@@ -1,11 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import MenuBar from './components/MenuBar.vue'
 import HeaderBar, { PieceSetOption, BoardThemeOption, DiscoveredDatabase } from './components/HeaderBar.vue'
 import Chessboard from './components/Chessboard.vue'
 import MoveNotation, { FlatMove } from './components/MoveNotation.vue'
 import OpeningTree, { TreeData } from './components/OpeningTree.vue'
 import EnginePanel, { EvalInfo, EngineOption } from './components/EnginePanel.vue'
 import GameBrowser, { GameSummary } from './components/GameBrowser.vue'
+import BoardSetupModal from './components/BoardSetupModal.vue'
+import PlayEngineModal from './components/PlayEngineModal.vue'
+import TacticsTrainerModal from './components/TacticsTrainerModal.vue'
+import EvaluationGraph, { GameAnalysisData } from './components/EvaluationGraph.vue'
+import KeyboardShortcutsModal from './components/KeyboardShortcutsModal.vue'
 
 // Import Wails backend bindings
 import {
@@ -34,6 +40,11 @@ import {
   GetScidSystemBases,
   ParsePGN,
   ExportPGN,
+  GetBestMove,
+  AnnotateCurrentGame,
+  AnnotatePGN,
+  SearchPosition,
+  LoadTacticsPuzzle,
 } from '../wailsjs/go/main/App'
 import { EventsOn, EventsOff } from '../wailsjs/runtime/runtime'
 
@@ -83,6 +94,28 @@ const availableEngines = ref<string[]>([])
 const discoveredEngines = ref<EngineOption[]>([])
 const selectedEngine = ref('')
 const evalInfo = ref<EvalInfo | null>(null)
+
+// Game Analysis & Blunder Detection
+const gameAnalysis = ref<GameAnalysisData | null>(null)
+const isAnalyzingGame = ref(false)
+
+// Trial Mode
+const trialMode = ref(false)
+const trialSavedState = ref<{
+  fen: string
+  history: { fen: string; lastMove: { from: string; to: string } | null }[]
+  flatMoves: FlatMove[]
+  currentPly: number
+  tags: Record<string, string>
+} | null>(null)
+
+// Modals State
+const showSetupBoardModal = ref(false)
+const showPlayEngineModal = ref(false)
+const showTacticsModal = ref(false)
+const showShortcutsModal = ref(false)
+const showImportModal = ref(false)
+const importPGNText = ref('')
 
 // Resizable Panes State
 const leftColWidth = ref<number>(Number(localStorage.getItem('newscid:leftColWidth')) || 560)
@@ -137,7 +170,6 @@ function startVerticalResize(e: MouseEvent) {
   document.body.style.userSelect = 'none'
 
   function onMouseMove(moveEvent: MouseEvent) {
-    // Dragging up increases height
     const delta = startY - moveEvent.clientY
     const minH = 120
     const maxH = Math.max(minH, window.innerHeight - 250)
@@ -181,10 +213,6 @@ const currentTheme = computed(() => {
 // Opening Tree Data
 const treeData = ref<TreeData | null>(null)
 const treeLoading = ref(false)
-
-// PGN Import Modal
-const showImportModal = ref(false)
-const importPGNText = ref('')
 
 // Initialize
 onMounted(async () => {
@@ -298,7 +326,7 @@ async function handleMove(uci: string) {
       ply: currentPly.value,
       moveNumber: moveNum,
       isWhite,
-      san: uci, // Fallback SAN
+      san: uci,
       uci,
       fen: nextState.fen,
       variationLevel: 0,
@@ -354,11 +382,88 @@ function toggleAutoplay() {
   }
 }
 
+// Trial Mode
+function toggleTrialMode() {
+  if (trialMode.value) {
+    // Exit trial mode: revert to saved state
+    if (trialSavedState.value) {
+      history.value = trialSavedState.value.history
+      flatMoves.value = trialSavedState.value.flatMoves
+      currentPly.value = trialSavedState.value.currentPly
+      gameTags.value = trialSavedState.value.tags
+      updateBoardState(trialSavedState.value.fen)
+      trialSavedState.value = null
+    }
+    trialMode.value = false
+  } else {
+    // Enter trial mode: save current state
+    trialSavedState.value = {
+      fen: currentFEN.value,
+      history: JSON.parse(JSON.stringify(history.value)),
+      flatMoves: JSON.parse(JSON.stringify(flatMoves.value)),
+      currentPly: currentPly.value,
+      tags: { ...gameTags.value },
+    }
+    trialMode.value = true
+  }
+}
+
+// Global Keyboard Shortcuts
 function handleKeydown(e: KeyboardEvent) {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
     return
   }
-  if (e.key === 'ArrowLeft') {
+
+  // Ctrl Combos
+  if (e.ctrlKey || e.metaKey) {
+    if (e.key === 'b' || e.key === 'B') {
+      e.preventDefault()
+      showSetupBoardModal.value = true
+    } else if (e.key === ' ' || e.code === 'Space') {
+      e.preventDefault()
+      toggleTrialMode()
+    } else if (e.key === 'o' || e.key === 'O') {
+      e.preventDefault()
+      handleOpenDB()
+    } else if (e.key === 'n' || e.key === 'N') {
+      e.preventDefault()
+      handleNewGame()
+    } else if (e.key === 's' || e.key === 'S') {
+      e.preventDefault()
+      handleSaveCurrentGame()
+    } else if (e.key === 'Delete') {
+      e.preventDefault()
+      if (activeGameId.value) handleDeleteGame(activeGameId.value)
+    } else if (e.key === 'z' || e.key === 'Z') {
+      e.preventDefault()
+      goPrev()
+    } else if (e.key === 'y' || e.key === 'Y') {
+      e.preventDefault()
+      goNext()
+    } else if (e.key === 'i' || e.key === 'I') {
+      e.preventDefault()
+      handleImportPGN()
+    } else if (e.key === 'e' || e.key === 'E') {
+      e.preventDefault()
+      handleExportPGN()
+    } else if (e.key === 'c' || e.key === 'C') {
+      e.preventDefault()
+      handleCopyFEN()
+    } else if (e.key === 'v' || e.key === 'V') {
+      e.preventDefault()
+      handlePasteFEN()
+    }
+    return
+  }
+
+  // Single Keys
+  if (e.key === 'F2') {
+    e.preventDefault()
+    toggleAnalysis()
+  } else if (e.key === '?') {
+    e.preventDefault()
+    showShortcutsModal.value = true
+  } else if (e.key === 'ArrowLeft') {
     goPrev()
   } else if (e.key === 'ArrowRight') {
     goNext()
@@ -430,6 +535,19 @@ async function handleCreateDB() {
   }
 }
 
+async function handleCloseDB() {
+  try {
+    await CloseDatabase()
+    dbInfo.value = null
+    gamesList.value = []
+    totalGames.value = 0
+    currentPage.value = 1
+    handleNewGame()
+  } catch (err) {
+    alert(`Failed to close database: ${err}`)
+  }
+}
+
 async function handleOpenSystemBase(path: string) {
   try {
     const info = await OpenDatabase(path)
@@ -466,6 +584,7 @@ async function handleLoadGame(id: number) {
     const g = await GetGame(id)
     activeGameId.value = id
     gameTags.value = g.tags || {}
+    gameAnalysis.value = null
 
     // Build history from game move tree
     const newHistory: { fen: string; lastMove: { from: string; to: string } | null }[] = [
@@ -501,7 +620,6 @@ async function handleLoadGame(id: number) {
     history.value = newHistory
     flatMoves.value = moves
 
-    // Jump to start of game (or end of game)
     jumpToPly(0)
   } catch (err) {
     alert(`Error loading game ${id}: ${err}`)
@@ -551,6 +669,7 @@ function handlePageChange(p: number) {
 
 function handleNewGame() {
   activeGameId.value = undefined
+  gameAnalysis.value = null
   gameTags.value = {
     White: 'Player 1',
     Black: 'Player 2',
@@ -561,6 +680,153 @@ function handleNewGame() {
   history.value = [{ fen: startingFEN, lastMove: null }]
   flatMoves.value = []
   jumpToPly(0)
+}
+
+// Game Navigation
+function handleFirstGame() {
+  if (totalGames.value > 0) handleLoadGame(1)
+}
+
+function handlePrevGame() {
+  if (activeGameId.value && activeGameId.value > 1) {
+    handleLoadGame(activeGameId.value - 1)
+  }
+}
+
+function handleNextGame() {
+  if (activeGameId.value && activeGameId.value < totalGames.value) {
+    handleLoadGame(activeGameId.value + 1)
+  }
+}
+
+function handleLastGame() {
+  if (totalGames.value > 0) handleLoadGame(totalGames.value)
+}
+
+function handleRandomGame() {
+  if (totalGames.value > 0) {
+    const rand = Math.floor(Math.random() * totalGames.value) + 1
+    handleLoadGame(rand)
+  }
+}
+
+// Position Search
+async function handleSearchPosition() {
+  try {
+    const matches = await SearchPosition(currentFEN.value)
+    if (!matches || matches.length === 0) {
+      alert('No games found in the database reaching this board position.')
+      return
+    }
+    gamesList.value = matches as GameSummary[]
+    totalGames.value = matches.length
+    currentPage.value = 1
+    bottomDrawerOpen.value = true
+    alert(`Found ${matches.length} game(s) reaching this position! Filter applied to game browser.`)
+  } catch (err) {
+    alert(`Position search failed: ${err}`)
+  }
+}
+
+// Setup Board
+function handleSetupBoard() {
+  showSetupBoardModal.value = true
+}
+
+async function handleSetupBoardApply(newFen: string) {
+  try {
+    await updateBoardState(newFen)
+    history.value = [{ fen: newFen, lastMove: null }]
+    flatMoves.value = []
+    currentPly.value = 0
+    gameAnalysis.value = null
+    gameTags.value = {
+      White: 'Custom Position',
+      Black: 'Custom Position',
+      Date: new Date().toISOString().split('T')[0].replace(/-/g, '.'),
+      Result: '*',
+      Event: 'Board Setup',
+    }
+  } catch (err) {
+    alert(`Failed to set up position: ${err}`)
+  }
+}
+
+// Copy / Paste FEN
+async function handleCopyFEN() {
+  try {
+    await navigator.clipboard.writeText(currentFEN.value)
+    alert(`FEN copied to clipboard:\n${currentFEN.value}`)
+  } catch (err) {
+    console.error('Failed to copy FEN:', err)
+  }
+}
+
+async function handlePasteFEN() {
+  try {
+    const text = await navigator.clipboard.readText()
+    if (!text || !text.trim()) {
+      alert('Clipboard does not contain valid text.')
+      return
+    }
+    await handleSetupBoardApply(text.trim())
+  } catch (err) {
+    alert(`Failed to paste FEN: ${err}`)
+  }
+}
+
+// Full Game Analysis (Annotate)
+async function handleAnnotateGame() {
+  if (isAnalyzingGame.value) return
+  isAnalyzingGame.value = true
+  try {
+    const gameObj: any = {
+      tags: gameTags.value,
+      startFen: history.value[0].fen,
+      result: gameTags.value.Result || '*',
+      plyCount: flatMoves.value.length,
+    }
+    const pgn = await ExportPGN(gameObj)
+    const analysis = await AnnotatePGN(pgn, 150)
+    gameAnalysis.value = analysis as GameAnalysisData
+
+    // Update flatMoves with NAGs and comments
+    if (analysis.moveAnalyses) {
+      for (const ma of analysis.moveAnalyses) {
+        const move = flatMoves.value.find(m => m.ply === ma.ply)
+        if (move) {
+          move.comment = ma.comment
+          if (ma.nag) {
+            move.nags = [ma.nag]
+          }
+        }
+      }
+    }
+    alert(`Annotation Complete!\nWhite Accuracy: ${analysis.whiteAccuracy}%\nBlack Accuracy: ${analysis.blackAccuracy}%\nBlunders: White ${analysis.whiteBlunders}, Black ${analysis.blackBlunders}`)
+  } catch (err) {
+    alert(`Game annotation failed: ${err}`)
+  } finally {
+    isAnalyzingGame.value = false
+  }
+}
+
+// Tactics Trainer
+function handleTacticsTrainer() {
+  showTacticsModal.value = true
+}
+
+async function handleLoadTacticsIntoApp(fen: string) {
+  await handleSetupBoardApply(fen)
+}
+
+// Play Against Engine
+function handlePlayVsEngine() {
+  showPlayEngineModal.value = true
+}
+
+async function handleImportGameFromMatch(pgn: string) {
+  importPGNText.value = pgn
+  await confirmImportPGN()
 }
 
 // ==========================================
@@ -577,6 +843,7 @@ async function confirmImportPGN() {
     const parsed = await ParsePGN(importPGNText.value)
     showImportModal.value = false
     importPGNText.value = ''
+    gameAnalysis.value = null
 
     gameTags.value = parsed.tags || {}
     const newHistory: { fen: string; lastMove: { from: string; to: string } | null }[] = [
@@ -662,6 +929,45 @@ async function handleSelectEngine(path: string) {
 
 <template>
   <div class="app-root flex flex-col h-screen w-screen bg-zinc-950 text-zinc-100 overflow-hidden font-sans">
+    <!-- Desktop Application Menu Bar (Scid vs. PC Parity) -->
+    <MenuBar
+      :db-name="dbInfo?.name"
+      :piece-sets="pieceSets"
+      :board-themes="boardThemes"
+      :current-piece-set="currentPieceSet"
+      :current-theme-id="currentThemeId"
+      :trial-mode="trialMode"
+      :is-analyzing="isAnalyzing"
+      @new-game="handleNewGame"
+      @open-d-b="handleOpenDB"
+      @create-d-b="handleCreateDB"
+      @close-d-b="handleCloseDB"
+      @save-game="handleSaveCurrentGame"
+      @delete-game="activeGameId ? handleDeleteGame(activeGameId) : undefined"
+      @first-game="handleFirstGame"
+      @prev-game="handlePrevGame"
+      @next-game="handleNextGame"
+      @last-game="handleLastGame"
+      @random-game="handleRandomGame"
+      @import-p-g-n="handleImportPGN"
+      @export-p-g-n="handleExportPGN"
+      @copy-f-e-n="handleCopyFEN"
+      @paste-f-e-n="handlePasteFEN"
+      @setup-board="handleSetupBoard"
+      @toggle-trial-mode="toggleTrialMode"
+      @undo-move="goPrev"
+      @redo-move="goNext"
+      @toggle-analysis="toggleAnalysis"
+      @annotate-game="handleAnnotateGame"
+      @play-vs-engine="handlePlayVsEngine"
+      @tactics-trainer="handleTacticsTrainer"
+      @search-position="handleSearchPosition"
+      @toggle-flip="flipped = !flipped"
+      @change-piece-set="currentPieceSet = $event"
+      @change-theme="currentThemeId = $event"
+      @show-shortcuts="showShortcutsModal = true"
+    />
+
     <!-- Top Header Bar -->
     <HeaderBar
       :db-name="dbInfo?.name"
@@ -740,16 +1046,16 @@ async function handleSelectEngine(path: string) {
               :class="activeTab === 'notation'
                 ? 'bg-emerald-600 text-white shadow-sm'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'"
-              @click="activeTab = 'notation'"
+              @click="activeTab === 'notation'"
             >
-              Notation & Moves
+              Notation & Analysis
             </button>
             <button
               class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer"
               :class="activeTab === 'tree'
                 ? 'bg-emerald-600 text-white shadow-sm'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'"
-              @click="activeTab = 'tree'"
+              @click="activeTab === 'tree'"
             >
               Opening Tree
             </button>
@@ -758,7 +1064,7 @@ async function handleSelectEngine(path: string) {
               :class="activeTab === 'info'
                 ? 'bg-emerald-600 text-white shadow-sm'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'"
-              @click="activeTab = 'info'"
+              @click="activeTab === 'info'"
             >
               Game Info
             </button>
@@ -766,7 +1072,7 @@ async function handleSelectEngine(path: string) {
 
           <!-- Bottom Drawer Toggle -->
           <button
-            class="text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded bg-zinc-800/80 hover:bg-zinc-800 transition-colors"
+            class="text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded bg-zinc-800/80 hover:bg-zinc-800 transition-colors cursor-pointer"
             @click="bottomDrawerOpen = !bottomDrawerOpen"
           >
             {{ bottomDrawerOpen ? 'Hide Database ▼' : 'Show Database ▲' }}
@@ -775,21 +1081,33 @@ async function handleSelectEngine(path: string) {
 
         <!-- Tab Content -->
         <div class="tab-content flex-1 overflow-hidden p-2">
-          <!-- 1. Notation View -->
-          <div v-show="activeTab === 'notation'" class="h-full">
-            <MoveNotation
-              :moves="flatMoves"
+          <!-- 1. Notation & Evaluation Curve View -->
+          <div v-show="activeTab === 'notation'" class="h-full flex flex-col gap-2">
+            <!-- Evaluation Graph -->
+            <EvaluationGraph
+              :analysis="gameAnalysis"
               :current-ply="currentPly"
-              :is-playing="isPlaying"
-              :result="gameTags.Result || '*'"
+              :is-analyzing-game="isAnalyzingGame"
               @jump="jumpToPly"
-              @first="goFirst"
-              @prev="goPrev"
-              @next="goNext"
-              @last="goLast"
-              @toggle-play="toggleAutoplay"
-              @copy-p-g-n="handleExportPGN"
+              @annotate="handleAnnotateGame"
             />
+
+            <!-- Move Notation List -->
+            <div class="flex-1 overflow-hidden">
+              <MoveNotation
+                :moves="flatMoves"
+                :current-ply="currentPly"
+                :is-playing="isPlaying"
+                :result="gameTags.Result || '*'"
+                @jump="jumpToPly"
+                @first="goFirst"
+                @prev="goPrev"
+                @next="goNext"
+                @last="goLast"
+                @toggle-play="toggleAutoplay"
+                @copy-p-g-n="handleExportPGN"
+              />
+            </div>
           </div>
 
           <!-- 2. Opening Tree View -->
@@ -837,6 +1155,10 @@ async function handleSelectEngine(path: string) {
                 <span class="text-zinc-500 font-semibold">ECO:</span>
                 <span class="text-zinc-200 font-mono">{{ gameTags.ECO || 'A00' }}</span>
               </div>
+              <div v-if="gameTags.Annotator" class="flex justify-between">
+                <span class="text-zinc-500 font-semibold">Annotator:</span>
+                <span class="text-amber-400 font-medium">{{ gameTags.Annotator }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -880,6 +1202,43 @@ async function handleSelectEngine(path: string) {
       />
     </div>
 
+    <!-- Setup Board / FEN Editor Modal (Ctrl+B) -->
+    <BoardSetupModal
+      v-if="showSetupBoardModal"
+      :initial-fen="currentFEN"
+      :piece-set="currentPieceSet"
+      :board-theme="currentTheme"
+      @apply="handleSetupBoardApply"
+      @close="showSetupBoardModal = false"
+    />
+
+    <!-- Play Against Engine Modal -->
+    <PlayEngineModal
+      v-if="showPlayEngineModal"
+      :discovered-engines="discoveredEngines"
+      :available-engines="availableEngines"
+      :current-piece-set="currentPieceSet"
+      :board-theme="currentTheme"
+      @import-game="handleImportGameFromMatch"
+      @close="showPlayEngineModal = false"
+    />
+
+    <!-- Tactics Puzzle Trainer Modal -->
+    <TacticsTrainerModal
+      v-if="showTacticsModal"
+      :system-bases="systemBases"
+      :current-piece-set="currentPieceSet"
+      :board-theme="currentTheme"
+      @load-into-app="handleLoadTacticsIntoApp"
+      @close="showTacticsModal = false"
+    />
+
+    <!-- Keyboard Shortcuts Modal -->
+    <KeyboardShortcutsModal
+      v-if="showShortcutsModal"
+      @close="showShortcutsModal = false"
+    />
+
     <!-- Import PGN Modal -->
     <div
       v-if="showImportModal"
@@ -896,13 +1255,13 @@ async function handleSelectEngine(path: string) {
         />
         <div class="flex justify-end gap-2">
           <button
-            class="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 text-xs font-medium hover:bg-zinc-700"
+            class="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 text-xs font-medium hover:bg-zinc-700 cursor-pointer"
             @click="showImportModal = false"
           >
             Cancel
           </button>
           <button
-            class="px-4 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-500"
+            class="px-4 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-500 cursor-pointer"
             @click="confirmImportPGN"
           >
             Load Game

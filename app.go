@@ -289,7 +289,13 @@ func (a *App) GetLegalMoves(fen string) ([]string, error) {
 }
 
 func (a *App) ParsePGN(pgnContent string) (*chess.Game, error) {
-	return chess.ParsePGN(pgnContent)
+	g, err := chess.ParsePGN(pgnContent)
+	if err == nil {
+		a.mu.Lock()
+		a.activeGame = g
+		a.mu.Unlock()
+	}
+	return g, err
 }
 
 func (a *App) ExportPGN(game *chess.Game) (string, error) {
@@ -306,9 +312,66 @@ func (a *App) GetOpeningTree(fen string) (*tree.TreeResult, error) {
 	return tree.BuildTreeFromDatabase(a.db, fen, 1000)
 }
 
+func (a *App) SearchPosition(fen string) ([]*scid.GameSummary, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	if !a.db.IsOpen {
+		return nil, fmt.Errorf("no database open")
+	}
+
+	targetBoard, err := chess.ParseFEN(fen)
+	if err != nil {
+		return nil, err
+	}
+	targetFENCore := tree.CoreFEN(targetBoard.FEN())
+
+	numGames := a.db.NumGames()
+	limit := numGames
+	if limit > 2000 {
+		limit = 2000
+	}
+
+	var results []*scid.GameSummary
+	for i := 1; i <= limit; i++ {
+		g, err := a.db.GetGame(i)
+		if err != nil {
+			continue
+		}
+
+		b := chess.NewBoard()
+		if g.StartFEN != "" && g.StartFEN != chess.StartingFEN {
+			if parsed, err := chess.ParseFEN(g.StartFEN); err == nil {
+				b = parsed
+			}
+		}
+
+		matched := (tree.CoreFEN(b.FEN()) == targetFENCore)
+		curr := g.RootMove
+		for !matched && curr != nil {
+			b.MakeMove(curr.Move)
+			if tree.CoreFEN(b.FEN()) == targetFENCore {
+				matched = true
+				break
+			}
+			curr = curr.Next
+		}
+
+		if matched {
+			summary, err := a.db.GetGameSummary(i)
+			if err == nil {
+				results = append(results, summary)
+			}
+		}
+	}
+
+	return results, nil
+}
+
 func (a *App) ClassifyOpening(moves []string) *eco.Entry {
 	return a.eco.Classify(moves)
 }
+
 
 // ==========================================
 // UCI Engine Operations & Scid Configuration
@@ -336,10 +399,7 @@ func (a *App) GetAvailableEngines() []string {
 	return result
 }
 
-func (a *App) StartEngine(idOrPath string) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
+func (a *App) startEngineLocked(idOrPath string) error {
 	if a.engine != nil {
 		_ = a.engine.Quit()
 	}
@@ -363,11 +423,37 @@ func (a *App) StartEngine(idOrPath string) error {
 	}
 
 	eng.SetOnEval(func(info engine.EvalInfo) {
-		runtime.EventsEmit(a.ctx, "engine:eval", info)
+		if a.ctx != nil && a.ctx.Value("events") != nil {
+			runtime.EventsEmit(a.ctx, "engine:eval", info)
+		}
 	})
 
 	a.engine = eng
 	return nil
+}
+
+func (a *App) StartEngine(idOrPath string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.startEngineLocked(idOrPath)
+}
+
+func (a *App) ensureEngineLocked() error {
+	if a.engine != nil {
+		return nil
+	}
+	discovered := engine.DiscoverScidEngines()
+	var chosen string
+	for _, e := range discovered {
+		if e.Available && e.UCI {
+			chosen = e.Name
+			break
+		}
+	}
+	if chosen == "" {
+		return fmt.Errorf("no UCI chess engine available on system")
+	}
+	return a.startEngineLocked(chosen)
 }
 
 func (a *App) StopEngine() error {
@@ -381,29 +467,11 @@ func (a *App) StopEngine() error {
 }
 
 func (a *App) AnalyzePosition(fen string, moves []string, maxDepth int) error {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
+	a.mu.Lock()
+	defer a.mu.Unlock()
 
-	if a.engine == nil {
-		// Auto-launch first available UCI engine
-		discovered := engine.DiscoverScidEngines()
-		var chosen string
-		for _, e := range discovered {
-			if e.Available && e.UCI {
-				chosen = e.Name
-				break
-			}
-		}
-		if chosen != "" {
-			a.mu.RUnlock()
-			err := a.StartEngine(chosen)
-			a.mu.RLock()
-			if err != nil {
-				return err
-			}
-		} else {
-			return fmt.Errorf("no chess engine installed on system")
-		}
+	if err := a.ensureEngineLocked(); err != nil {
+		return err
 	}
 
 	return a.engine.Analyze(fen, moves, maxDepth)
@@ -418,6 +486,51 @@ func (a *App) GetEngineEval() engine.EvalInfo {
 	}
 	return engine.EvalInfo{}
 }
+
+func (a *App) GetBestMove(fen string, moves []string, movetimeMs int) (string, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if err := a.ensureEngineLocked(); err != nil {
+		return "", err
+	}
+
+	best, _, err := a.engine.SearchBestMove(fen, moves, movetimeMs)
+	return best, err
+}
+
+func (a *App) AnnotateCurrentGame(movetimeMs int) (*engine.GameAnalysis, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.activeGame == nil {
+		return nil, fmt.Errorf("no active game to annotate")
+	}
+
+	if err := a.ensureEngineLocked(); err != nil {
+		return nil, err
+	}
+
+	return engine.AnnotateGame(a.activeGame, a.engine, movetimeMs)
+}
+
+func (a *App) AnnotatePGN(pgnContent string, movetimeMs int) (*engine.GameAnalysis, error) {
+	g, err := chess.ParsePGN(pgnContent)
+	if err != nil {
+		return nil, err
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	a.activeGame = g
+	if err := a.ensureEngineLocked(); err != nil {
+		return nil, err
+	}
+
+	return engine.AnnotateGame(g, a.engine, movetimeMs)
+}
+
 
 // ==========================================
 // Piece Sets & Board Themes
@@ -453,9 +566,95 @@ func (a *App) GetScidSystemBases() []string {
 	return found
 }
 
+// TacticsPuzzle contains puzzle setup and solution sequence.
+type TacticsPuzzle struct {
+	GameID     int      `json:"gameId"`
+	TotalGames int      `json:"totalGames"`
+	BaseName   string   `json:"baseName"`
+	Event      string   `json:"event"`
+	White      string   `json:"white"`
+	Black      string   `json:"black"`
+	StartFEN   string   `json:"startFen"`
+	Moves      []string `json:"moves"` // Solution UCI moves in order
+	SANMoves   []string `json:"sanMoves"`
+	Turn       string   `json:"turn"` // "w" or "b"
+	Theme      string   `json:"theme"`
+}
+
+func (a *App) LoadTacticsPuzzle(basePath string, puzzleNum int) (*TacticsPuzzle, error) {
+	if basePath == "" {
+		basePath = "/usr/share/scid/bases/tactics"
+	}
+	basePath = strings.TrimSuffix(basePath, ".si4")
+	basePath = strings.TrimSuffix(basePath, ".sg4")
+	basePath = strings.TrimSuffix(basePath, ".sn4")
+
+	db := scid.NewDatabase()
+	if err := db.Open(basePath); err != nil {
+		return nil, fmt.Errorf("failed to open puzzle database: %w", err)
+	}
+	defer db.Close()
+
+	total := db.NumGames()
+	if total == 0 {
+		return nil, fmt.Errorf("database has no games")
+	}
+
+	if puzzleNum <= 0 {
+		puzzleNum = 1
+	} else if puzzleNum > total {
+		puzzleNum = total
+	}
+
+	game, err := db.GetGame(puzzleNum)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load puzzle %d: %w", puzzleNum, err)
+	}
+
+	startFen := game.StartFEN
+	if startFen == "" {
+		startFen = chess.StartingFEN
+	}
+
+	turn := "w"
+	parts := strings.Split(startFen, " ")
+	if len(parts) > 1 && parts[1] == "b" {
+		turn = "b"
+	}
+
+	var moves []string
+	var sanMoves []string
+	curr := game.RootMove
+	for curr != nil {
+		moves = append(moves, curr.UCI)
+		sanMoves = append(sanMoves, curr.SAN)
+		curr = curr.Next
+	}
+
+	theme := game.Tag("Event")
+	if theme == "?" || theme == "" {
+		theme = filepath.Base(basePath)
+	}
+
+	return &TacticsPuzzle{
+		GameID:     puzzleNum,
+		TotalGames: total,
+		BaseName:   filepath.Base(basePath),
+		Event:      game.Tag("Event"),
+		White:      game.Tag("White"),
+		Black:      game.Tag("Black"),
+		StartFEN:   startFen,
+		Moves:      moves,
+		SANMoves:   sanMoves,
+		Turn:       turn,
+		Theme:      theme,
+	}, nil
+}
+
 func (a *App) IsScidDriverAvailable() bool {
 	return a.driver.IsAvailable()
 }
+
 
 func makeBoardState(b *chess.Board) *BoardState {
 	legal := b.GenerateLegalMoves()

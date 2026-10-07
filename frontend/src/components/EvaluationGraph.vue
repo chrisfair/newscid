@@ -1,0 +1,265 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+import { Sparkles, TrendingUp, AlertOctagon, AlertCircle, HelpCircle } from '@lucide/vue'
+
+export interface MoveAnalysisItem {
+  ply: number
+  san: string
+  scoreCp: number
+  deltaCp?: number
+  nag?: number
+  comment?: string
+}
+
+export interface GameAnalysisData {
+  whiteAccuracy: number
+  blackAccuracy: number
+  whiteBlunders: number
+  whiteMistakes: number
+  whiteInaccs: number
+  blackBlunders: number
+  blackMistakes: number
+  blackInaccs: number
+  moveAnalyses: MoveAnalysisItem[]
+}
+
+const props = defineProps<{
+  analysis: GameAnalysisData | null
+  currentPly: number
+  isAnalyzingGame?: boolean
+}>()
+
+const emit = defineEmits<{
+  (e: 'jump', ply: number): void
+  (e: 'annotate'): void
+}>()
+
+// Graph coordinate dimensions
+const width = 600
+const height = 110
+const padding = 15
+
+// Clamped evaluations between -600 cp and +600 cp for visible graph
+function clampCp(cp: number): number {
+  return Math.max(-600, Math.min(600, cp))
+}
+
+function getY(cp: number): number {
+  const clamped = clampCp(cp)
+  // 600 -> padding, -600 -> height - padding, 0 -> height / 2
+  const midY = height / 2
+  const range = (height - 2 * padding) / 2
+  return midY - (clamped / 600) * range
+}
+
+function getX(idx: number, total: number): number {
+  if (total <= 1) return padding
+  return padding + (idx / (total - 1)) * (width - 2 * padding)
+}
+
+const points = computed(() => {
+  if (!props.analysis || props.analysis.moveAnalyses.length === 0) {
+    return []
+  }
+  const moves = props.analysis.moveAnalyses
+  const total = moves.length
+  return moves.map((m, idx) => ({
+    ply: m.ply,
+    san: m.san,
+    scoreCp: m.scoreCp,
+    nag: m.nag,
+    x: getX(idx, total),
+    y: getY(m.scoreCp),
+  }))
+})
+
+// SVG path for line
+const linePath = computed(() => {
+  if (points.value.length === 0) return ''
+  return points.value.reduce((acc, pt, idx) => {
+    return `${acc} ${idx === 0 ? 'M' : 'L'} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`
+  }, '')
+})
+
+// SVG path for area fill
+const areaPath = computed(() => {
+  if (points.value.length === 0) return ''
+  const midY = height / 2
+  const first = points.value[0]
+  const last = points.value[points.value.length - 1]
+  const line = points.value.map(pt => `L ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`).join(' ')
+  return `M ${first.x.toFixed(1)} ${midY} ${line} L ${last.x.toFixed(1)} ${midY} Z`
+})
+
+// Active ply indicator X
+const currentMarkerX = computed(() => {
+  if (points.value.length === 0) return null
+  const idx = props.currentPly - 1
+  if (idx < 0) return points.value[0]?.x ?? null
+  if (idx >= points.value.length) return points.value[points.value.length - 1]?.x ?? null
+  return points.value[idx]?.x ?? null
+})
+
+function formatCp(cp: number): string {
+  const sign = cp > 0 ? '+' : ''
+  return `${sign}${(cp / 100).toFixed(2)}`
+}
+</script>
+
+<template>
+  <div class="evaluation-graph bg-zinc-950 border border-zinc-800 rounded-xl p-3 flex flex-col gap-2 select-none">
+    <!-- Header with Accuracy & Annotate button -->
+    <div class="flex items-center justify-between text-xs">
+      <div class="flex items-center gap-2">
+        <TrendingUp class="w-4 h-4 text-emerald-400" />
+        <span class="font-bold text-zinc-200">Evaluation Curve</span>
+        <span v-if="analysis" class="text-[11px] text-zinc-400">
+          White: <span class="font-bold text-emerald-400">{{ analysis.whiteAccuracy }}%</span> |
+          Black: <span class="font-bold text-emerald-400">{{ analysis.blackAccuracy }}%</span>
+        </span>
+      </div>
+
+      <button
+        class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[11px] font-semibold text-amber-400 transition-colors cursor-pointer"
+        :class="{ 'animate-pulse opacity-80 cursor-wait': isAnalyzingGame }"
+        :disabled="isAnalyzingGame"
+        @click="emit('annotate')"
+      >
+        <Sparkles class="w-3.5 h-3.5" />
+        <span>{{ isAnalyzingGame ? 'Analyzing Game...' : (analysis ? 'Re-Annotate' : 'Annotate Game') }}</span>
+      </button>
+    </div>
+
+    <!-- Blunder & Mistake Stats Bar -->
+    <div v-if="analysis" class="flex items-center justify-between text-[11px] px-2 py-1 bg-zinc-900/60 rounded-lg border border-zinc-800/80 font-mono">
+      <div class="flex items-center gap-3">
+        <span class="text-zinc-500">White:</span>
+        <span class="text-rose-400 flex items-center gap-0.5" title="Blunders (??)">
+          <span class="font-bold">{{ analysis.whiteBlunders }}</span> ??
+        </span>
+        <span class="text-amber-400 flex items-center gap-0.5" title="Mistakes (?)">
+          <span class="font-bold">{{ analysis.whiteMistakes }}</span> ?
+        </span>
+        <span class="text-yellow-400 flex items-center gap-0.5" title="Inaccuracies (?!)">
+          <span class="font-bold">{{ analysis.whiteInaccs }}</span> ?!
+        </span>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <span class="text-zinc-500">Black:</span>
+        <span class="text-rose-400 flex items-center gap-0.5" title="Blunders (??)">
+          <span class="font-bold">{{ analysis.blackBlunders }}</span> ??
+        </span>
+        <span class="text-amber-400 flex items-center gap-0.5" title="Mistakes (?)">
+          <span class="font-bold">{{ analysis.blackMistakes }}</span> ?
+        </span>
+        <span class="text-yellow-400 flex items-center gap-0.5" title="Inaccuracies (?!)">
+          <span class="font-bold">{{ analysis.blackInaccs }}</span> ?!
+        </span>
+      </div>
+    </div>
+
+    <!-- SVG Graph Container -->
+    <div class="relative w-full h-28 bg-zinc-900/90 rounded-lg border border-zinc-800/80 overflow-hidden flex items-center justify-center">
+      <template v-if="points.length > 0">
+        <svg
+          :viewBox="`0 0 ${width} ${height}`"
+          class="w-full h-full cursor-crosshair"
+          preserveAspectRatio="none"
+        >
+          <!-- Gradients -->
+          <defs>
+            <linearGradient id="evalGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#10b981" stop-opacity="0.4" />
+              <stop offset="50%" stop-color="#10b981" stop-opacity="0.05" />
+              <stop offset="50%" stop-color="#f43f5e" stop-opacity="0.05" />
+              <stop offset="100%" stop-color="#f43f5e" stop-opacity="0.4" />
+            </linearGradient>
+          </defs>
+
+          <!-- Zero Line -->
+          <line
+            :x1="padding"
+            :y1="height / 2"
+            :x2="width - padding"
+            :y2="height / 2"
+            stroke="#52525b"
+            stroke-dasharray="3 3"
+            stroke-width="1"
+          />
+
+          <!-- Area fill -->
+          <path :d="areaPath" fill="url(#evalGrad)" />
+
+          <!-- Evaluation Curve Line -->
+          <path
+            :d="linePath"
+            fill="none"
+            stroke="#10b981"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+
+          <!-- Active Ply Vertical Line Marker -->
+          <line
+            v-if="currentMarkerX !== null"
+            :x1="currentMarkerX"
+            y1="0"
+            :x2="currentMarkerX"
+            :y2="height"
+            stroke="#fbbf24"
+            stroke-width="2"
+            stroke-dasharray="2 2"
+          />
+
+          <!-- Interactive Ply Points & Blunder Markers -->
+          <g v-for="pt in points" :key="pt.ply" @click="emit('jump', pt.ply)">
+            <!-- Blunder (??) Marker -->
+            <circle
+              v-if="pt.nag === 4"
+              :cx="pt.x"
+              :cy="pt.y"
+              r="4.5"
+              fill="#ef4444"
+              stroke="#7f1d1d"
+              stroke-width="1.5"
+            >
+              <title>Ply {{ pt.ply }} ({{ pt.san }}): Blunder (??) [{{ formatCp(pt.scoreCp) }}]</title>
+            </circle>
+
+            <!-- Mistake (?) Marker -->
+            <circle
+              v-else-if="pt.nag === 2"
+              :cx="pt.x"
+              :cy="pt.y"
+              r="3.5"
+              fill="#f97316"
+              stroke="#7c2d12"
+              stroke-width="1"
+            >
+              <title>Ply {{ pt.ply }} ({{ pt.san }}): Mistake (?) [{{ formatCp(pt.scoreCp) }}]</title>
+            </circle>
+
+            <!-- Invisible hit target for clicking -->
+            <circle
+              :cx="pt.x"
+              :cy="pt.y"
+              r="8"
+              fill="transparent"
+              class="cursor-pointer"
+            >
+              <title>Ply {{ pt.ply }} ({{ pt.san }}): {{ formatCp(pt.scoreCp) }}</title>
+            </circle>
+          </g>
+        </svg>
+      </template>
+
+      <!-- Placeholder if game not analyzed yet -->
+      <div v-else class="flex flex-col items-center justify-center gap-1.5 text-zinc-500 text-xs">
+        <Sparkles class="w-5 h-5 text-zinc-600" />
+        <span>Click "Annotate Game" to generate centipawn advantage curve & blunder report</span>
+      </div>
+    </div>
+  </div>
+</template>

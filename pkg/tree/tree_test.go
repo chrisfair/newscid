@@ -52,3 +52,28 @@ func TestOpeningTreeCalculation(t *testing.T) {
 	assert.Equal(t, "c5", e4Tree.Moves[1].Move)
 	assert.Equal(t, 1, e4Tree.Moves[1].Count)
 }
+
+func TestSearchPositionInGames(t *testing.T) {
+	pgn1 := `[White "A"][Black "B"][Result "1-0"] 1. e4 e5 2. Nf3 Nc6 1-0`
+	pgn2 := `[White "C"][Black "D"][Result "0-1"] 1. d4 d5 2. c4 e6 0-1`
+	pgn3 := `[White "E"][Black "F"][Result "1/2-1/2"] 1. e4 e5 2. Nf3 Nf6 1/2-1/2`
+
+	var games []*chess.Game
+	for _, p := range []string{pgn1, pgn2, pgn3} {
+		g, err := chess.ParsePGN(p)
+		require.NoError(t, err)
+		games = append(games, g)
+	}
+
+	// Position after 1. e4 e5 2. Nf3
+	b := chess.NewBoard()
+	for _, san := range []string{"e4", "e5", "Nf3"} {
+		m, err := b.ParseSAN(san)
+		require.NoError(t, err)
+		b.MakeMove(m)
+	}
+
+	matches := tree.SearchPositionInGames(b.FEN(), games)
+	assert.Equal(t, []int{0, 2}, matches)
+}
+

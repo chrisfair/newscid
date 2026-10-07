@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"newscid/pkg/chess"
 	"newscid/pkg/engine"
 )
 
@@ -45,6 +46,47 @@ func TestEngineUCICommunication(t *testing.T) {
 
 	assert.True(t, receivedEval, "Engine should return evaluation information")
 	_ = eng.Stop()
+}
+
+func TestEngineSearchBestMove(t *testing.T) {
+	engines := engine.FindAvailableEngines()
+	if len(engines) == 0 {
+		t.Skip("No UCI chess engines found on system, skipping engine test")
+	}
+
+	eng := engine.NewEngine(engines[0])
+	err := eng.Start()
+	require.NoError(t, err)
+	defer eng.Quit()
+
+	bestMove, eval, err := eng.SearchBestMove("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", nil, 200)
+	require.NoError(t, err)
+	assert.NotEmpty(t, bestMove, "Engine should return a best move")
+	t.Logf("Engine returned best move %s (depth %d, eval %d cp)", bestMove, eval.Depth, eval.ScoreCp)
+}
+
+func TestAnnotateGame(t *testing.T) {
+	engines := engine.FindAvailableEngines()
+	if len(engines) == 0 {
+		t.Skip("No UCI chess engines found on system, skipping engine test")
+	}
+
+	eng := engine.NewEngine(engines[0])
+	err := eng.Start()
+	require.NoError(t, err)
+	defer eng.Quit()
+
+	game, err := chess.ParsePGN("1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 1-0")
+	require.NoError(t, err)
+
+	analysis, err := engine.AnnotateGame(game, eng, 150)
+	require.NoError(t, err)
+	assert.NotNil(t, analysis)
+	assert.NotEmpty(t, analysis.MoveAnalyses)
+	assert.Greater(t, analysis.WhiteAccuracy, 0.0)
+	assert.Greater(t, analysis.BlackAccuracy, 0.0)
+	t.Logf("White Accuracy: %.1f%%, Black Accuracy: %.1f%%", analysis.WhiteAccuracy, analysis.BlackAccuracy)
+	assert.NotEmpty(t, game.RootMove.Comment)
 }
 
 func TestParseEnginesDat(t *testing.T) {

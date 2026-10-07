@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // EvalInfo represents real-time analysis details from an engine.
@@ -23,17 +24,18 @@ type EvalInfo struct {
 
 // Engine represents a running UCI engine process.
 type Engine struct {
-	Path        string
-	Name        string
-	Author      string
-	cmd         *exec.Cmd
-	stdin       io.WriteCloser
-	stdout      *bufio.Scanner
-	mu          sync.Mutex
-	isAnalyzing bool
-	stopChan    chan struct{}
-	lastEval    EvalInfo
-	onEval      func(EvalInfo)
+	Path             string
+	Name             string
+	Author           string
+	cmd              *exec.Cmd
+	stdin            io.WriteCloser
+	stdout           *bufio.Scanner
+	mu               sync.Mutex
+	isAnalyzing      bool
+	stopChan         chan struct{}
+	bestMoveListener chan string
+	lastEval         EvalInfo
+	onEval           func(EvalInfo)
 }
 
 func NewEngine(path string) *Engine {
@@ -138,6 +140,50 @@ func (e *Engine) Analyze(fen string, moves []string, maxDepth int) error {
 	return nil
 }
 
+// SearchBestMove searches for the best move in a given position with time limit in milliseconds.
+func (e *Engine) SearchBestMove(fen string, moves []string, movetimeMs int) (string, EvalInfo, error) {
+	e.mu.Lock()
+	if e.stdin == nil {
+		e.mu.Unlock()
+		return "", EvalInfo{}, fmt.Errorf("engine not started")
+	}
+
+	bestMoveCh := make(chan string, 1)
+	e.bestMoveListener = bestMoveCh
+
+	posCmd := "position fen " + fen
+	if len(moves) > 0 {
+		posCmd += " moves " + strings.Join(moves, " ")
+	}
+	fmt.Fprintln(e.stdin, posCmd)
+
+	if movetimeMs <= 0 {
+		movetimeMs = 500
+	}
+	fmt.Fprintf(e.stdin, "go movetime %d\n", movetimeMs)
+	e.isAnalyzing = true
+	e.mu.Unlock()
+
+	select {
+	case best := <-bestMoveCh:
+		e.mu.Lock()
+		eval := e.lastEval
+		e.bestMoveListener = nil
+		e.mu.Unlock()
+		return best, eval, nil
+	case <-time.After(time.Duration(movetimeMs+3000) * time.Millisecond):
+		e.mu.Lock()
+		eval := e.lastEval
+		best := eval.BestMove
+		e.bestMoveListener = nil
+		e.mu.Unlock()
+		if best != "" {
+			return best, eval, nil
+		}
+		return "", eval, fmt.Errorf("engine search timed out")
+	}
+}
+
 // Stop halts current analysis.
 func (e *Engine) Stop() error {
 	e.mu.Lock()
@@ -192,7 +238,15 @@ func (e *Engine) listenOutput() {
 				e.isAnalyzing = false
 				cb := e.onEval
 				currEval := e.lastEval
+				listener := e.bestMoveListener
 				e.mu.Unlock()
+
+				if listener != nil {
+					select {
+					case listener <- parts[1]:
+					default:
+					}
+				}
 
 				if cb != nil {
 					cb(currEval)
