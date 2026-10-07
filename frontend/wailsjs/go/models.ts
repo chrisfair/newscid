@@ -179,6 +179,80 @@ export namespace engine {
 	        this.bestMove = source["bestMove"];
 	    }
 	}
+	export class MoveAnalysis {
+	    ply: number;
+	    san: string;
+	    uci: string;
+	    scoreCp: number;
+	    mateIn: number;
+	    bestMove: string;
+	    deltaCp: number;
+	    nag: number;
+	    comment: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MoveAnalysis(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ply = source["ply"];
+	        this.san = source["san"];
+	        this.uci = source["uci"];
+	        this.scoreCp = source["scoreCp"];
+	        this.mateIn = source["mateIn"];
+	        this.bestMove = source["bestMove"];
+	        this.deltaCp = source["deltaCp"];
+	        this.nag = source["nag"];
+	        this.comment = source["comment"];
+	    }
+	}
+	export class GameAnalysis {
+	    whiteAccuracy: number;
+	    blackAccuracy: number;
+	    whiteBlunders: number;
+	    whiteMistakes: number;
+	    whiteInaccs: number;
+	    blackBlunders: number;
+	    blackMistakes: number;
+	    blackInaccs: number;
+	    moveAnalyses: MoveAnalysis[];
+	
+	    static createFrom(source: any = {}) {
+	        return new GameAnalysis(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.whiteAccuracy = source["whiteAccuracy"];
+	        this.blackAccuracy = source["blackAccuracy"];
+	        this.whiteBlunders = source["whiteBlunders"];
+	        this.whiteMistakes = source["whiteMistakes"];
+	        this.whiteInaccs = source["whiteInaccs"];
+	        this.blackBlunders = source["blackBlunders"];
+	        this.blackMistakes = source["blackMistakes"];
+	        this.blackInaccs = source["blackInaccs"];
+	        this.moveAnalyses = this.convertValues(source["moveAnalyses"], MoveAnalysis);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 
 }
 
@@ -259,6 +333,38 @@ export namespace main {
 		    }
 		    return a;
 		}
+	}
+	export class TacticsPuzzle {
+	    gameId: number;
+	    totalGames: number;
+	    baseName: string;
+	    event: string;
+	    white: string;
+	    black: string;
+	    startFen: string;
+	    moves: string[];
+	    sanMoves: string[];
+	    turn: string;
+	    theme: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TacticsPuzzle(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.gameId = source["gameId"];
+	        this.totalGames = source["totalGames"];
+	        this.baseName = source["baseName"];
+	        this.event = source["event"];
+	        this.white = source["white"];
+	        this.black = source["black"];
+	        this.startFen = source["startFen"];
+	        this.moves = source["moves"];
+	        this.sanMoves = source["sanMoves"];
+	        this.turn = source["turn"];
+	        this.theme = source["theme"];
+	    }
 	}
 
 }

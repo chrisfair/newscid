@@ -6,6 +6,14 @@ export function AnalyzePosition(arg1, arg2, arg3) {
   return window['go']['main']['App']['AnalyzePosition'](arg1, arg2, arg3);
 }
 
+export function AnnotateCurrentGame(arg1) {
+  return window['go']['main']['App']['AnnotateCurrentGame'](arg1);
+}
+
+export function AnnotatePGN(arg1, arg2) {
+  return window['go']['main']['App']['AnnotatePGN'](arg1, arg2);
+}
+
 export function ClassifyOpening(arg1) {
   return window['go']['main']['App']['ClassifyOpening'](arg1);
 }
@@ -28,6 +36,10 @@ export function ExportPGN(arg1) {
 
 export function GetAvailableEngines() {
   return window['go']['main']['App']['GetAvailableEngines']();
+}
+
+export function GetBestMove(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetBestMove'](arg1, arg2, arg3);
 }
 
 export function GetBoardThemes() {
@@ -78,6 +90,10 @@ export function IsScidDriverAvailable() {
   return window['go']['main']['App']['IsScidDriverAvailable']();
 }
 
+export function LoadTacticsPuzzle(arg1, arg2) {
+  return window['go']['main']['App']['LoadTacticsPuzzle'](arg1, arg2);
+}
+
 export function MakeMove(arg1, arg2) {
   return window['go']['main']['App']['MakeMove'](arg1, arg2);
 }
@@ -104,6 +120,10 @@ export function SaveFileDialog(arg1) {
 
 export function SaveGame(arg1) {
   return window['go']['main']['App']['SaveGame'](arg1);
+}
+
+export function SearchPosition(arg1) {
+  return window['go']['main']['App']['SearchPosition'](arg1);
 }
 
 export function StartEngine(arg1) {

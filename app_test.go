@@ -104,3 +104,54 @@ func TestAppOpenPGNFile(t *testing.T) {
 	assert.Equal(t, "Player 2", game.Tag("Black"))
 	assert.Equal(t, "e4", game.RootMove.SAN)
 }
+
+func TestAppPlayAndAnnotation(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+
+	// Test GetBestMove
+	move, err := app.GetBestMove("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", nil, 150)
+	require.NoError(t, err)
+	assert.NotEmpty(t, move)
+	t.Logf("App GetBestMove: %s", move)
+
+	// Test Annotation
+	game, err := app.ParsePGN("1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0")
+	require.NoError(t, err)
+	app.activeGame = game
+
+	analysis, err := app.AnnotateCurrentGame(150)
+	require.NoError(t, err)
+	assert.NotNil(t, analysis)
+	assert.NotEmpty(t, analysis.MoveAnalyses)
+	t.Logf("Scholar's Mate analysis: White acc: %.1f%%, Black acc: %.1f%%", analysis.WhiteAccuracy, analysis.BlackAccuracy)
+}
+
+func TestAppTacticsAndSearchPosition(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+
+	// Test Tactics puzzle loading
+	puzzle, err := app.LoadTacticsPuzzle("/usr/share/scid/bases/tactics", 1)
+	if err == nil {
+		assert.Equal(t, 1, puzzle.GameID)
+		assert.Greater(t, puzzle.TotalGames, 0)
+		assert.NotEmpty(t, puzzle.StartFEN)
+		assert.NotEmpty(t, puzzle.Moves)
+		t.Logf("Loaded puzzle #1: StartFEN=%s, Moves=%v", puzzle.StartFEN, puzzle.Moves)
+	}
+
+	// Test SearchPosition on user base
+	userBase := "/home/christopher/ChessDataBases/ChristopherFair/ChristopherFair"
+	if _, err := os.Stat(userBase + ".si4"); err == nil {
+		_, err := app.OpenDatabase(userBase)
+		require.NoError(t, err)
+
+		results, err := app.SearchPosition("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
+		require.NoError(t, err)
+		t.Logf("SearchPosition for 1. e4 found %d games in ChristopherFair", len(results))
+		assert.NotEmpty(t, results)
+	}
+}
+
+

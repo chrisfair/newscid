@@ -128,6 +128,46 @@ func BuildTreeFromDatabase(db *scid.Database, fen string, maxGames int) (*TreeRe
 	return BuildTreeFromGames(fen, sampledGames), nil
 }
 
+// CoreFEN strips the halfmove clock and fullmove number for position matching.
+func CoreFEN(fen string) string {
+	return coreFEN(fen)
+}
+
+// SearchPositionInGames returns the 0-based indices of games that reach the target position.
+func SearchPositionInGames(fen string, games []*chess.Game) []int {
+	targetBoard, err := chess.ParseFEN(fen)
+	if err != nil {
+		targetBoard = chess.NewBoard()
+		fen = targetBoard.FEN()
+	}
+	targetCore := coreFEN(targetBoard.FEN())
+	var matched []int
+
+	for i, g := range games {
+		b := chess.NewBoard()
+		if g.StartFEN != "" && g.StartFEN != chess.StartingFEN {
+			if parsed, err := chess.ParseFEN(g.StartFEN); err == nil {
+				b = parsed
+			}
+		}
+
+		isMatch := (coreFEN(b.FEN()) == targetCore)
+		curr := g.RootMove
+		for !isMatch && curr != nil {
+			b.MakeMove(curr.Move)
+			if coreFEN(b.FEN()) == targetCore {
+				isMatch = true
+				break
+			}
+			curr = curr.Next
+		}
+		if isMatch {
+			matched = append(matched, i)
+		}
+	}
+	return matched
+}
+
 // coreFEN strips the halfmove clock and fullmove number for position matching.
 func coreFEN(fen string) string {
 	parts := [4]string{}
@@ -145,3 +185,4 @@ func coreFEN(fen string) string {
 	}
 	return fen
 }
+
