@@ -1,0 +1,14 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "newscid",
+  "outputfilename": "newscid",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "build:tags": "webkit2_41",
+  "author": {
+    "name": "Christopher Patrick Fair",
+    "email": "christopherpatrickfair@gmail.com"
+  }
+}
