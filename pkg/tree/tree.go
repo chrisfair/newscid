@@ -1,0 +1,147 @@
+package tree
+
+import (
+	"sort"
+
+	"newscid/pkg/chess"
+	"newscid/pkg/database/scid"
+)
+
+// MoveStat represents statistics for a move in the current position.
+type MoveStat struct {
+	Move      string  `json:"move"`      // SAN
+	UCI       string  `json:"uci"`       // e.g. "e2e4"
+	Count     int     `json:"count"`     // Number of games
+	WhiteWins int     `json:"whiteWins"`
+	Draws     int     `json:"draws"`
+	BlackWins int     `json:"blackWins"`
+	ScorePct  float64 `json:"scorePct"`  // White score % (or moving side %)
+	AvgElo    int     `json:"avgElo"`
+	ECO       string  `json:"eco,omitempty"`
+}
+
+// TreeResult contains the opening tree stats for a position.
+type TreeResult struct {
+	FEN        string      `json:"fen"`
+	TotalGames int         `json:"totalGames"`
+	Moves      []*MoveStat `json:"moves"`
+}
+
+// BuildTreeFromGames generates tree statistics for a position given a set of games.
+func BuildTreeFromGames(fen string, games []*chess.Game) *TreeResult {
+	targetBoard, err := chess.ParseFEN(fen)
+	if err != nil {
+		targetBoard = chess.NewBoard()
+		fen = targetBoard.FEN()
+	}
+
+	targetFENCore := coreFEN(targetBoard.FEN())
+	moveStatsMap := make(map[string]*MoveStat)
+	totalGamesMatching := 0
+
+	for _, g := range games {
+		// Replay game and check if it reaches targetFENCore
+		b := chess.NewBoard()
+		if g.StartFEN != "" && g.StartFEN != chess.StartingFEN {
+			if parsed, err := chess.ParseFEN(g.StartFEN); err == nil {
+				b = parsed
+			}
+		}
+
+		matched := false
+		curr := g.RootMove
+		for curr != nil {
+			if coreFEN(b.FEN()) == targetFENCore {
+				matched = true
+				totalGamesMatching++
+
+				san := curr.SAN
+				stat, exists := moveStatsMap[san]
+				if !exists {
+					stat = &MoveStat{
+						Move: san,
+						UCI:  curr.UCI,
+					}
+					moveStatsMap[san] = stat
+				}
+				stat.Count++
+				switch g.Result {
+				case chess.ResultWhiteWins:
+					stat.WhiteWins++
+				case chess.ResultBlackWins:
+					stat.BlackWins++
+				case chess.ResultDraw:
+					stat.Draws++
+				}
+				break
+			}
+
+			b.MakeMove(curr.Move)
+			curr = curr.Next
+		}
+
+		if !matched && coreFEN(b.FEN()) == targetFENCore {
+			totalGamesMatching++
+		}
+	}
+
+	var moveStats []*MoveStat
+	for _, stat := range moveStatsMap {
+		if stat.Count > 0 {
+			points := float64(stat.WhiteWins) + 0.5*float64(stat.Draws)
+			stat.ScorePct = (points / float64(stat.Count)) * 100.0
+		}
+		moveStats = append(moveStats, stat)
+	}
+
+	sort.Slice(moveStats, func(i, j int) bool {
+		return moveStats[i].Count > moveStats[j].Count
+	})
+
+	return &TreeResult{
+		FEN:        fen,
+		TotalGames: totalGamesMatching,
+		Moves:      moveStats,
+	}
+}
+
+// BuildTreeFromDatabase searches the database for games matching the position and aggregates move stats.
+func BuildTreeFromDatabase(db *scid.Database, fen string, maxGames int) (*TreeResult, error) {
+	if !db.IsOpen {
+		return &TreeResult{FEN: fen}, nil
+	}
+
+	var sampledGames []*chess.Game
+	numGames := db.NumGames()
+	limit := numGames
+	if maxGames > 0 && limit > maxGames {
+		limit = maxGames
+	}
+
+	for i := 1; i <= limit; i++ {
+		g, err := db.GetGame(i)
+		if err == nil {
+			sampledGames = append(sampledGames, g)
+		}
+	}
+
+	return BuildTreeFromGames(fen, sampledGames), nil
+}
+
+// coreFEN strips the halfmove clock and fullmove number for position matching.
+func coreFEN(fen string) string {
+	parts := [4]string{}
+	idx := 0
+	start := 0
+	for i := 0; i < len(fen) && idx < 4; i++ {
+		if fen[i] == ' ' {
+			parts[idx] = fen[start:i]
+			idx++
+			start = i + 1
+		}
+	}
+	if idx == 4 {
+		return parts[0] + " " + parts[1] + " " + parts[2] + " " + parts[3]
+	}
+	return fen
+}
