@@ -38,6 +38,14 @@ export function GetDatabaseInfo() {
   return window['go']['main']['App']['GetDatabaseInfo']();
 }
 
+export function GetDiscoveredDatabases() {
+  return window['go']['main']['App']['GetDiscoveredDatabases']();
+}
+
+export function GetDiscoveredEngines() {
+  return window['go']['main']['App']['GetDiscoveredEngines']();
+}
+
 export function GetEngineEval() {
   return window['go']['main']['App']['GetEngineEval']();
 }

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import HeaderBar, { PieceSetOption, BoardThemeOption } from './components/HeaderBar.vue'
+import HeaderBar, { PieceSetOption, BoardThemeOption, DiscoveredDatabase } from './components/HeaderBar.vue'
 import Chessboard from './components/Chessboard.vue'
 import MoveNotation, { FlatMove } from './components/MoveNotation.vue'
 import OpeningTree, { TreeData } from './components/OpeningTree.vue'
-import EnginePanel, { EvalInfo } from './components/EnginePanel.vue'
+import EnginePanel, { EvalInfo, EngineOption } from './components/EnginePanel.vue'
 import GameBrowser, { GameSummary } from './components/GameBrowser.vue'
 
 // Import Wails backend bindings
@@ -27,6 +27,8 @@ import {
   StopEngine,
   AnalyzePosition,
   GetAvailableEngines,
+  GetDiscoveredEngines,
+  GetDiscoveredDatabases,
   GetPieceSets,
   GetBoardThemes,
   GetScidSystemBases,
@@ -68,6 +70,7 @@ const activeGameId = ref<number | undefined>(undefined)
 // Database State
 const dbInfo = ref<{ basePath: string; name: string; numGames: number; description: string } | null>(null)
 const systemBases = ref<string[]>([])
+const discoveredDatabases = ref<DiscoveredDatabase[]>([])
 const gamesList = ref<GameSummary[]>([])
 const totalGames = ref(0)
 const currentPage = ref(1)
@@ -77,8 +80,87 @@ const searchFilter = ref<{ player?: string; result?: string; eco?: string }>({})
 // Engine State
 const isAnalyzing = ref(false)
 const availableEngines = ref<string[]>([])
+const discoveredEngines = ref<EngineOption[]>([])
 const selectedEngine = ref('')
 const evalInfo = ref<EvalInfo | null>(null)
+
+// Resizable Panes State
+const leftColWidth = ref<number>(Number(localStorage.getItem('newscid:leftColWidth')) || 560)
+const bottomDrawerHeight = ref<number>(Number(localStorage.getItem('newscid:bottomDrawerHeight')) || 240)
+const isResizingH = ref(false)
+const isResizingV = ref(false)
+const isMdScreen = ref(window.innerWidth >= 768)
+
+function handleWindowResize() {
+  isMdScreen.value = window.innerWidth >= 768
+}
+
+function startHorizontalResize(e: MouseEvent) {
+  e.preventDefault()
+  isResizingH.value = true
+  const startX = e.clientX
+  const startWidth = leftColWidth.value
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+
+  function onMouseMove(moveEvent: MouseEvent) {
+    const delta = moveEvent.clientX - startX
+    const minW = 360
+    const maxW = Math.max(minW, window.innerWidth - 300)
+    leftColWidth.value = Math.max(minW, Math.min(maxW, startWidth + delta))
+  }
+
+  function onMouseUp() {
+    isResizingH.value = false
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    window.removeEventListener('mousemove', onMouseMove)
+    window.removeEventListener('mouseup', onMouseUp)
+    localStorage.setItem('newscid:leftColWidth', String(leftColWidth.value))
+  }
+
+  window.addEventListener('mousemove', onMouseMove)
+  window.addEventListener('mouseup', onMouseUp)
+}
+
+function resetHorizontalResize() {
+  leftColWidth.value = 560
+  localStorage.setItem('newscid:leftColWidth', '560')
+}
+
+function startVerticalResize(e: MouseEvent) {
+  e.preventDefault()
+  isResizingV.value = true
+  const startY = e.clientY
+  const startHeight = bottomDrawerHeight.value
+  document.body.style.cursor = 'row-resize'
+  document.body.style.userSelect = 'none'
+
+  function onMouseMove(moveEvent: MouseEvent) {
+    // Dragging up increases height
+    const delta = startY - moveEvent.clientY
+    const minH = 120
+    const maxH = Math.max(minH, window.innerHeight - 250)
+    bottomDrawerHeight.value = Math.max(minH, Math.min(maxH, startHeight + delta))
+  }
+
+  function onMouseUp() {
+    isResizingV.value = false
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    window.removeEventListener('mousemove', onMouseMove)
+    window.removeEventListener('mouseup', onMouseUp)
+    localStorage.setItem('newscid:bottomDrawerHeight', String(bottomDrawerHeight.value))
+  }
+
+  window.addEventListener('mousemove', onMouseMove)
+  window.addEventListener('mouseup', onMouseUp)
+}
+
+function resetVerticalResize() {
+  bottomDrawerHeight.value = 240
+  localStorage.setItem('newscid:bottomDrawerHeight', '240')
+}
 
 // Customization
 const pieceSets = ref<PieceSetOption[]>([])
@@ -107,16 +189,26 @@ const importPGNText = ref('')
 // Initialize
 onMounted(async () => {
   try {
+    window.addEventListener('resize', handleWindowResize)
+
     // 1. Load sets and themes
     pieceSets.value = (await GetPieceSets()) as PieceSetOption[]
     boardThemes.value = (await GetBoardThemes()) as BoardThemeOption[]
 
-    // 2. Discover system sample databases (Tactics, Mate in 1, etc.)
+    // 2. Discover user databases and system bases
+    discoveredDatabases.value = (await GetDiscoveredDatabases()) as DiscoveredDatabase[]
     systemBases.value = await GetScidSystemBases()
 
-    // 3. Discover available UCI engines
+    // 3. Discover available UCI engines and configured Scid engines
+    discoveredEngines.value = (await GetDiscoveredEngines()) as EngineOption[]
     availableEngines.value = await GetAvailableEngines()
-    if (availableEngines.value.length > 0) {
+
+    if (discoveredEngines.value.length > 0) {
+      const firstAvailable = discoveredEngines.value.find(e => e.available)
+      if (firstAvailable) {
+        selectedEngine.value = firstAvailable.name || firstAvailable.cmd
+      }
+    } else if (availableEngines.value.length > 0) {
       selectedEngine.value = availableEngines.value[0]
     }
 
@@ -125,9 +217,22 @@ onMounted(async () => {
       evalInfo.value = data
     })
 
-    // 5. If system bases exist, auto-open Tactics base for immediate exploration
-    if (systemBases.value.length > 0) {
-      await handleOpenSystemBase(systemBases.value[0])
+    // 5. Auto-open user's database or first discovered base
+    let autoBase: string | null = null
+    if (discoveredDatabases.value.length > 0) {
+      const userBase = discoveredDatabases.value.find(d => d.name === 'ChristopherFair' && d.exists)
+        || discoveredDatabases.value.find(d => d.category === 'User Databases' && d.exists && d.numGames > 0)
+        || discoveredDatabases.value.find(d => d.exists && d.numGames > 0 && d.numGames < 100000)
+      if (userBase) {
+        autoBase = userBase.basePath
+      }
+    }
+    if (!autoBase && systemBases.value.length > 0) {
+      autoBase = systemBases.value[0]
+    }
+
+    if (autoBase) {
+      await handleOpenDiscoveredBase(autoBase)
     }
 
     // Update board state for start position
@@ -141,6 +246,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
+  window.removeEventListener('resize', handleWindowResize)
   EventsOff('engine:eval')
   if (playInterval) clearInterval(playInterval)
 })
@@ -335,6 +441,23 @@ async function handleOpenSystemBase(path: string) {
     }
   } catch (err) {
     console.error('Failed to open sample base:', err)
+  }
+}
+
+async function handleOpenDiscoveredBase(path: string) {
+  try {
+    const info = await OpenDatabase(path)
+    dbInfo.value = info
+    currentPage.value = 1
+    searchFilter.value = {}
+    await refreshGames()
+    if (gamesList.value.length > 0) {
+      await handleLoadGame(1)
+    }
+    bottomDrawerOpen.value = true
+  } catch (err) {
+    console.error('Failed to open database:', err)
+    alert(`Failed to open database: ${err}`)
   }
 }
 
@@ -543,6 +666,7 @@ async function handleSelectEngine(path: string) {
     <HeaderBar
       :db-name="dbInfo?.name"
       :system-bases="systemBases"
+      :discovered-databases="discoveredDatabases"
       :piece-sets="pieceSets"
       :board-themes="boardThemes"
       :current-piece-set="currentPieceSet"
@@ -551,6 +675,7 @@ async function handleSelectEngine(path: string) {
       @open-d-b="handleOpenDB"
       @create-d-b="handleCreateDB"
       @open-system-base="handleOpenSystemBase"
+      @open-discovered-base="handleOpenDiscoveredBase"
       @import-p-g-n="handleImportPGN"
       @export-p-g-n="handleExportPGN"
       @change-piece-set="currentPieceSet = $event"
@@ -559,9 +684,12 @@ async function handleSelectEngine(path: string) {
     />
 
     <!-- Main Workspace (Split Grid) -->
-    <div class="workspace-grid flex-1 flex flex-col md:flex-row overflow-hidden p-2 gap-2">
-      <!-- Left Column: Chessboard & Engine Control -->
-      <div class="left-col flex flex-col items-center justify-between gap-2 max-w-[620px] w-full shrink-0">
+    <div class="workspace-grid flex-1 flex flex-col md:flex-row overflow-hidden p-2 gap-1 relative">
+      <!-- Left Column: Chessboard & Engine Control (Resizable) -->
+      <div
+        class="left-col flex flex-col items-center justify-between gap-2 w-full md:w-auto shrink-0 overflow-y-auto"
+        :style="{ width: isMdScreen ? `${leftColWidth}px` : '100%' }"
+      >
         <!-- Interactive Chessboard -->
         <Chessboard
           :fen="currentFEN"
@@ -580,6 +708,7 @@ async function handleSelectEngine(path: string) {
             :eval-info="evalInfo"
             :is-analyzing="isAnalyzing"
             :available-engines="availableEngines"
+            :discovered-engines="discoveredEngines"
             :selected-engine="selectedEngine"
             @toggle-analysis="toggleAnalysis"
             @select-engine="handleSelectEngine"
@@ -587,8 +716,22 @@ async function handleSelectEngine(path: string) {
         </div>
       </div>
 
+      <!-- Horizontal Drag Splitter (between Left and Right Panes) -->
+      <div
+        class="hidden md:flex items-center justify-center w-2 cursor-col-resize hover:bg-emerald-500/20 active:bg-emerald-500/40 rounded transition-colors group select-none relative z-10 shrink-0"
+        :class="{ 'bg-emerald-500/30': isResizingH }"
+        title="Drag to resize panes (Double-click to reset)"
+        @mousedown="startHorizontalResize"
+        @dblclick="resetHorizontalResize"
+      >
+        <div
+          class="w-1 h-8 rounded-full bg-zinc-700 group-hover:bg-emerald-400 group-active:bg-emerald-400 transition-colors"
+          :class="{ 'bg-emerald-400': isResizingH }"
+        />
+      </div>
+
       <!-- Right Column: Tabbed Panels (Moves, Opening Tree, Game Info) -->
-      <div class="right-col flex-1 flex flex-col overflow-hidden bg-zinc-900 border border-zinc-800 rounded-xl shadow-lg">
+      <div class="right-col flex-1 min-w-0 flex flex-col overflow-hidden bg-zinc-900 border border-zinc-800 rounded-xl shadow-lg">
         <!-- Tabs Header -->
         <div class="tabs-header flex items-center justify-between p-2 bg-zinc-950 border-b border-zinc-800">
           <div class="flex items-center gap-1">
@@ -700,10 +843,26 @@ async function handleSelectEngine(path: string) {
       </div>
     </div>
 
-    <!-- Bottom Panel: Database Games Browser (Collapsible) -->
+    <!-- Vertical Drag Splitter (between Workspace and Database Drawer) -->
     <div
       v-if="bottomDrawerOpen"
-      class="bottom-drawer h-[240px] shrink-0 px-2 pb-2 transition-all duration-200"
+      class="flex items-center justify-center h-2 cursor-row-resize hover:bg-emerald-500/20 active:bg-emerald-500/40 transition-colors group select-none relative z-10 shrink-0"
+      :class="{ 'bg-emerald-500/30': isResizingV }"
+      title="Drag to resize database drawer (Double-click to reset)"
+      @mousedown="startVerticalResize"
+      @dblclick="resetVerticalResize"
+    >
+      <div
+        class="h-1 w-12 rounded-full bg-zinc-700 group-hover:bg-emerald-400 group-active:bg-emerald-400 transition-colors"
+        :class="{ 'bg-emerald-400': isResizingV }"
+      />
+    </div>
+
+    <!-- Bottom Panel: Database Games Browser (Collapsible & Resizable) -->
+    <div
+      v-if="bottomDrawerOpen"
+      class="bottom-drawer shrink-0 px-2 pb-2 transition-all duration-75 overflow-hidden"
+      :style="{ height: `${bottomDrawerHeight}px` }"
     >
       <GameBrowser
         :games="gamesList"

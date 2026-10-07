@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import {
   FolderOpen,
   PlusCircle,
@@ -9,7 +9,8 @@ import {
   Palette,
   RotateCcw,
   BookOpen,
-  Database
+  Database,
+  ChevronDown
 } from '@lucide/vue'
 
 export interface PieceSetOption {
@@ -27,9 +28,21 @@ export interface BoardThemeOption {
   highlight: string
 }
 
+export interface DiscoveredDatabase {
+  name: string
+  basePath: string
+  type: string
+  category: string
+  numGames: number
+  description: string
+  sizeStr: string
+  exists: boolean
+}
+
 const props = defineProps<{
   dbName?: string
   systemBases: string[]
+  discoveredDatabases?: DiscoveredDatabase[]
   pieceSets: PieceSetOption[]
   boardThemes: BoardThemeOption[]
   currentPieceSet: string
@@ -41,6 +54,7 @@ const emit = defineEmits<{
   (e: 'openDB'): void
   (e: 'createDB'): void
   (e: 'openSystemBase', path: string): void
+  (e: 'openDiscoveredBase', path: string): void
   (e: 'importPGN'): void
   (e: 'exportPGN'): void
   (e: 'changePieceSet', id: string): void
@@ -49,7 +63,46 @@ const emit = defineEmits<{
 }>()
 
 const showSettingsModal = ref(false)
-const showSystemBasesDropdown = ref(false)
+const showBasesDropdown = ref(false)
+
+const groupedDatabases = computed(() => {
+  const groups: Record<string, DiscoveredDatabase[]> = {}
+  if (props.discoveredDatabases && props.discoveredDatabases.length > 0) {
+    for (const db of props.discoveredDatabases) {
+      const cat = db.category || 'Other Databases'
+      if (!groups[cat]) {
+        groups[cat] = []
+      }
+      groups[cat].push(db)
+    }
+    return groups
+  }
+
+  if (props.systemBases && props.systemBases.length > 0) {
+    groups['Tutorial & Tactics'] = props.systemBases.map(b => ({
+      name: b.split('/').pop() || b,
+      basePath: b,
+      type: 'scid',
+      category: 'Tutorial & Tactics',
+      numGames: 0,
+      description: '',
+      sizeStr: '',
+      exists: true,
+    }))
+  }
+  return groups
+})
+
+function formatGameCount(count: number): string {
+  if (count <= 0) return ''
+  if (count >= 1000000) {
+    return `${(count / 1000000).toFixed(1)}M games`
+  }
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1)}k games`
+  }
+  return `${count} games`
+}
 </script>
 
 <template>
@@ -85,29 +138,57 @@ const showSystemBasesDropdown = ref(false)
           <span>Create DB</span>
         </button>
 
-        <!-- System Bases Dropdown -->
-        <div v-if="systemBases.length > 0" class="relative">
+        <!-- Installed & Discovered Databases Dropdown -->
+        <div v-if="Object.keys(groupedDatabases).length > 0" class="relative">
           <button
-            class="header-btn flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800 transition-colors"
-            @click="showSystemBasesDropdown = !showSystemBasesDropdown"
+            class="header-btn flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800 transition-colors"
+            @click="showBasesDropdown = !showBasesDropdown"
           >
-            <BookOpen class="w-3.5 h-3.5 text-blue-400" />
-            <span>Sample Bases</span>
+            <Database class="w-3.5 h-3.5 text-blue-400" />
+            <span>Installed Bases</span>
+            <ChevronDown class="w-3 h-3 text-zinc-500" />
           </button>
 
+          <!-- Backdrop click listener -->
           <div
-            v-if="showSystemBasesDropdown"
-            class="absolute top-full left-0 mt-1 w-48 bg-zinc-900 border border-zinc-700 rounded-lg shadow-2xl py-1 z-50 text-xs"
+            v-if="showBasesDropdown"
+            class="fixed inset-0 z-40"
+            @click="showBasesDropdown = false"
+          />
+
+          <div
+            v-if="showBasesDropdown"
+            class="absolute top-full left-0 mt-1 w-84 max-h-[440px] overflow-y-auto bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl py-1 z-50 text-xs divide-y divide-zinc-800"
           >
-            <button
-              v-for="base in systemBases"
-              :key="base"
-              class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 capitalize flex items-center justify-between"
-              @click="emit('openSystemBase', base); showSystemBasesDropdown = false"
-            >
-              <span>{{ base.split('/').pop() }}</span>
-              <Database class="w-3 h-3 text-zinc-500" />
-            </button>
+            <div v-for="(dbs, category) in groupedDatabases" :key="category" class="py-1">
+              <div class="px-3 py-1 text-[10px] font-bold text-zinc-400 uppercase tracking-wider bg-zinc-950/70 flex items-center justify-between">
+                <span>{{ category }}</span>
+                <span class="text-zinc-500 font-mono">{{ dbs.length }}</span>
+              </div>
+              <button
+                v-for="db in dbs"
+                :key="db.basePath"
+                class="w-full text-left px-3 py-2 hover:bg-zinc-800 text-zinc-200 transition-colors flex items-center justify-between group cursor-pointer"
+                @click="emit('openDiscoveredBase', db.basePath); showBasesDropdown = false"
+              >
+                <div class="flex flex-col min-w-0 pr-2">
+                  <div class="flex items-center gap-1.5">
+                    <span class="font-medium truncate text-zinc-100 group-hover:text-emerald-400 transition-colors">{{ db.name }}</span>
+                    <span
+                      class="px-1 py-0.2 rounded text-[9px] font-mono uppercase"
+                      :class="db.type === 'pgn' ? 'bg-amber-950/60 text-amber-400 border border-amber-800/50' : 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/50'"
+                    >
+                      {{ db.type }}
+                    </span>
+                  </div>
+                  <span v-if="db.description" class="text-[10px] text-zinc-400 truncate mt-0.5">{{ db.description }}</span>
+                </div>
+                <div class="flex flex-col items-end shrink-0 text-[10px] font-mono">
+                  <span v-if="db.numGames > 0" class="text-emerald-400 font-semibold">{{ formatGameCount(db.numGames) }}</span>
+                  <span v-if="db.sizeStr" class="text-zinc-500">{{ db.sizeStr }}</span>
+                </div>
+              </button>
+            </div>
           </div>
         </div>
       </div>

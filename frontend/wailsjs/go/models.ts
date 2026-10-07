@@ -129,6 +129,32 @@ export namespace eco {
 
 export namespace engine {
 	
+	export class EngineConfig {
+	    name: string;
+	    cmd: string;
+	    resolvedCmd: string;
+	    args: string;
+	    dir: string;
+	    uci: boolean;
+	    elo: number;
+	    available: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new EngineConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.cmd = source["cmd"];
+	        this.resolvedCmd = source["resolvedCmd"];
+	        this.args = source["args"];
+	        this.dir = source["dir"];
+	        this.uci = source["uci"];
+	        this.elo = source["elo"];
+	        this.available = source["available"];
+	    }
+	}
 	export class EvalInfo {
 	    depth: number;
 	    scoreCp: number;
@@ -239,6 +265,32 @@ export namespace main {
 
 export namespace scid {
 	
+	export class DiscoveredDatabase {
+	    name: string;
+	    basePath: string;
+	    type: string;
+	    category: string;
+	    numGames: number;
+	    description: string;
+	    sizeStr: string;
+	    exists: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new DiscoveredDatabase(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.basePath = source["basePath"];
+	        this.type = source["type"];
+	        this.category = source["category"];
+	        this.numGames = source["numGames"];
+	        this.description = source["description"];
+	        this.sizeStr = source["sizeStr"];
+	        this.exists = source["exists"];
+	    }
+	}
 	export class GameSummary {
 	    id: number;
 	    white: string;

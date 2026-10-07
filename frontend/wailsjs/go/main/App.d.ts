@@ -4,8 +4,8 @@ import {eco} from '../models';
 import {main} from '../models';
 import {chess} from '../models';
 import {sets} from '../models';
-import {engine} from '../models';
 import {scid} from '../models';
+import {engine} from '../models';
 import {tree} from '../models';
 
 export function AnalyzePosition(arg1:string,arg2:Array<string>,arg3:number):Promise<void>;
@@ -25,6 +25,10 @@ export function GetAvailableEngines():Promise<Array<string>>;
 export function GetBoardThemes():Promise<Array<sets.BoardThemeInfo>>;
 
 export function GetDatabaseInfo():Promise<main.DatabaseInfo>;
+
+export function GetDiscoveredDatabases():Promise<Array<scid.DiscoveredDatabase>>;
+
+export function GetDiscoveredEngines():Promise<Array<engine.EngineConfig>>;
 
 export function GetEngineEval():Promise<engine.EvalInfo>;
 
