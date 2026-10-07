@@ -7,6 +7,10 @@ import {chess} from '../models';
 import {sets} from '../models';
 import {scid} from '../models';
 import {tree} from '../models';
+import {repertoire} from '../models';
+import {puzzleminer} from '../models';
+
+export function AddRepertoireMove(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string):Promise<void>;
 
 export function AnalyzePosition(arg1:string,arg2:Array<string>,arg3:number):Promise<void>;
 
@@ -21,6 +25,8 @@ export function CloseDatabase():Promise<void>;
 export function CreateDatabase(arg1:string,arg2:string):Promise<main.DatabaseInfo>;
 
 export function DeleteGame(arg1:number,arg2:boolean):Promise<void>;
+
+export function DeleteRepertoire(arg1:string):Promise<void>;
 
 export function ExportPGN(arg1:chess.Game):Promise<string>;
 
@@ -48,6 +54,12 @@ export function GetOpeningTree(arg1:string):Promise<tree.TreeResult>;
 
 export function GetPieceSets():Promise<Array<sets.PieceSetInfo>>;
 
+export function GetProgressivePuzzle(arg1:number):Promise<main.TacticsPuzzle>;
+
+export function GetRepertoire(arg1:string):Promise<repertoire.Repertoire>;
+
+export function GetRepertoires():Promise<Array<repertoire.RepertoireSummary>>;
+
 export function GetScidSystemBases():Promise<Array<string>>;
 
 export function IsScidDriverAvailable():Promise<boolean>;
@@ -55,6 +67,8 @@ export function IsScidDriverAvailable():Promise<boolean>;
 export function LoadTacticsPuzzle(arg1:string,arg2:number):Promise<main.TacticsPuzzle>;
 
 export function MakeMove(arg1:string,arg2:string):Promise<main.BoardState>;
+
+export function MinePuzzlesFromDatabase(arg1:string,arg2:number):Promise<Array<puzzleminer.MinedPuzzle>>;
 
 export function OpenDatabase(arg1:string):Promise<main.DatabaseInfo>;
 
@@ -64,12 +78,18 @@ export function ParseFEN(arg1:string):Promise<main.BoardState>;
 
 export function ParsePGN(arg1:string):Promise<chess.Game>;
 
+export function RecordRepertoirePractice(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<void>;
+
 export function SaveFileDialog(arg1:string):Promise<string>;
 
 export function SaveGame(arg1:chess.Game):Promise<number>;
+
+export function SaveRepertoire(arg1:repertoire.Repertoire):Promise<void>;
 
 export function SearchPosition(arg1:string):Promise<Array<scid.GameSummary>>;
 
 export function StartEngine(arg1:string):Promise<void>;
 
 export function StopEngine():Promise<void>;
+
+export function VerifyRepertoireMove(arg1:string,arg2:string,arg3:string):Promise<main.RepertoireCheckResult>;

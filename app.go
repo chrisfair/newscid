@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -15,6 +17,8 @@ import (
 	"newscid/pkg/database/sciddriver"
 	"newscid/pkg/eco"
 	"newscid/pkg/engine"
+	"newscid/pkg/puzzleminer"
+	"newscid/pkg/repertoire"
 	"newscid/pkg/sets"
 	"newscid/pkg/tree"
 )
@@ -45,6 +49,13 @@ type GamesPage struct {
 	Games []*scid.GameSummary `json:"games"`
 }
 
+// RepertoireCheckResult contains feedback on whether a move aligns with repertoire.
+type RepertoireCheckResult struct {
+	IsRepertoire bool                        `json:"isRepertoire"`
+	PlayedMove   *repertoire.RepertoireMove  `json:"playedMove,omitempty"`
+	Alternatives []repertoire.RepertoireMove `json:"alternatives"`
+}
+
 // App struct
 type App struct {
 	ctx        context.Context
@@ -54,10 +65,12 @@ type App struct {
 	driver     *sciddriver.Driver
 	engine     *engine.Engine
 	activeGame *chess.Game
+	repMgr     *repertoire.Manager
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
+	rand.Seed(time.Now().UnixNano())
 	classifier := eco.NewClassifier()
 	// Attempt to load system scid.eco if available
 	if _, err := os.Stat("/usr/share/scid/data/scid.eco"); err == nil {
@@ -68,8 +81,10 @@ func NewApp() *App {
 		db:     scid.NewDatabase(),
 		eco:    classifier,
 		driver: sciddriver.NewDriver(),
+		repMgr: repertoire.NewManager(""),
 	}
 }
+
 
 // startup is called when the app starts.
 func (a *App) startup(ctx context.Context) {
@@ -601,7 +616,7 @@ func (a *App) LoadTacticsPuzzle(basePath string, puzzleNum int) (*TacticsPuzzle,
 	}
 
 	if puzzleNum <= 0 {
-		puzzleNum = 1
+		puzzleNum = rand.Intn(total) + 1
 	} else if puzzleNum > total {
 		puzzleNum = total
 	}
@@ -651,9 +666,122 @@ func (a *App) LoadTacticsPuzzle(basePath string, puzzleNum int) (*TacticsPuzzle,
 	}, nil
 }
 
+// GetProgressivePuzzle delivers a puzzle scaled dynamically to the user's level.
+func (a *App) GetProgressivePuzzle(level int) (*TacticsPuzzle, error) {
+	if level <= 0 {
+		level = 1
+	}
+
+	var base string
+	switch {
+	case level <= 5:
+		base = "/usr/share/scid/bases/matein1"
+	case level <= 15:
+		base = "/usr/share/scid/bases/matein2"
+	case level <= 25:
+		base = "/usr/share/scid/bases/tactics"
+	case level <= 35:
+		base = "/usr/share/scid/bases/matein3"
+	case level <= 45:
+		base = "/usr/share/scid/bases/matein4andmore"
+	default:
+		base = "/usr/share/scid/bases/endings"
+	}
+
+	if _, err := os.Stat(base + ".si4"); err != nil {
+		base = "/usr/share/scid/bases/tactics"
+	}
+
+	puzzle, err := a.LoadTacticsPuzzle(base, 0)
+	if err != nil {
+		return nil, err
+	}
+	puzzle.Theme = fmt.Sprintf("Level %d (%s)", level, filepath.Base(base))
+	return puzzle, nil
+}
+
+// ==========================================
+// Opening Repertoire Operations
+// ==========================================
+
+func (a *App) GetRepertoires() []repertoire.RepertoireSummary {
+	return a.repMgr.ListRepertoires()
+}
+
+func (a *App) GetRepertoire(id string) (*repertoire.Repertoire, error) {
+	return a.repMgr.GetRepertoire(id)
+}
+
+func (a *App) SaveRepertoire(rep *repertoire.Repertoire) error {
+	return a.repMgr.SaveRepertoire(rep)
+}
+
+func (a *App) DeleteRepertoire(id string) error {
+	return a.repMgr.DeleteRepertoire(id)
+}
+
+func (a *App) VerifyRepertoireMove(repID, fen, uci string) (*RepertoireCheckResult, error) {
+	isMatch, move, alts, err := a.repMgr.VerifyMove(repID, fen, uci)
+	if err != nil {
+		return nil, err
+	}
+	return &RepertoireCheckResult{
+		IsRepertoire: isMatch,
+		PlayedMove:   move,
+		Alternatives: alts,
+	}, nil
+}
+
+func (a *App) RecordRepertoirePractice(repID, fen, uci string, wasCorrect bool) {
+	a.repMgr.RecordPractice(repID, fen, uci, wasCorrect)
+}
+
+func (a *App) AddRepertoireMove(repID, fen, uci, san, nextFen, comment string) error {
+	rep, err := a.repMgr.GetRepertoire(repID)
+	if err != nil {
+		return err
+	}
+	core := repertoire.CoreFEN(fen)
+	existing := rep.Positions[core]
+	for _, m := range existing {
+		if strings.EqualFold(m.UCI, uci) {
+			return nil
+		}
+	}
+	rep.Positions[core] = append(existing, repertoire.RepertoireMove{
+		UCI:     uci,
+		SAN:     san,
+		NextFEN: repertoire.CoreFEN(nextFen),
+		Comment: comment,
+	})
+	return a.repMgr.SaveRepertoire(rep)
+}
+
+// ==========================================
+// Database Puzzle Miner Operations
+// ==========================================
+
+func (a *App) MinePuzzlesFromDatabase(playerName string, maxGames int) ([]puzzleminer.MinedPuzzle, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	if !a.db.IsOpen {
+		return nil, fmt.Errorf("no database open to mine puzzles from")
+	}
+
+	filter := puzzleminer.MiningFilter{
+		PlayerName: playerName,
+		MaxGames:   maxGames,
+		MinDeltaCp: 250,
+	}
+
+	return puzzleminer.MineFromDatabase(a.db, a.engine, filter)
+}
+
 func (a *App) IsScidDriverAvailable() bool {
 	return a.driver.IsAvailable()
 }
+
 
 
 func makeBoardState(b *chess.Board) *BoardState {

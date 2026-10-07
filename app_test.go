@@ -9,8 +9,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
 )
+
 
 func TestAppDatabaseAndEngineDiscovery(t *testing.T) {
 	app := NewApp()
@@ -153,5 +155,39 @@ func TestAppTacticsAndSearchPosition(t *testing.T) {
 		assert.NotEmpty(t, results)
 	}
 }
+
+func TestAppNewFeatures(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+
+	// 1. Repertoires
+	reps := app.GetRepertoires()
+	require.NotEmpty(t, reps)
+	assert.GreaterOrEqual(t, len(reps), 2)
+
+	check, err := app.VerifyRepertoireMove(reps[0].ID, chess.StartingFEN, "e2e4")
+	require.NoError(t, err)
+	assert.NotNil(t, check)
+
+	// 2. Progressive Tactics Puzzle
+	progPuzzle, err := app.GetProgressivePuzzle(1)
+	if err == nil {
+		assert.NotEmpty(t, progPuzzle.StartFEN)
+		assert.Contains(t, progPuzzle.Theme, "Level 1")
+		t.Logf("Progressive Puzzle Level 1: %s (%s)", progPuzzle.Theme, progPuzzle.StartFEN)
+	}
+
+	// 3. Database Puzzle Mining
+	userBase := "/home/christopher/ChessDataBases/ChristopherFair/ChristopherFair"
+	if _, err := os.Stat(userBase + ".si4"); err == nil {
+		_, err := app.OpenDatabase(userBase)
+		require.NoError(t, err)
+
+		mined, err := app.MinePuzzlesFromDatabase("", 15)
+		require.NoError(t, err)
+		t.Logf("Mined %d tactical puzzles from ChristopherFair", len(mined))
+	}
+}
+
 
 

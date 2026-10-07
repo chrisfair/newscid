@@ -12,6 +12,10 @@ import PlayEngineModal from './components/PlayEngineModal.vue'
 import TacticsTrainerModal from './components/TacticsTrainerModal.vue'
 import EvaluationGraph, { GameAnalysisData } from './components/EvaluationGraph.vue'
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal.vue'
+import OpeningTrainerModal from './components/OpeningTrainerModal.vue'
+import ProgressiveTacticsModal from './components/ProgressiveTacticsModal.vue'
+import PuzzleMinerModal from './components/PuzzleMinerModal.vue'
+
 
 // Import Wails backend bindings
 import {
@@ -113,9 +117,14 @@ const trialSavedState = ref<{
 const showSetupBoardModal = ref(false)
 const showPlayEngineModal = ref(false)
 const showTacticsModal = ref(false)
+const showOpeningTrainerModal = ref(false)
+const showProgressiveTacticsModal = ref(false)
+const showPuzzleMinerModal = ref(false)
 const showShortcutsModal = ref(false)
 const showImportModal = ref(false)
 const importPGNText = ref('')
+
+
 
 // Resizable Panes State
 const leftColWidth = ref<number>(Number(localStorage.getItem('newscid:leftColWidth')) || 560)
@@ -961,12 +970,16 @@ async function handleSelectEngine(path: string) {
       @annotate-game="handleAnnotateGame"
       @play-vs-engine="handlePlayVsEngine"
       @tactics-trainer="handleTacticsTrainer"
+      @opening-trainer="showOpeningTrainerModal = true"
+      @progressive-tactics="showProgressiveTacticsModal = true"
+      @mine-puzzles="showPuzzleMinerModal = true"
       @search-position="handleSearchPosition"
       @toggle-flip="flipped = !flipped"
       @change-piece-set="currentPieceSet = $event"
       @change-theme="currentThemeId = $event"
       @show-shortcuts="showShortcutsModal = true"
     />
+
 
     <!-- Top Header Bar -->
     <HeaderBar
@@ -1233,11 +1246,40 @@ async function handleSelectEngine(path: string) {
       @close="showTacticsModal = false"
     />
 
+    <!-- Opening Repertoire Builder & Trainer Modal -->
+    <OpeningTrainerModal
+      v-if="showOpeningTrainerModal"
+      :current-piece-set="currentPieceSet"
+      :board-theme="currentTheme"
+      @load-into-app="handleSetupBoardApply"
+      @close="showOpeningTrainerModal = false"
+    />
+
+    <!-- Progressive Tactics Challenge Modal -->
+    <ProgressiveTacticsModal
+      v-if="showProgressiveTacticsModal"
+      :current-piece-set="currentPieceSet"
+      :board-theme="currentTheme"
+      @load-into-app="handleSetupBoardApply"
+      @close="showProgressiveTacticsModal = false"
+    />
+
+    <!-- Database Puzzle Miner Modal -->
+    <PuzzleMinerModal
+      v-if="showPuzzleMinerModal"
+      :db-name="dbInfo?.name"
+      :current-piece-set="currentPieceSet"
+      :board-theme="currentTheme"
+      @load-into-app="handleSetupBoardApply"
+      @close="showPuzzleMinerModal = false"
+    />
+
     <!-- Keyboard Shortcuts Modal -->
     <KeyboardShortcutsModal
       v-if="showShortcutsModal"
       @close="showShortcutsModal = false"
     />
+
 
     <!-- Import PGN Modal -->
     <div
