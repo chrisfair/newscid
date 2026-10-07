@@ -334,6 +334,40 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class RepertoireCheckResult {
+	    isRepertoire: boolean;
+	    playedMove?: repertoire.RepertoireMove;
+	    alternatives: repertoire.RepertoireMove[];
+	
+	    static createFrom(source: any = {}) {
+	        return new RepertoireCheckResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.isRepertoire = source["isRepertoire"];
+	        this.playedMove = this.convertValues(source["playedMove"], repertoire.RepertoireMove);
+	        this.alternatives = this.convertValues(source["alternatives"], repertoire.RepertoireMove);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class TacticsPuzzle {
 	    gameId: number;
 	    totalGames: number;
@@ -364,6 +398,136 @@ export namespace main {
 	        this.sanMoves = source["sanMoves"];
 	        this.turn = source["turn"];
 	        this.theme = source["theme"];
+	    }
+	}
+
+}
+
+export namespace puzzleminer {
+	
+	export class MinedPuzzle {
+	    id: string;
+	    gameId: number;
+	    white: string;
+	    black: string;
+	    date: string;
+	    event: string;
+	    ply: number;
+	    startFen: string;
+	    turn: string;
+	    bestMoveUci: string;
+	    bestMoveSan: string;
+	    solution: string[];
+	    theme: string;
+	    evalDeltaCp: number;
+	    description: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MinedPuzzle(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.gameId = source["gameId"];
+	        this.white = source["white"];
+	        this.black = source["black"];
+	        this.date = source["date"];
+	        this.event = source["event"];
+	        this.ply = source["ply"];
+	        this.startFen = source["startFen"];
+	        this.turn = source["turn"];
+	        this.bestMoveUci = source["bestMoveUci"];
+	        this.bestMoveSan = source["bestMoveSan"];
+	        this.solution = source["solution"];
+	        this.theme = source["theme"];
+	        this.evalDeltaCp = source["evalDeltaCp"];
+	        this.description = source["description"];
+	    }
+	}
+
+}
+
+export namespace repertoire {
+	
+	export class Repertoire {
+	    id: string;
+	    name: string;
+	    color: string;
+	    description: string;
+	    positions: Record<string, Array<RepertoireMove>>;
+	
+	    static createFrom(source: any = {}) {
+	        return new Repertoire(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.color = source["color"];
+	        this.description = source["description"];
+	        this.positions = this.convertValues(source["positions"], Array<RepertoireMove>, true);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class RepertoireMove {
+	    uci: string;
+	    san: string;
+	    nextFen: string;
+	    comment?: string;
+	    practice: number;
+	    correct: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new RepertoireMove(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.uci = source["uci"];
+	        this.san = source["san"];
+	        this.nextFen = source["nextFen"];
+	        this.comment = source["comment"];
+	        this.practice = source["practice"];
+	        this.correct = source["correct"];
+	    }
+	}
+	export class RepertoireSummary {
+	    id: string;
+	    name: string;
+	    color: string;
+	    description: string;
+	    numMoves: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new RepertoireSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.color = source["color"];
+	        this.description = source["description"];
+	        this.numMoves = source["numMoves"];
 	    }
 	}
 

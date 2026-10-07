@@ -21,7 +21,10 @@ import {
   Swords,
   Copy,
   ClipboardPaste,
-  RotateCcw
+  RotateCcw,
+  BookOpen,
+  Zap,
+  Pickaxe
 } from '@lucide/vue'
 import { PieceSetOption, BoardThemeOption } from './HeaderBar.vue'
 
@@ -59,12 +62,16 @@ const emit = defineEmits<{
   (e: 'annotateGame'): void
   (e: 'playVsEngine'): void
   (e: 'tacticsTrainer'): void
+  (e: 'openingTrainer'): void
+  (e: 'progressiveTactics'): void
+  (e: 'minePuzzles'): void
   (e: 'searchPosition'): void
   (e: 'toggleFlip'): void
   (e: 'changePieceSet', id: string): void
   (e: 'changeTheme', id: string): void
   (e: 'showShortcuts'): void
 }>()
+
 
 const activeMenu = ref<string | null>(null)
 
@@ -354,6 +361,13 @@ onUnmounted(() => {
           <span class="flex items-center gap-2"><Cpu class="w-3.5 h-3.5 text-emerald-400" /> {{ isAnalyzing ? 'Stop Engine Analysis' : 'Start Live Analysis' }}</span>
           <span class="text-[10px] text-zinc-500 font-mono">F2</span>
         </button>
+        <div class="h-px bg-zinc-800 my-1" />
+        <button
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="emit('minePuzzles'); closeAll()"
+        >
+          <span class="flex items-center gap-2"><Pickaxe class="w-3.5 h-3.5 text-amber-400" /> Mine Puzzles from Database Games...</span>
+        </button>
       </div>
     </div>
 
@@ -370,7 +384,7 @@ onUnmounted(() => {
 
       <div
         v-if="activeMenu === 'play'"
-        class="absolute top-full left-0 mt-0.5 w-60 bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-2xl py-1 z-50 text-xs"
+        class="absolute top-full left-0 mt-0.5 w-68 bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-2xl py-1 z-50 text-xs"
       >
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
@@ -384,8 +398,22 @@ onUnmounted(() => {
         >
           <span class="flex items-center gap-2"><Award class="w-3.5 h-3.5 text-blue-400" /> Tactics Puzzle Trainer...</span>
         </button>
+        <div class="h-px bg-zinc-800 my-1" />
+        <button
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="emit('progressiveTactics'); closeAll()"
+        >
+          <span class="flex items-center gap-2"><Zap class="w-3.5 h-3.5 text-amber-400" /> Progressive Tactics Challenge...</span>
+        </button>
+        <button
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="emit('openingTrainer'); closeAll()"
+        >
+          <span class="flex items-center gap-2"><BookOpen class="w-3.5 h-3.5 text-emerald-400" /> Opening Builder & Trainer...</span>
+        </button>
       </div>
     </div>
+
 
     <!-- OPTIONS MENU -->
     <div class="relative">
