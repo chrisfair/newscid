@@ -3,6 +3,7 @@ package scid_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -144,4 +145,52 @@ func TestCreateAndModifyDatabaseRoundtrip(t *testing.T) {
 	sum, err := db2.GetGameSummary(1)
 	require.NoError(t, err)
 	assert.True(t, sum.Deleted)
+}
+
+func TestOpenUserDatabases(t *testing.T) {
+	userBase := "/home/christopher/ChessDataBases/ChristopherFair/ChristopherFair"
+	if _, err := os.Stat(userBase + ".si4"); os.IsNotExist(err) {
+		t.Skip("ChristopherFair database not found")
+	}
+
+	db := scid.NewDatabase()
+	err := db.Open(userBase)
+	require.NoError(t, err)
+	defer db.Close()
+
+	t.Logf("Successfully opened user base %s: %d games", userBase, db.NumGames())
+	assert.Greater(t, db.NumGames(), 0)
+
+	// Read summary of game 1
+	sum, err := db.GetGameSummary(1)
+	require.NoError(t, err)
+	t.Logf("Game 1: %s vs %s [%s]", sum.White, sum.Black, sum.Result)
+	assert.NotEmpty(t, sum.White)
+
+	g1, err := db.GetGame(1)
+	require.NoError(t, err)
+	assert.NotNil(t, g1.RootMove)
+	t.Logf("Game 1 first move: %s", g1.RootMove.SAN)
+}
+
+func TestParseRecentDat(t *testing.T) {
+	data := `# Scid vs. PC recent files list
+set recentFiles(limit) 10
+set recentFiles(data) {/path/to/base1.si4 /path/to/base2.si4 /path/to/game.pgn}
+`
+	paths := scid.ParseRecentDat(strings.NewReader(data))
+	require.Len(t, paths, 3)
+	assert.Equal(t, "/path/to/base1.si4", paths[0])
+	assert.Equal(t, "/path/to/base2.si4", paths[1])
+	assert.Equal(t, "/path/to/game.pgn", paths[2])
+}
+
+func TestDiscoverScidDatabases(t *testing.T) {
+	dbs := scid.DiscoverScidDatabases()
+	t.Logf("Discovered %d databases", len(dbs))
+	for _, db := range dbs {
+		t.Logf("[%s] %s (%s, %d games): %s", db.Category, db.Name, db.SizeStr, db.NumGames, db.BasePath)
+	}
+
+	assert.NotEmpty(t, dbs)
 }

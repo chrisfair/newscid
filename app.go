@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -82,6 +83,34 @@ func (a *App) startup(ctx context.Context) {
 func (a *App) OpenDatabase(path string) (*DatabaseInfo, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	// If path is a PGN file, convert/cache into temporary Scid DB
+	if strings.HasSuffix(strings.ToLower(path), ".pgn") {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		games, err := chess.ParsePGNDatabase(strings.NewReader(string(content)))
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse PGN: %w", err)
+		}
+		tmpBase := filepath.Join(os.TempDir(), "newscid_pgn_"+strings.TrimSuffix(filepath.Base(path), ".pgn"))
+		_ = os.Remove(tmpBase + ".si4")
+		_ = os.Remove(tmpBase + ".sg4")
+		_ = os.Remove(tmpBase + ".sn4")
+		if err := a.db.Create(tmpBase, "Imported from "+filepath.Base(path)); err != nil {
+			return nil, err
+		}
+		for _, g := range games {
+			_, _ = a.db.SaveGame(g)
+		}
+		return &DatabaseInfo{
+			BasePath:    a.db.BasePath,
+			Name:        filepath.Base(path),
+			NumGames:    a.db.NumGames(),
+			Description: "Imported PGN: " + filepath.Base(path),
+		}, nil
+	}
 
 	if err := a.db.Open(path); err != nil {
 		return nil, err
@@ -282,14 +311,32 @@ func (a *App) ClassifyOpening(moves []string) *eco.Entry {
 }
 
 // ==========================================
-// UCI Engine Operations
+// UCI Engine Operations & Scid Configuration
 // ==========================================
 
-func (a *App) GetAvailableEngines() []string {
-	return engine.FindAvailableEngines()
+func (a *App) GetDiscoveredEngines() []engine.EngineConfig {
+	return engine.DiscoverScidEngines()
 }
 
-func (a *App) StartEngine(path string) error {
+func (a *App) GetAvailableEngines() []string {
+	engines := engine.DiscoverScidEngines()
+	var result []string
+	for _, e := range engines {
+		if e.Available {
+			label := e.Name
+			if label == "" {
+				label = filepath.Base(e.Cmd)
+			}
+			result = append(result, label)
+		}
+	}
+	if len(result) == 0 {
+		return engine.FindAvailableEngines()
+	}
+	return result
+}
+
+func (a *App) StartEngine(idOrPath string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -297,7 +344,20 @@ func (a *App) StartEngine(path string) error {
 		_ = a.engine.Quit()
 	}
 
-	eng := engine.NewEngine(path)
+	execPath := idOrPath
+	// Match against discovered engines
+	for _, e := range engine.DiscoverScidEngines() {
+		if (e.Name == idOrPath || e.Cmd == idOrPath || filepath.Base(e.Cmd) == idOrPath) && e.Available {
+			if e.ResolvedCmd != "" {
+				execPath = e.ResolvedCmd
+			} else {
+				execPath = e.Cmd
+			}
+			break
+		}
+	}
+
+	eng := engine.NewEngine(execPath)
 	if err := eng.Start(); err != nil {
 		return err
 	}
@@ -325,11 +385,18 @@ func (a *App) AnalyzePosition(fen string, moves []string, maxDepth int) error {
 	defer a.mu.RUnlock()
 
 	if a.engine == nil {
-		// Auto-launch available engine if present
-		engines := engine.FindAvailableEngines()
-		if len(engines) > 0 {
+		// Auto-launch first available UCI engine
+		discovered := engine.DiscoverScidEngines()
+		var chosen string
+		for _, e := range discovered {
+			if e.Available && e.UCI {
+				chosen = e.Name
+				break
+			}
+		}
+		if chosen != "" {
 			a.mu.RUnlock()
-			err := a.StartEngine(engines[0])
+			err := a.StartEngine(chosen)
 			a.mu.RLock()
 			if err != nil {
 				return err
@@ -362,6 +429,10 @@ func (a *App) GetPieceSets() []sets.PieceSetInfo {
 
 func (a *App) GetBoardThemes() []sets.BoardThemeInfo {
 	return sets.GetAvailableBoardThemes()
+}
+
+func (a *App) GetDiscoveredDatabases() []scid.DiscoveredDatabase {
+	return scid.DiscoverScidDatabases()
 }
 
 func (a *App) GetScidSystemBases() []string {

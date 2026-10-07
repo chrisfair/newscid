@@ -12,15 +12,26 @@ export interface EvalInfo {
   bestMove: string
 }
 
+export interface EngineOption {
+  name: string
+  cmd: string
+  resolvedCmd?: string
+  uci?: boolean
+  elo?: number
+  available: boolean
+}
+
 const props = withDefaults(defineProps<{
   evalInfo: EvalInfo | null
   isAnalyzing: boolean
   availableEngines?: string[]
+  discoveredEngines?: EngineOption[]
   selectedEngine?: string
 }>(), {
   evalInfo: null,
   isAnalyzing: false,
   availableEngines: () => [],
+  discoveredEngines: () => [],
   selectedEngine: '',
 })
 
@@ -60,6 +71,25 @@ const pvLineString = computed(() => {
   }
   return props.evalInfo.pv.slice(0, 10).join(' ')
 })
+// Engine options list
+const engineOptions = computed(() => {
+  if (props.discoveredEngines && props.discoveredEngines.length > 0) {
+    return props.discoveredEngines.map(e => ({
+      id: e.name || e.cmd,
+      name: e.name || e.cmd.split('/').pop() || 'Engine',
+      available: e.available,
+      uci: e.uci !== false,
+      elo: e.elo,
+    }))
+  }
+  return props.availableEngines.map(p => ({
+    id: p,
+    name: p.split('/').pop() || p,
+    available: true,
+    uci: true,
+    elo: 0,
+  }))
+})
 </script>
 
 <template>
@@ -79,15 +109,20 @@ const pvLineString = computed(() => {
           <span>{{ isAnalyzing ? 'Stop' : 'Analyze' }}</span>
         </button>
 
-        <div v-if="availableEngines.length > 1" class="flex items-center gap-1">
-          <Cpu class="w-3.5 h-3.5 text-zinc-500" />
+        <div v-if="engineOptions.length > 0" class="flex items-center gap-1">
+          <Cpu class="w-3.5 h-3.5 text-zinc-500 shrink-0" />
           <select
             :value="selectedEngine"
-            class="bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs rounded px-1.5 py-1"
+            class="bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs rounded px-2 py-1 focus:outline-hidden focus:border-emerald-500 max-w-[170px] truncate"
             @change="emit('selectEngine', ($event.target as HTMLSelectElement).value)"
           >
-            <option v-for="eng in availableEngines" :key="eng" :value="eng">
-              {{ eng.split('/').pop() }}
+            <option
+              v-for="eng in engineOptions"
+              :key="eng.id"
+              :value="eng.id"
+              :disabled="!eng.available"
+            >
+              {{ eng.name }}{{ !eng.available ? ' (not found)' : '' }}{{ eng.elo ? ` [${eng.elo}]` : '' }}
             </option>
           </select>
         </div>
