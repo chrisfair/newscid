@@ -3,6 +3,7 @@
 
 .DEFAULT_GOAL := help
 .PHONY: help deps setup dev build build-frontend generate test test-coverage lint clean clean-dist run \
+        install install-user uninstall \
         appimage package-appimage snap package-snap deb package-deb pacman package-pacman \
         chocolatey choco package-chocolatey package-choco brew homebrew package-brew \
         flatpak package-flatpak packages package package-all package-checksums \
@@ -199,6 +200,43 @@ package-checksums: ## Generate SHA-256 checksums for all packages in build/dist/
 	@mkdir -p $(DIST_DIR)
 	@cd $(DIST_DIR) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS 2>/dev/null || true
 	@printf "$(BOLD)$(GREEN)✔ SHA256SUMS generated.$(RESET)\n"
+
+# ==============================================================================
+# Installation Targets
+# ==============================================================================
+
+install: install-user ## Install NewScid to user local environment (~/.local)
+
+install-user: build ## Install binary, desktop entry, mime info, and icons to ~/.local
+	@printf "$(BOLD)$(BLUE)==> Installing NewScid to $(HOME)/.local...$(RESET)\n"
+	@mkdir -p $(HOME)/.local/bin $(HOME)/.local/share/applications $(HOME)/.local/share/metainfo $(HOME)/.local/share/mime/packages
+	@install -Dm755 $(BINARY) $(HOME)/.local/bin/$(APP_NAME)
+	@install -Dm644 packaging/desktop/newscid.desktop $(HOME)/.local/share/applications/newscid.desktop
+	@install -Dm644 packaging/desktop/org.newscid.NewScid.metainfo.xml $(HOME)/.local/share/metainfo/org.newscid.NewScid.metainfo.xml
+	@install -Dm644 packaging/desktop/newscid.mime.xml $(HOME)/.local/share/mime/packages/newscid.xml
+	@python3 packaging/scripts/generate-icons.py build/appicon.png build/staging/icons
+	@for size in 16 32 48 64 128 256 512 1024; do \
+		if [ -f "build/staging/icons/$${size}x$${size}.png" ]; then \
+			install -Dm644 "build/staging/icons/$${size}x$${size}.png" "$(HOME)/.local/share/icons/hicolor/$${size}x$${size}/apps/newscid.png"; \
+		fi \
+	done
+	@update-desktop-database $(HOME)/.local/share/applications 2>/dev/null || true
+	@update-mime-database $(HOME)/.local/share/mime 2>/dev/null || true
+	@gtk-update-icon-cache -q -t -f $(HOME)/.local/share/icons/hicolor 2>/dev/null || true
+	@printf "$(BOLD)$(GREEN)✔ NewScid v$(APP_VERSION) successfully installed to $(HOME)/.local/bin/$(APP_NAME)$(RESET)\n"
+
+uninstall: ## Remove NewScid from user local environment (~/.local)
+	@printf "$(BOLD)$(YELLOW)==> Uninstalling NewScid from $(HOME)/.local...$(RESET)\n"
+	@rm -f $(HOME)/.local/bin/$(APP_NAME)
+	@rm -f $(HOME)/.local/share/applications/newscid.desktop
+	@rm -f $(HOME)/.local/share/metainfo/org.newscid.NewScid.metainfo.xml
+	@rm -f $(HOME)/.local/share/mime/packages/newscid.xml
+	@for size in 16 32 48 64 128 256 512 1024; do \
+		rm -f $(HOME)/.local/share/icons/hicolor/$${size}x$${size}/apps/newscid.png; \
+	done
+	@update-desktop-database $(HOME)/.local/share/applications 2>/dev/null || true
+	@update-mime-database $(HOME)/.local/share/mime 2>/dev/null || true
+	@printf "$(BOLD)$(GREEN)✔ NewScid successfully uninstalled from $(HOME)/.local.$(RESET)\n"
 
 clean-dist: ## Remove all packaged distribution artifacts in build/dist/ and staging
 	@printf "$(BOLD)$(YELLOW)==> Cleaning distribution packages...$(RESET)\n"
