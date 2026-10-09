@@ -17,6 +17,7 @@ import ProgressiveTacticsModal from './components/ProgressiveTacticsModal.vue'
 import PuzzleMinerModal from './components/PuzzleMinerModal.vue'
 import HeaderSearchModal from './components/HeaderSearchModal.vue'
 import AboutModal from './components/AboutModal.vue'
+import HelpModal from './components/HelpModal.vue'
 import DatabaseMaintenanceModal from './components/DatabaseMaintenanceModal.vue'
 import OnlineSyncModal from './components/OnlineSyncModal.vue'
 import PlayerSimulationModal from './components/PlayerSimulationModal.vue'
@@ -68,7 +69,7 @@ import {
   DeleteVariation,
   GetSimulatedMove,
 } from '../wailsjs/go/main/App'
-import { EventsOn, EventsOff, ClipboardSetText, ClipboardGetText } from '../wailsjs/runtime/runtime'
+import { EventsOn, EventsOff, ClipboardSetText, ClipboardGetText, BrowserOpenURL } from '../wailsjs/runtime/runtime'
 
 const startingFEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 
@@ -147,6 +148,7 @@ const showProgressiveTacticsModal = ref(false)
 const showPuzzleMinerModal = ref(false)
 const showShortcutsModal = ref(false)
 const showAboutModal = ref(false)
+const showHelpModal = ref(false)
 const showSearchModal = ref(false)
 const showMaintenanceModal = ref(false)
 const showOnlineSyncModal = ref(false)
@@ -537,7 +539,10 @@ function handleKeydown(e: KeyboardEvent) {
   }
 
   // Single Keys
-  if (e.key === 'F2') {
+  if (e.key === 'F1') {
+    e.preventDefault()
+    showHelpModal.value = true
+  } else if (e.key === 'F2') {
     e.preventDefault()
     toggleAnalysis()
   } else if (e.key === '?') {
@@ -1309,6 +1314,14 @@ async function handleOpenPersonaDb(p: persona.Persona) {
     await handleOpenDiscoveredBase(p.databasePath)
   }
 }
+
+function handleOpenWebDocs() {
+  try {
+    BrowserOpenURL('https://github.com/christopherpatrickfair/newscid#readme')
+  } catch (err) {
+    window.open('https://github.com/christopherpatrickfair/newscid#readme', '_blank')
+  }
+}
 </script>
 
 <template>
@@ -1356,6 +1369,8 @@ async function handleOpenPersonaDb(p: persona.Persona) {
       @open-settings="handleOpenSettings"
       @show-shortcuts="showShortcutsModal = true"
       @show-about="showAboutModal = true"
+      @show-help="showHelpModal = true"
+      @open-web-docs="handleOpenWebDocs"
       @database-maintenance="showMaintenanceModal = true"
       @online-sync="showOnlineSyncModal = true"
       @simulate-player="showPlayerSimulationModal = true"
@@ -1707,6 +1722,13 @@ async function handleOpenPersonaDb(p: persona.Persona) {
     <AboutModal
       v-if="showAboutModal"
       @close="showAboutModal = false"
+    />
+
+    <!-- Online Help & User Documentation Modal (F1) -->
+    <HelpModal
+      v-if="showHelpModal"
+      @close="showHelpModal = false"
+      @open-shortcuts="showHelpModal = false; showShortcutsModal = true"
     />
 
     <!-- Header / General Search Modal (Ctrl+H) -->

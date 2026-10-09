@@ -18,8 +18,10 @@ source=(
     'newscid.desktop'
     'org.newscid.NewScid.metainfo.xml'
     'newscid.mime.xml'
+    'newscid.1'
 )
 sha256sums=(
+    'SKIP'
     'SKIP'
     'SKIP'
     'SKIP'
@@ -35,7 +37,14 @@ package() {
     install -Dm644 "${srcdir}/org.newscid.NewScid.metainfo.xml" "${pkgdir}/usr/share/metainfo/org.newscid.NewScid.metainfo.xml"
     install -Dm644 "${srcdir}/newscid.mime.xml" "${pkgdir}/usr/share/mime/packages/newscid.xml"
 
-    # 3. Install icons
+    # 3. Install man page
+    if [ -f "${srcdir}/newscid.1" ]; then
+        install -Dm644 "${srcdir}/newscid.1" "${pkgdir}/usr/share/man/man1/newscid.1"
+    elif [ -f "${startdir}/newscid.1" ]; then
+        install -Dm644 "${startdir}/newscid.1" "${pkgdir}/usr/share/man/man1/newscid.1"
+    fi
+
+    # 4. Install icons
     for size in 16 32 48 64 128 256 512 1024; do
         icon_path=""
         if [ -f "${srcdir}/icons/${size}x${size}.png" ]; then

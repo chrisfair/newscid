@@ -1,0 +1,158 @@
+.TH NEWSCID 1 "October 2026" "NewScid 1.0.0" "User Commands"
+.SH NAME
+newscid \- Modern Chess Information Database and analysis workbench
+.SH SYNOPSIS
+.B newscid
+[\fIOPTIONS\fR] [\fIFILE\fR]
+.SH DESCRIPTION
+.B NewScid
+is a modern, high-performance chess information database and graphical analysis workbench designed as a pure Go and Vue 3 rewrite of Scid vs. PC.
+It provides native reading and writing support for high-capacity SCID databases (.si4 index, .sg4 games, .sn4 namebase), multi-game PGN streams, and live UCI chess engine analysis.
+.PP
+NewScid introduces advanced modern features including multi-alias Player Personas with dedicated database synchronization, AI player simulation sparring bots, online account integration (Chess.com and Lichess.org), universal notation styling, a 16-NAG scorebook annotation palette, and spaced-repetition training modules.
+.SH OPTIONS
+.TP
+.BR \-h ", " \-\-help
+Display command-line options and exit.
+.TP
+.BR \-v ", " \-\-version
+Output version, git commit, build date, and runtime information, then exit.
+.TP
+.BR \-\-db " \fIPATH\fR"
+Open the specified database (.si4 or .pgn) upon startup.
+.SH MAJOR FEATURES
+.SS 1. Native SCID Binary Database Engine
+NewScid contains a ground-up Go implementation of the SCID database format. It supports reading and writing 47-byte index records (.si4), Huffman-compressed move streams (.sg4), and front-coded namebase tries (.sn4) with sub-second query performance across databases containing millions of games.
+Database tools include physical compaction, custom multi-criteria sorting (Date, Elo, Event, ECO, Player), and signature-based duplicate detection.
+.SS 2. Player Personas & Multi-Alias Consolidation
+Unifies disparate database identifiers (e.g. FIDE OTB designator, Chess.com username, Lichess handle) under a single consolidated Persona profile.
+Features include:
+.IP \(bu 2
+Automatic candidate suggestion matching names in the currently active database.
+.IP \(bu 2
+Consolidated career record and per-alias win/draw/loss breakdown statistics.
+.IP \(bu 2
+Dedicated autonomous .si4 database provisioning per persona with one-click extraction and deduplication of matching games from any opened database.
+.SS 3. Online Account Synchronization & Blended Databases
+Direct API integration with Chess.com and Lichess.org. Download and merge games directly into the active database, a dedicated persona archive, or a blended dual-mode repository with automatic signature deduplication.
+.SS 4. AI Player Simulation Sparring Bot
+Simulate and spar against any human opponent found in any database (or any unified Persona) at their calibrated playlevel.
+The sparring bot extracts historical opening trees to play the opponent's true repertoire probabilistically, then calibrates Stockfish midgame skill (UCI_Elo / Skill Level) to match their historical rating.
+.SS 5. Universal Notation Styles
+Dynamically switches move notation across the entire interface without reloading:
+.TP
+.B SAN
+Standard Algebraic Notation (e.g., Nf3, e4, Bxf7+).
+.TP
+.B FAN
+Figurine Algebraic Notation using Unicode chess glyphs (e.g., ♘f3, e4, ♗xf7+).
+.TP
+.B LAN
+Long Algebraic Notation with coordinate squares (e.g., Ng1-f3, e2-e4, Bf1xf7+).
+.TP
+.B Descriptive
+Classical English Descriptive notation (e.g., N-KB3, P-K4, BxP+).
+.TP
+.B UCI
+Universal Chess Interface engine coordinates (e.g., g1f3, e2e4, f1f7).
+.TP
+.B ICCF
+Numeric telegraphic correspondence notation (e.g., 7163, 5254, 6167).
+.SS 6. Tournament Scorebook & Annotation Palette
+Full variation tree support with collapsible sub-variations, variation promotion to main line, and deletion. Includes a 16-NAG scorebook palette (!, ?, !!, ??, !?, ?!, =, ⩲, ⩱, ±, ∓, +-, -+, ∞, ⯹) and rich inline move comments.
+.SS 7. Live UCI Engine Analysis & Multi-PV
+Integrates with any UCI-compliant chess engine (such as Stockfish). Supports multi-PV candidate lines (1 to 5 lines simultaneously), interactive candidate line highlighting on the board, live evaluation graphs, and automated blunder detection.
+.SS 8. Training Modules
+Includes interactive Tactics Puzzle Trainer, Spaced-Repetition Opening Repertoire Builder, Progressive Tactics Challenge, and Database Puzzle Miner.
+.SH KEYBOARD SHORTCUTS
+.TP
+.B F1
+Open Online Help and User Documentation.
+.TP
+.B F2
+Toggle live UCI engine analysis.
+.TP
+.B Ctrl+O
+Open database dialog.
+.TP
+.B Ctrl+N
+Start a new game.
+.TP
+.B Ctrl+S
+Save current game into database.
+.TP
+.B Ctrl+Del
+Mark or delete current game.
+.TP
+.B Ctrl+B
+Open Setup Board / FEN Editor.
+.TP
+.B Ctrl+M
+Open Database Maintenance & Compaction dialog.
+.TP
+.B Ctrl+H
+Open Header / General Search dialog.
+.TP
+.B Ctrl+I
+Import PGN game from text or file.
+.TP
+.B Ctrl+E
+Export current game to PGN format.
+.TP
+.B Ctrl+C / Ctrl+V
+Copy / Paste FEN position to or from system clipboard.
+.TP
+.B Ctrl+Space
+Toggle Trial Mode (board sandbox).
+.TP
+.B Ctrl+Z / Ctrl+Y
+Undo / Redo board move.
+.TP
+.B F
+Flip board orientation.
+.TP
+.B Space
+Toggle autoplay / game replay.
+.TP
+.B Left / Right
+Step backward / forward one half-move.
+.TP
+.B Home / End
+Jump to starting position / final position of game.
+.TP
+.B Ctrl+Home / Ctrl+End
+Jump to first / last game in database.
+.TP
+.B ?
+Display Keyboard Shortcuts dialog.
+.SH FILES
+.TP
+.I ~/.config/newscid/
+User configuration directory.
+.TP
+.I ~/.config/newscid/personas.json
+Saved multi-alias Player Personas and profile definitions.
+.TP
+.I ~/.local/share/newscid/
+Default directory for user persona databases (.si4) and training repertoires.
+.TP
+.I ~/.scidvspc/
+Scid vs. PC legacy directory automatically scanned for databases, engine options, and piece sets.
+.TP
+.I /usr/share/scid/bases/
+System-wide reference, tutorial, and tactics databases.
+.SH SEE ALSO
+.BR stockfish (6),
+.BR scid (1),
+.BR xboard (6)
+.SH AUTHORS
+NewScid is created and maintained by Christopher Patrick Fair <christopherpatrickfair@gmail.com>.
+.SH BUGS
+Report bugs and submit feature requests at:
+.UR https://github.com/christopherpatrickfair/newscid/issues
+.UE
+.SH COPYRIGHT
+Copyright \(co 2026 Christopher Patrick Fair.
+License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
