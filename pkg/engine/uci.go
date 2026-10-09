@@ -9,17 +9,35 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"newscid/pkg/chess"
 )
+
+// PVLine represents one candidate principal variation line in Multi-PV mode.
+type PVLine struct {
+	MultiPV     int      `json:"multipv"`     // 1-indexed rank of this line (1 = best)
+	Depth       int      `json:"depth"`
+	ScoreCp     int      `json:"scoreCp"`     // centipawns
+	MateIn      int      `json:"mateIn"`      // moves to mate (0 if not mate)
+	NPS         int64    `json:"nps"`         // nodes per second
+	Nodes       int64    `json:"nodes"`
+	PV          []string `json:"pv"`          // UCI move sequence
+	MoveUCI     string   `json:"moveUci"`     // first move of PV
+	SAN         string   `json:"san"`         // SAN representation of candidate move
+	PVFormatted string   `json:"pvFormatted"` // formatted move string e.g. "1. e4 e5 2. Nf3"
+}
 
 // EvalInfo represents real-time analysis details from an engine.
 type EvalInfo struct {
 	Depth    int      `json:"depth"`
-	ScoreCp  int      `json:"scoreCp"`  // centipawns
+	ScoreCp  int      `json:"scoreCp"`  // centipawns (from line 1)
 	MateIn   int      `json:"mateIn"`   // moves to mate (0 if not mate)
 	NPS      int64    `json:"nps"`      // nodes per second
 	Nodes    int64    `json:"nodes"`
-	PV       []string `json:"pv"`       // principal variation moves
+	PV       []string `json:"pv"`       // principal variation moves (line 1)
 	BestMove string   `json:"bestMove"`
+	MultiPV  int      `json:"multiPv"`  // current configured MultiPV count (1-5)
+	Lines    []PVLine `json:"lines"`    // all active PV lines sorted by MultiPV rank
 }
 
 // Engine represents a running UCI engine process.
@@ -36,12 +54,19 @@ type Engine struct {
 	bestMoveListener chan string
 	lastEval         EvalInfo
 	onEval           func(EvalInfo)
+	multiPV          int
+	threads          int
+	hashMB           int
+	currentFEN       string
+	pvLines          map[int]PVLine
 }
 
 func NewEngine(path string) *Engine {
 	return &Engine{
 		Path:     path,
 		stopChan: make(chan struct{}),
+		multiPV:  1,
+		pvLines:  make(map[int]PVLine),
 	}
 }
 
@@ -83,18 +108,104 @@ func (e *Engine) Start() error {
 		}
 	}
 
-	// Send isready
-	fmt.Fprintln(e.stdin, "isready")
-	for e.stdout.Scan() {
-		line := strings.TrimSpace(e.stdout.Text())
-		if line == "readyok" {
-			break
+	// Apply configured options
+	if e.multiPV > 1 {
+		fmt.Fprintf(e.stdin, "setoption name MultiPV value %d\n", e.multiPV)
+	}
+	if e.threads > 0 {
+		fmt.Fprintf(e.stdin, "setoption name Threads value %d\n", e.threads)
+	}
+	if e.hashMB > 0 {
+		fmt.Fprintf(e.stdin, "setoption name Hash value %d\n", e.hashMB)
+	}
+	if e.multiPV > 1 || e.threads > 0 || e.hashMB > 0 {
+		fmt.Fprintln(e.stdin, "isready")
+		for e.stdout.Scan() {
+			if strings.TrimSpace(e.stdout.Text()) == "readyok" {
+				break
+			}
 		}
 	}
 
 	// Start background listener
 	go e.listenOutput()
 
+	return nil
+}
+
+// SetMultiPV configures how many candidate principal variations to analyze (1 to 10).
+func (e *Engine) SetMultiPV(n int) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if n < 1 {
+		n = 1
+	} else if n > 10 {
+		n = 10
+	}
+	e.multiPV = n
+
+	if e.stdin != nil {
+		fmt.Fprintf(e.stdin, "setoption name MultiPV value %d\n", n)
+		fmt.Fprintln(e.stdin, "isready")
+	}
+
+	e.pvLines = make(map[int]PVLine)
+	e.lastEval.MultiPV = n
+	return nil
+}
+
+// GetMultiPV returns current MultiPV setting.
+func (e *Engine) GetMultiPV() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.multiPV <= 0 {
+		return 1
+	}
+	return e.multiPV
+}
+
+// SetThreads configures engine search threads.
+func (e *Engine) SetThreads(n int) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if n < 1 {
+		n = 1
+	}
+	e.threads = n
+
+	if e.stdin != nil {
+		fmt.Fprintf(e.stdin, "setoption name Threads value %d\n", n)
+	}
+	return nil
+}
+
+// SetHash configures engine hash table memory in megabytes.
+func (e *Engine) SetHash(mb int) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if mb < 1 {
+		mb = 16
+	}
+	e.hashMB = mb
+
+	if e.stdin != nil {
+		fmt.Fprintf(e.stdin, "setoption name Hash value %d\n", mb)
+	}
+	return nil
+}
+
+// SetOption sends a generic UCI setoption command.
+func (e *Engine) SetOption(name, value string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.stdin != nil {
+		fmt.Fprintf(e.stdin, "setoption name %s value %s\n", name, value)
+		fmt.Fprintln(e.stdin, "isready")
+	}
 	return nil
 }
 
@@ -124,6 +235,18 @@ func (e *Engine) Analyze(fen string, moves []string, maxDepth int) error {
 	// Stop previous search
 	fmt.Fprintln(e.stdin, "stop")
 
+	// Ensure multiPV is applied
+	if e.multiPV > 1 {
+		fmt.Fprintf(e.stdin, "setoption name MultiPV value %d\n", e.multiPV)
+	}
+
+	e.currentFEN = fen
+	e.pvLines = make(map[int]PVLine)
+	e.lastEval = EvalInfo{
+		MultiPV: e.multiPV,
+		Lines:   make([]PVLine, 0),
+	}
+
 	posCmd := "position fen " + fen
 	if len(moves) > 0 {
 		posCmd += " moves " + strings.Join(moves, " ")
@@ -150,6 +273,7 @@ func (e *Engine) SearchBestMove(fen string, moves []string, movetimeMs int) (str
 
 	bestMoveCh := make(chan string, 1)
 	e.bestMoveListener = bestMoveCh
+	e.currentFEN = fen
 
 	posCmd := "position fen " + fen
 	if len(moves) > 0 {
@@ -221,14 +345,42 @@ func (e *Engine) listenOutput() {
 		}
 
 		if strings.HasPrefix(line, "info ") {
-			eval := parseInfoLine(line)
 			e.mu.Lock()
-			e.lastEval = eval
+			pvLine, hasPV := ParseInfoLine(line, e.currentFEN)
+			if hasPV {
+				e.pvLines[pvLine.MultiPV] = pvLine
+
+				// Rebuild sorted lines
+				lines := make([]PVLine, 0, len(e.pvLines))
+				for rank := 1; rank <= 10; rank++ {
+					if l, ok := e.pvLines[rank]; ok {
+						lines = append(lines, l)
+					}
+				}
+				e.lastEval.Lines = lines
+				e.lastEval.MultiPV = e.multiPV
+
+				// Line 1 updates root evaluation
+				if pvLine.MultiPV == 1 {
+					e.lastEval.Depth = pvLine.Depth
+					e.lastEval.ScoreCp = pvLine.ScoreCp
+					e.lastEval.MateIn = pvLine.MateIn
+					e.lastEval.NPS = pvLine.NPS
+					e.lastEval.Nodes = pvLine.Nodes
+					e.lastEval.PV = pvLine.PV
+					if pvLine.MoveUCI != "" {
+						e.lastEval.BestMove = pvLine.MoveUCI
+					}
+				} else if e.lastEval.Depth == 0 {
+					e.lastEval.Depth = pvLine.Depth
+				}
+			}
 			cb := e.onEval
+			currEval := e.lastEval
 			e.mu.Unlock()
 
-			if cb != nil {
-				cb(eval)
+			if cb != nil && hasPV {
+				cb(currEval)
 			}
 		} else if strings.HasPrefix(line, "bestmove ") {
 			parts := strings.Fields(line)
@@ -256,42 +408,108 @@ func (e *Engine) listenOutput() {
 	}
 }
 
-func parseInfoLine(line string) EvalInfo {
-	var eval EvalInfo
+// FormatPV converts a sequence of UCI moves starting from fen into readable SAN notation and returns candidate move SAN and formatted PV.
+func FormatPV(fen string, pvMoves []string) (candidateSAN string, formattedPV string) {
+	if len(pvMoves) == 0 {
+		return "", ""
+	}
+
+	board, err := chess.ParseFEN(fen)
+	if err != nil {
+		board = chess.NewBoard()
+	}
+
+	var formattedParts []string
+	for i, uci := range pvMoves {
+		if i >= 12 { // Limit PV preview length for clean display
+			break
+		}
+		m, err := board.ParseUCI(uci)
+		if err != nil {
+			break
+		}
+		san := board.MoveToSAN(m)
+		if i == 0 {
+			candidateSAN = san
+		}
+
+		if board.Turn == chess.White {
+			formattedParts = append(formattedParts, fmt.Sprintf("%d. %s", board.FullMove, san))
+		} else {
+			if i == 0 {
+				formattedParts = append(formattedParts, fmt.Sprintf("%d... %s", board.FullMove, san))
+			} else {
+				formattedParts = append(formattedParts, san)
+			}
+		}
+		board.MakeMove(m)
+	}
+
+	if candidateSAN == "" && len(pvMoves) > 0 {
+		candidateSAN = pvMoves[0]
+	}
+	if len(formattedParts) == 0 && len(pvMoves) > 0 {
+		formattedPV = strings.Join(pvMoves, " ")
+	} else {
+		formattedPV = strings.Join(formattedParts, " ")
+	}
+
+	return candidateSAN, formattedPV
+}
+
+// ParseInfoLine parses a UCI 'info' line and returns the PVLine and whether it contained a PV.
+func ParseInfoLine(line string, currentFEN string) (PVLine, bool) {
+	var pvLine PVLine
+	pvLine.MultiPV = 1
 	tokens := strings.Fields(line)
+	hasPV := false
 
 	for i := 0; i < len(tokens); i++ {
 		t := tokens[i]
 		switch t {
 		case "depth":
 			if i+1 < len(tokens) {
-				eval.Depth, _ = strconv.Atoi(tokens[i+1])
+				pvLine.Depth, _ = strconv.Atoi(tokens[i+1])
+			}
+		case "multipv":
+			if i+1 < len(tokens) {
+				mpv, err := strconv.Atoi(tokens[i+1])
+				if err == nil && mpv > 0 {
+					pvLine.MultiPV = mpv
+				}
 			}
 		case "score":
 			if i+2 < len(tokens) {
 				typ := tokens[i+1]
 				val, _ := strconv.Atoi(tokens[i+2])
 				if typ == "cp" {
-					eval.ScoreCp = val
+					pvLine.ScoreCp = val
 				} else if typ == "mate" {
-					eval.MateIn = val
+					pvLine.MateIn = val
 				}
 			}
 		case "nps":
 			if i+1 < len(tokens) {
-				eval.NPS, _ = strconv.ParseInt(tokens[i+1], 10, 64)
+				pvLine.NPS, _ = strconv.ParseInt(tokens[i+1], 10, 64)
 			}
 		case "nodes":
 			if i+1 < len(tokens) {
-				eval.Nodes, _ = strconv.ParseInt(tokens[i+1], 10, 64)
+				pvLine.Nodes, _ = strconv.ParseInt(tokens[i+1], 10, 64)
 			}
 		case "pv":
-			eval.PV = tokens[i+1:]
-			return eval
+			pvLine.PV = tokens[i+1:]
+			if len(pvLine.PV) > 0 {
+				pvLine.MoveUCI = pvLine.PV[0]
+				candidateSAN, formattedPV := FormatPV(currentFEN, pvLine.PV)
+				pvLine.SAN = candidateSAN
+				pvLine.PVFormatted = formattedPV
+			}
+			hasPV = true
+			return pvLine, true
 		}
 	}
 
-	return eval
+	return pvLine, hasPV
 }
 
 // FindAvailableEngines scans standard paths for installed chess engines.

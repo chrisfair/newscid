@@ -1,6 +1,19 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { Play, Square, Cpu, ChevronDown, Check } from '@lucide/vue'
+import { Play, Square, Cpu, ChevronDown, Check, Sliders, Layers } from '@lucide/vue'
+
+export interface PVLine {
+  multipv: number
+  depth: number
+  scoreCp: number
+  mateIn: number
+  nps: number
+  nodes: number
+  pv: string[]
+  moveUci: string
+  san: string
+  pvFormatted: string
+}
 
 export interface EvalInfo {
   depth: number
@@ -10,6 +23,8 @@ export interface EvalInfo {
   nodes: number
   pv: string[]
   bestMove: string
+  multiPv?: number
+  lines?: PVLine[]
 }
 
 export interface EngineOption {
@@ -27,29 +42,49 @@ const props = withDefaults(defineProps<{
   availableEngines?: string[]
   discoveredEngines?: EngineOption[]
   selectedEngine?: string
+  multiPv?: number
 }>(), {
   evalInfo: null,
   isAnalyzing: false,
   availableEngines: () => [],
   discoveredEngines: () => [],
   selectedEngine: '',
+  multiPv: 1,
 })
 
 const emit = defineEmits<{
   (e: 'toggleAnalysis'): void
   (e: 'selectEngine', path: string): void
+  (e: 'changeMultiPV', lines: number): void
+  (e: 'changeThreads', threads: number): void
+  (e: 'changeHash', mb: number): void
+  (e: 'previewMove', uci: string): void
 }>()
 
-// Calculate score string (+1.45, -0.80, M3, -M2)
+// Dropdown and settings state
+const showEngineDropdown = ref(false)
+const showSettingsDropdown = ref(false)
+const selectedThreads = ref(1)
+const selectedHash = ref(128)
+
+// Active MultiPV count
+const currentMultiPv = computed(() => {
+  return props.multiPv || props.evalInfo?.multiPv || 1
+})
+
+// Format scores for any PVLine or root eval
+function formatScoreVal(scoreCp: number, mateIn: number): string {
+  if (mateIn !== 0) {
+    return mateIn > 0 ? `M${mateIn}` : `-M${Math.abs(mateIn)}`
+  }
+  const score = scoreCp / 100.0
+  return score > 0 ? `+${score.toFixed(2)}` : score.toFixed(2)
+}
+
+// Calculate root score string (+1.45, -0.80, M3, -M2)
 const formattedScore = computed(() => {
   if (!props.evalInfo) return '0.0'
-  if (props.evalInfo.mateIn !== 0) {
-    return props.evalInfo.mateIn > 0
-      ? `M${props.evalInfo.mateIn}`
-      : `-M${Math.abs(props.evalInfo.mateIn)}`
-  }
-  const score = props.evalInfo.scoreCp / 100.0
-  return score > 0 ? `+${score.toFixed(2)}` : score.toFixed(2)
+  return formatScoreVal(props.evalInfo.scoreCp, props.evalInfo.mateIn)
 })
 
 // Evaluation bar percentage (0% = Black winning, 50% = equal, 100% = White winning)
@@ -58,19 +93,42 @@ const evalBarPercent = computed(() => {
   if (props.evalInfo.mateIn !== 0) {
     return props.evalInfo.mateIn > 0 ? 98 : 2
   }
-  // Sigmoid-like scale for centipawns (-1000 to +1000)
   const cp = props.evalInfo.scoreCp
   const clamped = Math.max(-1000, Math.min(1000, cp))
   return 50 + (clamped / 1000) * 45
 })
 
-// PV line string
+// Single PV line string
 const pvLineString = computed(() => {
   if (!props.evalInfo || !props.evalInfo.pv || props.evalInfo.pv.length === 0) {
     return 'Waiting for engine...'
   }
   return props.evalInfo.pv.slice(0, 10).join(' ')
 })
+
+// Sorted Multi-PV lines
+const sortedLines = computed<PVLine[]>(() => {
+  if (!props.evalInfo || !props.evalInfo.lines || props.evalInfo.lines.length === 0) {
+    // If no lines array but root PV exists, construct line 1
+    if (props.evalInfo && props.evalInfo.pv && props.evalInfo.pv.length > 0) {
+      return [{
+        multipv: 1,
+        depth: props.evalInfo.depth,
+        scoreCp: props.evalInfo.scoreCp,
+        mateIn: props.evalInfo.mateIn,
+        nps: props.evalInfo.nps,
+        nodes: props.evalInfo.nodes,
+        pv: props.evalInfo.pv,
+        moveUci: props.evalInfo.pv[0],
+        san: props.evalInfo.pv[0],
+        pvFormatted: props.evalInfo.pv.slice(0, 10).join(' ')
+      }]
+    }
+    return []
+  }
+  return [...props.evalInfo.lines].sort((a, b) => a.multipv - b.multipv)
+})
+
 // Engine options list
 const engineOptions = computed(() => {
   if (props.discoveredEngines && props.discoveredEngines.length > 0) {
@@ -91,9 +149,6 @@ const engineOptions = computed(() => {
   }))
 })
 
-// Dropdown state
-const showEngineDropdown = ref(false)
-
 const activeEngineName = computed(() => {
   const found = engineOptions.value.find(e => e.id === props.selectedEngine || e.name === props.selectedEngine)
   if (found) return found.name
@@ -105,15 +160,51 @@ const activeEngineName = computed(() => {
   if (first) return first.name
   return 'Select Engine'
 })
+
+function getRankBadgeStyle(rank: number) {
+  switch (rank) {
+    case 1:
+      return 'bg-emerald-950/70 text-emerald-300 border-emerald-700/60'
+    case 2:
+      return 'bg-sky-950/70 text-sky-300 border-sky-700/60'
+    case 3:
+      return 'bg-amber-950/70 text-amber-300 border-amber-700/60'
+    case 4:
+      return 'bg-purple-950/70 text-purple-300 border-purple-700/60'
+    case 5:
+      return 'bg-rose-950/70 text-rose-300 border-rose-700/60'
+    default:
+      return 'bg-zinc-800 text-zinc-300 border-zinc-700'
+  }
+}
+
+function handleSelectMultiPV(n: number) {
+  emit('changeMultiPV', n)
+}
+
+function handleApplyThreads(t: number) {
+  selectedThreads.value = t
+  emit('changeThreads', t)
+}
+
+function handleApplyHash(h: number) {
+  selectedHash.value = h
+  emit('changeHash', h)
+}
 </script>
 
 <template>
-  <div class="engine-panel bg-zinc-900 border border-zinc-800 rounded-xl p-3 shadow-lg flex flex-col gap-2">
+  <div class="engine-panel bg-zinc-900 border border-zinc-800 rounded-xl p-3 shadow-lg flex flex-col gap-2.5">
+    
     <!-- Top Row: Engine controls & Evaluation score badge -->
-    <div class="flex items-center justify-between">
-      <div class="flex items-center gap-2">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      
+      <!-- Left side: Play/Stop + Engine selector + MultiPV quick pills -->
+      <div class="flex items-center gap-2 flex-wrap">
+        
+        <!-- Toggle Analysis Button -->
         <button
-          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs transition-colors cursor-pointer"
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs transition-colors cursor-pointer shrink-0"
           :class="isAnalyzing
             ? 'bg-amber-600/30 text-amber-300 border border-amber-500/50 hover:bg-amber-600/40'
             : 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/50 hover:bg-emerald-600/40'"
@@ -124,15 +215,15 @@ const activeEngineName = computed(() => {
           <span>{{ isAnalyzing ? 'Stop' : 'Analyze' }}</span>
         </button>
 
-        <!-- Custom Readable Engine Selector Dropdown -->
+        <!-- Engine Selector Dropdown -->
         <div v-if="engineOptions.length > 0" class="relative">
           <button
             class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700/90 text-white text-xs font-semibold border border-zinc-650 transition-colors cursor-pointer shadow-xs"
             title="Click to change chess engine"
-            @click="showEngineDropdown = !showEngineDropdown"
+            @click="showEngineDropdown = !showEngineDropdown; showSettingsDropdown = false"
           >
             <Cpu class="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-            <span class="font-bold text-zinc-100 max-w-[150px] truncate">{{ activeEngineName }}</span>
+            <span class="font-bold text-zinc-100 max-w-[130px] truncate">{{ activeEngineName }}</span>
             <ChevronDown class="w-3 h-3 text-zinc-400 shrink-0 ml-0.5" />
           </button>
 
@@ -143,7 +234,7 @@ const activeEngineName = computed(() => {
             @click="showEngineDropdown = false"
           />
 
-          <!-- Popover Menu (opens upward from engine panel) -->
+          <!-- Engine Menu -->
           <div
             v-if="showEngineDropdown"
             class="absolute bottom-full left-0 mb-1.5 w-64 max-h-64 overflow-y-auto bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-1 z-50 text-xs divide-y divide-zinc-800"
@@ -186,10 +277,96 @@ const activeEngineName = computed(() => {
             </div>
           </div>
         </div>
+
+        <!-- Multi-PV Lines Quick Selector -->
+        <div class="flex items-center bg-zinc-950 rounded-lg p-0.5 border border-zinc-800 shadow-inner">
+          <span class="text-[10px] text-zinc-500 font-semibold px-1.5 uppercase tracking-wider flex items-center gap-1">
+            <Layers class="w-3 h-3 text-cyan-400" />
+            Lines:
+          </span>
+          <button
+            v-for="n in [1, 2, 3, 4, 5]"
+            :key="n"
+            class="px-2 py-0.5 text-xs font-mono rounded font-medium transition-all cursor-pointer"
+            :class="currentMultiPv === n 
+              ? 'bg-cyan-600 text-white shadow-xs font-bold' 
+              : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/80'"
+            :title="`Analyze ${n} candidate principal variation line${n > 1 ? 's' : ''}`"
+            @click="handleSelectMultiPV(n)"
+          >
+            {{ n }}
+          </button>
+        </div>
+
+        <!-- Engine Advanced Settings Popover Toggle -->
+        <div class="relative">
+          <button
+            class="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700/80 text-zinc-300 hover:text-white border border-zinc-700 transition-colors cursor-pointer"
+            title="Engine configuration (Threads, Hash)"
+            @click="showSettingsDropdown = !showSettingsDropdown; showEngineDropdown = false"
+          >
+            <Sliders class="w-3.5 h-3.5" />
+          </button>
+
+          <!-- Backdrop -->
+          <div
+            v-if="showSettingsDropdown"
+            class="fixed inset-0 z-40"
+            @click="showSettingsDropdown = false"
+          />
+
+          <!-- Settings Popover -->
+          <div
+            v-if="showSettingsDropdown"
+            class="absolute bottom-full left-0 mb-1.5 w-60 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-3 z-50 text-xs space-y-3"
+          >
+            <div class="font-semibold text-xs text-white border-b border-zinc-800 pb-1.5 flex items-center justify-between">
+              <span>Engine Parameters</span>
+              <span class="text-[10px] text-zinc-500 font-mono">UCI Options</span>
+            </div>
+
+            <!-- Threads -->
+            <div>
+              <label class="text-[11px] text-zinc-400 block mb-1">CPU Threads</label>
+              <div class="flex items-center gap-1">
+                <button
+                  v-for="t in [1, 2, 4, 8, 16]"
+                  :key="t"
+                  class="flex-1 py-1 rounded text-center font-mono text-[11px] border transition-colors cursor-pointer"
+                  :class="selectedThreads === t
+                    ? 'bg-emerald-600 text-white border-emerald-500 font-bold'
+                    : 'bg-zinc-950 text-zinc-300 border-zinc-800 hover:bg-zinc-800'"
+                  @click="handleApplyThreads(t)"
+                >
+                  {{ t }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Hash Size -->
+            <div>
+              <label class="text-[11px] text-zinc-400 block mb-1">Hash Memory (MB)</label>
+              <div class="grid grid-cols-3 gap-1">
+                <button
+                  v-for="h in [16, 64, 128, 256, 512, 1024]"
+                  :key="h"
+                  class="py-1 rounded text-center font-mono text-[11px] border transition-colors cursor-pointer"
+                  :class="selectedHash === h
+                    ? 'bg-emerald-600 text-white border-emerald-500 font-bold'
+                    : 'bg-zinc-950 text-zinc-300 border-zinc-800 hover:bg-zinc-800'"
+                  @click="handleApplyHash(h)"
+                >
+                  {{ h }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
-      <!-- Score Badge -->
-      <div class="flex items-center gap-2">
+      <!-- Right side: Score & Depth Badge -->
+      <div class="flex items-center gap-2 shrink-0">
         <span class="text-xs text-zinc-500 font-mono">D: {{ evalInfo?.depth || 0 }}</span>
         <span
           class="px-2.5 py-1 rounded font-mono font-bold text-sm tracking-wider shadow-inner"
@@ -198,6 +375,7 @@ const activeEngineName = computed(() => {
           {{ formattedScore }}
         </span>
       </div>
+
     </div>
 
     <!-- Visual Eval Bar -->
@@ -208,10 +386,78 @@ const activeEngineName = computed(() => {
       />
     </div>
 
-    <!-- PV / Principal Variation line -->
-    <div class="pv-container bg-zinc-950/70 border border-zinc-800/60 rounded-lg p-2 font-mono text-xs text-zinc-300 truncate">
+    <!-- Multi-PV Lines View (when Lines > 1) -->
+    <div
+      v-if="currentMultiPv > 1"
+      class="multi-pv-container space-y-1.5 max-h-48 overflow-y-auto pr-0.5"
+    >
+      <div
+        v-for="line in sortedLines"
+        :key="line.multipv"
+        class="flex items-start gap-2 p-1.5 rounded-lg bg-zinc-950/80 border border-zinc-800/80 hover:border-zinc-700 hover:bg-zinc-850/90 transition-colors font-mono text-xs cursor-pointer group"
+        :title="`Click to preview candidate move ${line.san || line.moveUci}`"
+        @click="emit('previewMove', line.moveUci)"
+      >
+        <!-- Rank Badge -->
+        <span
+          class="px-1.5 py-0.5 rounded text-[10px] font-bold border shrink-0 mt-0.5"
+          :class="getRankBadgeStyle(line.multipv)"
+        >
+          #{{ line.multipv }}
+        </span>
+
+        <!-- Score pill -->
+        <span
+          class="px-1.5 py-0.5 rounded text-[11px] font-semibold font-mono shrink-0 mt-0.5"
+          :class="line.scoreCp >= 0 
+            ? 'bg-zinc-800 text-emerald-300' 
+            : 'bg-zinc-900 text-rose-300 border border-zinc-800'"
+        >
+          {{ formatScoreVal(line.scoreCp, line.mateIn) }}
+        </span>
+
+        <!-- Depth -->
+        <span class="text-[10px] text-zinc-500 font-mono shrink-0 mt-0.5">
+          d{{ line.depth }}
+        </span>
+
+        <!-- Candidate Move & Continuation -->
+        <div class="flex-1 min-w-0 truncate">
+          <span class="font-bold text-white group-hover:text-cyan-300 transition-colors mr-1.5">
+            {{ line.san || line.moveUci }}
+          </span>
+          <span class="text-zinc-400 group-hover:text-zinc-200 transition-colors text-[11px]">
+            {{ line.pvFormatted || line.pv?.join(' ') }}
+          </span>
+        </div>
+      </div>
+
+      <div
+        v-if="sortedLines.length === 0"
+        class="text-xs text-zinc-500 italic p-2 text-center"
+      >
+        Waiting for engine analysis ({{ currentMultiPv }} lines)...
+      </div>
+    </div>
+
+    <!-- Single PV Line View (when Lines == 1) -->
+    <div
+      v-else
+      class="pv-container bg-zinc-950/70 border border-zinc-800/60 rounded-lg p-2 font-mono text-xs text-zinc-300 truncate"
+    >
       <span class="text-zinc-500 font-semibold mr-1.5">PV:</span>
       <span class="text-emerald-400 select-all">{{ pvLineString }}</span>
     </div>
+
   </div>
 </template>
+
+<style scoped>
+.multi-pv-container::-webkit-scrollbar {
+  width: 4px;
+}
+.multi-pv-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+</style>

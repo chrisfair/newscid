@@ -102,6 +102,10 @@ export function GetEngineEval() {
   return window['go']['main']['App']['GetEngineEval']();
 }
 
+export function GetEngineMultiPV() {
+  return window['go']['main']['App']['GetEngineMultiPV']();
+}
+
 export function GetGame(arg1) {
   return window['go']['main']['App']['GetGame'](arg1);
 }
@@ -216,6 +220,18 @@ export function SaveSyncProfile(arg1) {
 
 export function SearchPosition(arg1) {
   return window['go']['main']['App']['SearchPosition'](arg1);
+}
+
+export function SetEngineHash(arg1) {
+  return window['go']['main']['App']['SetEngineHash'](arg1);
+}
+
+export function SetEngineMultiPV(arg1) {
+  return window['go']['main']['App']['SetEngineMultiPV'](arg1);
+}
+
+export function SetEngineThreads(arg1) {
+  return window['go']['main']['App']['SetEngineThreads'](arg1);
 }
 
 export function SortDatabase(arg1) {

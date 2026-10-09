@@ -62,6 +62,8 @@ export function GetDiscoveredEngines():Promise<Array<engine.EngineConfig>>;
 
 export function GetEngineEval():Promise<engine.EvalInfo>;
 
+export function GetEngineMultiPV():Promise<number>;
+
 export function GetGame(arg1:number):Promise<chess.Game>;
 
 export function GetGames(arg1:number,arg2:number,arg3:scid.SearchCriteria):Promise<main.GamesPage>;
@@ -119,6 +121,12 @@ export function SaveRepertoire(arg1:repertoire.Repertoire):Promise<void>;
 export function SaveSyncProfile(arg1:online.Profile):Promise<void>;
 
 export function SearchPosition(arg1:string):Promise<Array<scid.GameSummary>>;
+
+export function SetEngineHash(arg1:number):Promise<void>;
+
+export function SetEngineMultiPV(arg1:number):Promise<void>;
+
+export function SetEngineThreads(arg1:number):Promise<void>;
 
 export function SortDatabase(arg1:scid.SortCriteria):Promise<void>;
 
