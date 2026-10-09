@@ -1,0 +1,18 @@
+#!/bin/sh
+set -e
+
+# AppRun launcher for NewScid AppImage
+HERE="$(dirname "$(readlink -f "$0")")"
+
+export APPDIR="${HERE}"
+export PATH="${HERE}/usr/bin:${PATH}"
+export LD_LIBRARY_PATH="${HERE}/usr/lib:${HERE}/usr/lib64:${LD_LIBRARY_PATH}"
+export XDG_DATA_DIRS="${HERE}/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+
+# Ensure desktop integration and webkit paths if packaged
+if [ -d "${HERE}/usr/lib/x86_64-linux-gnu" ]; then
+    export LD_LIBRARY_PATH="${HERE}/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}"
+fi
+
+# Execute the application binary passing all CLI arguments
+exec "${HERE}/usr/bin/newscid" "$@"

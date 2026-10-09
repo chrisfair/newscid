@@ -2,7 +2,36 @@
 # Automated dependency management, testing, and building
 
 .DEFAULT_GOAL := help
-.PHONY: help deps setup dev build build-frontend generate test test-coverage lint clean run
+.PHONY: help deps setup dev build build-frontend generate test test-coverage lint clean clean-dist run \
+        appimage package-appimage snap package-snap deb package-deb pacman package-pacman \
+        chocolatey choco package-chocolatey package-choco brew homebrew package-brew \
+        flatpak package-flatpak packages package package-all package-checksums \
+        version bump-patch bump-minor bump-major tag-release
+
+# Application Metadata & Versioning (Single source of truth: VERSION)
+VERSION_FILE := VERSION
+APP_NAME     ?= newscid
+APP_TITLE    ?= NewScid
+APP_VERSION  ?= $(shell cat $(VERSION_FILE) 2>/dev/null || echo 1.0.0)
+APP_RELEASE  ?= 1
+APP_ARCH     ?= amd64
+APP_DESC     ?= Modern Chess Information Database (Scid vs. PC Rewrite)
+APP_AUTHOR   ?= Christopher Patrick Fair
+APP_EMAIL    ?= christopherpatrickfair@gmail.com
+APP_URL      ?= https://github.com/christopherpatrickfair/newscid
+
+# Build & Git Metadata
+GIT_COMMIT   ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "development")
+BUILD_DATE   ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
+LDFLAGS      := -X newscid/pkg/version.Version=$(APP_VERSION) \
+                -X newscid/pkg/version.GitCommit=$(GIT_COMMIT) \
+                -X newscid/pkg/version.BuildDate=$(BUILD_DATE)
+
+# Build Directories & Artifacts
+BIN_DIR     := build/bin
+DIST_DIR    := build/dist
+STAGING_DIR := build/staging
+BINARY      := $(BIN_DIR)/$(APP_NAME)
 
 # Color definitions
 CYAN   := \033[36m
@@ -18,12 +47,13 @@ help: ## Display this help menu with all available targets
 	@printf "$(BOLD)$(CYAN)========================================================================$(RESET)\n"
 	@printf "$(BOLD)Usage:$(RESET) make $(GREEN)<target>$(RESET)\n\n"
 	@printf "$(BOLD)Available Targets:$(RESET)\n"
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(GREEN)%-18s$(RESET) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(GREEN)%-20s$(RESET) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@printf "\n$(BOLD)Quick Start:$(RESET)\n"
-	@printf "  1. $(YELLOW)make deps$(RESET)    # Install mise toolchain and dependencies\n"
-	@printf "  2. $(YELLOW)make test$(RESET)    # Run all unit and integration tests\n"
-	@printf "  3. $(YELLOW)make build$(RESET)   # Build standalone production binary\n"
-	@printf "  4. $(YELLOW)make dev$(RESET)     # Launch interactive development mode\n\n"
+	@printf "  1. $(YELLOW)make deps$(RESET)        # Install mise toolchain and dependencies\n"
+	@printf "  2. $(YELLOW)make test$(RESET)        # Run all unit and integration tests\n"
+	@printf "  3. $(YELLOW)make build$(RESET)       # Build standalone production binary\n"
+	@printf "  4. $(YELLOW)make packages$(RESET)    # Build all distribution packages\n"
+	@printf "  5. $(YELLOW)make dev$(RESET)         # Launch interactive development mode\n\n"
 
 deps: setup ## Alias for setup (installs all toolchain and library dependencies)
 
@@ -42,9 +72,10 @@ dev: ## Run live development server with hot-reload (Wails Dev)
 	@wails dev
 
 build: ## Build the standalone production binary (build/bin/newscid)
-	@printf "$(BOLD)$(BLUE)==> Building NewScid production desktop application...$(RESET)\n"
-	@wails build
+	@printf "$(BOLD)$(BLUE)==> Building NewScid production desktop application (v$(APP_VERSION), commit $(GIT_COMMIT))...$(RESET)\n"
+	@wails build -ldflags "$(LDFLAGS)"
 	@printf "$(BOLD)$(GREEN)✔ Binary built at build/bin/newscid$(RESET)\n"
+
 
 build-frontend: ## Compile the Vue 3 + Vite frontend assets
 	@printf "$(BOLD)$(BLUE)==> Compiling Vue 3 frontend...$(RESET)\n"
@@ -83,8 +114,100 @@ run: ## Run the built production application binary
 		$(MAKE) build && ./build/bin/newscid; \
 	fi
 
-clean: ## Remove build artifacts, coverage outputs, and temporary files
+# ==============================================================================
+# Versioning & Release Management
+# ==============================================================================
+
+version: ## Display current version, git commit, and build metadata
+	@printf "$(BOLD)Application:$(RESET) $(CYAN)$(APP_TITLE)$(RESET)\n"
+	@printf "$(BOLD)Version:    $(RESET) $(GREEN)v$(APP_VERSION)$(RESET) (from $(VERSION_FILE))\n"
+	@printf "$(BOLD)Git Commit: $(RESET) $(YELLOW)$(GIT_COMMIT)$(RESET)\n"
+	@printf "$(BOLD)Build Date: $(RESET) $(BLUE)$(BUILD_DATE)$(RESET)\n"
+
+bump-patch: ## Bump semantic patch version (e.g. 1.0.0 -> 1.0.1)
+	@./packaging/scripts/bump-version.sh patch
+
+bump-minor: ## Bump semantic minor version (e.g. 1.0.0 -> 1.1.0)
+	@./packaging/scripts/bump-version.sh minor
+
+bump-major: ## Bump semantic major version (e.g. 1.0.0 -> 2.0.0)
+	@./packaging/scripts/bump-version.sh major
+
+tag-release: ## Create and annotate git release tag for current version
+	@printf "$(BOLD)$(BLUE)==> Creating git release tag v$(APP_VERSION)...$(RESET)\n"
+	@if [ -n "$$(git status --porcelain)" ]; then \
+		printf "$(BOLD)$(YELLOW)Warning: Working directory has uncommitted changes. Please commit first.$(RESET)\n"; \
+		exit 1; \
+	fi
+	@git tag -a "v$(APP_VERSION)" -m "Release v$(APP_VERSION)"
+	@printf "$(BOLD)$(GREEN)✔ Tag v$(APP_VERSION) created successfully.$(RESET)\n"
+	@printf "  Run $(YELLOW)git push origin v$(APP_VERSION)$(RESET) to publish tag.\n"
+
+# ==============================================================================
+# Packaging Targets
+# ==============================================================================
+
+appimage: build ## Build standalone Linux AppImage package (.AppImage)
+	@APP_VERSION=$(APP_VERSION) ./packaging/scripts/build-appimage.sh $(BINARY) $(DIST_DIR)
+
+package-appimage: appimage ## Alias for appimage
+
+snap: build ## Build Canonical Snap package (.snap)
+	@APP_VERSION=$(APP_VERSION) ./packaging/scripts/build-snap.sh $(BINARY) $(DIST_DIR)
+
+package-snap: snap ## Alias for snap
+
+deb: build ## Build Debian/Ubuntu package (.deb)
+	@APP_VERSION=$(APP_VERSION) APP_RELEASE=$(APP_RELEASE) ./packaging/scripts/build-deb.sh $(BINARY) $(DIST_DIR)
+
+package-deb: deb ## Alias for deb
+
+pacman: build ## Build Arch Linux pacman package (.pkg.tar.*)
+	@APP_VERSION=$(APP_VERSION) APP_RELEASE=$(APP_RELEASE) ./packaging/scripts/build-pacman.sh $(BINARY) $(DIST_DIR)
+
+package-pacman: pacman ## Alias for pacman
+
+chocolatey: ## Build Windows Chocolatey package (.nupkg)
+	@APP_VERSION=$(APP_VERSION) ./packaging/scripts/build-chocolatey.py $(DIST_DIR)
+
+choco: chocolatey ## Alias for chocolatey
+package-chocolatey: chocolatey ## Alias for chocolatey
+package-choco: chocolatey ## Alias for chocolatey
+
+brew: build ## Build macOS Homebrew Cask and Formula (.rb + .zip)
+	@APP_VERSION=$(APP_VERSION) ./packaging/scripts/build-brew.sh $(BINARY) $(DIST_DIR)
+
+homebrew: brew ## Alias for brew
+package-brew: brew ## Alias for brew
+
+flatpak: build ## Build Flatpak bundle or staged export package
+	@APP_VERSION=$(APP_VERSION) ./packaging/scripts/build-flatpak.sh $(BINARY) $(DIST_DIR)
+
+package-flatpak: flatpak ## Alias for flatpak
+
+packages: appimage snap deb pacman chocolatey brew flatpak package-checksums ## Build all distribution packages (Linux, Windows, macOS)
+	@printf "\n$(BOLD)$(GREEN)========================================================================$(RESET)\n"
+	@printf "$(BOLD)$(GREEN)✔ All packages successfully generated in $(DIST_DIR)/$(RESET)\n"
+	@printf "$(BOLD)$(GREEN)========================================================================$(RESET)\n"
+	@ls -lh $(DIST_DIR)
+
+package: packages ## Alias for packages
+package-all: packages ## Alias for packages
+
+package-checksums: ## Generate SHA-256 checksums for all packages in build/dist/
+	@printf "$(BOLD)$(BLUE)==> Generating SHA-256 checksums in $(DIST_DIR)/SHA256SUMS...$(RESET)\n"
+	@mkdir -p $(DIST_DIR)
+	@cd $(DIST_DIR) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS 2>/dev/null || true
+	@printf "$(BOLD)$(GREEN)✔ SHA256SUMS generated.$(RESET)\n"
+
+clean-dist: ## Remove all packaged distribution artifacts in build/dist/ and staging
+	@printf "$(BOLD)$(YELLOW)==> Cleaning distribution packages...$(RESET)\n"
+	@rm -rf $(DIST_DIR) $(STAGING_DIR)
+	@printf "$(BOLD)$(GREEN)✔ Distribution artifacts removed.$(RESET)\n"
+
+clean: clean-dist ## Remove build artifacts, coverage outputs, and temporary files
 	@printf "$(BOLD)$(YELLOW)==> Cleaning build artifacts...$(RESET)\n"
 	@rm -rf build/bin coverage.out
 	@rm -rf frontend/dist
 	@printf "$(BOLD)$(GREEN)✔ Clean completed.$(RESET)\n"
+

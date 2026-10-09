@@ -1,0 +1,48 @@
+app-id: org.newscid.NewScid
+runtime: org.gnome.Platform
+runtime-version: '46'
+sdk: org.gnome.Sdk
+command: newscid
+
+finish-args:
+  # Graphical & Display
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --socket=x11
+  - --device=dri
+  # Networking for online updates and analysis
+  - --share=network
+  # Filesystem access for user chess databases and PGN files
+  - --filesystem=home
+  - --filesystem=xdg-documents
+  # PulseAudio for chess move and check notifications
+  - --socket=pulseaudio
+  # Desktop notifications
+  - --talk-name=org.freedesktop.Notifications
+
+modules:
+  - name: newscid
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 newscid /app/bin/newscid
+      - install -Dm644 org.newscid.NewScid.desktop /app/share/applications/org.newscid.NewScid.desktop
+      - install -Dm644 org.newscid.NewScid.metainfo.xml /app/share/metainfo/org.newscid.NewScid.metainfo.xml
+      - install -Dm644 icons/1024x1024.png /app/share/icons/hicolor/1024x1024/apps/org.newscid.NewScid.png
+      - install -Dm644 icons/512x512.png /app/share/icons/hicolor/512x512/apps/org.newscid.NewScid.png
+      - install -Dm644 icons/256x256.png /app/share/icons/hicolor/256x256/apps/org.newscid.NewScid.png
+      - install -Dm644 icons/128x128.png /app/share/icons/hicolor/128x128/apps/org.newscid.NewScid.png
+      - install -Dm644 icons/64x64.png /app/share/icons/hicolor/64x64/apps/org.newscid.NewScid.png
+      - install -Dm644 icons/48x48.png /app/share/icons/hicolor/48x48/apps/org.newscid.NewScid.png
+      - install -Dm644 icons/32x32.png /app/share/icons/hicolor/32x32/apps/org.newscid.NewScid.png
+      - install -Dm644 icons/16x16.png /app/share/icons/hicolor/16x16/apps/org.newscid.NewScid.png
+    sources:
+      - type: file
+        path: ../../build/bin/newscid
+      - type: file
+        path: org.newscid.NewScid.desktop
+      - type: file
+        path: org.newscid.NewScid.metainfo.xml
+      - type: dir
+        path: ../../build/staging/icons
+        dest: icons

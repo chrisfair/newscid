@@ -132,18 +132,28 @@ $ make
 Usage: make <target>
 
 Available Targets:
-  help               Display this help menu with all available targets
-  deps               Alias for setup (installs all toolchain and library dependencies)
-  setup              Setup toolchain via mise, download Go modules, and install npm packages
-  dev                Run live development server with hot-reload (Wails Dev)
-  build              Build the standalone production binary (build/bin/newscid)
-  build-frontend     Compile the Vue 3 + Vite frontend assets
-  generate           Regenerate TypeScript bindings from Go App service
-  test               Run all Go unit and integration tests with testify
-  test-coverage      Run tests with code coverage analysis
-  lint               Run static analysis and linting on Go and TypeScript code
-  run                Run the built production application binary
-  clean              Remove build artifacts, coverage outputs, and temporary files
+  help                 Display this help menu with all available targets
+  deps                 Alias for setup (installs all toolchain and library dependencies)
+  setup                Setup toolchain via mise, download Go modules, and install npm packages
+  dev                  Run live development server with hot-reload (Wails Dev)
+  build                Build the standalone production binary (build/bin/newscid)
+  build-frontend       Compile the Vue 3 + Vite frontend assets
+  generate             Regenerate TypeScript bindings from Go App service
+  test                 Run all Go unit and integration tests with testify
+  test-coverage        Run tests with code coverage analysis
+  lint                 Run static analysis and linting on Go and TypeScript code
+  run                  Run the built production application binary
+  appimage             Build standalone Linux AppImage package (.AppImage)
+  snap                 Build Canonical Snap package (.snap)
+  deb                  Build Debian/Ubuntu package (.deb)
+  pacman               Build Arch Linux pacman package (.pkg.tar.*)
+  chocolatey           Build Windows Chocolatey package (.nupkg)
+  brew                 Build macOS Homebrew Cask and Formula (.rb + .zip)
+  flatpak              Build Flatpak bundle or staged export package
+  packages             Build all distribution packages (Linux, Windows, macOS)
+  package-checksums    Generate SHA-256 checksums for all packages in build/dist/
+  clean-dist           Remove all packaged distribution artifacts in build/dist/ and staging
+  clean                Remove build artifacts, coverage outputs, and temporary files
 ```
 
 ### Common Commands
@@ -173,3 +183,54 @@ Available Targets:
   make run
   ```
 
+---
+
+## Cross-Platform Packaging
+
+NewScid includes complete packaging automation for all major operating systems and package managers from the [`Makefile`](file:///home/christopher/Projects/newscid/Makefile):
+
+| Target | Format / Platform | Output in `build/dist/` |
+|---|---|---|
+| `make appimage` | Standalone Linux AppImage | `NewScid-1.0.0-x86_64.AppImage` |
+| `make snap` | Ubuntu / Canonical Snap | `newscid_1.0.0_amd64.snap` |
+| `make deb` | Debian / Ubuntu / Linux Mint | `newscid_1.0.0-1_amd64.deb` |
+| `make pacman` | Arch Linux / Manjaro / EndeavourOS | `newscid-1.0.0-1-x86_64.pkg.tar.*` |
+| `make chocolatey` | Windows (Chocolatey / NuGet) | `newscid.1.0.0.nupkg` |
+| `make brew` | macOS (Homebrew Cask & Formula) | `newscid.cask.rb`, `newscid.rb`, `NewScid-1.0.0-darwin.zip` |
+| `make flatpak` | Linux Flatpak (Sandboxed) | `org.newscid.NewScid.flatpak` or staging archive |
+| `make packages` | All Formats + SHA-256 Checksums | Generates all 7 packages & `SHA256SUMS` |
+
+Custom versions and release increments can be passed to make:
+```bash
+make packages APP_VERSION=1.1.0 APP_RELEASE=1
+```
+
+---
+
+## Versioning System
+
+NewScid follows [Semantic Versioning 2.0.0](https://semver.org) (`MAJOR.MINOR.PATCH`):
+
+- **Single Source of Truth**: The root [`VERSION`](file:///home/christopher/Projects/newscid/VERSION) file.
+- **Build Metadata Injection**: The `Makefile` passes `-ldflags` embedding the semantic version, git commit hash, and build timestamp into [`pkg/version`](file:///home/christopher/Projects/newscid/pkg/version/version.go).
+- **CLI Commands**:
+  ```bash
+  # Check version from compiled binary
+  ./build/bin/newscid --version
+  # NewScid v1.0.0 (commit: 9a87716, built: 2026-10-09T10:18:25Z, linux/amd64)
+
+  # Check version from Makefile
+  make version
+  ```
+- **Automated Version Bumping**:
+  ```bash
+  make bump-patch    # 1.0.0 -> 1.0.1
+  make bump-minor    # 1.0.0 -> 1.1.0
+  make bump-major    # 1.0.0 -> 2.0.0
+  ```
+  Automatically synchronizes versioning across `VERSION`, `wails.json`, `frontend/package.json`, and Go runtime metadata.
+- **Git Tagging**:
+  ```bash
+  make tag-release   # Validates clean working tree and tags v<version>
+  ```
+- **Desktop UI**: Accessible via **Help -> About NewScid** displaying version badge, commit, build date, and platform runtime info.

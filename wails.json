@@ -7,6 +7,13 @@
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
   "build:tags": "webkit2_41",
+  "info": {
+    "companyName": "Christopher Patrick Fair",
+    "productName": "NewScid",
+    "productVersion": "1.0.0",
+    "copyright": "Copyright © 2026 Christopher Patrick Fair",
+    "comments": "Modern Chess Information Database"
+  },
   "author": {
     "name": "Christopher Patrick Fair",
     "email": "christopherpatrickfair@gmail.com"

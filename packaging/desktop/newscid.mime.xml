@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-scid-database">
+    <comment>Scid Chess Database</comment>
+    <glob pattern="*.si4"/>
+    <glob pattern="*.sn4"/>
+    <glob pattern="*.sg4"/>
+  </mime-type>
+  <mime-type type="application/x-chess-pgn">
+    <comment>Portable Game Notation (PGN) Chess Game</comment>
+    <glob pattern="*.pgn"/>
+    <sub-class-of type="text/plain"/>
+  </mime-type>
+</mime-info>
