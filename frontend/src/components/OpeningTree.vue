@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useNotation, formatMoveNotation } from '../utils/notation'
 
 export interface MoveStat {
   move: string
@@ -67,9 +68,9 @@ const totalGames = computed(() => props.treeData?.totalGames || 0)
             class="hover:bg-emerald-950/30 transition-colors cursor-pointer group"
             @click="emit('playMove', m.move)"
           >
-            <!-- Move SAN -->
+            <!-- Move SAN / Styled -->
             <td class="py-2 px-3 font-bold text-emerald-400 group-hover:text-emerald-300 flex items-center gap-1.5">
-              <span>{{ m.move }}</span>
+              <span>{{ formatMoveNotation(m.move, m.uci || '') }}</span>
             </td>
 
             <!-- Games Count -->

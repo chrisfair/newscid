@@ -27,9 +27,14 @@ import {
   Zap,
   Pickaxe,
   Info,
-  Globe
+  Globe,
+  Bot,
+  Check
 } from '@lucide/vue'
 import { PieceSetOption, BoardThemeOption } from './HeaderBar.vue'
+import { useNotation, type NotationStyle } from '../utils/notation'
+
+const { currentStyle, setNotationStyle, options: notationOptions } = useNotation()
 
 const props = defineProps<{
   dbName?: string
@@ -78,6 +83,7 @@ const emit = defineEmits<{
   (e: 'showAbout'): void
   (e: 'databaseMaintenance'): void
   (e: 'onlineSync'): void
+  (e: 'simulatePlayer'): void
 }>()
 
 
@@ -459,6 +465,12 @@ onUnmounted(() => {
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => emit('simulatePlayer'))"
+        >
+          <span class="flex items-center gap-2"><Bot class="w-3.5 h-3.5 text-purple-400" /> Simulate Database Player (Sparring)...</span>
+        </button>
+        <button
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
           @click="selectItem(() => emit('tacticsTrainer'))"
         >
           <span class="flex items-center gap-2"><Award class="w-3.5 h-3.5 text-blue-400" /> Tactics Puzzle Trainer...</span>
@@ -493,7 +505,7 @@ onUnmounted(() => {
 
       <div
         v-if="activeMenu === 'options'"
-        class="absolute top-full left-0 mt-0.5 w-60 bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-2xl py-1 z-50 text-xs"
+        class="absolute top-full left-0 mt-0.5 w-64 bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-2xl py-1 z-50 text-xs"
       >
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
@@ -508,6 +520,19 @@ onUnmounted(() => {
           @click="selectItem(() => emit('openSettings'))"
         >
           <span class="flex items-center gap-2"><Palette class="w-3.5 h-3.5 text-emerald-400" /> Board Themes & Piece Sets...</span>
+        </button>
+        <div class="h-px bg-zinc-800 my-1" />
+        <div class="px-3 py-1 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Notation Style</div>
+        <button
+          v-for="opt in notationOptions"
+          :key="opt.id"
+          class="w-full text-left px-3 py-1 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => setNotationStyle(opt.id))"
+        >
+          <span class="flex items-center gap-2">
+            <span :class="currentStyle === opt.id ? 'text-amber-400 font-bold' : 'text-zinc-400'">{{ opt.name }}</span>
+          </span>
+          <Check v-if="currentStyle === opt.id" class="w-3 h-3 text-amber-400" />
         </button>
       </div>
     </div>

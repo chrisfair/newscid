@@ -7,10 +7,13 @@ import {main} from '../models';
 import {chess} from '../models';
 import {sets} from '../models';
 import {tree} from '../models';
+import {playerbot} from '../models';
 import {repertoire} from '../models';
 import {online} from '../models';
 import {version} from '../models';
 import {puzzleminer} from '../models';
+
+export function AddGameComment(arg1:number,arg2:string):Promise<void>;
 
 export function AddRepertoireMove(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string):Promise<void>;
 
@@ -21,6 +24,8 @@ export function AnnotateCurrentGame(arg1:number):Promise<engine.GameAnalysis>;
 export function AnnotatePGN(arg1:string,arg2:number):Promise<engine.GameAnalysis>;
 
 export function ClassifyOpening(arg1:Array<string>):Promise<eco.Entry>;
+
+export function ClearGameNAGs(arg1:number):Promise<void>;
 
 export function CloseDatabase():Promise<void>;
 
@@ -38,6 +43,8 @@ export function DeleteRepertoire(arg1:string):Promise<void>;
 
 export function DeleteSyncProfile(arg1:string):Promise<void>;
 
+export function DeleteVariation(arg1:number,arg2:number):Promise<void>;
+
 export function ExportPGN(arg1:chess.Game):Promise<string>;
 
 export function FetchChessComPreview(arg1:string):Promise<Array<string>>;
@@ -46,6 +53,10 @@ export function FetchLichessPreview(arg1:string,arg2:number):Promise<string>;
 
 export function FindDuplicateGames(arg1:scid.DuplicateCriteria):Promise<Array<scid.DuplicateGroup>>;
 
+export function FormatMove(arg1:string,arg2:string,arg3:string):Promise<string>;
+
+export function FormatMoveSequence(arg1:string,arg2:Array<string>,arg3:string):Promise<string>;
+
 export function GetAvailableEngines():Promise<Array<string>>;
 
 export function GetBestMove(arg1:string,arg2:Array<string>,arg3:number):Promise<string>;
@@ -53,6 +64,8 @@ export function GetBestMove(arg1:string,arg2:Array<string>,arg3:number):Promise<
 export function GetBoardThemes():Promise<Array<sets.BoardThemeInfo>>;
 
 export function GetDatabaseInfo():Promise<main.DatabaseInfo>;
+
+export function GetDatabasePlayers():Promise<Array<string>>;
 
 export function GetDatabaseStatistics():Promise<scid.DatabaseStatistics>;
 
@@ -70,9 +83,13 @@ export function GetGames(arg1:number,arg2:number,arg3:scid.SearchCriteria):Promi
 
 export function GetLegalMoves(arg1:string):Promise<Array<string>>;
 
+export function GetNotationStyle():Promise<string>;
+
 export function GetOpeningTree(arg1:string):Promise<tree.TreeResult>;
 
 export function GetPieceSets():Promise<Array<sets.PieceSetInfo>>;
+
+export function GetPlayerPersonality(arg1:string):Promise<playerbot.PlayerPersonality>;
 
 export function GetProgressivePuzzle(arg1:number):Promise<main.TacticsPuzzle>;
 
@@ -81,6 +98,8 @@ export function GetRepertoire(arg1:string):Promise<repertoire.Repertoire>;
 export function GetRepertoires():Promise<Array<repertoire.RepertoireSummary>>;
 
 export function GetScidSystemBases():Promise<Array<string>>;
+
+export function GetSimulatedMove(arg1:string,arg2:string,arg3:boolean):Promise<playerbot.SimulatedMove>;
 
 export function GetSyncProfile(arg1:string):Promise<online.Profile>;
 
@@ -91,6 +110,8 @@ export function GetVersionInfo():Promise<version.Info>;
 export function ImportPGNBatch(arg1:string):Promise<scid.ImportStats>;
 
 export function ImportPGNFileBatch(arg1:string):Promise<scid.ImportStats>;
+
+export function ImportPlayerGames(arg1:online.ImportPlayerOptions):Promise<online.SyncResult>;
 
 export function IsScidDriverAvailable():Promise<boolean>;
 
@@ -110,6 +131,8 @@ export function ParseFEN(arg1:string):Promise<main.BoardState>;
 
 export function ParsePGN(arg1:string):Promise<chess.Game>;
 
+export function PromoteVariation(arg1:number,arg2:number):Promise<void>;
+
 export function RecordRepertoirePractice(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<void>;
 
 export function SaveFileDialog(arg1:string):Promise<string>;
@@ -127,6 +150,10 @@ export function SetEngineHash(arg1:number):Promise<void>;
 export function SetEngineMultiPV(arg1:number):Promise<void>;
 
 export function SetEngineThreads(arg1:number):Promise<void>;
+
+export function SetGameNAG(arg1:number,arg2:number):Promise<void>;
+
+export function SetNotationStyle(arg1:string):Promise<void>;
 
 export function SortDatabase(arg1:scid.SortCriteria):Promise<void>;
 

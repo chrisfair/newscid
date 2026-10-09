@@ -249,6 +249,7 @@ func parseTokensToMoveTree(tokens []string, initialBoard *Board) (*MoveNode, int
 	b := initialBoard.Clone()
 	var root *MoveNode
 	var curr *MoveNode
+	var prevBoard *Board
 	plyCount := 0
 
 	for i := 0; i < len(tokens); i++ {
@@ -268,6 +269,33 @@ func parseTokensToMoveTree(tokens []string, initialBoard *Board) (*MoveNode, int
 			nag, err := strconv.Atoi(t[1:])
 			if err == nil && curr != nil {
 				curr.NAGs = append(curr.NAGs, nag)
+			}
+			continue
+		}
+
+		// Handle variations (...)
+		if t == "(" {
+			depth := 1
+			j := i + 1
+			var subTokens []string
+			for j < len(tokens) {
+				if tokens[j] == "(" {
+					depth++
+				} else if tokens[j] == ")" {
+					depth--
+					if depth == 0 {
+						break
+					}
+				}
+				subTokens = append(subTokens, tokens[j])
+				j++
+			}
+			i = j // Advance outer loop
+			if curr != nil && len(subTokens) > 0 && prevBoard != nil {
+				varRoot, _ := parseTokensToMoveTree(subTokens, prevBoard)
+				if varRoot != nil {
+					curr.Variations = append(curr.Variations, varRoot)
+				}
 			}
 			continue
 		}
@@ -292,6 +320,7 @@ func parseTokensToMoveTree(tokens []string, initialBoard *Board) (*MoveNode, int
 			continue
 		}
 
+		prevBoard = b.Clone()
 		san := b.MoveToSAN(move)
 		b.MakeMove(move)
 		plyCount++

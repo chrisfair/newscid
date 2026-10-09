@@ -458,10 +458,45 @@ export namespace main {
 
 export namespace online {
 	
+	export class ImportPlayerOptions {
+	    playerName: string;
+	    chessComUsername: string;
+	    lichessUsername: string;
+	    lichessToken?: string;
+	    targetMode: string;
+	    dedicatedPath: string;
+	    blendedPath: string;
+	    ratedOnly: boolean;
+	    maxGames: number;
+	    autoDeduplicate: boolean;
+	    createProfile: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportPlayerOptions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.playerName = source["playerName"];
+	        this.chessComUsername = source["chessComUsername"];
+	        this.lichessUsername = source["lichessUsername"];
+	        this.lichessToken = source["lichessToken"];
+	        this.targetMode = source["targetMode"];
+	        this.dedicatedPath = source["dedicatedPath"];
+	        this.blendedPath = source["blendedPath"];
+	        this.ratedOnly = source["ratedOnly"];
+	        this.maxGames = source["maxGames"];
+	        this.autoDeduplicate = source["autoDeduplicate"];
+	        this.createProfile = source["createProfile"];
+	    }
+	}
 	export class Profile {
 	    id: string;
 	    name: string;
 	    targetDatabase: string;
+	    targetMode: string;
+	    blendedDatabase: string;
+	    isStudyTarget: boolean;
 	    chessComUsername: string;
 	    lichessUsername: string;
 	    lichessToken?: string;
@@ -481,6 +516,9 @@ export namespace online {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.targetDatabase = source["targetDatabase"];
+	        this.targetMode = source["targetMode"];
+	        this.blendedDatabase = source["blendedDatabase"];
+	        this.isStudyTarget = source["isStudyTarget"];
 	        this.chessComUsername = source["chessComUsername"];
 	        this.lichessUsername = source["lichessUsername"];
 	        this.lichessToken = source["lichessToken"];
@@ -520,6 +558,115 @@ export namespace online {
 	        this.durationMs = source["durationMs"];
 	        this.timestamp = source["timestamp"];
 	        this.errors = source["errors"];
+	    }
+	}
+
+}
+
+export namespace playerbot {
+	
+	export class BookMove {
+	    uci: string;
+	    san: string;
+	    playedCount: number;
+	    wins: number;
+	    draws: number;
+	    losses: number;
+	    winRate: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new BookMove(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.uci = source["uci"];
+	        this.san = source["san"];
+	        this.playedCount = source["playedCount"];
+	        this.wins = source["wins"];
+	        this.draws = source["draws"];
+	        this.losses = source["losses"];
+	        this.winRate = source["winRate"];
+	    }
+	}
+	export class PlayerPersonality {
+	    name: string;
+	    totalGames: number;
+	    whiteGames: number;
+	    blackGames: number;
+	    wins: number;
+	    draws: number;
+	    losses: number;
+	    winRate: number;
+	    estimatedElo: number;
+	    peakElo: number;
+	    topWhiteECOs: string[];
+	    topBlackECOs: string[];
+	    whiteBook: Record<string, Array<BookMove>>;
+	    blackBook: Record<string, Array<BookMove>>;
+	
+	    static createFrom(source: any = {}) {
+	        return new PlayerPersonality(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.totalGames = source["totalGames"];
+	        this.whiteGames = source["whiteGames"];
+	        this.blackGames = source["blackGames"];
+	        this.wins = source["wins"];
+	        this.draws = source["draws"];
+	        this.losses = source["losses"];
+	        this.winRate = source["winRate"];
+	        this.estimatedElo = source["estimatedElo"];
+	        this.peakElo = source["peakElo"];
+	        this.topWhiteECOs = source["topWhiteECOs"];
+	        this.topBlackECOs = source["topBlackECOs"];
+	        this.whiteBook = this.convertValues(source["whiteBook"], Array<BookMove>, true);
+	        this.blackBook = this.convertValues(source["blackBook"], Array<BookMove>, true);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SimulatedMove {
+	    uci: string;
+	    san: string;
+	    isBook: boolean;
+	    playedCount: number;
+	    winRate: number;
+	    eloTarget: number;
+	    commentary: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SimulatedMove(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.uci = source["uci"];
+	        this.san = source["san"];
+	        this.isBook = source["isBook"];
+	        this.playedCount = source["playedCount"];
+	        this.winRate = source["winRate"];
+	        this.eloTarget = source["eloTarget"];
+	        this.commentary = source["commentary"];
 	    }
 	}
 

@@ -28,7 +28,8 @@ import {
   SyncOnlineProfile,
   FetchLichessPreview,
   FetchChessComPreview,
-  OpenFileDialog
+  OpenFileDialog,
+  ImportPlayerGames
 } from '../../wailsjs/go/main/App'
 import { online } from '../../wailsjs/go/models'
 
@@ -76,6 +77,98 @@ const currentProfile = ref<online.Profile>(
     updatedAt: 0
   })
 )
+
+// Active Modal Tab: 'profiles' (My accounts) or 'import-opponent' (Import other users)
+const activeTab = ref<'profiles' | 'import-opponent'>('profiles')
+
+// Opponent / GM Import State
+const opponentForm = ref({
+  playerName: '',
+  chessComUsername: '',
+  lichessUsername: '',
+  targetMode: 'active' as 'active' | 'dedicated' | 'blended',
+  dedicatedPath: '',
+  blendedPath: '',
+  createProfile: true,
+  ratedOnly: false,
+  autoDeduplicate: true,
+})
+const isImportingOpponent = ref(false)
+const opponentImportResult = ref<online.SyncResult | null>(null)
+
+async function pickDedicatedPath() {
+  try {
+    const path = await OpenFileDialog()
+    if (path) {
+      opponentForm.value.dedicatedPath = path
+    }
+  } catch (err: any) {
+    console.error('Error selecting dedicated database path:', err)
+  }
+}
+
+async function pickBlendedPath() {
+  try {
+    const path = await OpenFileDialog()
+    if (path) {
+      opponentForm.value.blendedPath = path
+    }
+  } catch (err: any) {
+    console.error('Error selecting blended database path:', err)
+  }
+}
+
+async function handleImportOpponentGames() {
+  if (!opponentForm.value.chessComUsername.trim() && !opponentForm.value.lichessUsername.trim()) {
+    errorMessage.value = 'Please provide at least one username (Chess.com or Lichess.org)'
+    return
+  }
+
+  if (opponentForm.value.targetMode === 'active' && !props.activeDbPath) {
+    errorMessage.value = 'No database is currently open. Please open a database or choose Dedicated Database mode.'
+    return
+  }
+
+  if (opponentForm.value.targetMode === 'dedicated' && !opponentForm.value.dedicatedPath.trim()) {
+    errorMessage.value = 'Please select or enter the Dedicated Database path.'
+    return
+  }
+
+  isImportingOpponent.value = true
+  errorMessage.value = ''
+  statusMessage.value = ''
+  opponentImportResult.value = null
+
+  try {
+    const displayName = opponentForm.value.playerName.trim() || opponentForm.value.chessComUsername.trim() || opponentForm.value.lichessUsername.trim()
+    const res = await ImportPlayerGames(new online.ImportPlayerOptions({
+      playerName: displayName,
+      chessComUsername: opponentForm.value.chessComUsername.trim(),
+      lichessUsername: opponentForm.value.lichessUsername.trim(),
+      targetMode: opponentForm.value.targetMode,
+      dedicatedPath: opponentForm.value.dedicatedPath.trim(),
+      blendedPath: opponentForm.value.blendedPath.trim(),
+      createProfile: opponentForm.value.createProfile,
+      ratedOnly: opponentForm.value.ratedOnly,
+      autoDeduplicate: opponentForm.value.autoDeduplicate,
+      maxGames: 0,
+    }))
+
+    opponentImportResult.value = res
+    if (res.errors && res.errors.length > 0) {
+      errorMessage.value = `Import finished with warnings: ${res.errors.join('; ')}`
+    } else {
+      statusMessage.value = `Successfully imported ${res.imported} games for ${displayName}!`
+    }
+
+    emit('dbUpdated')
+    await loadProfiles()
+  } catch (err: any) {
+    errorMessage.value = `Opponent import failed: ${err?.message || err}`
+  } finally {
+    isImportingOpponent.value = false
+  }
+}
 
 // Target database mode: 'active' or 'custom'
 const targetMode = ref<'active' | 'custom'>('active')
@@ -356,8 +449,36 @@ function formatDate(ms: number): string {
         </button>
       </div>
 
-      <!-- Modal Body (Two-Column Layout) -->
-      <div class="flex-1 flex overflow-hidden">
+      <!-- Modal Navigation Tabs -->
+      <div class="flex items-center gap-2 px-6 pt-2.5 border-b border-zinc-800 bg-zinc-950/40 text-xs">
+        <button
+          class="pb-2.5 px-3 font-semibold border-b-2 transition-colors flex items-center gap-2 cursor-pointer"
+          :class="activeTab === 'profiles'
+            ? 'border-cyan-400 text-white font-bold'
+            : 'border-transparent text-zinc-400 hover:text-zinc-200'"
+          @click="activeTab = 'profiles'"
+        >
+          <User class="w-4 h-4 text-cyan-400" />
+          <span>My Account Profiles ({{ profiles.length }})</span>
+        </button>
+
+        <button
+          class="pb-2.5 px-3 font-semibold border-b-2 transition-colors flex items-center gap-2 cursor-pointer"
+          :class="activeTab === 'import-opponent'
+            ? 'border-purple-400 text-white font-bold'
+            : 'border-transparent text-zinc-400 hover:text-zinc-200'"
+          @click="activeTab = 'import-opponent'"
+        >
+          <Globe class="w-4 h-4 text-purple-400" />
+          <span>Import Another User / Opponent Games</span>
+          <span class="px-1.5 py-0.5 rounded bg-purple-950/80 border border-purple-800 text-[10px] text-purple-300 font-mono">
+            Dedicated & Blended
+          </span>
+        </button>
+      </div>
+
+      <!-- Modal Body (Two-Column Layout for Profiles) -->
+      <div v-if="activeTab === 'profiles'" class="flex-1 flex overflow-hidden">
         
         <!-- Left Column: Profiles List -->
         <div class="w-72 border-r border-zinc-800 bg-zinc-950/30 flex flex-col p-4">
@@ -721,40 +842,271 @@ function formatDate(ms: number): string {
 
       </div>
 
+      <!-- Tab 2: Import Another User / Opponent Games -->
+      <div v-else-if="activeTab === 'import-opponent'" class="flex-1 overflow-y-auto p-6 space-y-5">
+        <div class="p-4 rounded-xl bg-purple-950/30 border border-purple-800/40 flex items-start gap-3">
+          <Globe class="w-5 h-5 text-purple-400 shrink-0 mt-0.5" />
+          <div class="text-xs space-y-1">
+            <h4 class="font-bold text-white text-sm">Download & Merge Any Player's Online Games</h4>
+            <p class="text-zinc-300 leading-relaxed">
+              Study any opponent, club rival, coach, or grandmaster. Choose to merge their games into your currently active database, maintain an isolated dedicated database, or maintain both simultaneously (blended database).
+            </p>
+          </div>
+        </div>
+
+        <!-- Form: Player Identity -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label class="text-xs font-semibold text-zinc-300 block mb-1">Player Display Name</label>
+            <input
+              v-model="opponentForm.playerName"
+              type="text"
+              placeholder="e.g. Hikaru Nakamura, RivalSmith"
+              class="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-xl text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+            />
+          </div>
+
+          <div>
+            <label class="text-xs font-semibold text-zinc-300 block mb-1">Chess.com Username</label>
+            <input
+              v-model="opponentForm.chessComUsername"
+              type="text"
+              placeholder="e.g. hikaru"
+              class="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-xl text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+            />
+          </div>
+
+          <div>
+            <label class="text-xs font-semibold text-zinc-300 block mb-1">Lichess.org Username</label>
+            <input
+              v-model="opponentForm.lichessUsername"
+              type="text"
+              placeholder="e.g. drnykterstein"
+              class="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-xl text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+            />
+          </div>
+        </div>
+
+        <!-- Destination Strategy Selector -->
+        <div class="space-y-3">
+          <label class="text-xs font-bold text-zinc-200 block uppercase tracking-wider">
+            Database Destination & Merge Strategy
+          </label>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <!-- Mode 1: Active DB -->
+            <label
+              class="p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between"
+              :class="opponentForm.targetMode === 'active'
+                ? 'bg-purple-950/40 border-purple-500 shadow-md ring-1 ring-purple-500/30'
+                : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700'"
+            >
+              <div class="flex items-start gap-2.5">
+                <input
+                  v-model="opponentForm.targetMode"
+                  type="radio"
+                  value="active"
+                  class="mt-1 accent-purple-500"
+                />
+                <div>
+                  <span class="text-xs font-bold text-white block">Blend into Active DB</span>
+                  <p class="text-[11px] text-zinc-400 mt-1">
+                    Appends games directly into:
+                    <span class="text-purple-300 font-mono block mt-0.5 truncate">{{ props.activeDbName || 'Current open database' }}</span>
+                  </p>
+                </div>
+              </div>
+            </label>
+
+            <!-- Mode 2: Dedicated DB -->
+            <label
+              class="p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between"
+              :class="opponentForm.targetMode === 'dedicated'
+                ? 'bg-purple-950/40 border-purple-500 shadow-md ring-1 ring-purple-500/30'
+                : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700'"
+            >
+              <div class="flex items-start gap-2.5">
+                <input
+                  v-model="opponentForm.targetMode"
+                  type="radio"
+                  value="dedicated"
+                  class="mt-1 accent-purple-500"
+                />
+                <div>
+                  <span class="text-xs font-bold text-white block">Dedicated Standalone DB</span>
+                  <p class="text-[11px] text-zinc-400 mt-1">
+                    Stores the player's games in their own isolated database file (.si4).
+                  </p>
+                </div>
+              </div>
+            </label>
+
+            <!-- Mode 3: Blended DB (Both) -->
+            <label
+              class="p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between"
+              :class="opponentForm.targetMode === 'blended'
+                ? 'bg-purple-950/40 border-purple-500 shadow-md ring-1 ring-purple-500/30'
+                : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700'"
+            >
+              <div class="flex items-start gap-2.5">
+                <input
+                  v-model="opponentForm.targetMode"
+                  type="radio"
+                  value="blended"
+                  class="mt-1 accent-purple-500"
+                />
+                <div>
+                  <span class="text-xs font-bold text-white block">Dedicated + Blended Master</span>
+                  <p class="text-[11px] text-zinc-400 mt-1">
+                    Maintains their separate base AND merges their games into your master database.
+                  </p>
+                </div>
+              </div>
+            </label>
+          </div>
+
+          <!-- File pickers for dedicated and blended paths -->
+          <div v-if="opponentForm.targetMode === 'dedicated' || opponentForm.targetMode === 'blended'" class="space-y-2 pt-2">
+            <div>
+              <label class="text-xs text-zinc-400 block mb-1">Dedicated Database Path (.si4):</label>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model="opponentForm.dedicatedPath"
+                  type="text"
+                  placeholder="e.g. /home/user/ChessDataBases/Hikaru_Games.si4"
+                  class="flex-1 px-3 py-1.5 bg-zinc-950 border border-zinc-700 rounded-lg text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                />
+                <button
+                  type="button"
+                  class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  @click="pickDedicatedPath"
+                >
+                  <FolderOpen class="w-3.5 h-3.5 text-purple-400" />
+                  <span>Browse</span>
+                </button>
+              </div>
+            </div>
+
+            <div v-if="opponentForm.targetMode === 'blended'">
+              <label class="text-xs text-zinc-400 block mb-1">Master Blended Database Path (leave empty to use active database):</label>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model="opponentForm.blendedPath"
+                  type="text"
+                  :placeholder="props.activeDbPath || '/home/user/ChessDataBases/Master.si4'"
+                  class="flex-1 px-3 py-1.5 bg-zinc-950 border border-zinc-700 rounded-lg text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                />
+                <button
+                  type="button"
+                  class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  @click="pickBlendedPath"
+                >
+                  <FolderOpen class="w-3.5 h-3.5 text-purple-400" />
+                  <span>Browse</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Preferences Checkboxes -->
+        <div class="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input v-model="opponentForm.autoDeduplicate" type="checkbox" class="rounded accent-purple-500" />
+            <span class="text-zinc-300">Auto-deduplicate games</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input v-model="opponentForm.ratedOnly" type="checkbox" class="rounded accent-purple-500" />
+            <span class="text-zinc-300">Rated games only</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input v-model="opponentForm.createProfile" type="checkbox" class="rounded accent-purple-500" />
+            <span class="text-zinc-300">Save as ongoing study profile</span>
+          </label>
+        </div>
+
+        <!-- Import Result Card -->
+        <div v-if="opponentImportResult" class="p-4 rounded-xl bg-purple-950/40 border border-purple-500/50 space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-bold text-white flex items-center gap-1.5">
+              <CheckCircle2 class="w-4 h-4 text-emerald-400" />
+              Import Complete for {{ opponentImportResult.profileName }}
+            </span>
+            <span class="text-zinc-400 font-mono">{{ opponentImportResult.durationMs }}ms</span>
+          </div>
+          <div class="grid grid-cols-4 gap-2 text-center text-xs">
+            <div class="p-2 bg-zinc-900 rounded-lg"><div class="font-bold text-white font-mono">{{ opponentImportResult.totalDownloaded }}</div><div class="text-[10px] text-zinc-400">Downloaded</div></div>
+            <div class="p-2 bg-zinc-900 rounded-lg"><div class="font-bold text-cyan-300 font-mono">{{ opponentImportResult.imported }}</div><div class="text-[10px] text-zinc-400">Imported</div></div>
+            <div class="p-2 bg-zinc-900 rounded-lg"><div class="font-bold text-amber-300 font-mono">{{ opponentImportResult.duplicatesSkipped }}</div><div class="text-[10px] text-zinc-400">Deduplicated</div></div>
+            <div class="p-2 bg-zinc-900 rounded-lg"><div class="font-bold text-blue-300 font-mono">{{ opponentImportResult.lichessGames + opponentImportResult.chessComGames }}</div><div class="text-[10px] text-zinc-400">Online Total</div></div>
+          </div>
+        </div>
+      </div>
+
       <!-- Modal Footer Action Bar -->
       <div class="px-6 py-4 border-t border-zinc-800 bg-zinc-950/80 flex items-center justify-between">
-        <div>
-          <button
-            v-if="currentProfile.id"
-            class="px-3 py-2 text-xs rounded-xl bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-800/40 flex items-center gap-1.5 transition-colors cursor-pointer"
-            :disabled="isSyncing || isSaving"
-            @click="handleDeleteProfile"
-          >
-            <Trash2 class="w-3.5 h-3.5" />
-            <span>Delete Profile</span>
-          </button>
-        </div>
+        <!-- Profiles footer buttons -->
+        <template v-if="activeTab === 'profiles'">
+          <div>
+            <button
+              v-if="currentProfile.id"
+              class="px-3 py-2 text-xs rounded-xl bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-800/40 flex items-center gap-1.5 transition-colors cursor-pointer"
+              :disabled="isSyncing || isSaving"
+              @click="handleDeleteProfile"
+            >
+              <Trash2 class="w-3.5 h-3.5" />
+              <span>Delete Profile</span>
+            </button>
+          </div>
 
-        <div class="flex items-center gap-3">
-          <button
-            class="px-4 py-2 text-xs rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 flex items-center gap-1.5 transition-colors cursor-pointer"
-            :disabled="isSyncing || isSaving"
-            @click="handleSaveProfile"
-          >
-            <Save class="w-3.5 h-3.5" />
-            <span>{{ isSaving ? 'Saving...' : 'Save Profile' }}</span>
-          </button>
+          <div class="flex items-center gap-3">
+            <button
+              class="px-4 py-2 text-xs rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+              :disabled="isSyncing || isSaving"
+              @click="handleSaveProfile"
+            >
+              <Save class="w-3.5 h-3.5" />
+              <span>{{ isSaving ? 'Saving...' : 'Save Profile' }}</span>
+            </button>
 
-          <button
-            class="px-5 py-2 text-xs font-semibold rounded-xl bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 text-white flex items-center gap-2 transition-all shadow-lg shadow-cyan-950/50 cursor-pointer disabled:opacity-50"
-            :disabled="isSyncing || isSaving"
-            @click="handleSyncNow"
-          >
-            <RefreshCw v-if="isSyncing" class="w-4 h-4 animate-spin" />
-            <Globe v-else class="w-4 h-4" />
-            <span>{{ isSyncing ? (syncProgressText || 'Syncing...') : 'Sync & Merge Now' }}</span>
-          </button>
-        </div>
+            <button
+              class="px-5 py-2 text-xs font-semibold rounded-xl bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 text-white flex items-center gap-2 transition-all shadow-lg shadow-cyan-950/50 cursor-pointer disabled:opacity-50"
+              :disabled="isSyncing || isSaving"
+              @click="handleSyncNow"
+            >
+              <RefreshCw v-if="isSyncing" class="w-4 h-4 animate-spin" />
+              <Globe v-else class="w-4 h-4" />
+              <span>{{ isSyncing ? (syncProgressText || 'Syncing...') : 'Sync & Merge Now' }}</span>
+            </button>
+          </div>
+        </template>
+
+        <!-- Import Opponent footer buttons -->
+        <template v-else-if="activeTab === 'import-opponent'">
+          <div class="text-xs text-zinc-400">
+            <span>Destination: </span>
+            <span class="text-purple-300 font-semibold uppercase">{{ opponentForm.targetMode }} mode</span>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <button
+              class="px-4 py-2 text-xs rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition-colors cursor-pointer"
+              @click="emit('close')"
+            >
+              Close
+            </button>
+
+            <button
+              class="px-5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white flex items-center gap-2 transition-all shadow-lg shadow-purple-950/50 cursor-pointer disabled:opacity-50"
+              :disabled="isImportingOpponent"
+              @click="handleImportOpponentGames"
+            >
+              <RefreshCw v-if="isImportingOpponent" class="w-4 h-4 animate-spin" />
+              <Globe v-else class="w-4 h-4" />
+              <span>{{ isImportingOpponent ? 'Downloading & Merging...' : 'Download & Merge Player Games' }}</span>
+            </button>
+          </div>
+        </template>
       </div>
 
     </div>
