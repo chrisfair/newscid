@@ -1,6 +1,7 @@
 package scid_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -194,3 +195,90 @@ func TestDiscoverScidDatabases(t *testing.T) {
 
 	assert.NotEmpty(t, dbs)
 }
+
+func TestAdvancedHeaderSearch(t *testing.T) {
+	tacticsPath := "/usr/share/scid/bases/tactics"
+	if _, err := os.Stat(tacticsPath + ".si4"); os.IsNotExist(err) {
+		t.Skip("Tactics base not found on system, skipping search test")
+	}
+
+	db := scid.NewDatabase()
+	err := db.Open(tacticsPath)
+	require.NoError(t, err)
+	defer db.Close()
+
+	// 1. Search by Player
+	results, total, err := db.GetGameSummaries(0, 50, scid.SearchCriteria{
+		Player: "Fischer",
+	})
+	require.NoError(t, err)
+	assert.Greater(t, total, 0)
+	for _, g := range results {
+		assert.True(t, strings.Contains(strings.ToLower(g.White), "fischer") || strings.Contains(strings.ToLower(g.Black), "fischer"))
+	}
+	assert.Equal(t, total, db.CountMatches(scid.SearchCriteria{Player: "Fischer"}))
+
+	// 2. Search by Specific Color (White = Fischer)
+	resWhite, totalWhite, err := db.GetGameSummaries(0, 50, scid.SearchCriteria{
+		White: "Fischer",
+	})
+	require.NoError(t, err)
+	for _, g := range resWhite {
+		assert.Contains(t, strings.ToLower(g.White), "fischer")
+	}
+	assert.LessOrEqual(t, totalWhite, total)
+
+	// 3. Search by Result (1-0)
+	resWins, totalWins, err := db.GetGameSummaries(0, 10, scid.SearchCriteria{
+		Result: "1-0",
+	})
+	require.NoError(t, err)
+	assert.Greater(t, totalWins, 0)
+	for _, g := range resWins {
+		assert.Equal(t, chess.ResultWhiteWins, g.Result)
+	}
+
+	// 4. Search by ECO Range (e.g. B00 to B99)
+	resEco, totalEco, err := db.GetGameSummaries(0, 20, scid.SearchCriteria{
+		EcoFrom: "B00",
+		EcoTo:   "B99",
+	})
+	require.NoError(t, err)
+	for _, g := range resEco {
+		if g.ECO != "" {
+			assert.True(t, g.ECO >= "B00" && g.ECO <= "B99", "ECO %s should be in [B00, B99]", g.ECO)
+		}
+	}
+	assert.Equal(t, totalEco, db.CountMatches(scid.SearchCriteria{EcoFrom: "B00", EcoTo: "B99"}))
+
+	// 5. Search by Move count (MinMoves = 10, MaxMoves = 30)
+	resMoves, totalMoves, err := db.GetGameSummaries(0, 20, scid.SearchCriteria{
+		MinMoves: 10,
+		MaxMoves: 30,
+	})
+	require.NoError(t, err)
+	for _, g := range resMoves {
+		assert.GreaterOrEqual(t, g.Moves, 10)
+		assert.LessOrEqual(t, g.Moves, 30)
+	}
+	assert.Equal(t, totalMoves, db.CountMatches(scid.SearchCriteria{MinMoves: 10, MaxMoves: 30}))
+
+	// 6. Search by Year (YearFrom = 1970, YearTo = 1980)
+	resYears, totalYears, err := db.GetGameSummaries(0, 20, scid.SearchCriteria{
+		YearFrom: 1970,
+		YearTo:   1980,
+	})
+	require.NoError(t, err)
+	for _, g := range resYears {
+		if len(g.Date) >= 4 {
+			var y int
+			fmt.Sscanf(g.Date[:4], "%d", &y)
+			if y > 0 {
+				assert.GreaterOrEqual(t, y, 1970)
+				assert.LessOrEqual(t, y, 1980)
+			}
+		}
+	}
+	assert.Equal(t, totalYears, db.CountMatches(scid.SearchCriteria{YearFrom: 1970, YearTo: 1980}))
+}
+

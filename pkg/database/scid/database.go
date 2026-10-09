@@ -28,17 +28,31 @@ type GameSummary struct {
 
 // SearchCriteria defines filters for querying the database.
 type SearchCriteria struct {
-	White     string `json:"white,omitempty"`
-	Black     string `json:"black,omitempty"`
-	Player    string `json:"player,omitempty"` // White or Black
-	Event     string `json:"event,omitempty"`
-	Site      string `json:"site,omitempty"`
-	DateFrom  string `json:"dateFrom,omitempty"`
-	DateTo    string `json:"dateTo,omitempty"`
-	Result    string `json:"result,omitempty"`
-	ECO       string `json:"eco,omitempty"`
-	MinElo    int    `json:"minElo,omitempty"`
-	MaxElo    int    `json:"maxElo,omitempty"`
+	White         string `json:"white,omitempty"`
+	Black         string `json:"black,omitempty"`
+	Player        string `json:"player,omitempty"` // White or Black
+	Event         string `json:"event,omitempty"`
+	Site          string `json:"site,omitempty"`
+	Round         string `json:"round,omitempty"`
+	DateFrom      string `json:"dateFrom,omitempty"`
+	DateTo        string `json:"dateTo,omitempty"`
+	YearFrom      int    `json:"yearFrom,omitempty"`
+	YearTo        int    `json:"yearTo,omitempty"`
+	Result        string `json:"result,omitempty"`
+	ECO           string `json:"eco,omitempty"`
+	EcoFrom       string `json:"ecoFrom,omitempty"`
+	EcoTo         string `json:"ecoTo,omitempty"`
+	MinElo        int    `json:"minElo,omitempty"`
+	MaxElo        int    `json:"maxElo,omitempty"`
+	WhiteEloMin   int    `json:"whiteEloMin,omitempty"`
+	WhiteEloMax   int    `json:"whiteEloMax,omitempty"`
+	BlackEloMin   int    `json:"blackEloMin,omitempty"`
+	BlackEloMax   int    `json:"blackEloMax,omitempty"`
+	MinMoves      int    `json:"minMoves,omitempty"`
+	MaxMoves      int    `json:"maxMoves,omitempty"`
+	HasVariations bool   `json:"hasVariations,omitempty"`
+	IgnoreDeleted bool   `json:"ignoreDeleted,omitempty"`
+	OnlyDeleted   bool   `json:"onlyDeleted,omitempty"`
 }
 
 // Database represents an open SCID database.
@@ -199,6 +213,161 @@ func formatECO(eco uint16) string {
 	return fmt.Sprintf("%c%02d", letter, num)
 }
 
+// matchesCriteria checks if an entry matches the given search criteria.
+func (db *Database) matchesCriteria(entry *IndexEntry, criteria *SearchCriteria) bool {
+	// 1. Deleted check
+	isDeleted := (entry.Flags & FlagDelete) != 0
+	if criteria.OnlyDeleted && !isDeleted {
+		return false
+	}
+	if criteria.IgnoreDeleted && isDeleted {
+		return false
+	}
+
+	// 2. Result check
+	if criteria.Result != "" && string(entry.Result) != criteria.Result {
+		return false
+	}
+
+	// 3. Ratings check
+	wElo := int(entry.WhiteElo)
+	bElo := int(entry.BlackElo)
+
+	if criteria.MinElo > 0 && (wElo < criteria.MinElo && bElo < criteria.MinElo) {
+		return false
+	}
+	if criteria.MaxElo > 0 && ((wElo > 0 && wElo > criteria.MaxElo) || (bElo > 0 && bElo > criteria.MaxElo)) {
+		return false
+	}
+	if criteria.WhiteEloMin > 0 && wElo < criteria.WhiteEloMin {
+		return false
+	}
+	if criteria.WhiteEloMax > 0 && wElo > 0 && wElo > criteria.WhiteEloMax {
+		return false
+	}
+	if criteria.BlackEloMin > 0 && bElo < criteria.BlackEloMin {
+		return false
+	}
+	if criteria.BlackEloMax > 0 && bElo > 0 && bElo > criteria.BlackEloMax {
+		return false
+	}
+
+	// 4. Move count check
+	moves := int((entry.NumHalfMoves + 1) / 2)
+	if criteria.MinMoves > 0 && moves < criteria.MinMoves {
+		return false
+	}
+	if criteria.MaxMoves > 0 && moves > criteria.MaxMoves {
+		return false
+	}
+
+	// 5. Variations check
+	if criteria.HasVariations && (entry.VarCounts&0x0FFF) == 0 {
+		return false
+	}
+
+	// 6. ECO check
+	ecoStr := formatECO(entry.EcoCode)
+	if criteria.ECO != "" {
+		critECO := strings.ToUpper(strings.TrimSpace(criteria.ECO))
+		if !strings.HasPrefix(ecoStr, critECO) {
+			return false
+		}
+	}
+	if criteria.EcoFrom != "" {
+		critFrom := strings.ToUpper(strings.TrimSpace(criteria.EcoFrom))
+		if ecoStr < critFrom {
+			return false
+		}
+	}
+	if criteria.EcoTo != "" {
+		critTo := strings.ToUpper(strings.TrimSpace(criteria.EcoTo))
+		if ecoStr > critTo {
+			return false
+		}
+	}
+
+	// 7. Date & Year check
+	var year int
+	if len(entry.Date) >= 4 {
+		fmt.Sscanf(entry.Date[:4], "%d", &year)
+	}
+	if criteria.YearFrom > 0 && (year == 0 || year < criteria.YearFrom) {
+		return false
+	}
+	if criteria.YearTo > 0 && (year == 0 || year > criteria.YearTo) {
+		return false
+	}
+	if criteria.DateFrom != "" {
+		cleanFrom := strings.TrimSpace(criteria.DateFrom)
+		if entry.Date != "" && entry.Date < cleanFrom {
+			return false
+		}
+	}
+	if criteria.DateTo != "" {
+		cleanTo := strings.TrimSpace(criteria.DateTo)
+		if entry.Date != "" && entry.Date > cleanTo {
+			return false
+		}
+	}
+
+	// 8. Name criteria (only lookup from namebase if requested)
+	if criteria.Player != "" {
+		white := db.Names.GetName(NamePlayer, entry.WhiteID)
+		black := db.Names.GetName(NamePlayer, entry.BlackID)
+		critP := strings.ToLower(criteria.Player)
+		if !strings.Contains(strings.ToLower(white), critP) && !strings.Contains(strings.ToLower(black), critP) {
+			return false
+		}
+	}
+	if criteria.White != "" {
+		white := db.Names.GetName(NamePlayer, entry.WhiteID)
+		if !strings.Contains(strings.ToLower(white), strings.ToLower(criteria.White)) {
+			return false
+		}
+	}
+	if criteria.Black != "" {
+		black := db.Names.GetName(NamePlayer, entry.BlackID)
+		if !strings.Contains(strings.ToLower(black), strings.ToLower(criteria.Black)) {
+			return false
+		}
+	}
+	if criteria.Event != "" {
+		event := db.Names.GetName(NameEvent, entry.EventID)
+		if !strings.Contains(strings.ToLower(event), strings.ToLower(criteria.Event)) {
+			return false
+		}
+	}
+	if criteria.Site != "" {
+		site := db.Names.GetName(NameSite, entry.SiteID)
+		if !strings.Contains(strings.ToLower(site), strings.ToLower(criteria.Site)) {
+			return false
+		}
+	}
+	if criteria.Round != "" {
+		round := db.Names.GetName(NameRound, entry.RoundID)
+		if !strings.Contains(strings.ToLower(round), strings.ToLower(criteria.Round)) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// CountMatches returns the total number of games matching the criteria.
+func (db *Database) CountMatches(criteria SearchCriteria) int {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	count := 0
+	for _, entry := range db.Entries {
+		if db.matchesCriteria(entry, &criteria) {
+			count++
+		}
+	}
+	return count
+}
+
 // GetGameSummaries returns filtered and paginated game summaries.
 func (db *Database) GetGameSummaries(offset, limit int, criteria SearchCriteria) ([]*GameSummary, int, error) {
 	db.mu.RLock()
@@ -206,45 +375,19 @@ func (db *Database) GetGameSummaries(offset, limit int, criteria SearchCriteria)
 
 	var matched []*GameSummary
 	for i, entry := range db.Entries {
+		if !db.matchesCriteria(entry, &criteria) {
+			continue
+		}
+
 		gameNum := i + 1
-		white := db.Names.GetName(NamePlayer, entry.WhiteID)
-		black := db.Names.GetName(NamePlayer, entry.BlackID)
-		event := db.Names.GetName(NameEvent, entry.EventID)
-		site := db.Names.GetName(NameSite, entry.SiteID)
-
-		if criteria.Player != "" {
-			critP := strings.ToLower(criteria.Player)
-			if !strings.Contains(strings.ToLower(white), critP) && !strings.Contains(strings.ToLower(black), critP) {
-				continue
-			}
-		}
-		if criteria.White != "" && !strings.Contains(strings.ToLower(white), strings.ToLower(criteria.White)) {
-			continue
-		}
-		if criteria.Black != "" && !strings.Contains(strings.ToLower(black), strings.ToLower(criteria.Black)) {
-			continue
-		}
-		if criteria.Event != "" && !strings.Contains(strings.ToLower(event), strings.ToLower(criteria.Event)) {
-			continue
-		}
-		if criteria.Site != "" && !strings.Contains(strings.ToLower(site), strings.ToLower(criteria.Site)) {
-			continue
-		}
-		if criteria.Result != "" && string(entry.Result) != criteria.Result {
-			continue
-		}
-		if criteria.MinElo > 0 && (int(entry.WhiteElo) < criteria.MinElo && int(entry.BlackElo) < criteria.MinElo) {
-			continue
-		}
-
 		s := &GameSummary{
 			ID:       gameNum,
-			White:    white,
-			Black:    black,
+			White:    db.Names.GetName(NamePlayer, entry.WhiteID),
+			Black:    db.Names.GetName(NamePlayer, entry.BlackID),
 			Result:   entry.Result,
 			Date:     entry.Date,
-			Event:    event,
-			Site:     site,
+			Event:    db.Names.GetName(NameEvent, entry.EventID),
+			Site:     db.Names.GetName(NameSite, entry.SiteID),
 			Round:    db.Names.GetName(NameRound, entry.RoundID),
 			WhiteElo: int(entry.WhiteElo),
 			BlackElo: int(entry.BlackElo),

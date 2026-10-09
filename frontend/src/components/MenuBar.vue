@@ -11,6 +11,7 @@ import {
   Play,
   Award,
   Search,
+  Filter,
   Wrench,
   HelpCircle,
   Cpu,
@@ -65,6 +66,7 @@ const emit = defineEmits<{
   (e: 'openingTrainer'): void
   (e: 'progressiveTactics'): void
   (e: 'minePuzzles'): void
+  (e: 'searchHeader'): void
   (e: 'searchPosition'): void
   (e: 'toggleFlip'): void
   (e: 'changePieceSet', id: string): void
@@ -345,8 +347,15 @@ onUnmounted(() => {
 
       <div
         v-if="activeMenu === 'search'"
-        class="absolute top-full left-0 mt-0.5 w-60 bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-2xl py-1 z-50 text-xs"
+        class="absolute top-full left-0 mt-0.5 w-64 bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-2xl py-1 z-50 text-xs"
       >
+        <button
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => emit('searchHeader'))"
+        >
+          <span class="flex items-center gap-2"><Filter class="w-3.5 h-3.5 text-blue-400" /> Header / General Search...</span>
+          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+H</span>
+        </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
           @click="selectItem(() => emit('searchPosition'))"

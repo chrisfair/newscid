@@ -26,6 +26,10 @@ export function CloseDatabase() {
   return window['go']['main']['App']['CloseDatabase']();
 }
 
+export function CountSearchMatches(arg1) {
+  return window['go']['main']['App']['CountSearchMatches'](arg1);
+}
+
 export function CreateDatabase(arg1, arg2) {
   return window['go']['main']['App']['CreateDatabase'](arg1, arg2);
 }

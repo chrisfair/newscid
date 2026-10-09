@@ -15,6 +15,7 @@ import KeyboardShortcutsModal from './components/KeyboardShortcutsModal.vue'
 import OpeningTrainerModal from './components/OpeningTrainerModal.vue'
 import ProgressiveTacticsModal from './components/ProgressiveTacticsModal.vue'
 import PuzzleMinerModal from './components/PuzzleMinerModal.vue'
+import HeaderSearchModal from './components/HeaderSearchModal.vue'
 
 
 // Import Wails backend bindings
@@ -127,6 +128,7 @@ const showOpeningTrainerModal = ref(false)
 const showProgressiveTacticsModal = ref(false)
 const showPuzzleMinerModal = ref(false)
 const showShortcutsModal = ref(false)
+const showSearchModal = ref(false)
 const showImportModal = ref(false)
 const importPGNText = ref('')
 
@@ -440,6 +442,9 @@ function handleKeydown(e: KeyboardEvent) {
     } else if (e.key === 'o' || e.key === 'O') {
       e.preventDefault()
       handleOpenDB()
+    } else if (e.key === 'h' || e.key === 'H') {
+      e.preventDefault()
+      showSearchModal.value = true
     } else if (e.key === 'n' || e.key === 'N') {
       e.preventDefault()
       handleNewGame()
@@ -686,8 +691,8 @@ async function handleDeleteCurrentGame() {
   }
 }
 
-function handleSearch(criteria: { player?: string; result?: string; eco?: string }) {
-  searchFilter.value = criteria
+function handleSearch(criteria: any) {
+  searchFilter.value = criteria || {}
   currentPage.value = 1
   refreshGames()
 }
@@ -1051,6 +1056,7 @@ async function handleSelectEngine(path: string) {
       @opening-trainer="showOpeningTrainerModal = true"
       @progressive-tactics="showProgressiveTacticsModal = true"
       @mine-puzzles="showPuzzleMinerModal = true"
+      @search-header="showSearchModal = true"
       @search-position="handleSearchPosition"
       @toggle-flip="flipped = !flipped"
       @change-piece-set="currentPieceSet = $event"
@@ -1286,9 +1292,11 @@ async function handleSelectEngine(path: string) {
         :page-size="pageSize"
         :active-game-id="activeGameId"
         :db-name="dbInfo?.name"
+        :active-criteria="searchFilter"
         @load-game="handleLoadGame"
         @page-change="handlePageChange"
         @search="handleSearch"
+        @open-advanced-search="showSearchModal = true"
         @new-game="handleNewGame"
         @save-game="handleSaveCurrentGame"
         @delete-game="handleDeleteGame"
@@ -1358,6 +1366,16 @@ async function handleSelectEngine(path: string) {
     <KeyboardShortcutsModal
       v-if="showShortcutsModal"
       @close="showShortcutsModal = false"
+    />
+
+    <!-- Header / General Search Modal (Ctrl+H) -->
+    <HeaderSearchModal
+      v-if="showSearchModal"
+      :db-name="dbInfo?.name"
+      :total-games="totalGames"
+      :initial-criteria="searchFilter"
+      @apply-search="handleSearch"
+      @close="showSearchModal = false"
     />
 
 
