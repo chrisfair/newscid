@@ -37,8 +37,14 @@ package() {
 
     # 3. Install icons
     for size in 16 32 48 64 128 256 512 1024; do
+        icon_path=""
         if [ -f "${srcdir}/icons/${size}x${size}.png" ]; then
-            install -Dm644 "${srcdir}/icons/${size}x${size}.png" \
+            icon_path="${srcdir}/icons/${size}x${size}.png"
+        elif [ -f "${startdir}/icons/${size}x${size}.png" ]; then
+            icon_path="${startdir}/icons/${size}x${size}.png"
+        fi
+        if [ -n "${icon_path}" ]; then
+            install -Dm644 "${icon_path}" \
                 "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps/newscid.png"
         fi
     done
