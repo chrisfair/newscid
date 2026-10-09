@@ -50,8 +50,20 @@ export function DeleteRepertoire(arg1) {
   return window['go']['main']['App']['DeleteRepertoire'](arg1);
 }
 
+export function DeleteSyncProfile(arg1) {
+  return window['go']['main']['App']['DeleteSyncProfile'](arg1);
+}
+
 export function ExportPGN(arg1) {
   return window['go']['main']['App']['ExportPGN'](arg1);
+}
+
+export function FetchChessComPreview(arg1) {
+  return window['go']['main']['App']['FetchChessComPreview'](arg1);
+}
+
+export function FetchLichessPreview(arg1, arg2) {
+  return window['go']['main']['App']['FetchLichessPreview'](arg1, arg2);
 }
 
 export function FindDuplicateGames(arg1) {
@@ -126,6 +138,14 @@ export function GetScidSystemBases() {
   return window['go']['main']['App']['GetScidSystemBases']();
 }
 
+export function GetSyncProfile(arg1) {
+  return window['go']['main']['App']['GetSyncProfile'](arg1);
+}
+
+export function GetSyncProfiles() {
+  return window['go']['main']['App']['GetSyncProfiles']();
+}
+
 export function GetVersionInfo() {
   return window['go']['main']['App']['GetVersionInfo']();
 }
@@ -190,6 +210,10 @@ export function SaveRepertoire(arg1) {
   return window['go']['main']['App']['SaveRepertoire'](arg1);
 }
 
+export function SaveSyncProfile(arg1) {
+  return window['go']['main']['App']['SaveSyncProfile'](arg1);
+}
+
 export function SearchPosition(arg1) {
   return window['go']['main']['App']['SearchPosition'](arg1);
 }
@@ -204,6 +228,10 @@ export function StartEngine(arg1) {
 
 export function StopEngine() {
   return window['go']['main']['App']['StopEngine']();
+}
+
+export function SyncOnlineProfile(arg1) {
+  return window['go']['main']['App']['SyncOnlineProfile'](arg1);
 }
 
 export function VerifyDatabase() {

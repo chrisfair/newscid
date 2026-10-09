@@ -152,6 +152,9 @@ func (db *Database) ImportGames(games []*chess.Game) (*ImportStats, error) {
 	}
 
 	// Update header in .si4
+	if _, err := fSi.Seek(0, os.SEEK_SET); err != nil {
+		return nil, fmt.Errorf("seeking si4 to update header: %w", err)
+	}
 	db.Header.NumGames = uint32(len(db.Entries))
 	if err := WriteIndexHeader(fSi, db.Header); err != nil {
 		return nil, fmt.Errorf("updating index header: %w", err)

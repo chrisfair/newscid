@@ -18,6 +18,7 @@ import PuzzleMinerModal from './components/PuzzleMinerModal.vue'
 import HeaderSearchModal from './components/HeaderSearchModal.vue'
 import AboutModal from './components/AboutModal.vue'
 import DatabaseMaintenanceModal from './components/DatabaseMaintenanceModal.vue'
+import OnlineSyncModal from './components/OnlineSyncModal.vue'
 
 
 // Import Wails backend bindings
@@ -133,6 +134,7 @@ const showShortcutsModal = ref(false)
 const showAboutModal = ref(false)
 const showSearchModal = ref(false)
 const showMaintenanceModal = ref(false)
+const showOnlineSyncModal = ref(false)
 const showImportModal = ref(false)
 const importPGNText = ref('')
 
@@ -1078,6 +1080,7 @@ async function handleSelectEngine(path: string) {
       @show-shortcuts="showShortcutsModal = true"
       @show-about="showAboutModal = true"
       @database-maintenance="showMaintenanceModal = true"
+      @online-sync="showOnlineSyncModal = true"
     />
 
 
@@ -1407,6 +1410,15 @@ async function handleSelectEngine(path: string) {
       :total-games="totalGames"
       @db-updated="handleDatabaseUpdated"
       @close="showMaintenanceModal = false"
+    />
+
+    <!-- Online Account Sync & Merge Modal -->
+    <OnlineSyncModal
+      v-if="showOnlineSyncModal"
+      :active-db-path="dbInfo?.basePath"
+      :active-db-name="dbInfo?.name"
+      @db-updated="handleDatabaseUpdated"
+      @close="showOnlineSyncModal = false"
     />
 
 
