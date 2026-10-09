@@ -69,48 +69,71 @@ const emit = defineEmits<{
   (e: 'toggleFlip'): void
   (e: 'changePieceSet', id: string): void
   (e: 'changeTheme', id: string): void
+  (e: 'openSettings'): void
   (e: 'showShortcuts'): void
 }>()
 
 
 const activeMenu = ref<string | null>(null)
+let justSwitchedMenu = false
 
 function toggleMenu(menu: string) {
   if (activeMenu.value === menu) {
+    if (justSwitchedMenu) {
+      justSwitchedMenu = false
+      return
+    }
     activeMenu.value = null
   } else {
     activeMenu.value = menu
+    justSwitchedMenu = false
   }
 }
 
 function handleMenuHover(menu: string) {
-  if (activeMenu.value !== null) {
+  if (activeMenu.value !== null && activeMenu.value !== menu) {
     activeMenu.value = menu
+    justSwitchedMenu = true
   }
 }
 
 function closeAll() {
   activeMenu.value = null
+  justSwitchedMenu = false
+}
+
+function selectItem(fn: () => void) {
+  closeAll()
+  fn()
 }
 
 function handleGlobalClick(e: MouseEvent) {
   const target = e.target as HTMLElement
+  if (!target || typeof target.closest !== 'function') return
   if (!target.closest('.app-menubar')) {
+    closeAll()
+  }
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && activeMenu.value !== null) {
     closeAll()
   }
 }
 
 onMounted(() => {
   window.addEventListener('click', handleGlobalClick)
+  window.addEventListener('keydown', handleKeydown)
 })
 
 onUnmounted(() => {
   window.removeEventListener('click', handleGlobalClick)
+  window.removeEventListener('keydown', handleKeydown)
 })
 </script>
 
 <template>
-  <div class="app-menubar bg-zinc-950 border-b border-zinc-800/80 px-2 py-0.5 flex items-center gap-1 text-xs select-none z-30">
+  <div class="app-menubar relative z-40 bg-zinc-950 border-b border-zinc-800/80 px-2 py-0.5 flex items-center gap-1 text-xs select-none">
     <!-- FILE MENU -->
     <div class="relative">
       <button
@@ -128,21 +151,21 @@ onUnmounted(() => {
       >
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('openDB'); closeAll()"
+          @click="selectItem(() => emit('openDB'))"
         >
           <span class="flex items-center gap-2"><FolderOpen class="w-3.5 h-3.5 text-emerald-400" /> Open Database...</span>
           <span class="text-[10px] text-zinc-500 font-mono">Ctrl+O</span>
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('createDB'); closeAll()"
+          @click="selectItem(() => emit('createDB'))"
         >
           <span class="flex items-center gap-2"><FileText class="w-3.5 h-3.5 text-zinc-400" /> New Database...</span>
         </button>
         <button
           v-if="dbName"
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('closeDB'); closeAll()"
+          @click="selectItem(() => emit('closeDB'))"
         >
           <span class="flex items-center gap-2"><Trash2 class="w-3.5 h-3.5 text-amber-400" /> Close Database</span>
         </button>
@@ -151,28 +174,28 @@ onUnmounted(() => {
 
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('importPGN'); closeAll()"
+          @click="selectItem(() => emit('importPGN'))"
         >
           <span class="flex items-center gap-2"><ClipboardPaste class="w-3.5 h-3.5 text-zinc-400" /> Import PGN Game...</span>
           <span class="text-[10px] text-zinc-500 font-mono">Ctrl+I</span>
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('exportPGN'); closeAll()"
+          @click="selectItem(() => emit('exportPGN'))"
         >
           <span class="flex items-center gap-2"><Copy class="w-3.5 h-3.5 text-zinc-400" /> Export PGN Game</span>
           <span class="text-[10px] text-zinc-500 font-mono">Ctrl+E</span>
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('copyFEN'); closeAll()"
+          @click="selectItem(() => emit('copyFEN'))"
         >
           <span class="flex items-center gap-2"><Copy class="w-3.5 h-3.5 text-zinc-400" /> Copy FEN to Clipboard</span>
           <span class="text-[10px] text-zinc-500 font-mono">Ctrl+C</span>
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('pasteFEN'); closeAll()"
+          @click="selectItem(() => emit('pasteFEN'))"
         >
           <span class="flex items-center gap-2"><ClipboardPaste class="w-3.5 h-3.5 text-zinc-400" /> Paste FEN from Clipboard</span>
           <span class="text-[10px] text-zinc-500 font-mono">Ctrl+V</span>
@@ -197,14 +220,14 @@ onUnmounted(() => {
       >
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('setupBoard'); closeAll()"
+          @click="selectItem(() => emit('setupBoard'))"
         >
           <span class="flex items-center gap-2"><Sliders class="w-3.5 h-3.5 text-purple-400" /> Setup Board / FEN Editor...</span>
           <span class="text-[10px] text-zinc-500 font-mono">Ctrl+B</span>
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('toggleTrialMode'); closeAll()"
+          @click="selectItem(() => emit('toggleTrialMode'))"
         >
           <span class="flex items-center gap-2">
             <span class="w-2 h-2 rounded-full" :class="trialMode ? 'bg-amber-400' : 'bg-zinc-600'" />
@@ -217,14 +240,14 @@ onUnmounted(() => {
 
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('undoMove'); closeAll()"
+          @click="selectItem(() => emit('undoMove'))"
         >
           <span class="flex items-center gap-2"><Undo2 class="w-3.5 h-3.5 text-zinc-400" /> Undo Move</span>
           <span class="text-[10px] text-zinc-500 font-mono">Ctrl+Z</span>
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('redoMove'); closeAll()"
+          @click="selectItem(() => emit('redoMove'))"
         >
           <span class="flex items-center gap-2"><Redo2 class="w-3.5 h-3.5 text-zinc-400" /> Redo Move</span>
           <span class="text-[10px] text-zinc-500 font-mono">Ctrl+Y</span>
@@ -249,21 +272,21 @@ onUnmounted(() => {
       >
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('newGame'); closeAll()"
+          @click="selectItem(() => emit('newGame'))"
         >
           <span class="flex items-center gap-2"><FileText class="w-3.5 h-3.5 text-emerald-400" /> New Game</span>
           <span class="text-[10px] text-zinc-500 font-mono">Ctrl+N</span>
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('saveGame'); closeAll()"
+          @click="selectItem(() => emit('saveGame'))"
         >
           <span class="flex items-center gap-2"><Save class="w-3.5 h-3.5 text-blue-400" /> Save Current Game</span>
           <span class="text-[10px] text-zinc-500 font-mono">Ctrl+S</span>
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('deleteGame'); closeAll()"
+          @click="selectItem(() => emit('deleteGame'))"
         >
           <span class="flex items-center gap-2"><Trash2 class="w-3.5 h-3.5 text-red-400" /> Delete Game</span>
           <span class="text-[10px] text-zinc-500 font-mono">Ctrl+Del</span>
@@ -273,35 +296,35 @@ onUnmounted(() => {
 
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('firstGame'); closeAll()"
+          @click="selectItem(() => emit('firstGame'))"
         >
           <span>First Game</span>
           <span class="text-[10px] text-zinc-500 font-mono">Ctrl+Home</span>
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('prevGame'); closeAll()"
+          @click="selectItem(() => emit('prevGame'))"
         >
           <span>Previous Game</span>
           <span class="text-[10px] text-zinc-500 font-mono">Ctrl+Up</span>
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('nextGame'); closeAll()"
+          @click="selectItem(() => emit('nextGame'))"
         >
           <span>Next Game</span>
           <span class="text-[10px] text-zinc-500 font-mono">Ctrl+Down</span>
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('lastGame'); closeAll()"
+          @click="selectItem(() => emit('lastGame'))"
         >
           <span>Last Game</span>
           <span class="text-[10px] text-zinc-500 font-mono">Ctrl+End</span>
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('randomGame'); closeAll()"
+          @click="selectItem(() => emit('randomGame'))"
         >
           <span class="flex items-center gap-2"><Shuffle class="w-3.5 h-3.5 text-zinc-400" /> Random Game</span>
           <span class="text-[10px] text-zinc-500 font-mono">Ctrl+?</span>
@@ -326,7 +349,7 @@ onUnmounted(() => {
       >
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('searchPosition'); closeAll()"
+          @click="selectItem(() => emit('searchPosition'))"
         >
           <span class="flex items-center gap-2"><Search class="w-3.5 h-3.5 text-emerald-400" /> Search Current Position</span>
         </button>
@@ -350,13 +373,13 @@ onUnmounted(() => {
       >
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('annotateGame'); closeAll()"
+          @click="selectItem(() => emit('annotateGame'))"
         >
           <span class="flex items-center gap-2"><Sparkles class="w-3.5 h-3.5 text-amber-400" /> Full Game Analysis (Annotate)</span>
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('toggleAnalysis'); closeAll()"
+          @click="selectItem(() => emit('toggleAnalysis'))"
         >
           <span class="flex items-center gap-2"><Cpu class="w-3.5 h-3.5 text-emerald-400" /> {{ isAnalyzing ? 'Stop Engine Analysis' : 'Start Live Analysis' }}</span>
           <span class="text-[10px] text-zinc-500 font-mono">F2</span>
@@ -364,7 +387,7 @@ onUnmounted(() => {
         <div class="h-px bg-zinc-800 my-1" />
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('minePuzzles'); closeAll()"
+          @click="selectItem(() => emit('minePuzzles'))"
         >
           <span class="flex items-center gap-2"><Pickaxe class="w-3.5 h-3.5 text-amber-400" /> Mine Puzzles from Database Games...</span>
         </button>
@@ -388,26 +411,26 @@ onUnmounted(() => {
       >
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('playVsEngine'); closeAll()"
+          @click="selectItem(() => emit('playVsEngine'))"
         >
           <span class="flex items-center gap-2"><Swords class="w-3.5 h-3.5 text-amber-400" /> Play Against Engine...</span>
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('tacticsTrainer'); closeAll()"
+          @click="selectItem(() => emit('tacticsTrainer'))"
         >
           <span class="flex items-center gap-2"><Award class="w-3.5 h-3.5 text-blue-400" /> Tactics Puzzle Trainer...</span>
         </button>
         <div class="h-px bg-zinc-800 my-1" />
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('progressiveTactics'); closeAll()"
+          @click="selectItem(() => emit('progressiveTactics'))"
         >
           <span class="flex items-center gap-2"><Zap class="w-3.5 h-3.5 text-amber-400" /> Progressive Tactics Challenge...</span>
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('openingTrainer'); closeAll()"
+          @click="selectItem(() => emit('openingTrainer'))"
         >
           <span class="flex items-center gap-2"><BookOpen class="w-3.5 h-3.5 text-emerald-400" /> Opening Builder & Trainer...</span>
         </button>
@@ -428,14 +451,21 @@ onUnmounted(() => {
 
       <div
         v-if="activeMenu === 'options'"
-        class="absolute top-full left-0 mt-0.5 w-56 bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-2xl py-1 z-50 text-xs"
+        class="absolute top-full left-0 mt-0.5 w-60 bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-2xl py-1 z-50 text-xs"
       >
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('toggleFlip'); closeAll()"
+          @click="selectItem(() => emit('toggleFlip'))"
         >
           <span class="flex items-center gap-2"><RotateCcw class="w-3.5 h-3.5 text-zinc-400" /> Flip Board</span>
           <span class="text-[10px] text-zinc-500 font-mono">F</span>
+        </button>
+        <div class="h-px bg-zinc-800 my-1" />
+        <button
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => emit('openSettings'))"
+        >
+          <span class="flex items-center gap-2"><Palette class="w-3.5 h-3.5 text-emerald-400" /> Board Themes & Piece Sets...</span>
         </button>
       </div>
     </div>
@@ -457,7 +487,7 @@ onUnmounted(() => {
       >
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
-          @click="emit('showShortcuts'); closeAll()"
+          @click="selectItem(() => emit('showShortcuts'))"
         >
           <span class="flex items-center gap-2"><HelpCircle class="w-3.5 h-3.5 text-emerald-400" /> Keyboard Shortcuts</span>
           <span class="text-[10px] text-zinc-500 font-mono">?</span>
