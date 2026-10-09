@@ -24,6 +24,7 @@ mkdir -p "${STAGE_DIR}/usr/share/applications"
 mkdir -p "${STAGE_DIR}/usr/share/metainfo"
 mkdir -p "${STAGE_DIR}/usr/share/mime/packages"
 mkdir -p "${STAGE_DIR}/usr/share/doc/newscid"
+mkdir -p "${STAGE_DIR}/usr/share/man/man1"
 mkdir -p "${DIST_DIR}"
 
 # 1. Install binary
@@ -39,6 +40,10 @@ chmod 644 "${STAGE_DIR}/usr/share/metainfo/org.newscid.NewScid.metainfo.xml"
 
 cp packaging/desktop/newscid.mime.xml "${STAGE_DIR}/usr/share/mime/packages/newscid.xml"
 chmod 644 "${STAGE_DIR}/usr/share/mime/packages/newscid.xml"
+
+cp packaging/man/newscid.1 "${STAGE_DIR}/usr/share/man/man1/newscid.1"
+gzip -9n -f "${STAGE_DIR}/usr/share/man/man1/newscid.1"
+chmod 644 "${STAGE_DIR}/usr/share/man/man1/newscid.1.gz"
 
 cp packaging/deb/copyright "${STAGE_DIR}/usr/share/doc/newscid/copyright"
 chmod 644 "${STAGE_DIR}/usr/share/doc/newscid/copyright"

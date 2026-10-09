@@ -20,6 +20,7 @@ rm -rf "${STAGING_DIR}"
 mkdir -p "${STAGING_DIR}/usr/bin"
 mkdir -p "${STAGING_DIR}/usr/share/applications"
 mkdir -p "${STAGING_DIR}/usr/share/metainfo"
+mkdir -p "${STAGING_DIR}/usr/share/man/man1"
 mkdir -p "${DIST_DIR}"
 mkdir -p "${CACHE_DIR}"
 
@@ -35,8 +36,9 @@ chmod 755 "${STAGING_DIR}/AppRun"
 cp packaging/desktop/newscid.desktop "${STAGING_DIR}/newscid.desktop"
 cp packaging/desktop/newscid.desktop "${STAGING_DIR}/usr/share/applications/newscid.desktop"
 
-# 4. Copy AppStream metadata
+# 4. Copy AppStream metadata and man page
 cp packaging/desktop/org.newscid.NewScid.metainfo.xml "${STAGING_DIR}/usr/share/metainfo/org.newscid.NewScid.metainfo.xml"
+cp packaging/man/newscid.1 "${STAGING_DIR}/usr/share/man/man1/newscid.1"
 
 # 5. Generate and install icons
 python3 packaging/scripts/generate-icons.py build/appicon.png build/staging/icons

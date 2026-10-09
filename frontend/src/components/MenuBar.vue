@@ -30,7 +30,8 @@ import {
   Globe,
   Bot,
   Check,
-  Users
+  Users,
+  ExternalLink
 } from '@lucide/vue'
 import { PieceSetOption, BoardThemeOption } from './HeaderBar.vue'
 import { useNotation, type NotationStyle } from '../utils/notation'
@@ -82,6 +83,8 @@ const emit = defineEmits<{
   (e: 'openSettings'): void
   (e: 'showShortcuts'): void
   (e: 'showAbout'): void
+  (e: 'showHelp'): void
+  (e: 'openWebDocs'): void
   (e: 'databaseMaintenance'): void
   (e: 'onlineSync'): void
   (e: 'simulatePlayer'): void
@@ -564,8 +567,22 @@ onUnmounted(() => {
 
       <div
         v-if="activeMenu === 'help'"
-        class="absolute top-full left-0 mt-0.5 w-52 bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-2xl py-1 z-50 text-xs"
+        class="absolute top-full left-0 mt-0.5 w-60 bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-2xl py-1 z-50 text-xs"
       >
+        <button
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => emit('showHelp'))"
+        >
+          <span class="flex items-center gap-2"><BookOpen class="w-3.5 h-3.5 text-emerald-400" /> Online Help & Guides...</span>
+          <span class="text-[10px] text-zinc-500 font-mono">F1</span>
+        </button>
+        <button
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => emit('openWebDocs'))"
+        >
+          <span class="flex items-center gap-2"><ExternalLink class="w-3.5 h-3.5 text-cyan-400" /> Web Documentation (Online)...</span>
+        </button>
+        <div class="h-px bg-zinc-800 my-1" />
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
           @click="selectItem(() => emit('showShortcuts'))"

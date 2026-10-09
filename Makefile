@@ -209,11 +209,12 @@ install: install-user ## Install NewScid to user local environment (~/.local)
 
 install-user: build ## Install binary, desktop entry, mime info, and icons to ~/.local
 	@printf "$(BOLD)$(BLUE)==> Installing NewScid to $(HOME)/.local...$(RESET)\n"
-	@mkdir -p $(HOME)/.local/bin $(HOME)/.local/share/applications $(HOME)/.local/share/metainfo $(HOME)/.local/share/mime/packages
+	@mkdir -p $(HOME)/.local/bin $(HOME)/.local/share/applications $(HOME)/.local/share/metainfo $(HOME)/.local/share/mime/packages $(HOME)/.local/share/man/man1
 	@install -Dm755 $(BINARY) $(HOME)/.local/bin/$(APP_NAME)
 	@install -Dm644 packaging/desktop/newscid.desktop $(HOME)/.local/share/applications/newscid.desktop
 	@install -Dm644 packaging/desktop/org.newscid.NewScid.metainfo.xml $(HOME)/.local/share/metainfo/org.newscid.NewScid.metainfo.xml
 	@install -Dm644 packaging/desktop/newscid.mime.xml $(HOME)/.local/share/mime/packages/newscid.xml
+	@install -Dm644 packaging/man/newscid.1 $(HOME)/.local/share/man/man1/newscid.1
 	@python3 packaging/scripts/generate-icons.py build/appicon.png build/staging/icons
 	@for size in 16 32 48 64 128 256 512 1024; do \
 		if [ -f "build/staging/icons/$${size}x$${size}.png" ]; then \
@@ -231,6 +232,7 @@ uninstall: ## Remove NewScid from user local environment (~/.local)
 	@rm -f $(HOME)/.local/share/applications/newscid.desktop
 	@rm -f $(HOME)/.local/share/metainfo/org.newscid.NewScid.metainfo.xml
 	@rm -f $(HOME)/.local/share/mime/packages/newscid.xml
+	@rm -f $(HOME)/.local/share/man/man1/newscid.1
 	@for size in 16 32 48 64 128 256 512 1024; do \
 		rm -f $(HOME)/.local/share/icons/hicolor/$${size}x$${size}/apps/newscid.png; \
 	done

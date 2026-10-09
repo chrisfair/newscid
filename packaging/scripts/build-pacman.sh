@@ -25,6 +25,7 @@ chmod 755 "${STAGE_DIR}/newscid"
 cp packaging/desktop/newscid.desktop "${STAGE_DIR}/newscid.desktop"
 cp packaging/desktop/org.newscid.NewScid.metainfo.xml "${STAGE_DIR}/org.newscid.NewScid.metainfo.xml"
 cp packaging/desktop/newscid.mime.xml "${STAGE_DIR}/newscid.mime.xml"
+cp packaging/man/newscid.1 "${STAGE_DIR}/newscid.1"
 cp packaging/pacman/newscid.install "${STAGE_DIR}/newscid.install"
 
 # 2. Copy icons
