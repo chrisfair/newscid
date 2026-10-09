@@ -55,12 +55,29 @@ type SimulatedMove struct {
 // BuildPersonality extracts games for playerName from the database and constructs a complete
 // opening repertoire and statistical playing model.
 func BuildPersonality(db *scid.Database, playerName string) (*PlayerPersonality, error) {
+	return BuildPersonalityFromIdentifiers(db, playerName, []string{playerName})
+}
+
+// BuildPersonalityFromIdentifiers extracts games matching any identifier in identifiers
+// and constructs a unified opening repertoire and statistical playing model for the persona.
+func BuildPersonalityFromIdentifiers(db *scid.Database, displayName string, identifiers []string) (*PlayerPersonality, error) {
 	if db == nil || !db.IsOpen {
 		return nil, fmt.Errorf("database is not open")
 	}
-	cleanName := strings.TrimSpace(playerName)
+	cleanName := strings.TrimSpace(displayName)
 	if cleanName == "" {
-		return nil, fmt.Errorf("player name cannot be empty")
+		return nil, fmt.Errorf("player display name cannot be empty")
+	}
+
+	aliasLookup := make(map[string]bool)
+	for _, id := range identifiers {
+		clean := strings.ToLower(strings.TrimSpace(id))
+		if clean != "" {
+			aliasLookup[clean] = true
+		}
+	}
+	if len(aliasLookup) == 0 {
+		aliasLookup[strings.ToLower(cleanName)] = true
 	}
 
 	p := &PlayerPersonality{
@@ -69,7 +86,6 @@ func BuildPersonality(db *scid.Database, playerName string) (*PlayerPersonality,
 		BlackBook: make(map[string][]BookMove),
 	}
 
-	lowerTarget := strings.ToLower(cleanName)
 	totalEloSum := 0
 	eloCount := 0
 
@@ -83,11 +99,19 @@ func BuildPersonality(db *scid.Database, playerName string) (*PlayerPersonality,
 			continue
 		}
 
-		whiteName := db.Names.GetName(scid.NamePlayer, entry.WhiteID)
-		blackName := db.Names.GetName(scid.NamePlayer, entry.BlackID)
+		whiteName := strings.ToLower(db.Names.GetName(scid.NamePlayer, entry.WhiteID))
+		blackName := strings.ToLower(db.Names.GetName(scid.NamePlayer, entry.BlackID))
 
-		isWhite := strings.Contains(strings.ToLower(whiteName), lowerTarget)
-		isBlack := strings.Contains(strings.ToLower(blackName), lowerTarget)
+		isWhite := false
+		isBlack := false
+		for alias := range aliasLookup {
+			if strings.Contains(whiteName, alias) {
+				isWhite = true
+			}
+			if strings.Contains(blackName, alias) {
+				isBlack = true
+			}
+		}
 
 		if !isWhite && !isBlack {
 			continue

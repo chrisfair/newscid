@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import {
   Bot,
   User,
+  Users,
   Search,
   Swords,
   Trophy,
@@ -16,11 +17,17 @@ import {
   CheckCircle2,
   AlertCircle
 } from '@lucide/vue'
-import { GetDatabasePlayers, GetPlayerPersonality } from '../../wailsjs/go/main/App'
-import { playerbot } from '../../wailsjs/go/models'
+import {
+  GetDatabasePlayers,
+  GetPlayerPersonality,
+  GetPersonas,
+  GetPersonaPersonality
+} from '../../wailsjs/go/main/App'
+import { playerbot, persona } from '../../wailsjs/go/models'
 
 const props = defineProps<{
   activeDbName?: string
+  initialPersona?: persona.Persona
 }>()
 
 const emit = defineEmits<{
@@ -32,6 +39,11 @@ const emit = defineEmits<{
     personality: playerbot.PlayerPersonality
   }): void
 }>()
+
+// Opponent selection tab: 'database' | 'personas'
+const activeTab = ref<'database' | 'personas'>(props.initialPersona ? 'personas' : 'database')
+const personasList = ref<persona.Persona[]>([])
+const selectedPersona = ref<persona.Persona | null>(props.initialPersona || null)
 
 const availablePlayers = ref<string[]>([])
 const searchInput = ref('')
@@ -49,9 +61,21 @@ const bookStyle = ref<'weighted' | 'strict'>('weighted')
 
 onMounted(async () => {
   try {
+    const pList = await GetPersonas()
+    personasList.value = pList || []
+  } catch (e) {
+    personasList.value = []
+  }
+
+  if (props.initialPersona) {
+    activeTab.value = 'personas'
+    await analyzePersona(props.initialPersona)
+  }
+
+  try {
     const list = await GetDatabasePlayers()
     availablePlayers.value = list || []
-    if (availablePlayers.value.length > 0) {
+    if (!props.initialPersona && availablePlayers.value.length > 0) {
       // Pick a popular GM if available or first player
       const preferred = availablePlayers.value.find(p =>
         p.includes('Kasparov') || p.includes('Carlsen') || p.includes('Fischer')
@@ -67,7 +91,9 @@ onMounted(async () => {
       }
     }
   } catch (err: any) {
-    errorMessage.value = `Failed to load database players: ${err?.message || err}`
+    if (!props.initialPersona) {
+      errorMessage.value = `Failed to load database players: ${err?.message || err}`
+    }
   } finally {
     loadingPlayers.value = false
   }
@@ -85,6 +111,7 @@ async function analyzePlayer(name: string) {
   if (!name.trim()) return
   loadingPersonality.value = true
   errorMessage.value = ''
+  selectedPersona.value = null
   try {
     const p = await GetPlayerPersonality(name)
     personality.value = p
@@ -97,9 +124,30 @@ async function analyzePlayer(name: string) {
   }
 }
 
+async function analyzePersona(p: persona.Persona) {
+  if (!p || !p.id) return
+  loadingPersonality.value = true
+  errorMessage.value = ''
+  selectedPersona.value = p
+  try {
+    const pers = await GetPersonaPersonality(p.id)
+    personality.value = pers
+    selectedPlayer.value = p.displayName
+  } catch (err: any) {
+    errorMessage.value = `Error analyzing persona ${p.displayName}: ${err?.message || err}`
+    personality.value = null
+  } finally {
+    loadingPersonality.value = false
+  }
+}
+
 function handleSelectPlayer(name: string) {
   searchInput.value = name
   analyzePlayer(name)
+}
+
+function handleSelectPersona(p: persona.Persona) {
+  analyzePersona(p)
 }
 
 function handleStartMatch() {
@@ -161,8 +209,32 @@ function handleStartMatch() {
           <span>{{ errorMessage }}</span>
         </div>
 
-        <!-- Player Selection Search Bar -->
-        <div class="space-y-1.5">
+        <!-- Mode Tabs: Database Opponents vs Unified Personas -->
+        <div class="flex items-center gap-2 p-1 bg-zinc-950 border border-zinc-800 rounded-xl text-xs">
+          <button
+            class="flex-1 py-1.5 px-3 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            :class="activeTab === 'database'
+              ? 'bg-zinc-800 text-white shadow-xs'
+              : 'text-zinc-400 hover:text-zinc-200'"
+            @click="activeTab = 'database'"
+          >
+            <User class="w-3.5 h-3.5" />
+            <span>Database Opponents</span>
+          </button>
+          <button
+            class="flex-1 py-1.5 px-3 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            :class="activeTab === 'personas'
+              ? 'bg-purple-600 text-white shadow-xs'
+              : 'text-zinc-400 hover:text-zinc-200'"
+            @click="activeTab = 'personas'"
+          >
+            <Users class="w-3.5 h-3.5" />
+            <span>Unified Personas ({{ personasList.length }})</span>
+          </button>
+        </div>
+
+        <!-- 1. Database Opponents Selection -->
+        <div v-if="activeTab === 'database'" class="space-y-1.5">
           <label class="text-xs font-semibold text-zinc-300 flex items-center justify-between">
             <span>Select Player to Simulate:</span>
             <span class="text-[11px] text-zinc-500 font-normal">
@@ -201,6 +273,44 @@ function handleStartMatch() {
             >
               {{ pName }}
             </button>
+          </div>
+        </div>
+
+        <!-- 2. Unified Personas Selection -->
+        <div v-else class="space-y-2">
+          <label class="text-xs font-semibold text-zinc-300 flex items-center justify-between">
+            <span>Choose Persona to Spar Against:</span>
+            <span class="text-[11px] text-purple-400 font-mono">Consolidated Multi-Alias Sparring</span>
+          </label>
+
+          <div v-if="personasList.length > 0" class="grid grid-cols-2 gap-2 max-h-44 overflow-y-auto p-1">
+            <button
+              v-for="p in personasList"
+              :key="p.id"
+              class="p-2.5 rounded-xl border text-left flex items-center gap-2.5 transition-all cursor-pointer"
+              :class="selectedPersona?.id === p.id
+                ? 'bg-purple-950/50 border-purple-500 text-white shadow-xs'
+                : 'bg-zinc-950/80 border-zinc-800 hover:border-zinc-700 text-zinc-300'"
+              @click="handleSelectPersona(p)"
+            >
+              <div
+                class="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs text-white shrink-0"
+                :style="{ backgroundColor: p.avatarColor || '#8b5cf6' }"
+              >
+                {{ p.displayName.charAt(0).toUpperCase() }}
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="font-bold text-xs truncate">{{ p.displayName }}</div>
+                <div class="flex items-center gap-2 text-[10px] text-zinc-400 mt-0.5">
+                  <span class="text-purple-300 font-mono">~{{ p.estimatedElo }} Elo</span>
+                  <span>•</span>
+                  <span>{{ p.identifiers?.length || 0 }} aliases</span>
+                </div>
+              </div>
+            </button>
+          </div>
+          <div v-else class="p-6 text-center text-xs text-zinc-500 bg-zinc-950/50 rounded-xl border border-zinc-800/80">
+            No personas configured yet. Create a persona in Tools -> Player Personas.
           </div>
         </div>
 

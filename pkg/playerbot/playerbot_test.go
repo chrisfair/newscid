@@ -162,3 +162,28 @@ func TestCalibrateEngineSettings(t *testing.T) {
 	_, _, skillMin := playerbot.CalibrateEngineSettings(600)
 	assert.Equal(t, 0, skillMin)
 }
+
+func TestBuildPersonalityFromIdentifiers(t *testing.T) {
+	db, _ := createTestDatabaseWithGames(t)
+	defer db.Close()
+
+	// Multi-alias: "Kasparov" and "Karpov" combined persona
+	personality, err := playerbot.BuildPersonalityFromIdentifiers(db, "Soviet Champions", []string{"Kasparov", "Karpov"})
+	require.NoError(t, err)
+	assert.Equal(t, "Soviet Champions", personality.Name)
+	assert.Equal(t, 3, personality.TotalGames)
+
+	// Single alias fallback
+	pSingle, err := playerbot.BuildPersonalityFromIdentifiers(db, "Karpov", []string{"Karpov"})
+	require.NoError(t, err)
+	assert.Equal(t, 1, pSingle.TotalGames)
+
+	// Empty identifiers fallback to displayName
+	pEmpty, err := playerbot.BuildPersonalityFromIdentifiers(db, "Kasparov", []string{})
+	require.NoError(t, err)
+	assert.Equal(t, 3, pEmpty.TotalGames)
+
+	// Empty display name error
+	_, err = playerbot.BuildPersonalityFromIdentifiers(db, "   ", []string{"Kasparov"})
+	assert.Error(t, err)
+}

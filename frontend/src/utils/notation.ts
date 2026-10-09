@@ -18,13 +18,25 @@ export const NOTATION_OPTIONS: NotationOption[] = [
   { id: 'iccf', name: 'ICCF Numeric', example: '7163, 5254, 6167', description: 'Telegraphic numerical correspondence notation' },
 ]
 
-const storedStyle = (localStorage.getItem('newscid_notation_style') as NotationStyle) || 'san'
-const currentStyle = ref<NotationStyle>(storedStyle)
+function getStoredStyle(): NotationStyle {
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem) {
+      return (localStorage.getItem('newscid_notation_style') as NotationStyle) || 'san'
+    }
+  } catch (e) {}
+  return 'san'
+}
+
+const currentStyle = ref<NotationStyle>(getStoredStyle())
 
 export function useNotation() {
   function setNotationStyle(style: NotationStyle) {
     currentStyle.value = style
-    localStorage.setItem('newscid_notation_style', style)
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage.setItem) {
+        localStorage.setItem('newscid_notation_style', style)
+      }
+    } catch (e) {}
   }
 
   return {
@@ -184,10 +196,6 @@ export function formatMoveNotation(
 export function formatSequenceNotation(pvSAN: string, style?: NotationStyle): string {
   const targetStyle = style || currentStyle.value
   if (!pvSAN || targetStyle === 'san') return pvSAN
-
-  if (targetStyle === 'fan') {
-    return sanToFAN(pvSAN)
-  }
 
   // Tokenize and transform SAN moves
   const tokens = pvSAN.split(/\s+/)

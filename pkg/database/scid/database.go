@@ -28,10 +28,11 @@ type GameSummary struct {
 
 // SearchCriteria defines filters for querying the database.
 type SearchCriteria struct {
-	White         string `json:"white,omitempty"`
-	Black         string `json:"black,omitempty"`
-	Player        string `json:"player,omitempty"` // White or Black
-	Event         string `json:"event,omitempty"`
+	White         string   `json:"white,omitempty"`
+	Black         string   `json:"black,omitempty"`
+	Player        string   `json:"player,omitempty"` // White or Black
+	Players       []string `json:"players,omitempty"`// Matches any of these designators/aliases
+	Event         string   `json:"event,omitempty"`
 	Site          string `json:"site,omitempty"`
 	Round         string `json:"round,omitempty"`
 	DateFrom      string `json:"dateFrom,omitempty"`
@@ -331,6 +332,21 @@ func (db *Database) matchesCriteria(entry *IndexEntry, criteria *SearchCriteria)
 	}
 
 	// 8. Name criteria (only lookup from namebase if requested)
+	if len(criteria.Players) > 0 {
+		white := strings.ToLower(db.Names.GetName(NamePlayer, entry.WhiteID))
+		black := strings.ToLower(db.Names.GetName(NamePlayer, entry.BlackID))
+		matched := false
+		for _, p := range criteria.Players {
+			critP := strings.ToLower(strings.TrimSpace(p))
+			if critP != "" && (strings.Contains(white, critP) || strings.Contains(black, critP) || white == critP || black == critP) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
 	if criteria.Player != "" {
 		white := db.Names.GetName(NamePlayer, entry.WhiteID)
 		black := db.Names.GetName(NamePlayer, entry.BlackID)
@@ -507,6 +523,13 @@ func (db *Database) SaveGame(game *chess.Game) (int, error) {
 		fmt.Sscanf(val, "%d", &bElo)
 	}
 
+	plyCount := game.PlyCount
+	if plyCount == 0 && game.RootMove != nil {
+		for curr := game.RootMove; curr != nil; curr = curr.Next {
+			plyCount++
+		}
+	}
+
 	// 4. Create IndexEntry
 	entry := &IndexEntry{
 		Offset:       offset,
@@ -519,9 +542,9 @@ func (db *Database) SaveGame(game *chess.Game) (int, error) {
 		WhiteElo:     uint16(wElo),
 		BlackElo:     uint16(bElo),
 		EcoCode:      parseECO(game.Tag("ECO")),
-		Result:       game.Result,
+		Result:       gameResult(game),
 		Date:         game.Tag("Date"),
-		NumHalfMoves: uint16(game.PlyCount),
+		NumHalfMoves: uint16(plyCount),
 	}
 
 	db.Entries = append(db.Entries, entry)
@@ -580,4 +603,17 @@ func (db *Database) DeleteGame(gameNum int, deleted bool) error {
 		return err
 	}
 	return WriteIndexEntry(fSi, entry)
+}
+
+func gameResult(game *chess.Game) chess.Result {
+	if game == nil {
+		return chess.ResultUnderway
+	}
+	if game.Result != "" && game.Result != chess.ResultUnderway {
+		return game.Result
+	}
+	if r := game.Tag("Result"); r != "" && r != "*" {
+		return chess.Result(r)
+	}
+	return chess.ResultUnderway
 }
