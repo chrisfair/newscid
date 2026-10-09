@@ -254,6 +254,112 @@ func (a *App) DeleteGame(gameID int, deleted bool) error {
 	return a.db.DeleteGame(gameID, deleted)
 }
 
+// CompactDatabase physically cleans deleted games from disk and defragments game data offsets.
+func (a *App) CompactDatabase() (*scid.CompactStats, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if !a.db.IsOpen {
+		return nil, fmt.Errorf("no database open")
+	}
+
+	return a.db.Compact()
+}
+
+// SortDatabase reorders the database index based on the chosen field and direction.
+func (a *App) SortDatabase(criteria scid.SortCriteria) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if !a.db.IsOpen {
+		return fmt.Errorf("no database open")
+	}
+
+	return a.db.Sort(criteria)
+}
+
+// FindDuplicateGames finds all groups of duplicate games in the current database.
+func (a *App) FindDuplicateGames(criteria scid.DuplicateCriteria) ([]scid.DuplicateGroup, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	if !a.db.IsOpen {
+		return nil, fmt.Errorf("no database open")
+	}
+
+	return a.db.FindDuplicates(criteria)
+}
+
+// DeleteDuplicateGames marks duplicate copies of games as deleted, keeping the primary instance.
+func (a *App) DeleteDuplicateGames(criteria scid.DuplicateCriteria) (int, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if !a.db.IsOpen {
+		return 0, fmt.Errorf("no database open")
+	}
+
+	return a.db.DeleteDuplicates(criteria)
+}
+
+// VerifyDatabase performs a thorough integrity check on the active database files.
+func (a *App) VerifyDatabase() (*scid.VerificationReport, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	if !a.db.IsOpen {
+		return nil, fmt.Errorf("no database open")
+	}
+
+	return a.db.Verify()
+}
+
+// GetDatabaseStatistics aggregates demographic, rating, result, and storage metrics.
+func (a *App) GetDatabaseStatistics() (*scid.DatabaseStatistics, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	if !a.db.IsOpen {
+		return nil, fmt.Errorf("no database open")
+	}
+
+	return a.db.GetStatistics()
+}
+
+// ImportPGNBatch imports multiple PGN games from a raw string.
+func (a *App) ImportPGNBatch(pgnText string) (*scid.ImportStats, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if !a.db.IsOpen {
+		return nil, fmt.Errorf("no database open")
+	}
+
+	return a.db.ImportPGNText(pgnText)
+}
+
+// ImportPGNFileBatch imports multiple PGN games from a file on disk.
+func (a *App) ImportPGNFileBatch(filePath string) (*scid.ImportStats, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if !a.db.IsOpen {
+		return nil, fmt.Errorf("no database open")
+	}
+
+	return a.db.ImportPGNFile(filePath)
+}
+
+func (a *App) OpenPGNFileDialog() (string, error) {
+	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select PGN File to Import",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "PGN Files (*.pgn)", Pattern: "*.pgn"},
+			{DisplayName: "All Files (*.*)", Pattern: "*.*"},
+		},
+	})
+}
+
 func (a *App) OpenFileDialog() (string, error) {
 	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "Open Chess Database",

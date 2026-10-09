@@ -153,6 +153,7 @@ func DecodeGameData(raw []byte, entry *IndexEntry, nb *NameBase) (*chess.Game, e
 func decodeVariation(r *bytes.Reader, b *chess.Board, level int) (*chess.MoveNode, int, error) {
 	var root *chess.MoveNode
 	var curr *chess.MoveNode
+	var prevBoard *chess.Board
 	plyCount := 0
 
 	for {
@@ -167,15 +168,16 @@ func decodeVariation(r *bytes.Reader, b *chess.Board, level int) (*chess.MoveNod
 
 		switch bVal {
 		case EncodeStartMarker:
-			// Variation starts: child of previous position
-			if curr != nil {
-				// Clone position before curr move or at curr position
-				varBoard := b.Clone()
+			// Variation starts: child of previous position before curr move
+			if curr != nil && prevBoard != nil {
+				varBoard := prevBoard.Clone()
 				varNode, _, err := decodeVariation(r, varBoard, level+1)
 				if err != nil && err != io.EOF {
 					return root, plyCount, err
 				}
-				curr.Variations = append(curr.Variations, varNode)
+				if varNode != nil {
+					curr.Variations = append(curr.Variations, varNode)
+				}
 			}
 		case EncodeNAG:
 			nagByte, err := r.ReadByte()
@@ -185,7 +187,7 @@ func decodeVariation(r *bytes.Reader, b *chess.Board, level int) (*chess.MoveNod
 		case EncodeComment:
 			// Marker indicating comment
 		default:
-			// Normal move
+			prevBoard = b.Clone()
 			move, err := decodePieceMove(r, b, bVal)
 			if err != nil {
 				return root, plyCount, err
@@ -360,6 +362,8 @@ func EncodeGameData(game *chess.Game) ([]byte, error) {
 func encodeNodeTree(buf *bytes.Buffer, b *chess.Board, node *chess.MoveNode) {
 	curr := node
 	for curr != nil {
+		beforeBoard := b.Clone()
+
 		// Encode Move
 		encodeSingleMove(buf, b, curr.Move)
 		b.MakeMove(curr.Move)
@@ -373,7 +377,7 @@ func encodeNodeTree(buf *bytes.Buffer, b *chess.Board, node *chess.MoveNode) {
 		// Variations
 		for _, v := range curr.Variations {
 			buf.WriteByte(EncodeStartMarker)
-			varBoard := b.Clone()
+			varBoard := beforeBoard.Clone()
 			encodeNodeTree(buf, varBoard, v)
 			buf.WriteByte(EncodeEndMarker)
 		}

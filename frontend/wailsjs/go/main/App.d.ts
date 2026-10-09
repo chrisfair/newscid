@@ -23,15 +23,21 @@ export function ClassifyOpening(arg1:Array<string>):Promise<eco.Entry>;
 
 export function CloseDatabase():Promise<void>;
 
+export function CompactDatabase():Promise<scid.CompactStats>;
+
 export function CountSearchMatches(arg1:scid.SearchCriteria):Promise<number>;
 
 export function CreateDatabase(arg1:string,arg2:string):Promise<main.DatabaseInfo>;
+
+export function DeleteDuplicateGames(arg1:scid.DuplicateCriteria):Promise<number>;
 
 export function DeleteGame(arg1:number,arg2:boolean):Promise<void>;
 
 export function DeleteRepertoire(arg1:string):Promise<void>;
 
 export function ExportPGN(arg1:chess.Game):Promise<string>;
+
+export function FindDuplicateGames(arg1:scid.DuplicateCriteria):Promise<Array<scid.DuplicateGroup>>;
 
 export function GetAvailableEngines():Promise<Array<string>>;
 
@@ -40,6 +46,8 @@ export function GetBestMove(arg1:string,arg2:Array<string>,arg3:number):Promise<
 export function GetBoardThemes():Promise<Array<sets.BoardThemeInfo>>;
 
 export function GetDatabaseInfo():Promise<main.DatabaseInfo>;
+
+export function GetDatabaseStatistics():Promise<scid.DatabaseStatistics>;
 
 export function GetDiscoveredDatabases():Promise<Array<scid.DiscoveredDatabase>>;
 
@@ -67,6 +75,10 @@ export function GetScidSystemBases():Promise<Array<string>>;
 
 export function GetVersionInfo():Promise<version.Info>;
 
+export function ImportPGNBatch(arg1:string):Promise<scid.ImportStats>;
+
+export function ImportPGNFileBatch(arg1:string):Promise<scid.ImportStats>;
+
 export function IsScidDriverAvailable():Promise<boolean>;
 
 export function LoadTacticsPuzzle(arg1:string,arg2:number):Promise<main.TacticsPuzzle>;
@@ -78,6 +90,8 @@ export function MinePuzzlesFromDatabase(arg1:string,arg2:number):Promise<Array<p
 export function OpenDatabase(arg1:string):Promise<main.DatabaseInfo>;
 
 export function OpenFileDialog():Promise<string>;
+
+export function OpenPGNFileDialog():Promise<string>;
 
 export function ParseFEN(arg1:string):Promise<main.BoardState>;
 
@@ -93,8 +107,12 @@ export function SaveRepertoire(arg1:repertoire.Repertoire):Promise<void>;
 
 export function SearchPosition(arg1:string):Promise<Array<scid.GameSummary>>;
 
+export function SortDatabase(arg1:scid.SortCriteria):Promise<void>;
+
 export function StartEngine(arg1:string):Promise<void>;
 
 export function StopEngine():Promise<void>;
+
+export function VerifyDatabase():Promise<scid.VerificationReport>;
 
 export function VerifyRepertoireMove(arg1:string,arg2:string,arg3:string):Promise<main.RepertoireCheckResult>;
