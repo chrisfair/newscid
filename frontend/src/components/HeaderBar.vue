@@ -103,10 +103,16 @@ function formatGameCount(count: number): string {
   }
   return `${count} games`
 }
+
+defineExpose({
+  openSettings: () => {
+    showSettingsModal.value = true
+  }
+})
 </script>
 
 <template>
-  <header class="app-header bg-zinc-950 border-b border-zinc-800 px-4 py-2 flex items-center justify-between z-40 select-none">
+  <header class="app-header relative z-30 bg-zinc-950 border-b border-zinc-800 px-4 py-2 flex items-center justify-between select-none">
     <!-- Left: Brand Logo & Database Status -->
     <div class="flex items-center gap-3">
       <div class="flex items-center gap-2">
@@ -241,88 +247,90 @@ function formatGameCount(count: number): string {
     </div>
 
     <!-- Settings Modal -->
-    <div
-      v-if="showSettingsModal"
-      class="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 animate-fade-in p-4"
-      @click.self="showSettingsModal = false"
-    >
-      <div class="bg-zinc-900 border border-zinc-700 w-full max-w-2xl rounded-2xl shadow-2xl p-5 flex flex-col gap-4 max-h-[85vh] overflow-y-auto">
-        <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
-          <div class="flex items-center gap-2">
-            <Palette class="w-5 h-5 text-emerald-400" />
-            <h2 class="text-base font-bold text-zinc-100">Piece Sets & Board Themes</h2>
-          </div>
-          <button
-            class="text-zinc-400 hover:text-white text-sm"
-            @click="showSettingsModal = false"
-          >
-            ✕
-          </button>
-        </div>
-
-        <!-- Piece Sets Section -->
-        <div>
-          <h3 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Piece Sets</h3>
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            <div
-              v-for="set in pieceSets"
-              :key="set.id"
-              class="p-2.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between"
-              :class="currentPieceSet === set.id
-                ? 'bg-emerald-950/40 border-emerald-500 shadow-md ring-1 ring-emerald-500'
-                : 'bg-zinc-800/60 border-zinc-700/60 hover:bg-zinc-800 hover:border-zinc-600'"
-              @click="emit('changePieceSet', set.id)"
+    <Teleport to="body">
+      <div
+        v-if="showSettingsModal"
+        class="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[100] animate-fade-in p-4"
+        @click.self="showSettingsModal = false"
+      >
+        <div class="bg-zinc-900 border border-zinc-700 w-full max-w-2xl rounded-2xl shadow-2xl p-5 flex flex-col gap-4 max-h-[85vh] overflow-y-auto">
+          <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+            <div class="flex items-center gap-2">
+              <Palette class="w-5 h-5 text-emerald-400" />
+              <h2 class="text-base font-bold text-zinc-100">Piece Sets & Board Themes</h2>
+            </div>
+            <button
+              class="text-zinc-400 hover:text-white text-sm"
+              @click="showSettingsModal = false"
             >
-              <div>
-                <div class="flex items-center justify-between">
-                  <span class="font-bold text-xs text-zinc-200">{{ set.name }}</span>
-                  <span
-                    v-if="set.isScidNative"
-                    class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-300 font-semibold"
-                  >
-                    SCID
-                  </span>
+              ✕
+            </button>
+          </div>
+
+          <!-- Piece Sets Section -->
+          <div>
+            <h3 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Piece Sets</h3>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div
+                v-for="set in pieceSets"
+                :key="set.id"
+                class="p-2.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between"
+                :class="currentPieceSet === set.id
+                  ? 'bg-emerald-950/40 border-emerald-500 shadow-md ring-1 ring-emerald-500'
+                  : 'bg-zinc-800/60 border-zinc-700/60 hover:bg-zinc-800 hover:border-zinc-600'"
+                @click="emit('changePieceSet', set.id)"
+              >
+                <div>
+                  <div class="flex items-center justify-between">
+                    <span class="font-bold text-xs text-zinc-200">{{ set.name }}</span>
+                    <span
+                      v-if="set.isScidNative"
+                      class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-300 font-semibold"
+                    >
+                      SCID
+                    </span>
+                  </div>
+                  <p class="text-[10px] text-zinc-500 mt-1 leading-snug">{{ set.description }}</p>
                 </div>
-                <p class="text-[10px] text-zinc-500 mt-1 leading-snug">{{ set.description }}</p>
               </div>
             </div>
           </div>
-        </div>
 
-        <!-- Board Themes Section -->
-        <div>
-          <h3 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Board Themes</h3>
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <div
-              v-for="theme in boardThemes"
-              :key="theme.id"
-              class="p-2 rounded-xl border cursor-pointer transition-all flex items-center gap-3"
-              :class="currentThemeId === theme.id
-                ? 'bg-emerald-950/40 border-emerald-500 shadow-md ring-1 ring-emerald-500'
-                : 'bg-zinc-800/60 border-zinc-700/60 hover:bg-zinc-800 hover:border-zinc-600'"
-              @click="emit('changeTheme', theme.id)"
+          <!-- Board Themes Section -->
+          <div>
+            <h3 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Board Themes</h3>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div
+                v-for="theme in boardThemes"
+                :key="theme.id"
+                class="p-2 rounded-xl border cursor-pointer transition-all flex items-center gap-3"
+                :class="currentThemeId === theme.id
+                  ? 'bg-emerald-950/40 border-emerald-500 shadow-md ring-1 ring-emerald-500'
+                  : 'bg-zinc-800/60 border-zinc-700/60 hover:bg-zinc-800 hover:border-zinc-600'"
+                @click="emit('changeTheme', theme.id)"
+              >
+                <!-- 2x2 Mini Board Swatch -->
+                <div class="w-8 h-8 rounded grid grid-cols-2 grid-rows-2 overflow-hidden shadow-xs border border-black/20 shrink-0">
+                  <div :style="{ backgroundColor: theme.light }" />
+                  <div :style="{ backgroundColor: theme.dark }" />
+                  <div :style="{ backgroundColor: theme.dark }" />
+                  <div :style="{ backgroundColor: theme.light }" />
+                </div>
+                <span class="text-xs font-medium text-zinc-200 truncate">{{ theme.name }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex justify-end pt-2 border-t border-zinc-800">
+            <button
+              class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition-colors cursor-pointer"
+              @click="showSettingsModal = false"
             >
-              <!-- 2x2 Mini Board Swatch -->
-              <div class="w-8 h-8 rounded grid grid-cols-2 grid-rows-2 overflow-hidden shadow-xs border border-black/20 shrink-0">
-                <div :style="{ backgroundColor: theme.light }" />
-                <div :style="{ backgroundColor: theme.dark }" />
-                <div :style="{ backgroundColor: theme.dark }" />
-                <div :style="{ backgroundColor: theme.light }" />
-              </div>
-              <span class="text-xs font-medium text-zinc-200 truncate">{{ theme.name }}</span>
-            </div>
+              Done
+            </button>
           </div>
-        </div>
-
-        <div class="flex justify-end pt-2 border-t border-zinc-800">
-          <button
-            class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition-colors cursor-pointer"
-            @click="showSettingsModal = false"
-          >
-            Done
-          </button>
         </div>
       </div>
-    </div>
+    </Teleport>
   </header>
 </template>

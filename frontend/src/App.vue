@@ -50,9 +50,15 @@ import {
   SearchPosition,
   LoadTacticsPuzzle,
 } from '../wailsjs/go/main/App'
-import { EventsOn, EventsOff } from '../wailsjs/runtime/runtime'
+import { EventsOn, EventsOff, ClipboardSetText, ClipboardGetText } from '../wailsjs/runtime/runtime'
 
 const startingFEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+
+const headerBarRef = ref<InstanceType<typeof HeaderBar> | null>(null)
+
+function handleOpenSettings() {
+  headerBarRef.value?.openSettings()
+}
 
 // App State
 const currentFEN = ref(startingFEN)
@@ -637,8 +643,13 @@ async function handleLoadGame(id: number) {
 
 async function handleSaveCurrentGame() {
   if (!dbInfo.value) {
-    alert('Please open or create a database first before saving.')
-    return
+    const shouldCreate = confirm('No database is currently open. Would you like to create a new database to save this game?')
+    if (shouldCreate) {
+      await handleCreateDB()
+      if (!dbInfo.value) return
+    } else {
+      return
+    }
   }
   try {
     const gameObj: any = {
@@ -662,6 +673,16 @@ async function handleDeleteGame(id: number) {
     await refreshGames()
   } catch (err) {
     alert(`Error deleting game: ${err}`)
+  }
+}
+
+async function handleDeleteCurrentGame() {
+  if (activeGameId.value) {
+    await handleDeleteGame(activeGameId.value)
+  } else if (!dbInfo.value) {
+    alert('No database is currently open.')
+  } else {
+    alert('No game from the database is currently loaded to delete.')
   }
 }
 
@@ -693,34 +714,60 @@ function handleNewGame() {
 
 // Game Navigation
 function handleFirstGame() {
-  if (totalGames.value > 0) handleLoadGame(1)
+  if (totalGames.value > 0) {
+    handleLoadGame(1)
+  } else {
+    alert('No database is open or no games available.')
+  }
 }
 
 function handlePrevGame() {
   if (activeGameId.value && activeGameId.value > 1) {
     handleLoadGame(activeGameId.value - 1)
+  } else if (!activeGameId.value && totalGames.value > 0) {
+    handleLoadGame(1)
+  } else if (activeGameId.value === 1) {
+    alert('Already at the first game in the database.')
+  } else {
+    alert('No database is open or no games available.')
   }
 }
 
 function handleNextGame() {
   if (activeGameId.value && activeGameId.value < totalGames.value) {
     handleLoadGame(activeGameId.value + 1)
+  } else if (!activeGameId.value && totalGames.value > 0) {
+    handleLoadGame(1)
+  } else if (activeGameId.value && activeGameId.value >= totalGames.value) {
+    alert('Already at the last game in the database.')
+  } else {
+    alert('No database is open or no games available.')
   }
 }
 
 function handleLastGame() {
-  if (totalGames.value > 0) handleLoadGame(totalGames.value)
+  if (totalGames.value > 0) {
+    handleLoadGame(totalGames.value)
+  } else {
+    alert('No database is open or no games available.')
+  }
 }
 
 function handleRandomGame() {
   if (totalGames.value > 0) {
     const rand = Math.floor(Math.random() * totalGames.value) + 1
     handleLoadGame(rand)
+  } else {
+    alert('No database is open or no games available.')
   }
 }
 
 // Position Search
 async function handleSearchPosition() {
+  if (!dbInfo.value) {
+    alert('Please open a database before searching for board positions.')
+    return
+  }
   try {
     const matches = await SearchPosition(currentFEN.value)
     if (!matches || matches.length === 0) {
@@ -764,16 +811,34 @@ async function handleSetupBoardApply(newFen: string) {
 // Copy / Paste FEN
 async function handleCopyFEN() {
   try {
-    await navigator.clipboard.writeText(currentFEN.value)
+    let success = false
+    try {
+      success = await ClipboardSetText(currentFEN.value)
+    } catch {
+      // fallback
+    }
+    if (!success && navigator.clipboard) {
+      await navigator.clipboard.writeText(currentFEN.value)
+      success = true
+    }
     alert(`FEN copied to clipboard:\n${currentFEN.value}`)
   } catch (err) {
     console.error('Failed to copy FEN:', err)
+    alert(`Failed to copy FEN: ${err}`)
   }
 }
 
 async function handlePasteFEN() {
   try {
-    const text = await navigator.clipboard.readText()
+    let text = ''
+    try {
+      text = await ClipboardGetText()
+    } catch {
+      // fallback
+    }
+    if (!text && navigator.clipboard) {
+      text = await navigator.clipboard.readText()
+    }
     if (!text || !text.trim()) {
       alert('Clipboard does not contain valid text.')
       return
@@ -787,6 +852,10 @@ async function handlePasteFEN() {
 // Full Game Analysis (Annotate)
 async function handleAnnotateGame() {
   if (isAnalyzingGame.value) return
+  if (flatMoves.value.length === 0) {
+    alert('There are no moves in the current game to annotate.')
+    return
+  }
   isAnalyzingGame.value = true
   try {
     const gameObj: any = {
@@ -902,7 +971,16 @@ async function handleExportPGN() {
       plyCount: flatMoves.value.length,
     }
     const pgn = await ExportPGN(gameObj)
-    await navigator.clipboard.writeText(pgn)
+    let success = false
+    try {
+      success = await ClipboardSetText(pgn)
+    } catch {
+      // fallback
+    }
+    if (!success && navigator.clipboard) {
+      await navigator.clipboard.writeText(pgn)
+      success = true
+    }
     alert('PGN copied to clipboard!')
   } catch (err) {
     alert(`Error exporting PGN: ${err}`)
@@ -952,7 +1030,7 @@ async function handleSelectEngine(path: string) {
       @create-d-b="handleCreateDB"
       @close-d-b="handleCloseDB"
       @save-game="handleSaveCurrentGame"
-      @delete-game="activeGameId ? handleDeleteGame(activeGameId) : undefined"
+      @delete-game="handleDeleteCurrentGame"
       @first-game="handleFirstGame"
       @prev-game="handlePrevGame"
       @next-game="handleNextGame"
@@ -977,12 +1055,14 @@ async function handleSelectEngine(path: string) {
       @toggle-flip="flipped = !flipped"
       @change-piece-set="currentPieceSet = $event"
       @change-theme="currentThemeId = $event"
+      @open-settings="handleOpenSettings"
       @show-shortcuts="showShortcutsModal = true"
     />
 
 
     <!-- Top Header Bar -->
     <HeaderBar
+      ref="headerBarRef"
       :db-name="dbInfo?.name"
       :system-bases="systemBases"
       :discovered-databases="discoveredDatabases"
