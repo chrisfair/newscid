@@ -618,6 +618,9 @@ func TestSearchCriteriaComprehensive(t *testing.T) {
 		{"Event filter", SearchCriteria{Event: "Candidates"}, 1},
 		{"Site filter", SearchCriteria{Site: "Test City"}, 4},
 		{"Round filter", SearchCriteria{Round: "1"}, 4},
+		{"Players multi-alias matching", SearchCriteria{Players: []string{"Kasparov", "Fischer"}}, 3},
+		{"Players no match", SearchCriteria{Players: []string{"UnknownGrandmaster", "GhostPlayer"}}, 0},
+		{"Players empty string element", SearchCriteria{Players: []string{"", "Kasparov"}}, 2},
 	}
 
 	for _, tc := range tests {

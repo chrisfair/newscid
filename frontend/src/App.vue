@@ -20,8 +20,9 @@ import AboutModal from './components/AboutModal.vue'
 import DatabaseMaintenanceModal from './components/DatabaseMaintenanceModal.vue'
 import OnlineSyncModal from './components/OnlineSyncModal.vue'
 import PlayerSimulationModal from './components/PlayerSimulationModal.vue'
+import PersonaModal from './components/PersonaModal.vue'
 import { Bot } from '@lucide/vue'
-import { playerbot } from '../wailsjs/go/models'
+import { playerbot, persona } from '../wailsjs/go/models'
 
 // Import Wails backend bindings
 import {
@@ -150,6 +151,8 @@ const showSearchModal = ref(false)
 const showMaintenanceModal = ref(false)
 const showOnlineSyncModal = ref(false)
 const showPlayerSimulationModal = ref(false)
+const showPersonaModal = ref(false)
+const selectedSimulationPersona = ref<persona.Persona | undefined>(undefined)
 const showImportModal = ref(false)
 const importPGNText = ref('')
 
@@ -1293,6 +1296,19 @@ async function triggerSimulatedOpponentMove() {
     isBotThinking.value = false
   }
 }
+
+function handleSparPersona(p: persona.Persona) {
+  selectedSimulationPersona.value = p
+  showPersonaModal.value = false
+  showPlayerSimulationModal.value = true
+}
+
+async function handleOpenPersonaDb(p: persona.Persona) {
+  if (p.databasePath) {
+    showPersonaModal.value = false
+    await handleOpenDiscoveredBase(p.databasePath)
+  }
+}
 </script>
 
 <template>
@@ -1343,6 +1359,7 @@ async function triggerSimulatedOpponentMove() {
       @database-maintenance="showMaintenanceModal = true"
       @online-sync="showOnlineSyncModal = true"
       @simulate-player="showPlayerSimulationModal = true"
+      @player-personas="showPersonaModal = true"
     />
 
 
@@ -1725,8 +1742,18 @@ async function triggerSimulatedOpponentMove() {
     <PlayerSimulationModal
       v-if="showPlayerSimulationModal"
       :active-db-name="dbInfo?.name"
+      :initial-persona="selectedSimulationPersona"
       @start-match="handleStartSimulationMatch"
-      @close="showPlayerSimulationModal = false"
+      @close="showPlayerSimulationModal = false; selectedSimulationPersona = undefined"
+    />
+
+    <!-- Player Personas & Unified Designators Modal -->
+    <PersonaModal
+      v-if="showPersonaModal"
+      :active-db-name="dbInfo?.name"
+      @spar-persona="handleSparPersona"
+      @open-persona-db="handleOpenPersonaDb"
+      @close="showPersonaModal = false"
     />
 
 

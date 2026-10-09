@@ -6,8 +6,16 @@ export function AddGameComment(arg1, arg2) {
   return window['go']['main']['App']['AddGameComment'](arg1, arg2);
 }
 
+export function AddPersonaIdentifier(arg1, arg2) {
+  return window['go']['main']['App']['AddPersonaIdentifier'](arg1, arg2);
+}
+
 export function AddRepertoireMove(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['main']['App']['AddRepertoireMove'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
+export function AggregatePersonaGames(arg1) {
+  return window['go']['main']['App']['AggregatePersonaGames'](arg1);
 }
 
 export function AnalyzePosition(arg1, arg2, arg3) {
@@ -52,6 +60,10 @@ export function DeleteDuplicateGames(arg1) {
 
 export function DeleteGame(arg1, arg2) {
   return window['go']['main']['App']['DeleteGame'](arg1, arg2);
+}
+
+export function DeletePersona(arg1) {
+  return window['go']['main']['App']['DeletePersona'](arg1);
 }
 
 export function DeleteRepertoire(arg1) {
@@ -150,6 +162,22 @@ export function GetOpeningTree(arg1) {
   return window['go']['main']['App']['GetOpeningTree'](arg1);
 }
 
+export function GetPersona(arg1) {
+  return window['go']['main']['App']['GetPersona'](arg1);
+}
+
+export function GetPersonaPersonality(arg1) {
+  return window['go']['main']['App']['GetPersonaPersonality'](arg1);
+}
+
+export function GetPersonaStatistics(arg1) {
+  return window['go']['main']['App']['GetPersonaStatistics'](arg1);
+}
+
+export function GetPersonas() {
+  return window['go']['main']['App']['GetPersonas']();
+}
+
 export function GetPieceSets() {
   return window['go']['main']['App']['GetPieceSets']();
 }
@@ -230,6 +258,10 @@ export function OpenPGNFileDialog() {
   return window['go']['main']['App']['OpenPGNFileDialog']();
 }
 
+export function OpenPersonaDatabase(arg1) {
+  return window['go']['main']['App']['OpenPersonaDatabase'](arg1);
+}
+
 export function ParseFEN(arg1) {
   return window['go']['main']['App']['ParseFEN'](arg1);
 }
@@ -246,12 +278,20 @@ export function RecordRepertoirePractice(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['RecordRepertoirePractice'](arg1, arg2, arg3, arg4);
 }
 
+export function RemovePersonaIdentifier(arg1, arg2) {
+  return window['go']['main']['App']['RemovePersonaIdentifier'](arg1, arg2);
+}
+
 export function SaveFileDialog(arg1) {
   return window['go']['main']['App']['SaveFileDialog'](arg1);
 }
 
 export function SaveGame(arg1) {
   return window['go']['main']['App']['SaveGame'](arg1);
+}
+
+export function SavePersona(arg1) {
+  return window['go']['main']['App']['SavePersona'](arg1);
 }
 
 export function SaveRepertoire(arg1) {
@@ -296,6 +336,10 @@ export function StartEngine(arg1) {
 
 export function StopEngine() {
   return window['go']['main']['App']['StopEngine']();
+}
+
+export function SuggestPersonaIdentifiers(arg1, arg2) {
+  return window['go']['main']['App']['SuggestPersonaIdentifiers'](arg1, arg2);
 }
 
 export function SyncOnlineProfile(arg1) {

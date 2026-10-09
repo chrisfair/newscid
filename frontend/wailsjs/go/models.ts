@@ -563,6 +563,153 @@ export namespace online {
 
 }
 
+export namespace persona {
+	
+	export class AggregateResult {
+	    personaId: string;
+	    displayName: string;
+	    dedicatedDatabasePath: string;
+	    totalFound: number;
+	    newlyAdded: number;
+	    duplicatesSkipped: number;
+	    totalPersonaGames: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new AggregateResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.personaId = source["personaId"];
+	        this.displayName = source["displayName"];
+	        this.dedicatedDatabasePath = source["dedicatedDatabasePath"];
+	        this.totalFound = source["totalFound"];
+	        this.newlyAdded = source["newlyAdded"];
+	        this.duplicatesSkipped = source["duplicatesSkipped"];
+	        this.totalPersonaGames = source["totalPersonaGames"];
+	    }
+	}
+	export class IdentifierStat {
+	    identifier: string;
+	    gameCount: number;
+	    wins: number;
+	    draws: number;
+	    losses: number;
+	    winRate: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new IdentifierStat(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.identifier = source["identifier"];
+	        this.gameCount = source["gameCount"];
+	        this.wins = source["wins"];
+	        this.draws = source["draws"];
+	        this.losses = source["losses"];
+	        this.winRate = source["winRate"];
+	    }
+	}
+	export class Persona {
+	    id: string;
+	    displayName: string;
+	    identifiers: string[];
+	    databasePath: string;
+	    title?: string;
+	    bio?: string;
+	    avatarColor?: string;
+	    estimatedElo?: number;
+	    chessComUsername?: string;
+	    lichessUsername?: string;
+	    fideId?: string;
+	    createdAt: number;
+	    updatedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Persona(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.displayName = source["displayName"];
+	        this.identifiers = source["identifiers"];
+	        this.databasePath = source["databasePath"];
+	        this.title = source["title"];
+	        this.bio = source["bio"];
+	        this.avatarColor = source["avatarColor"];
+	        this.estimatedElo = source["estimatedElo"];
+	        this.chessComUsername = source["chessComUsername"];
+	        this.lichessUsername = source["lichessUsername"];
+	        this.fideId = source["fideId"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
+	export class PersonaStatistics {
+	    personaId: string;
+	    displayName: string;
+	    totalGames: number;
+	    whiteGames: number;
+	    blackGames: number;
+	    wins: number;
+	    draws: number;
+	    losses: number;
+	    winRate: number;
+	    peakElo: number;
+	    averageElo: number;
+	    topWhiteECOs: string[];
+	    topBlackECOs: string[];
+	    identifierStats: IdentifierStat[];
+	    earliestDate: string;
+	    latestDate: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PersonaStatistics(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.personaId = source["personaId"];
+	        this.displayName = source["displayName"];
+	        this.totalGames = source["totalGames"];
+	        this.whiteGames = source["whiteGames"];
+	        this.blackGames = source["blackGames"];
+	        this.wins = source["wins"];
+	        this.draws = source["draws"];
+	        this.losses = source["losses"];
+	        this.winRate = source["winRate"];
+	        this.peakElo = source["peakElo"];
+	        this.averageElo = source["averageElo"];
+	        this.topWhiteECOs = source["topWhiteECOs"];
+	        this.topBlackECOs = source["topBlackECOs"];
+	        this.identifierStats = this.convertValues(source["identifierStats"], IdentifierStat);
+	        this.earliestDate = source["earliestDate"];
+	        this.latestDate = source["latestDate"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace playerbot {
 	
 	export class BookMove {
@@ -1048,6 +1195,7 @@ export namespace scid {
 	    white?: string;
 	    black?: string;
 	    player?: string;
+	    players?: string[];
 	    event?: string;
 	    site?: string;
 	    round?: string;
@@ -1080,6 +1228,7 @@ export namespace scid {
 	        this.white = source["white"];
 	        this.black = source["black"];
 	        this.player = source["player"];
+	        this.players = source["players"];
 	        this.event = source["event"];
 	        this.site = source["site"];
 	        this.round = source["round"];

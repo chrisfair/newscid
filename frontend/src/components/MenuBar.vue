@@ -29,7 +29,8 @@ import {
   Info,
   Globe,
   Bot,
-  Check
+  Check,
+  Users
 } from '@lucide/vue'
 import { PieceSetOption, BoardThemeOption } from './HeaderBar.vue'
 import { useNotation, type NotationStyle } from '../utils/notation'
@@ -84,6 +85,7 @@ const emit = defineEmits<{
   (e: 'databaseMaintenance'): void
   (e: 'onlineSync'): void
   (e: 'simulatePlayer'): void
+  (e: 'playerPersonas'): void
 }>()
 
 
@@ -439,6 +441,12 @@ onUnmounted(() => {
         >
           <span class="flex items-center gap-2"><Globe class="w-3.5 h-3.5 text-cyan-400" /> Online Account Sync (Chess.com & Lichess)...</span>
         </button>
+        <button
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => emit('playerPersonas'))"
+        >
+          <span class="flex items-center gap-2"><Users class="w-3.5 h-3.5 text-purple-400" /> Player Personas & Aliases...</span>
+        </button>
       </div>
     </div>
 
@@ -468,6 +476,12 @@ onUnmounted(() => {
           @click="selectItem(() => emit('simulatePlayer'))"
         >
           <span class="flex items-center gap-2"><Bot class="w-3.5 h-3.5 text-purple-400" /> Simulate Database Player (Sparring)...</span>
+        </button>
+        <button
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => emit('playerPersonas'))"
+        >
+          <span class="flex items-center gap-2"><Users class="w-3.5 h-3.5 text-emerald-400" /> Player Personas (Spar & Aggregate)...</span>
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"

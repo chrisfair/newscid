@@ -20,6 +20,7 @@ import (
 	"newscid/pkg/eco"
 	"newscid/pkg/engine"
 	"newscid/pkg/online"
+	"newscid/pkg/persona"
 	"newscid/pkg/playerbot"
 	"newscid/pkg/puzzleminer"
 	"newscid/pkg/repertoire"
@@ -73,6 +74,7 @@ type App struct {
 	repMgr        *repertoire.Manager
 	profileMgr    *online.ProfileManager
 	syncMgr       *online.SyncManager
+	personaMgr    *persona.PersonaManager
 	engineMultiPV int
 	engineThreads int
 	engineHashMB  int
@@ -89,6 +91,7 @@ func NewApp() *App {
 	}
 
 	profileMgr, _ := online.NewProfileManager("")
+	personaMgr, _ := persona.NewPersonaManager("")
 
 	return &App{
 		db:            scid.NewDatabase(),
@@ -97,6 +100,7 @@ func NewApp() *App {
 		repMgr:        repertoire.NewManager(""),
 		profileMgr:    profileMgr,
 		syncMgr:       online.NewSyncManager(profileMgr),
+		personaMgr:    personaMgr,
 		engineMultiPV: 1,
 	}
 }
@@ -1346,7 +1350,187 @@ func (a *App) GetSimulatedMove(playerName string, fen string, isWhite bool) (*pl
 	}, nil
 }
 
+// ==========================================
+// Persona Management & Multi-Alias Aggregation
+// ==========================================
 
+// GetPersonas returns all configured personas sorted by display name.
+func (a *App) GetPersonas() ([]*persona.Persona, error) {
+	if a.personaMgr == nil {
+		return nil, fmt.Errorf("persona manager not initialized")
+	}
+	return a.personaMgr.GetPersonas(), nil
+}
+
+// GetPersona retrieves a persona by its unique ID.
+func (a *App) GetPersona(id string) (*persona.Persona, error) {
+	if a.personaMgr == nil {
+		return nil, fmt.Errorf("persona manager not initialized")
+	}
+	return a.personaMgr.GetPersona(id)
+}
+
+// SavePersona creates or updates a unified persona.
+func (a *App) SavePersona(p *persona.Persona) (*persona.Persona, error) {
+	if a.personaMgr == nil {
+		return nil, fmt.Errorf("persona manager not initialized")
+	}
+	saved, err := a.personaMgr.SavePersona(p)
+	if err != nil {
+		return nil, err
+	}
+	_, _ = a.personaMgr.EnsurePersonaDatabase(saved)
+	return saved, nil
+}
+
+// DeletePersona removes a persona by ID.
+func (a *App) DeletePersona(id string) error {
+	if a.personaMgr == nil {
+		return fmt.Errorf("persona manager not initialized")
+	}
+	return a.personaMgr.DeletePersona(id)
+}
+
+// AddPersonaIdentifier adds a new database designator to the persona.
+func (a *App) AddPersonaIdentifier(personaID string, identifier string) (*persona.Persona, error) {
+	if a.personaMgr == nil {
+		return nil, fmt.Errorf("persona manager not initialized")
+	}
+	return a.personaMgr.AddIdentifier(personaID, identifier)
+}
+
+// RemovePersonaIdentifier removes a database designator from the persona.
+func (a *App) RemovePersonaIdentifier(personaID string, identifier string) (*persona.Persona, error) {
+	if a.personaMgr == nil {
+		return nil, fmt.Errorf("persona manager not initialized")
+	}
+	return a.personaMgr.RemoveIdentifier(personaID, identifier)
+}
+
+// SuggestPersonaIdentifiers queries the active database for player names matching query.
+func (a *App) SuggestPersonaIdentifiers(query string, existing []string) ([]string, error) {
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+
+	if db == nil || !db.IsOpen {
+		return []string{}, nil
+	}
+	return persona.SuggestIdentifiers(db, query, existing), nil
+}
+
+// GetPersonaStatistics calculates aggregated statistics across all identifiers for a persona from active DB or dedicated base.
+func (a *App) GetPersonaStatistics(personaID string) (*persona.PersonaStatistics, error) {
+	if a.personaMgr == nil {
+		return nil, fmt.Errorf("persona manager not initialized")
+	}
+	p, err := a.personaMgr.GetPersona(personaID)
+	if err != nil {
+		return nil, err
+	}
+
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+
+	// If no database is open, try opening persona's dedicated database
+	if (db == nil || !db.IsOpen) && p.DatabasePath != "" {
+		dedicatedDB := &scid.Database{}
+		if err := dedicatedDB.Open(p.DatabasePath); err == nil {
+			defer dedicatedDB.Close()
+			return persona.CalculatePersonaStatistics(dedicatedDB, p), nil
+		}
+	}
+
+	if db == nil || !db.IsOpen {
+		return &persona.PersonaStatistics{
+			PersonaID:   p.ID,
+			DisplayName: p.DisplayName,
+		}, nil
+	}
+
+	return persona.CalculatePersonaStatistics(db, p), nil
+}
+
+// AggregatePersonaGames extracts all matching games from the active database into the persona's dedicated database.
+func (a *App) AggregatePersonaGames(personaID string) (*persona.AggregateResult, error) {
+	if a.personaMgr == nil {
+		return nil, fmt.Errorf("persona manager not initialized")
+	}
+
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+
+	if db == nil || !db.IsOpen {
+		return nil, fmt.Errorf("no database open to aggregate games from")
+	}
+
+	return a.personaMgr.AggregateGames(db, personaID)
+}
+
+// OpenPersonaDatabase opens the persona's dedicated database as the active database in NewScid.
+func (a *App) OpenPersonaDatabase(personaID string) (*DatabaseInfo, error) {
+	if a.personaMgr == nil {
+		return nil, fmt.Errorf("persona manager not initialized")
+	}
+	p, err := a.personaMgr.GetPersona(personaID)
+	if err != nil {
+		return nil, err
+	}
+	basePath, err := a.personaMgr.EnsurePersonaDatabase(p)
+	if err != nil {
+		return nil, err
+	}
+	return a.OpenDatabase(basePath)
+}
+
+// GetPersonaPersonality builds a playerbot personality using all identifiers of the persona.
+func (a *App) GetPersonaPersonality(personaID string) (*playerbot.PlayerPersonality, error) {
+	if a.personaMgr == nil {
+		return nil, fmt.Errorf("persona manager not initialized")
+	}
+	p, err := a.personaMgr.GetPersona(personaID)
+	if err != nil {
+		return nil, err
+	}
+
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+
+	// If active database is open and contains games for this persona, use it
+	if db != nil && db.IsOpen {
+		personality, err := playerbot.BuildPersonalityFromIdentifiers(db, p.DisplayName, p.Identifiers)
+		if err == nil && personality.TotalGames > 0 {
+			if p.EstimatedElo > 0 {
+				personality.EstimatedElo = p.EstimatedElo
+			}
+			return personality, nil
+		}
+	}
+
+	// Otherwise, check if dedicated persona database has games
+	if p.DatabasePath != "" {
+		dedicatedDB := &scid.Database{}
+		if err := dedicatedDB.Open(p.DatabasePath); err == nil {
+			defer dedicatedDB.Close()
+			personality, err := playerbot.BuildPersonalityFromIdentifiers(dedicatedDB, p.DisplayName, p.Identifiers)
+			if err == nil && personality.TotalGames > 0 {
+				if p.EstimatedElo > 0 {
+					personality.EstimatedElo = p.EstimatedElo
+				}
+				return personality, nil
+			}
+		}
+	}
+
+	if db != nil && db.IsOpen {
+		return playerbot.BuildPersonalityFromIdentifiers(db, p.DisplayName, p.Identifiers)
+	}
+
+	return nil, fmt.Errorf("no games found for persona %q in open or dedicated databases", p.DisplayName)
+}
 
 func makeBoardState(b *chess.Board) *BoardState {
 	legal := b.GenerateLegalMoves()

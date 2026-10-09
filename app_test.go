@@ -16,6 +16,7 @@ import (
 	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
 	"newscid/pkg/online"
+	"newscid/pkg/persona"
 )
 
 
@@ -680,6 +681,138 @@ func TestAppPlayerImportAndSimulation(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 1, resImport.Imported)
+}
+
+func TestAppPersonaOperations(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "personas.json")
+	pMgr, err := persona.NewPersonaManager(configPath)
+	require.NoError(t, err)
+	app.personaMgr = pMgr
+
+	// 1. Initial state
+	personas, err := app.GetPersonas()
+	require.NoError(t, err)
+	assert.Empty(t, personas)
+
+	// 2. SavePersona
+	p, err := app.SavePersona(&persona.Persona{
+		DisplayName:  "Christopher Fair",
+		Identifiers:  []string{"Fair, Christopher", "ChristopherFair"},
+		DatabasePath: filepath.Join(tempDir, "dedicated_persona"),
+		Title:        "Club Champion",
+		EstimatedElo: 2400,
+	})
+	require.NoError(t, err)
+	assert.NotEmpty(t, p.ID)
+	assert.Equal(t, "Christopher Fair", p.DisplayName)
+	assert.NotEmpty(t, p.DatabasePath)
+
+	// 3. GetPersonas and GetPersona
+	list, err := app.GetPersonas()
+	require.NoError(t, err)
+	assert.Len(t, list, 1)
+
+	fetched, err := app.GetPersona(p.ID)
+	require.NoError(t, err)
+	assert.Equal(t, p.DisplayName, fetched.DisplayName)
+
+	_, err = app.GetPersona("non-existent")
+	assert.Error(t, err)
+
+	// 4. AddPersonaIdentifier & RemovePersonaIdentifier
+	pUpdated, err := app.AddPersonaIdentifier(p.ID, "QuenyenHighElf")
+	require.NoError(t, err)
+	assert.Contains(t, pUpdated.Identifiers, "QuenyenHighElf")
+
+	pRemoved, err := app.RemovePersonaIdentifier(p.ID, "QuenyenHighElf")
+	require.NoError(t, err)
+	assert.NotContains(t, pRemoved.Identifiers, "QuenyenHighElf")
+
+	// 5. Create active database with games for this persona
+	dbPath := filepath.Join(tempDir, "active_db")
+	err = app.db.Create(dbPath, "Active Base")
+	require.NoError(t, err)
+
+	g1 := chess.NewGame()
+	g1.SetTag("White", "Fair, Christopher")
+	g1.SetTag("Black", "Opponent 1")
+	g1.SetTag("Date", "2023.01.10")
+	g1.SetTag("Result", "1-0")
+	g1.SetTag("WhiteElo", "2380")
+	g1.SetTag("ECO", "B90")
+	g1.RootMove = &chess.MoveNode{
+		UCI: "e2e4",
+		SAN: "e4",
+		FEN: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+	}
+	_, err = app.db.SaveGame(g1)
+	require.NoError(t, err)
+
+	g2 := chess.NewGame()
+	g2.SetTag("White", "Opponent 2")
+	g2.SetTag("Black", "ChristopherFair")
+	g2.SetTag("Date", "2023.02.15")
+	g2.SetTag("Result", "1/2-1/2")
+	g2.SetTag("BlackElo", "2420")
+	g2.SetTag("ECO", "C50")
+	g2.RootMove = &chess.MoveNode{
+		UCI: "e2e4",
+		SAN: "e4",
+		FEN: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+	}
+	_, err = app.db.SaveGame(g2)
+	require.NoError(t, err)
+
+	// 6. SuggestPersonaIdentifiers
+	suggestions, err := app.SuggestPersonaIdentifiers("Fair", []string{})
+	require.NoError(t, err)
+	assert.Contains(t, suggestions, "Fair, Christopher")
+	assert.Contains(t, suggestions, "ChristopherFair")
+
+	// 7. GetPersonaStatistics
+	stats, err := app.GetPersonaStatistics(p.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 2, stats.TotalGames)
+	assert.Equal(t, 1, stats.WhiteGames)
+	assert.Equal(t, 1, stats.BlackGames)
+	assert.Equal(t, 1, stats.Wins)
+	assert.Equal(t, 1, stats.Draws)
+	assert.Equal(t, 2420, stats.PeakElo)
+
+	// 8. AggregatePersonaGames into dedicated persona database
+	aggRes, err := app.AggregatePersonaGames(p.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 2, aggRes.TotalFound)
+	assert.Equal(t, 2, aggRes.NewlyAdded)
+	assert.Equal(t, 2, aggRes.TotalPersonaGames)
+
+	// Aggregate again to verify deduplication
+	aggRes2, err := app.AggregatePersonaGames(p.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 0, aggRes2.NewlyAdded)
+	assert.Equal(t, 2, aggRes2.DuplicatesSkipped)
+
+	// 9. GetPersonaPersonality
+	personality, err := app.GetPersonaPersonality(p.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Christopher Fair", personality.Name)
+	assert.Equal(t, 2, personality.TotalGames)
+	assert.Equal(t, 2400, personality.EstimatedElo)
+
+	// 10. OpenPersonaDatabase
+	info, err := app.OpenPersonaDatabase(p.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 2, info.NumGames)
+
+	// 11. DeletePersona
+	err = app.DeletePersona(p.ID)
+	require.NoError(t, err)
+	personasAfter, _ := app.GetPersonas()
+	assert.Empty(t, personasAfter)
 }
 
 
