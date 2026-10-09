@@ -27,6 +27,8 @@ const shortcuts = [
     { key: 'Ctrl+Space', desc: 'Toggle Trial Mode (explore moves without dirtying game)' },
     { key: 'Ctrl+Z / Ctrl+Y', desc: 'Undo / Redo move' },
     { key: 'F2', desc: 'Toggle live UCI engine analysis' },
+    { key: 'F7', desc: 'Tournament Crosstables & Standings (Swiss & Round-Robin)' },
+    { key: 'F1', desc: 'User Manual & Online Help' },
   ]},
 ]
 </script>

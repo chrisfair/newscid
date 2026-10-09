@@ -25,6 +25,7 @@ import (
 	"newscid/pkg/puzzleminer"
 	"newscid/pkg/repertoire"
 	"newscid/pkg/sets"
+	"newscid/pkg/tournament"
 	"newscid/pkg/tree"
 	"newscid/pkg/version"
 )
@@ -1555,3 +1556,39 @@ func makeBoardState(b *chess.Board) *BoardState {
 		HalfMove:    b.HalfMove,
 	}
 }
+
+// GetTournamentEvents returns discovered tournament events in the currently open database.
+func (a *App) GetTournamentEvents() ([]*tournament.EventSummary, error) {
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+
+	if db == nil || !db.IsOpen {
+		return nil, fmt.Errorf("no database is currently open")
+	}
+
+	return tournament.DiscoverEvents(db)
+}
+
+// GetTournamentCrosstable calculates standings, matrix, and tiebreak metrics for a given event in the open database.
+func (a *App) GetTournamentCrosstable(eventName string, site string, date string) (*tournament.TournamentCrosstable, error) {
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+
+	if db == nil || !db.IsOpen {
+		return nil, fmt.Errorf("no database is currently open")
+	}
+
+	return tournament.CalculateCrosstable(db, eventName, site, date)
+}
+
+// ExportCrosstableText returns the ASCII crosstable text for an event in the open database.
+func (a *App) ExportCrosstableText(eventName string, site string, date string) (string, error) {
+	ct, err := a.GetTournamentCrosstable(eventName, site, date)
+	if err != nil {
+		return "", err
+	}
+	return ct.CrossTableText, nil
+}
+

@@ -1341,6 +1341,190 @@ export namespace sets {
 
 }
 
+export namespace tournament {
+	
+	export class CrosstableCell {
+	    result: string;
+	    score: number;
+	    color: string;
+	    gameId: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CrosstableCell(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.result = source["result"];
+	        this.score = source["score"];
+	        this.color = source["color"];
+	        this.gameId = source["gameId"];
+	    }
+	}
+	export class EventSummary {
+	    event: string;
+	    site: string;
+	    date: string;
+	    year: number;
+	    numGames: number;
+	    numPlayers: number;
+	    rounds: number;
+	    type: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new EventSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.event = source["event"];
+	        this.site = source["site"];
+	        this.date = source["date"];
+	        this.year = source["year"];
+	        this.numGames = source["numGames"];
+	        this.numPlayers = source["numPlayers"];
+	        this.rounds = source["rounds"];
+	        this.type = source["type"];
+	    }
+	}
+	export class SwissRoundResult {
+	    round: string;
+	    opponentRank: number;
+	    opponentName: string;
+	    color: string;
+	    result: string;
+	    score: number;
+	    gameId: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SwissRoundResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.round = source["round"];
+	        this.opponentRank = source["opponentRank"];
+	        this.opponentName = source["opponentName"];
+	        this.color = source["color"];
+	        this.result = source["result"];
+	        this.score = source["score"];
+	        this.gameId = source["gameId"];
+	    }
+	}
+	export class PlayerStanding {
+	    rank: number;
+	    playerName: string;
+	    title?: string;
+	    elo: number;
+	    points: number;
+	    played: number;
+	    wins: number;
+	    draws: number;
+	    losses: number;
+	    sonnebornBerger: number;
+	    buchholz: number;
+	    buchholzCut1: number;
+	    performanceRating: number;
+	    roundResults: SwissRoundResult[];
+	    scoresAgainst: Record<string, number>;
+	
+	    static createFrom(source: any = {}) {
+	        return new PlayerStanding(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.rank = source["rank"];
+	        this.playerName = source["playerName"];
+	        this.title = source["title"];
+	        this.elo = source["elo"];
+	        this.points = source["points"];
+	        this.played = source["played"];
+	        this.wins = source["wins"];
+	        this.draws = source["draws"];
+	        this.losses = source["losses"];
+	        this.sonnebornBerger = source["sonnebornBerger"];
+	        this.buchholz = source["buchholz"];
+	        this.buchholzCut1 = source["buchholzCut1"];
+	        this.performanceRating = source["performanceRating"];
+	        this.roundResults = this.convertValues(source["roundResults"], SwissRoundResult);
+	        this.scoresAgainst = source["scoresAgainst"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class TournamentCrosstable {
+	    event: string;
+	    site: string;
+	    date: string;
+	    category: number;
+	    averageElo: number;
+	    numPlayers: number;
+	    numGames: number;
+	    numRounds: number;
+	    type: string;
+	    standings: PlayerStanding[];
+	    matrix: CrosstableCell[][];
+	    crossTableText: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TournamentCrosstable(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.event = source["event"];
+	        this.site = source["site"];
+	        this.date = source["date"];
+	        this.category = source["category"];
+	        this.averageElo = source["averageElo"];
+	        this.numPlayers = source["numPlayers"];
+	        this.numGames = source["numGames"];
+	        this.numRounds = source["numRounds"];
+	        this.type = source["type"];
+	        this.standings = this.convertValues(source["standings"], PlayerStanding);
+	        this.matrix = this.convertValues(source["matrix"], CrosstableCell);
+	        this.crossTableText = source["crossTableText"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace tree {
 	
 	export class MoveStat {

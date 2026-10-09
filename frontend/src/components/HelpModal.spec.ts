@@ -67,4 +67,18 @@ describe('HelpModal.vue', () => {
 
     expect(wrapper.emitted('close')).toBeTruthy()
   })
+
+  it('renders tournaments & crosstables topic when selected', async () => {
+    const wrapper = mount(HelpModal)
+
+    const topicButtons = wrapper.findAll('.w-72 button')
+    const tourneyBtn = topicButtons.find(b => b.text().includes('Tournaments & Crosstables'))
+    expect(tourneyBtn).toBeDefined()
+    await tourneyBtn!.trigger('click')
+
+    expect(wrapper.text()).toContain('Tournament Crosstables & Standings (F7)')
+    expect(wrapper.text()).toContain('Round-Robin Matrix')
+    expect(wrapper.text()).toContain('Swiss Pairings')
+    expect(wrapper.text()).toContain('Sonneborn-Berger')
+  })
 })

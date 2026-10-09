@@ -13,6 +13,7 @@ import {
   Cpu,
   Edit3,
   Award,
+  Trophy,
   Keyboard,
   ChevronRight,
   Sparkles,
@@ -275,6 +276,31 @@ const HELP_TOPICS: HelpTopic[] = [
         paragraphs: [
           'Scan your own database games with Stockfish to automatically detect major blunder turnarounds and generate personalized tactical puzzles from your own games.'
         ]
+      }
+    ]
+  },
+  {
+    id: 'tournaments',
+    title: 'Tournaments & Crosstables',
+    icon: Trophy,
+    summary: 'Round-Robin matrices, Swiss pairings, Sonneborn-Berger, and Buchholz tiebreaks.',
+    tags: ['tournament', 'crosstable', 'round-robin', 'swiss', 'standings', 'sonneborn-berger', 'buchholz', 'tpr'],
+    content: [
+      {
+        heading: 'Tournament Crosstables & Standings (F7)',
+        subheading: 'Instant standings calculation and cross-table matrices for any event in the database.',
+        paragraphs: [
+          'NewScid scans all games in the open database to discover tournament events, detect whether the event was played as a Round-Robin, Swiss, or Match, and calculate official FIDE metrics.',
+          'Press F7 or choose Tools → Tournament Crosstables & Standings to open the cross-table modal.'
+        ],
+        bullets: [
+          'Round-Robin Matrix: View head-to-head outcomes (1, ½, 0, *) in an NxN grid with row/column highlights and color-coded results.',
+          'Swiss Pairings: View round-by-round encounters with opponent rank, color (w/b), and individual game outcomes.',
+          'Tiebreak Calculations: Computes Sonneborn-Berger (SB), Buchholz, Buchholz Cut 1, direct encounters, and Tournament Performance Rating (TPR).',
+          'Interactive Jump-to-Game: Click any match result cell to immediately load that game into the board and scorebook.',
+          'Export & Copy: Instantly export or copy formatted plain-text ASCII cross-tables to the system clipboard.'
+        ],
+        tip: 'The FIDE Tournament Category is automatically determined from the average Elo rating of all competitors.'
       }
     ]
   }
