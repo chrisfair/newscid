@@ -78,6 +78,10 @@ export function DeleteVariation(arg1, arg2) {
   return window['go']['main']['App']['DeleteVariation'](arg1, arg2);
 }
 
+export function ExportCrosstableText(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ExportCrosstableText'](arg1, arg2, arg3);
+}
+
 export function ExportPGN(arg1) {
   return window['go']['main']['App']['ExportPGN'](arg1);
 }
@@ -212,6 +216,14 @@ export function GetSyncProfile(arg1) {
 
 export function GetSyncProfiles() {
   return window['go']['main']['App']['GetSyncProfiles']();
+}
+
+export function GetTournamentCrosstable(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetTournamentCrosstable'](arg1, arg2, arg3);
+}
+
+export function GetTournamentEvents() {
+  return window['go']['main']['App']['GetTournamentEvents']();
 }
 
 export function GetVersionInfo() {

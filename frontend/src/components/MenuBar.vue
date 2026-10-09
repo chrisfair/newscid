@@ -10,6 +10,7 @@ import {
   Sliders,
   Play,
   Award,
+  Trophy,
   Search,
   Filter,
   Wrench,
@@ -89,6 +90,7 @@ const emit = defineEmits<{
   (e: 'onlineSync'): void
   (e: 'simulatePlayer'): void
   (e: 'playerPersonas'): void
+  (e: 'showCrosstable'): void
 }>()
 
 
@@ -449,6 +451,13 @@ onUnmounted(() => {
           @click="selectItem(() => emit('playerPersonas'))"
         >
           <span class="flex items-center gap-2"><Users class="w-3.5 h-3.5 text-purple-400" /> Player Personas & Aliases...</span>
+        </button>
+        <button
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => emit('showCrosstable'))"
+        >
+          <span class="flex items-center gap-2"><Trophy class="w-3.5 h-3.5 text-amber-400" /> Tournament Crosstables & Standings...</span>
+          <span class="text-[10px] text-zinc-500 font-mono">F7</span>
         </button>
       </div>
     </div>

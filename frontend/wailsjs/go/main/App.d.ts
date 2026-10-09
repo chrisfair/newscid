@@ -11,6 +11,7 @@ import {tree} from '../models';
 import {playerbot} from '../models';
 import {repertoire} from '../models';
 import {online} from '../models';
+import {tournament} from '../models';
 import {version} from '../models';
 import {puzzleminer} from '../models';
 
@@ -51,6 +52,8 @@ export function DeleteRepertoire(arg1:string):Promise<void>;
 export function DeleteSyncProfile(arg1:string):Promise<void>;
 
 export function DeleteVariation(arg1:number,arg2:number):Promise<void>;
+
+export function ExportCrosstableText(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function ExportPGN(arg1:chess.Game):Promise<string>;
 
@@ -119,6 +122,10 @@ export function GetSimulatedMove(arg1:string,arg2:string,arg3:boolean):Promise<p
 export function GetSyncProfile(arg1:string):Promise<online.Profile>;
 
 export function GetSyncProfiles():Promise<Array<online.Profile>>;
+
+export function GetTournamentCrosstable(arg1:string,arg2:string,arg3:string):Promise<tournament.TournamentCrosstable>;
+
+export function GetTournamentEvents():Promise<Array<tournament.EventSummary>>;
 
 export function GetVersionInfo():Promise<version.Info>;
 

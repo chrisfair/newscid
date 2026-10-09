@@ -22,6 +22,7 @@ import DatabaseMaintenanceModal from './components/DatabaseMaintenanceModal.vue'
 import OnlineSyncModal from './components/OnlineSyncModal.vue'
 import PlayerSimulationModal from './components/PlayerSimulationModal.vue'
 import PersonaModal from './components/PersonaModal.vue'
+import TournamentCrosstableModal from './components/TournamentCrosstableModal.vue'
 import { Bot } from '@lucide/vue'
 import { playerbot, persona } from '../wailsjs/go/models'
 
@@ -154,6 +155,7 @@ const showMaintenanceModal = ref(false)
 const showOnlineSyncModal = ref(false)
 const showPlayerSimulationModal = ref(false)
 const showPersonaModal = ref(false)
+const showTournamentCrosstableModal = ref(false)
 const selectedSimulationPersona = ref<persona.Persona | undefined>(undefined)
 const showImportModal = ref(false)
 const importPGNText = ref('')
@@ -545,6 +547,9 @@ function handleKeydown(e: KeyboardEvent) {
   } else if (e.key === 'F2') {
     e.preventDefault()
     toggleAnalysis()
+  } else if (e.key === 'F7') {
+    e.preventDefault()
+    showTournamentCrosstableModal.value = !showTournamentCrosstableModal.value
   } else if (e.key === '?') {
     e.preventDefault()
     showShortcutsModal.value = true
@@ -1375,6 +1380,7 @@ function handleOpenWebDocs() {
       @online-sync="showOnlineSyncModal = true"
       @simulate-player="showPlayerSimulationModal = true"
       @player-personas="showPersonaModal = true"
+      @show-crosstable="showTournamentCrosstableModal = true"
     />
 
 
@@ -1776,6 +1782,15 @@ function handleOpenWebDocs() {
       @spar-persona="handleSparPersona"
       @open-persona-db="handleOpenPersonaDb"
       @close="showPersonaModal = false"
+    />
+
+    <!-- Tournament Crosstables & Standings Modal (F7) -->
+    <TournamentCrosstableModal
+      v-if="showTournamentCrosstableModal"
+      :show="showTournamentCrosstableModal"
+      :active-event="gameTags.Event"
+      @load-game="handleLoadGame"
+      @close="showTournamentCrosstableModal = false"
     />
 
 

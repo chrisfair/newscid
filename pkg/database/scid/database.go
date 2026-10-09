@@ -172,6 +172,16 @@ func (db *Database) Close() error {
 	return nil
 }
 
+// RLock acquires the database read lock.
+func (db *Database) RLock() {
+	db.mu.RLock()
+}
+
+// RUnlock releases the database read lock.
+func (db *Database) RUnlock() {
+	db.mu.RUnlock()
+}
+
 func (db *Database) NumGames() int {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
