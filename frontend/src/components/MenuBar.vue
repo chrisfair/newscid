@@ -26,7 +26,8 @@ import {
   BookOpen,
   Zap,
   Pickaxe,
-  Info
+  Info,
+  Globe
 } from '@lucide/vue'
 import { PieceSetOption, BoardThemeOption } from './HeaderBar.vue'
 
@@ -76,6 +77,7 @@ const emit = defineEmits<{
   (e: 'showShortcuts'): void
   (e: 'showAbout'): void
   (e: 'databaseMaintenance'): void
+  (e: 'onlineSync'): void
 }>()
 
 
@@ -181,6 +183,13 @@ onUnmounted(() => {
         >
           <span class="flex items-center gap-2"><Wrench class="w-3.5 h-3.5 text-emerald-400" /> Database Maintenance...</span>
           <span class="text-[10px] text-zinc-500 font-mono">Ctrl+M</span>
+        </button>
+        <button
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => emit('onlineSync'))"
+        >
+          <span class="flex items-center gap-2"><Globe class="w-3.5 h-3.5 text-cyan-400" /> Online Account Sync...</span>
+          <span class="text-[10px] text-zinc-500 font-mono">Chess.com/Lichess</span>
         </button>
 
         <div class="h-px bg-zinc-800 my-1" />
@@ -417,6 +426,12 @@ onUnmounted(() => {
           @click="selectItem(() => emit('databaseMaintenance'))"
         >
           <span class="flex items-center gap-2"><Wrench class="w-3.5 h-3.5 text-emerald-400" /> Database Maintenance & Tools...</span>
+        </button>
+        <button
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => emit('onlineSync'))"
+        >
+          <span class="flex items-center gap-2"><Globe class="w-3.5 h-3.5 text-cyan-400" /> Online Account Sync (Chess.com & Lichess)...</span>
         </button>
       </div>
     </div>

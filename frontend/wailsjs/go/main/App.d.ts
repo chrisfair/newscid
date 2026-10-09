@@ -8,6 +8,7 @@ import {chess} from '../models';
 import {sets} from '../models';
 import {tree} from '../models';
 import {repertoire} from '../models';
+import {online} from '../models';
 import {version} from '../models';
 import {puzzleminer} from '../models';
 
@@ -35,7 +36,13 @@ export function DeleteGame(arg1:number,arg2:boolean):Promise<void>;
 
 export function DeleteRepertoire(arg1:string):Promise<void>;
 
+export function DeleteSyncProfile(arg1:string):Promise<void>;
+
 export function ExportPGN(arg1:chess.Game):Promise<string>;
+
+export function FetchChessComPreview(arg1:string):Promise<Array<string>>;
+
+export function FetchLichessPreview(arg1:string,arg2:number):Promise<string>;
 
 export function FindDuplicateGames(arg1:scid.DuplicateCriteria):Promise<Array<scid.DuplicateGroup>>;
 
@@ -73,6 +80,10 @@ export function GetRepertoires():Promise<Array<repertoire.RepertoireSummary>>;
 
 export function GetScidSystemBases():Promise<Array<string>>;
 
+export function GetSyncProfile(arg1:string):Promise<online.Profile>;
+
+export function GetSyncProfiles():Promise<Array<online.Profile>>;
+
 export function GetVersionInfo():Promise<version.Info>;
 
 export function ImportPGNBatch(arg1:string):Promise<scid.ImportStats>;
@@ -105,6 +116,8 @@ export function SaveGame(arg1:chess.Game):Promise<number>;
 
 export function SaveRepertoire(arg1:repertoire.Repertoire):Promise<void>;
 
+export function SaveSyncProfile(arg1:online.Profile):Promise<void>;
+
 export function SearchPosition(arg1:string):Promise<Array<scid.GameSummary>>;
 
 export function SortDatabase(arg1:scid.SortCriteria):Promise<void>;
@@ -112,6 +125,8 @@ export function SortDatabase(arg1:scid.SortCriteria):Promise<void>;
 export function StartEngine(arg1:string):Promise<void>;
 
 export function StopEngine():Promise<void>;
+
+export function SyncOnlineProfile(arg1:string):Promise<online.SyncResult>;
 
 export function VerifyDatabase():Promise<scid.VerificationReport>;
 

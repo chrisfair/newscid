@@ -17,6 +17,7 @@ import (
 	"newscid/pkg/database/sciddriver"
 	"newscid/pkg/eco"
 	"newscid/pkg/engine"
+	"newscid/pkg/online"
 	"newscid/pkg/puzzleminer"
 	"newscid/pkg/repertoire"
 	"newscid/pkg/sets"
@@ -67,6 +68,8 @@ type App struct {
 	engine     *engine.Engine
 	activeGame *chess.Game
 	repMgr     *repertoire.Manager
+	profileMgr *online.ProfileManager
+	syncMgr    *online.SyncManager
 }
 
 // NewApp creates a new App application struct
@@ -78,11 +81,15 @@ func NewApp() *App {
 		_ = classifier.LoadFromFile("/usr/share/scid/data/scid.eco")
 	}
 
+	profileMgr, _ := online.NewProfileManager("")
+
 	return &App{
-		db:     scid.NewDatabase(),
-		eco:    classifier,
-		driver: sciddriver.NewDriver(),
-		repMgr: repertoire.NewManager(""),
+		db:         scid.NewDatabase(),
+		eco:        classifier,
+		driver:     sciddriver.NewDriver(),
+		repMgr:     repertoire.NewManager(""),
+		profileMgr: profileMgr,
+		syncMgr:    online.NewSyncManager(profileMgr),
 	}
 }
 
@@ -904,6 +911,82 @@ func (a *App) IsScidDriverAvailable() bool {
 // GetVersionInfo returns current application version and runtime metadata.
 func (a *App) GetVersionInfo() version.Info {
 	return version.Get()
+}
+
+// ==========================================
+// Online Account Sync (Chess.com & Lichess)
+// ==========================================
+
+func (a *App) GetSyncProfiles() ([]*online.Profile, error) {
+	return a.profileMgr.GetProfiles(), nil
+}
+
+func (a *App) GetSyncProfile(id string) (*online.Profile, error) {
+	return a.profileMgr.GetProfile(id)
+}
+
+func (a *App) SaveSyncProfile(p *online.Profile) error {
+	return a.profileMgr.SaveProfile(p)
+}
+
+func (a *App) DeleteSyncProfile(id string) error {
+	return a.profileMgr.DeleteProfile(id)
+}
+
+func (a *App) SyncOnlineProfile(profileID string) (*online.SyncResult, error) {
+	profile, err := a.profileMgr.GetProfile(profileID)
+	if err != nil {
+		return nil, err
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	var targetDB *scid.Database
+	shouldCloseTarget := false
+
+	targetPath := strings.TrimSpace(profile.TargetDatabase)
+	if targetPath == "" {
+		if !a.db.IsOpen {
+			return nil, fmt.Errorf("no target database specified in profile and no database currently open")
+		}
+		targetDB = a.db
+	} else {
+		basePath := strings.TrimSuffix(targetPath, ".si4")
+		if a.db.IsOpen && filepath.Clean(a.db.BasePath) == filepath.Clean(basePath) {
+			targetDB = a.db
+		} else {
+			targetDB = scid.NewDatabase()
+			shouldCloseTarget = true
+
+			if _, err := os.Stat(basePath + ".si4"); err == nil {
+				if err := targetDB.Open(basePath); err != nil {
+					return nil, fmt.Errorf("failed to open target database: %w", err)
+				}
+			} else {
+				if err := targetDB.Create(basePath, fmt.Sprintf("Online sync for %s", profile.Name)); err != nil {
+					return nil, fmt.Errorf("failed to create target database: %w", err)
+				}
+			}
+		}
+	}
+
+	if shouldCloseTarget {
+		defer targetDB.Close()
+	}
+
+	return a.syncMgr.SyncProfile(profile, targetDB)
+}
+
+func (a *App) FetchLichessPreview(username string, count int) (string, error) {
+	if count <= 0 {
+		count = 5
+	}
+	return a.syncMgr.Lichess.FetchUserGames(username, 0, "", false, count)
+}
+
+func (a *App) FetchChessComPreview(username string) ([]string, error) {
+	return a.syncMgr.ChessCom.FetchArchives(username)
 }
 
 

@@ -403,6 +403,75 @@ export namespace main {
 
 }
 
+export namespace online {
+	
+	export class Profile {
+	    id: string;
+	    name: string;
+	    targetDatabase: string;
+	    chessComUsername: string;
+	    lichessUsername: string;
+	    lichessToken?: string;
+	    lastSyncTime: number;
+	    lastSyncGames: number;
+	    ratedOnly: boolean;
+	    autoDeduplicate: boolean;
+	    createdAt: number;
+	    updatedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Profile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.targetDatabase = source["targetDatabase"];
+	        this.chessComUsername = source["chessComUsername"];
+	        this.lichessUsername = source["lichessUsername"];
+	        this.lichessToken = source["lichessToken"];
+	        this.lastSyncTime = source["lastSyncTime"];
+	        this.lastSyncGames = source["lastSyncGames"];
+	        this.ratedOnly = source["ratedOnly"];
+	        this.autoDeduplicate = source["autoDeduplicate"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
+	export class SyncResult {
+	    profileId: string;
+	    profileName: string;
+	    totalDownloaded: number;
+	    lichessGames: number;
+	    chessComGames: number;
+	    imported: number;
+	    duplicatesSkipped: number;
+	    durationMs: number;
+	    timestamp: number;
+	    errors: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SyncResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.profileId = source["profileId"];
+	        this.profileName = source["profileName"];
+	        this.totalDownloaded = source["totalDownloaded"];
+	        this.lichessGames = source["lichessGames"];
+	        this.chessComGames = source["chessComGames"];
+	        this.imported = source["imported"];
+	        this.duplicatesSkipped = source["duplicatesSkipped"];
+	        this.durationMs = source["durationMs"];
+	        this.timestamp = source["timestamp"];
+	        this.errors = source["errors"];
+	    }
+	}
+
+}
+
 export namespace puzzleminer {
 	
 	export class MinedPuzzle {

@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,6 +15,7 @@ import (
 
 	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
+	"newscid/pkg/online"
 )
 
 
@@ -348,4 +353,161 @@ func TestAppDatabaseMaintenanceOperations(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, fileStats.Imported)
 }
+
+func TestAppOnlineSyncOperations(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+
+	tmpDir := t.TempDir()
+	pm, err := online.NewProfileManager(filepath.Join(tmpDir, "profiles.json"))
+	require.NoError(t, err)
+
+	app.profileMgr = pm
+	app.syncMgr = online.NewSyncManager(pm)
+
+	// 1. Initial list should be empty
+	profiles, err := app.GetSyncProfiles()
+	require.NoError(t, err)
+	assert.Empty(t, profiles)
+
+	// 2. Save profile
+	p := &online.Profile{
+		Name:             "Grandmaster Sync",
+		ChessComUsername: "testplayer",
+		LichessUsername:  "testuser",
+		AutoDeduplicate:  true,
+	}
+	err = app.SaveSyncProfile(p)
+	require.NoError(t, err)
+	assert.NotEmpty(t, p.ID)
+
+	// 3. Query profiles
+	profiles, err = app.GetSyncProfiles()
+	require.NoError(t, err)
+	assert.Len(t, profiles, 1)
+	assert.Equal(t, "Grandmaster Sync", profiles[0].Name)
+
+	retrieved, err := app.GetSyncProfile(p.ID)
+	require.NoError(t, err)
+	assert.Equal(t, p.Name, retrieved.Name)
+
+	_, err = app.GetSyncProfile("nonexistent_id")
+	assert.Error(t, err)
+
+	// 4. Set up mock HTTP server for Lichess and Chess.com
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		switch {
+		case strings.HasPrefix(path, "/api/games/user/"):
+			w.Header().Set("Content-Type", "application/x-chess-pgn")
+			_, _ = w.Write([]byte(`[Event "Lichess Round 1"]
+[White "testuser"]
+[Black "OpponentA"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 1-0
+
+[Event "Lichess Round 2"]
+[White "OpponentB"]
+[Black "testuser"]
+[Result "0-1"]
+
+1. d4 d5 2. c4 e6 0-1
+`))
+		case strings.HasSuffix(path, "/games/archives"):
+			w.Header().Set("Content-Type", "application/json")
+			// Return one archive URL pointing back to this mock server
+			archiveURL := fmt.Sprintf("http://%s/pub/player/testplayer/games/2026/10", r.Host)
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"archives":["%s"]}`, archiveURL)))
+		case strings.HasSuffix(path, "/pgn"):
+			w.Header().Set("Content-Type", "application/x-chess-pgn")
+			_, _ = w.Write([]byte(`[Event "ChessCom Game"]
+[White "testplayer"]
+[Black "MasterC"]
+[Result "1-0"]
+
+1. e4 c5 2. Nf3 d6 1-0
+`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	app.syncMgr.Lichess.BaseURL = server.URL
+	app.syncMgr.ChessCom.BaseURL = server.URL
+
+	// 5. Test Previews
+	previewLichess, err := app.FetchLichessPreview("testuser", 2)
+	require.NoError(t, err)
+	assert.Contains(t, previewLichess, "Lichess Round 1")
+
+	archivesChessCom, err := app.FetchChessComPreview("testplayer")
+	require.NoError(t, err)
+	assert.Len(t, archivesChessCom, 1)
+
+	// 6. Test SyncOnlineProfile error cases
+	_, err = app.SyncOnlineProfile("nonexistent_id")
+	assert.Error(t, err)
+
+	// When no database is open and no target path is set
+	_, err = app.SyncOnlineProfile(p.ID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no target database specified")
+
+	// 7. Sync into a new target database file
+	targetDBPath := filepath.Join(tmpDir, "online_merged")
+	p.TargetDatabase = targetDBPath
+	err = app.SaveSyncProfile(p)
+	require.NoError(t, err)
+
+	syncRes, err := app.SyncOnlineProfile(p.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 3, syncRes.TotalDownloaded)
+	assert.Equal(t, 2, syncRes.LichessGames)
+	assert.Equal(t, 1, syncRes.ChessComGames)
+	assert.Equal(t, 3, syncRes.Imported)
+	assert.Empty(t, syncRes.Errors)
+
+	// Verify profile metrics were recorded
+	updatedP, err := app.GetSyncProfile(p.ID)
+	require.NoError(t, err)
+	assert.Greater(t, updatedP.LastSyncTime, int64(0))
+	assert.Equal(t, 3, updatedP.LastSyncGames)
+
+	// Verify target database file actually exists and has 3 games
+	verifyDB := scid.NewDatabase()
+	err = verifyDB.Open(targetDBPath)
+	require.NoError(t, err)
+	assert.Equal(t, 3, verifyDB.NumGames())
+	_ = verifyDB.Close()
+
+	// 8. Sync into currently active open database
+	activePath := filepath.Join(tmpDir, "active_base")
+	_, err = app.CreateDatabase(activePath, "Active Test Base")
+	require.NoError(t, err)
+
+	pActive := &online.Profile{
+		Name:            "Active Target Profile",
+		LichessUsername: "testuser",
+		TargetDatabase:  "", // should sync to app.db
+	}
+	err = app.SaveSyncProfile(pActive)
+	require.NoError(t, err)
+
+	activeRes, err := app.SyncOnlineProfile(pActive.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 2, activeRes.TotalDownloaded)
+	assert.Equal(t, 2, app.db.NumGames())
+
+	// 9. Delete Profile
+	err = app.DeleteSyncProfile(p.ID)
+	require.NoError(t, err)
+	_, err = app.GetSyncProfile(p.ID)
+	assert.Error(t, err)
+
+	err = app.DeleteSyncProfile("nonexistent")
+	assert.Error(t, err)
+}
+
 
