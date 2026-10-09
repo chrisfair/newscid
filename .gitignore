@@ -1,9 +1,44 @@
-build/bin
-build/dist
-build/staging
-build/.cache
-node_modules
-frontend/dist
-coverage.out
+# Build & Binary Artifacts
+build/bin/
+build/dist/
+build/staging/
+build/.cache/
 newscid
+coverage.out
 
+# Dependencies & Web Assets
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Local tool & editor metadata
+AGENTS.md
+CLAUDE.md
+.gemini/
+.antigravity/
+.system_generated/
+brain/
+.cursor/
+.cursorrules
+.claude/
+.copilot/
+.chatgpt/
+.cline/
+.roo/
+.aidev/
+.ai/
+*.agent
+*.prompt
+*.prompt.md
+*.chat
+
+# OS & Editor Metadata
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
