@@ -66,10 +66,13 @@ type App struct {
 	eco        *eco.Classifier
 	driver     *sciddriver.Driver
 	engine     *engine.Engine
-	activeGame *chess.Game
-	repMgr     *repertoire.Manager
-	profileMgr *online.ProfileManager
-	syncMgr    *online.SyncManager
+	activeGame    *chess.Game
+	repMgr        *repertoire.Manager
+	profileMgr    *online.ProfileManager
+	syncMgr       *online.SyncManager
+	engineMultiPV int
+	engineThreads int
+	engineHashMB  int
 }
 
 // NewApp creates a new App application struct
@@ -84,12 +87,13 @@ func NewApp() *App {
 	profileMgr, _ := online.NewProfileManager("")
 
 	return &App{
-		db:         scid.NewDatabase(),
-		eco:        classifier,
-		driver:     sciddriver.NewDriver(),
-		repMgr:     repertoire.NewManager(""),
-		profileMgr: profileMgr,
-		syncMgr:    online.NewSyncManager(profileMgr),
+		db:            scid.NewDatabase(),
+		eco:           classifier,
+		driver:        sciddriver.NewDriver(),
+		repMgr:        repertoire.NewManager(""),
+		profileMgr:    profileMgr,
+		syncMgr:       online.NewSyncManager(profileMgr),
+		engineMultiPV: 1,
 	}
 }
 
@@ -559,6 +563,16 @@ func (a *App) startEngineLocked(idOrPath string) error {
 	}
 
 	eng := engine.NewEngine(execPath)
+	if a.engineMultiPV > 1 {
+		_ = eng.SetMultiPV(a.engineMultiPV)
+	}
+	if a.engineThreads > 0 {
+		_ = eng.SetThreads(a.engineThreads)
+	}
+	if a.engineHashMB > 0 {
+		_ = eng.SetHash(a.engineHashMB)
+	}
+
 	if err := eng.Start(); err != nil {
 		return err
 	}
@@ -626,6 +640,58 @@ func (a *App) GetEngineEval() engine.EvalInfo {
 		return a.engine.GetLastEval()
 	}
 	return engine.EvalInfo{}
+}
+
+func (a *App) SetEngineMultiPV(lines int) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if lines < 1 {
+		lines = 1
+	} else if lines > 10 {
+		lines = 10
+	}
+	a.engineMultiPV = lines
+
+	if a.engine != nil {
+		return a.engine.SetMultiPV(lines)
+	}
+	return nil
+}
+
+func (a *App) GetEngineMultiPV() int {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	if a.engine != nil {
+		return a.engine.GetMultiPV()
+	}
+	if a.engineMultiPV > 0 {
+		return a.engineMultiPV
+	}
+	return 1
+}
+
+func (a *App) SetEngineThreads(threads int) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	a.engineThreads = threads
+	if a.engine != nil {
+		return a.engine.SetThreads(threads)
+	}
+	return nil
+}
+
+func (a *App) SetEngineHash(mb int) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	a.engineHashMB = mb
+	if a.engine != nil {
+		return a.engine.SetHash(mb)
+	}
+	return nil
 }
 
 func (a *App) GetBestMove(fen string, moves []string, movetimeMs int) (string, error) {

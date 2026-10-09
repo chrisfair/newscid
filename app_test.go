@@ -510,4 +510,52 @@ func TestAppOnlineSyncOperations(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestAppEngineMultiPVAndOptions(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+
+	// Default MultiPV should be 1
+	assert.Equal(t, 1, app.GetEngineMultiPV())
+
+	// Set MultiPV before engine started
+	err := app.SetEngineMultiPV(3)
+	require.NoError(t, err)
+	assert.Equal(t, 3, app.GetEngineMultiPV())
+
+	err = app.SetEngineThreads(2)
+	require.NoError(t, err)
+
+	err = app.SetEngineHash(128)
+	require.NoError(t, err)
+
+	// If engine is available, test starting and applying settings
+	engines := app.GetDiscoveredEngines()
+	var availableEngine string
+	for _, e := range engines {
+		if e.Available && e.UCI {
+			availableEngine = e.Name
+			break
+		}
+	}
+
+	if availableEngine != "" {
+		err = app.StartEngine(availableEngine)
+		require.NoError(t, err)
+		defer func() { _ = app.StopEngine() }()
+
+		assert.Equal(t, 3, app.GetEngineMultiPV())
+
+		// Update MultiPV while engine is running
+		err = app.SetEngineMultiPV(2)
+		require.NoError(t, err)
+		assert.Equal(t, 2, app.GetEngineMultiPV())
+
+		err = app.SetEngineThreads(1)
+		require.NoError(t, err)
+
+		err = app.SetEngineHash(64)
+		require.NoError(t, err)
+	}
+}
+
 

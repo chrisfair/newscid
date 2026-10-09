@@ -53,6 +53,10 @@ import {
   AnnotatePGN,
   SearchPosition,
   LoadTacticsPuzzle,
+  SetEngineMultiPV,
+  GetEngineMultiPV,
+  SetEngineThreads,
+  SetEngineHash,
 } from '../wailsjs/go/main/App'
 import { EventsOn, EventsOff, ClipboardSetText, ClipboardGetText } from '../wailsjs/runtime/runtime'
 
@@ -108,6 +112,7 @@ const availableEngines = ref<string[]>([])
 const discoveredEngines = ref<EngineOption[]>([])
 const selectedEngine = ref('')
 const evalInfo = ref<EvalInfo | null>(null)
+const engineMultiPv = ref(1)
 
 // Game Analysis & Blunder Detection
 const gameAnalysis = ref<GameAnalysisData | null>(null)
@@ -267,6 +272,11 @@ onMounted(async () => {
     EventsOn('engine:eval', (data: EvalInfo) => {
       evalInfo.value = data
     })
+
+    const initMPV = await GetEngineMultiPV()
+    if (initMPV > 0) {
+      engineMultiPv.value = initMPV
+    }
 
     // 5. Auto-open user's database or first discovered base
     let autoBase: string | null = null
@@ -1032,6 +1042,47 @@ async function handleSelectEngine(path: string) {
     AnalyzePosition(currentFEN.value, [], 20)
   }
 }
+
+async function handleChangeMultiPV(lines: number) {
+  engineMultiPv.value = lines
+  try {
+    await SetEngineMultiPV(lines)
+    if (isAnalyzing.value) {
+      await AnalyzePosition(currentFEN.value, [], 20)
+    }
+  } catch (err) {
+    console.error('Failed to set MultiPV:', err)
+  }
+}
+
+async function handleChangeThreads(threads: number) {
+  try {
+    await SetEngineThreads(threads)
+    if (isAnalyzing.value) {
+      await AnalyzePosition(currentFEN.value, [], 20)
+    }
+  } catch (err) {
+    console.error('Failed to set engine threads:', err)
+  }
+}
+
+async function handleChangeHash(mb: number) {
+  try {
+    await SetEngineHash(mb)
+    if (isAnalyzing.value) {
+      await AnalyzePosition(currentFEN.value, [], 20)
+    }
+  } catch (err) {
+    console.error('Failed to set engine hash:', err)
+  }
+}
+
+function handlePreviewCandidateMove(uci: string) {
+  if (!uci || uci.length < 4) return
+  const from = uci.slice(0, 2)
+  const to = uci.slice(2, 4)
+  lastMove.value = { from, to }
+}
 </script>
 
 <template>
@@ -1133,8 +1184,13 @@ async function handleSelectEngine(path: string) {
             :available-engines="availableEngines"
             :discovered-engines="discoveredEngines"
             :selected-engine="selectedEngine"
+            :multi-pv="engineMultiPv"
             @toggle-analysis="toggleAnalysis"
             @select-engine="handleSelectEngine"
+            @change-multi-p-v="handleChangeMultiPV"
+            @change-threads="handleChangeThreads"
+            @change-hash="handleChangeHash"
+            @preview-move="handlePreviewCandidateMove"
           />
         </div>
       </div>
