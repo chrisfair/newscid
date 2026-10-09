@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { Play, Square, Cpu, ChevronDown, Check, Sliders, Layers } from '@lucide/vue'
+import { useNotation, formatMoveNotation, formatSequenceNotation } from '../utils/notation'
 
 export interface PVLine {
   multipv: number
@@ -424,10 +425,10 @@ function handleApplyHash(h: number) {
         <!-- Candidate Move & Continuation -->
         <div class="flex-1 min-w-0 truncate">
           <span class="font-bold text-white group-hover:text-cyan-300 transition-colors mr-1.5">
-            {{ line.san || line.moveUci }}
+            {{ formatMoveNotation(line.san || line.moveUci, line.moveUci) }}
           </span>
           <span class="text-zinc-400 group-hover:text-zinc-200 transition-colors text-[11px]">
-            {{ line.pvFormatted || line.pv?.join(' ') }}
+            {{ formatSequenceNotation(line.pvFormatted || line.pv?.join(' ') || '') }}
           </span>
         </div>
       </div>
@@ -446,7 +447,7 @@ function handleApplyHash(h: number) {
       class="pv-container bg-zinc-950/70 border border-zinc-800/60 rounded-lg p-2 font-mono text-xs text-zinc-300 truncate"
     >
       <span class="text-zinc-500 font-semibold mr-1.5">PV:</span>
-      <span class="text-emerald-400 select-all">{{ pvLineString }}</span>
+      <span class="text-emerald-400 select-all">{{ formatSequenceNotation(pvLineString) }}</span>
     </div>
 
   </div>

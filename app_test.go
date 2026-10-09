@@ -558,4 +558,129 @@ func TestAppEngineMultiPVAndOptions(t *testing.T) {
 	}
 }
 
+func TestAppNotationAndAnnotations(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+
+	// 1. Notation style getter/setter
+	assert.Equal(t, "san", app.GetNotationStyle())
+	err := app.SetNotationStyle("fan")
+	require.NoError(t, err)
+	assert.Equal(t, "fan", app.GetNotationStyle())
+
+	err = app.SetNotationStyle("invalid_style")
+	assert.Error(t, err)
+
+	// 2. FormatMove
+	formatted, err := app.FormatMove(chess.StartingFEN, "g1f3", "")
+	require.NoError(t, err)
+	assert.Equal(t, "♘f3", formatted)
+
+	// 3. FormatMoveSequence
+	seq, err := app.FormatMoveSequence(chess.StartingFEN, []string{"e2e4", "e7e5"}, "lan")
+	require.NoError(t, err)
+	assert.Equal(t, "1. e2-e4 e7-e5", seq)
+
+	// 4. Game Comments and NAGs
+	pgnSample := `[Event "World Championship"]
+[Site "Reykjavik"]
+[Date "1972.07.11"]
+[Round "1"]
+[White "Spassky, Boris V"]
+[Black "Fischer, Robert J"]
+[Result "1-0"]
+
+1. d4 Nf6 2. c4 e6 1-0`
+
+	_, err = app.ParsePGN(pgnSample)
+	require.NoError(t, err)
+
+	err = app.AddGameComment(1, "Strong queen pawn start")
+	require.NoError(t, err)
+
+	err = app.SetGameNAG(1, 1) // Good move !
+	require.NoError(t, err)
+
+	err = app.ClearGameNAGs(1)
+	require.NoError(t, err)
+
+	// Errors on non-existent ply
+	err = app.AddGameComment(99, "Error ply")
+	assert.Error(t, err)
+	err = app.SetGameNAG(99, 1)
+	assert.Error(t, err)
+	err = app.ClearGameNAGs(99)
+	assert.Error(t, err)
+}
+
+func TestAppPlayerImportAndSimulation(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+
+	tmpDir := t.TempDir()
+	basePath := filepath.Join(tmpDir, "sim_test_db")
+	db := scid.NewDatabase()
+	err := db.Create(basePath, "Sim DB")
+	require.NoError(t, err)
+
+	// Add games for Kasparov
+	g1, _ := chess.ParsePGN(`[Event "Match"]
+[White "Kasparov, Garry"]
+[Black "Deep Blue"]
+[Result "1-0"]
+[WhiteElo "2820"]
+
+1. e4 c5 2. Nf3 d6 1-0`)
+	_, _ = db.SaveGame(g1)
+	db.Close()
+
+	_, err = app.OpenDatabase(basePath)
+	require.NoError(t, err)
+
+	// Test GetDatabasePlayers
+	players, err := app.GetDatabasePlayers()
+	require.NoError(t, err)
+	assert.Contains(t, players, "Kasparov, Garry")
+
+	// Test GetPlayerPersonality
+	personality, err := app.GetPlayerPersonality("Kasparov")
+	require.NoError(t, err)
+	assert.Equal(t, "Kasparov", personality.Name)
+	assert.Equal(t, 2820, personality.PeakElo)
+
+	// Test GetSimulatedMove (book move)
+	simMove, err := app.GetSimulatedMove("Kasparov", chess.StartingFEN, true)
+	require.NoError(t, err)
+	assert.True(t, simMove.IsBook)
+	assert.Equal(t, "e2e4", simMove.UCI)
+
+	// Test GetSimulatedMove (out of book / fallback)
+	simFallback, err := app.GetSimulatedMove("Kasparov", "8/8/8/8/8/8/8/4K2k w - - 0 1", true)
+	require.NoError(t, err)
+	assert.False(t, simFallback.IsBook)
+
+	// Test ImportPlayerGames through mock server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-chess-pgn")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`[Event "Online"]
+[White "Carlsen"]
+[Black "Nakamura"]
+[Result "1-0"]
+
+1. e4 e5 1-0`))
+	}))
+	defer server.Close()
+
+	app.syncMgr.Lichess.BaseURL = server.URL
+	resImport, err := app.ImportPlayerGames(online.ImportPlayerOptions{
+		PlayerName:      "Magnus Carlsen",
+		LichessUsername: "magnuscarlsen",
+		TargetMode:      online.TargetActiveBase,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, resImport.Imported)
+}
+
+
 

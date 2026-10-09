@@ -6,6 +6,8 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +20,7 @@ import (
 	"newscid/pkg/eco"
 	"newscid/pkg/engine"
 	"newscid/pkg/online"
+	"newscid/pkg/playerbot"
 	"newscid/pkg/puzzleminer"
 	"newscid/pkg/repertoire"
 	"newscid/pkg/sets"
@@ -73,6 +76,7 @@ type App struct {
 	engineMultiPV int
 	engineThreads int
 	engineHashMB  int
+	notationStyle chess.NotationStyle
 }
 
 // NewApp creates a new App application struct
@@ -1053,6 +1057,293 @@ func (a *App) FetchLichessPreview(username string, count int) (string, error) {
 
 func (a *App) FetchChessComPreview(username string) ([]string, error) {
 	return a.syncMgr.ChessCom.FetchArchives(username)
+}
+
+// ==========================================
+// Notation Styles & Formatting
+// ==========================================
+
+// SetNotationStyle sets the active notation style (san, fan, lan, descriptive, uci, iccf).
+func (a *App) SetNotationStyle(style string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if !chess.ValidNotationStyle(style) {
+		return fmt.Errorf("invalid notation style: %s", style)
+	}
+	a.notationStyle = chess.NotationStyle(strings.ToLower(style))
+	return nil
+}
+
+// GetNotationStyle returns the active notation format.
+func (a *App) GetNotationStyle() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if a.notationStyle == "" {
+		return string(chess.NotationSAN)
+	}
+	return string(a.notationStyle)
+}
+
+// FormatMove formats a UCI move from a given FEN position into the target notation style.
+func (a *App) FormatMove(fen string, moveUCI string, style string) (string, error) {
+	st := chess.NotationStyle(strings.ToLower(style))
+	if !chess.ValidNotationStyle(style) {
+		a.mu.RLock()
+		st = a.notationStyle
+		a.mu.RUnlock()
+		if st == "" {
+			st = chess.NotationSAN
+		}
+	}
+	return chess.FormatMoveWithFEN(fen, moveUCI, st)
+}
+
+// FormatMoveSequence formats a sequence of UCI moves into readable moves with full-move numbers.
+func (a *App) FormatMoveSequence(fen string, movesUCI []string, style string) (string, error) {
+	st := chess.NotationStyle(strings.ToLower(style))
+	if !chess.ValidNotationStyle(style) {
+		a.mu.RLock()
+		st = a.notationStyle
+		a.mu.RUnlock()
+		if st == "" {
+			st = chess.NotationSAN
+		}
+	}
+	return chess.FormatPVWithStyle(fen, movesUCI, st), nil
+}
+
+// ==========================================
+// Game Annotations & Variations
+// ==========================================
+
+// AddGameComment attaches a comment to the move node at the given 1-based ply in activeGame.
+func (a *App) AddGameComment(ply int, comment string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.activeGame == nil || a.activeGame.RootMove == nil {
+		return fmt.Errorf("no active game")
+	}
+	curr := a.activeGame.RootMove
+	for p := 1; curr != nil && p < ply; p++ {
+		curr = curr.Next
+	}
+	if curr == nil {
+		return fmt.Errorf("ply %d not found in active game", ply)
+	}
+	curr.Comment = comment
+	return nil
+}
+
+// SetGameNAG sets or adds a Numeric Annotation Glyph to the move at the given 1-based ply.
+func (a *App) SetGameNAG(ply int, nag int) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.activeGame == nil || a.activeGame.RootMove == nil {
+		return fmt.Errorf("no active game")
+	}
+	curr := a.activeGame.RootMove
+	for p := 1; curr != nil && p < ply; p++ {
+		curr = curr.Next
+	}
+	if curr == nil {
+		return fmt.Errorf("ply %d not found in active game", ply)
+	}
+	for _, existing := range curr.NAGs {
+		if existing == nag {
+			return nil
+		}
+	}
+	curr.NAGs = append(curr.NAGs, nag)
+	return nil
+}
+
+// ClearGameNAGs removes all NAGs from the move at the given 1-based ply.
+func (a *App) ClearGameNAGs(ply int) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.activeGame == nil || a.activeGame.RootMove == nil {
+		return fmt.Errorf("no active game")
+	}
+	curr := a.activeGame.RootMove
+	for p := 1; curr != nil && p < ply; p++ {
+		curr = curr.Next
+	}
+	if curr == nil {
+		return fmt.Errorf("ply %d not found in active game", ply)
+	}
+	curr.NAGs = nil
+	return nil
+}
+
+// PromoteVariation promotes a variation at the specified ply to become the main line.
+func (a *App) PromoteVariation(ply int, varIndex int) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.activeGame == nil || a.activeGame.RootMove == nil {
+		return fmt.Errorf("no active game")
+	}
+	if ply <= 1 {
+		if varIndex < 0 || varIndex >= len(a.activeGame.RootMove.Variations) {
+			return fmt.Errorf("variation index %d out of range", varIndex)
+		}
+		oldMain := a.activeGame.RootMove
+		newMain := oldMain.Variations[varIndex]
+		oldMain.Variations = append(oldMain.Variations[:varIndex], oldMain.Variations[varIndex+1:]...)
+		newMain.Variations = append(newMain.Variations, oldMain)
+		a.activeGame.RootMove = newMain
+		return nil
+	}
+
+	parent := a.activeGame.RootMove
+	for p := 1; parent != nil && p < ply-1; p++ {
+		parent = parent.Next
+	}
+	if parent == nil || parent.Next == nil {
+		return fmt.Errorf("ply %d not found", ply)
+	}
+	targetNode := parent.Next
+	if varIndex < 0 || varIndex >= len(targetNode.Variations) {
+		return fmt.Errorf("variation index %d out of range", varIndex)
+	}
+	promotedNode := targetNode.Variations[varIndex]
+	targetNode.Variations = append(targetNode.Variations[:varIndex], targetNode.Variations[varIndex+1:]...)
+	promotedNode.Variations = append(promotedNode.Variations, targetNode)
+	parent.Next = promotedNode
+	return nil
+}
+
+// DeleteVariation removes the specified variation branch at ply.
+func (a *App) DeleteVariation(ply int, varIndex int) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.activeGame == nil || a.activeGame.RootMove == nil {
+		return fmt.Errorf("no active game")
+	}
+	curr := a.activeGame.RootMove
+	for p := 1; curr != nil && p < ply; p++ {
+		curr = curr.Next
+	}
+	if curr == nil {
+		return fmt.Errorf("ply %d not found", ply)
+	}
+	if varIndex < 0 || varIndex >= len(curr.Variations) {
+		return fmt.Errorf("variation index %d out of range", varIndex)
+	}
+	curr.Variations = append(curr.Variations[:varIndex], curr.Variations[varIndex+1:]...)
+	return nil
+}
+
+// ==========================================
+// Player Import & Dedicated / Blended Sync
+// ==========================================
+
+// ImportPlayerGames downloads games for any player and merges them into dedicated, active, or blended databases.
+func (a *App) ImportPlayerGames(opts online.ImportPlayerOptions) (*online.SyncResult, error) {
+	a.mu.Lock()
+	activeDB := a.db
+	a.mu.Unlock()
+
+	return a.syncMgr.ImportPlayerGames(opts, activeDB)
+}
+
+// ==========================================
+// Player Simulation & Training Module
+// ==========================================
+
+// GetDatabasePlayers returns a sorted list of unique player names in the active database.
+func (a *App) GetDatabasePlayers() ([]string, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	if a.db == nil || !a.db.IsOpen {
+		return nil, fmt.Errorf("no database open")
+	}
+
+	players := make([]string, 0, len(a.db.Names.NamesByID[scid.NamePlayer]))
+	for _, name := range a.db.Names.NamesByID[scid.NamePlayer] {
+		if name != "" && name != "?" {
+			players = append(players, name)
+		}
+	}
+	sort.Strings(players)
+	return players, nil
+}
+
+// GetPlayerPersonality builds a repertoire and calibrated personality model for playerName from the database.
+func (a *App) GetPlayerPersonality(playerName string) (*playerbot.PlayerPersonality, error) {
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+
+	if db == nil || !db.IsOpen {
+		return nil, fmt.Errorf("no database open")
+	}
+
+	return playerbot.BuildPersonality(db, playerName)
+}
+
+// GetSimulatedMove queries the player's personal opening book or generates an Elo-calibrated move.
+func (a *App) GetSimulatedMove(playerName string, fen string, isWhite bool) (*playerbot.SimulatedMove, error) {
+	personality, err := a.GetPlayerPersonality(playerName)
+	if err != nil {
+		return nil, err
+	}
+
+	// 1. Check personal opening book
+	if simMove, inBook := personality.SelectSimulatedMove(fen, isWhite); inBook {
+		return simMove, nil
+	}
+
+	// 2. Out of book: calibrate engine with player's estimated Elo
+	limit, uciElo, skill := playerbot.CalibrateEngineSettings(personality.EstimatedElo)
+
+	a.mu.Lock()
+	eng := a.engine
+	a.mu.Unlock()
+
+	if eng != nil {
+		if limit {
+			_ = eng.SetOption("UCI_LimitStrength", "true")
+			_ = eng.SetOption("UCI_Elo", strconv.Itoa(uciElo))
+		}
+		_ = eng.SetOption("Skill Level", strconv.Itoa(skill))
+
+		bestUCI, _, err := eng.SearchBestMove(fen, nil, 800)
+		if err == nil && bestUCI != "" {
+			board, _ := chess.ParseFEN(fen)
+			san := bestUCI
+			if board != nil {
+				if m, err := board.ParseUCI(bestUCI); err == nil {
+					san = board.MoveToSAN(m)
+				}
+			}
+			return &playerbot.SimulatedMove{
+				UCI:        bestUCI,
+				SAN:        san,
+				IsBook:     false,
+				EloTarget:  personality.EstimatedElo,
+				Commentary: fmt.Sprintf("🧠 %s calculated move at calibrated %d Elo", personality.Name, personality.EstimatedElo),
+			}, nil
+		}
+	}
+
+	// Fallback if engine is not running: pick a legal move
+	b, err := chess.ParseFEN(fen)
+	if err != nil {
+		return nil, err
+	}
+	moves := b.GenerateLegalMoves()
+	if len(moves) == 0 {
+		return nil, fmt.Errorf("no legal moves available")
+	}
+	m := moves[rand.Intn(len(moves))]
+	return &playerbot.SimulatedMove{
+		UCI:        m.String(),
+		SAN:        b.MoveToSAN(m),
+		IsBook:     false,
+		EloTarget:  personality.EstimatedElo,
+		Commentary: fmt.Sprintf("🎲 %s played fallback move", personality.Name),
+	}, nil
 }
 
 

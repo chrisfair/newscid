@@ -449,3 +449,238 @@ func TestOnlineEdgeCasesAndErrors(t *testing.T) {
 	assert.Equal(t, 0, resFail.TotalDownloaded)
 }
 
+func TestImportPlayerGamesAndBlendedSync(t *testing.T) {
+	// Setup mock server for both Lichess and Chess.com
+	sampleLichessPGN := `[Event "Lichess Classical"]
+[Site "https://lichess.org/12345"]
+[Date "2026.01.01"]
+[Round "1"]
+[White "OpponentGM"]
+[Black "HeroPlayer"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 1-0`
+
+	sampleChessComPGN := `[Event "Chess.com Titled Tuesday"]
+[Site "Chess.com"]
+[Date "2026.02.01"]
+[Round "1"]
+[White "OpponentGM"]
+[Black "RivalMaster"]
+[Result "0-1"]
+
+1. d4 Nf6 2. c4 e6 3. Nc3 Bb4 0-1`
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if strings.Contains(path, "/api/games/user/") {
+			w.Header().Set("Content-Type", "application/x-chess-pgn")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(sampleLichessPGN))
+			return
+		}
+		if strings.Contains(path, "/games/archives") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			archives := map[string][]string{
+				"archives": {"http://" + r.Host + "/pub/player/opponentgm/games/2026/02"},
+			}
+			_ = json.NewEncoder(w).Encode(archives)
+			return
+		}
+		if strings.Contains(path, "/games/2026/02") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			gamesObj := map[string][]map[string]string{
+				"games": {{"pgn": sampleChessComPGN}},
+			}
+			_ = json.NewEncoder(w).Encode(gamesObj)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	pm, err := NewProfileManager(filepath.Join(tmpDir, "pm.json"))
+	require.NoError(t, err)
+
+	sm := NewSyncManager(pm)
+	sm.Lichess.BaseURL = server.URL
+	sm.ChessCom.BaseURL = server.URL + "/pub/player"
+
+	// 1. Validation error: no usernames
+	_, err = sm.ImportPlayerGames(ImportPlayerOptions{}, nil)
+	assert.Error(t, err)
+
+	// 2. Active Base Mode
+	activeDB := scid.NewDatabase()
+	activePath := filepath.Join(tmpDir, "active_base")
+	err = activeDB.Create(activePath, "Active Base")
+	require.NoError(t, err)
+	defer activeDB.Close()
+
+	resActive, err := sm.ImportPlayerGames(ImportPlayerOptions{
+		PlayerName:       "Opponent GM",
+		LichessUsername:  "opponentgm",
+		ChessComUsername: "opponentgm",
+		TargetMode:       TargetActiveBase,
+		AutoDeduplicate:  true,
+	}, activeDB)
+	require.NoError(t, err)
+	assert.Equal(t, 2, resActive.TotalDownloaded)
+	assert.Equal(t, 2, resActive.Imported)
+	assert.Equal(t, uint32(2), activeDB.Header.NumGames)
+
+	// 2b. Error: TargetActiveBase with nil active database
+	_, err = sm.ImportPlayerGames(ImportPlayerOptions{
+		LichessUsername: "opponentgm",
+		TargetMode:      TargetActiveBase,
+	}, nil)
+	assert.Error(t, err)
+
+	// 3. Dedicated Base Mode
+	dedicatedPath := filepath.Join(tmpDir, "dedicated_opponent.si4")
+	resDedicated, err := sm.ImportPlayerGames(ImportPlayerOptions{
+		PlayerName:       "Opponent GM",
+		LichessUsername:  "opponentgm",
+		ChessComUsername: "opponentgm",
+		TargetMode:       TargetDedicatedBase,
+		DedicatedPath:    dedicatedPath,
+		AutoDeduplicate:  true,
+		CreateProfile:    true,
+	}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 2, resDedicated.Imported)
+
+	// Verify profile created
+	profs := pm.GetProfiles()
+	require.Len(t, profs, 1)
+	assert.True(t, profs[0].IsStudyTarget)
+	assert.Equal(t, TargetDedicatedBase, profs[0].TargetMode)
+
+	// Verify dedicated database has 2 games
+	dedDB := scid.NewDatabase()
+	err = dedDB.Open(filepath.Join(tmpDir, "dedicated_opponent"))
+	require.NoError(t, err)
+	assert.Equal(t, uint32(2), dedDB.Header.NumGames)
+	dedDB.Close()
+
+	// 3b. Error: Dedicated path missing
+	_, err = sm.ImportPlayerGames(ImportPlayerOptions{
+		LichessUsername: "opponentgm",
+		TargetMode:      TargetDedicatedBase,
+		DedicatedPath:   "",
+	}, nil)
+	assert.Error(t, err)
+
+	// 4. Blended Base Mode (Dedicated DB + Blended Master DB)
+	blendedDedicatedPath := filepath.Join(tmpDir, "hikaru_dedicated.si4")
+	blendedMasterPath := filepath.Join(tmpDir, "master_blended.si4")
+
+	resBlended, err := sm.ImportPlayerGames(ImportPlayerOptions{
+		PlayerName:       "Hikaru Nakamura",
+		LichessUsername:  "opponentgm",
+		ChessComUsername: "opponentgm",
+		TargetMode:       TargetBlendedBase,
+		DedicatedPath:    blendedDedicatedPath,
+		BlendedPath:      blendedMasterPath,
+		AutoDeduplicate:  true,
+		CreateProfile:    true,
+	}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 4, resBlended.Imported) // 2 in dedicated + 2 in blended
+
+	// Verify dedicated base has 2 games
+	hDB := scid.NewDatabase()
+	err = hDB.Open(filepath.Join(tmpDir, "hikaru_dedicated"))
+	require.NoError(t, err)
+	assert.Equal(t, uint32(2), hDB.Header.NumGames)
+	hDB.Close()
+
+	// Verify blended master base has 2 games
+	mDB := scid.NewDatabase()
+	err = mDB.Open(filepath.Join(tmpDir, "master_blended"))
+	require.NoError(t, err)
+	assert.Equal(t, uint32(2), mDB.Header.NumGames)
+	mDB.Close()
+
+	// 5. Blended mode with active database fallback
+	resBlendedActive, err := sm.ImportPlayerGames(ImportPlayerOptions{
+		PlayerName:       "Magnus",
+		LichessUsername:  "opponentgm",
+		TargetMode:       TargetBlendedBase,
+		DedicatedPath:    filepath.Join(tmpDir, "magnus_dedicated.si4"),
+		BlendedPath:      "", // empty -> should blend into activeDB!
+	}, activeDB)
+	require.NoError(t, err)
+	assert.Greater(t, resBlendedActive.Imported, 0)
+
+	// 6. Test SyncProfile with TargetBlendedBase
+	blendedProf := &Profile{
+		Name:             "Blended Sync Test",
+		LichessUsername:  "opponentgm",
+		TargetMode:       TargetBlendedBase,
+		BlendedDatabase:  blendedMasterPath,
+		AutoDeduplicate:  true,
+	}
+	resSyncBlended, err := sm.SyncProfile(blendedProf, activeDB)
+	require.NoError(t, err)
+	assert.Greater(t, resSyncBlended.Imported, 0)
+
+	// 7. openOrCreateDatabase errors
+	_, err = openOrCreateDatabase("", "empty")
+	assert.Error(t, err)
+}
+
+func TestImportPlayerGamesAdditionalEdgeCases(t *testing.T) {
+	tmpDir := t.TempDir()
+	pm, err := NewProfileManager(filepath.Join(tmpDir, "pm2.json"))
+	require.NoError(t, err)
+
+	sm := NewSyncManager(pm)
+	// Mock server that returns empty string
+	emptyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(""))
+	}))
+	defer emptyServer.Close()
+
+	sm.Lichess.BaseURL = emptyServer.URL
+	sm.ChessCom.BaseURL = emptyServer.URL
+
+	// 1. Zero games downloaded
+	resZero, err := sm.ImportPlayerGames(ImportPlayerOptions{
+		LichessUsername: "nobody",
+	}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 0, resZero.TotalDownloaded)
+
+	// 2. TargetBlendedBase with invalid paths to trigger error branches
+	samplePGN := `[Event "Test"]
+[White "P1"]
+[Black "P2"]
+[Result "1-0"]
+
+1. e4 1-0`
+
+	pgnServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-chess-pgn")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(samplePGN))
+	}))
+	defer pgnServer.Close()
+
+	sm.Lichess.BaseURL = pgnServer.URL
+	resErr, err := sm.ImportPlayerGames(ImportPlayerOptions{
+		LichessUsername: "hasgames",
+		TargetMode:      TargetBlendedBase,
+		DedicatedPath:   "", // empty dedicated path triggers error recording
+		BlendedPath:     "/invalid/nonexistent/dir/file.si4", // invalid blended path
+	}, nil)
+	require.NoError(t, err)
+	assert.NotEmpty(t, resErr.Errors)
+}
+
+
+

@@ -213,6 +213,11 @@ func formatECO(eco uint16) string {
 	return fmt.Sprintf("%c%02d", letter, num)
 }
 
+// FormatECO formats a numeric ECO code into standard string notation (e.g. B44).
+func FormatECO(eco uint16) string {
+	return formatECO(eco)
+}
+
 func parseECO(s string) uint16 {
 	s = strings.TrimSpace(strings.ToUpper(s))
 	if len(s) < 3 {

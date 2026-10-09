@@ -9,21 +9,33 @@ import (
 	"time"
 )
 
+// DatabaseTargetMode specifies where downloaded player games should be merged.
+type DatabaseTargetMode string
+
+const (
+	TargetActiveBase    DatabaseTargetMode = "active"    // Merge into currently active database
+	TargetDedicatedBase DatabaseTargetMode = "dedicated" // Maintain dedicated standalone database
+	TargetBlendedBase   DatabaseTargetMode = "blended"   // Dedicated database + also blend into master database
+)
+
 // Profile represents a user synchronization configuration mapping online platform accounts
-// to a local target database.
+// to local target database(s).
 type Profile struct {
-	ID               string `json:"id"`
-	Name             string `json:"name"`
-	TargetDatabase   string `json:"targetDatabase"` // Full path or empty for currently active database
-	ChessComUsername string `json:"chessComUsername"`
-	LichessUsername  string `json:"lichessUsername"`
-	LichessToken     string `json:"lichessToken,omitempty"` // Optional API bearer token
-	LastSyncTime     int64  `json:"lastSyncTime"`           // Unix milliseconds
-	LastSyncGames    int    `json:"lastSyncGames"`
-	RatedOnly        bool   `json:"ratedOnly"`
-	AutoDeduplicate  bool   `json:"autoDeduplicate"`
-	CreatedAt        int64  `json:"createdAt"`
-	UpdatedAt        int64  `json:"updatedAt"`
+	ID               string             `json:"id"`
+	Name             string             `json:"name"`
+	TargetDatabase   string             `json:"targetDatabase"` // Full path or empty for active database
+	TargetMode       DatabaseTargetMode `json:"targetMode"`     // "active", "dedicated", or "blended"
+	BlendedDatabase  string             `json:"blendedDatabase"`// Master database for blended mode
+	IsStudyTarget    bool               `json:"isStudyTarget"`  // Opponent, Grandmaster, or study target
+	ChessComUsername string             `json:"chessComUsername"`
+	LichessUsername  string             `json:"lichessUsername"`
+	LichessToken     string             `json:"lichessToken,omitempty"` // Optional API bearer token
+	LastSyncTime     int64              `json:"lastSyncTime"`           // Unix milliseconds
+	LastSyncGames    int                `json:"lastSyncGames"`
+	RatedOnly        bool               `json:"ratedOnly"`
+	AutoDeduplicate  bool               `json:"autoDeduplicate"`
+	CreatedAt        int64              `json:"createdAt"`
+	UpdatedAt        int64              `json:"updatedAt"`
 }
 
 // ProfileManager manages loading, saving, and querying user sync profiles.
@@ -134,6 +146,9 @@ func (pm *ProfileManager) SaveProfile(p *Profile) error {
 	if p.ID == "" {
 		p.ID = fmt.Sprintf("profile_%d", now)
 		p.CreatedAt = now
+	}
+	if p.TargetMode == "" {
+		p.TargetMode = TargetActiveBase
 	}
 	p.UpdatedAt = now
 

@@ -19,7 +19,9 @@ import HeaderSearchModal from './components/HeaderSearchModal.vue'
 import AboutModal from './components/AboutModal.vue'
 import DatabaseMaintenanceModal from './components/DatabaseMaintenanceModal.vue'
 import OnlineSyncModal from './components/OnlineSyncModal.vue'
-
+import PlayerSimulationModal from './components/PlayerSimulationModal.vue'
+import { Bot } from '@lucide/vue'
+import { playerbot } from '../wailsjs/go/models'
 
 // Import Wails backend bindings
 import {
@@ -57,6 +59,13 @@ import {
   GetEngineMultiPV,
   SetEngineThreads,
   SetEngineHash,
+  FormatMove,
+  SetGameNAG,
+  ClearGameNAGs,
+  AddGameComment,
+  PromoteVariation,
+  DeleteVariation,
+  GetSimulatedMove,
 } from '../wailsjs/go/main/App'
 import { EventsOn, EventsOff, ClipboardSetText, ClipboardGetText } from '../wailsjs/runtime/runtime'
 
@@ -140,8 +149,19 @@ const showAboutModal = ref(false)
 const showSearchModal = ref(false)
 const showMaintenanceModal = ref(false)
 const showOnlineSyncModal = ref(false)
+const showPlayerSimulationModal = ref(false)
 const showImportModal = ref(false)
 const importPGNText = ref('')
+
+// Player Simulation Sparring State
+const activeSimulation = ref<{
+  playerName: string
+  userColor: 'white' | 'black'
+  personality: playerbot.PlayerPersonality
+  timeControlMinutes: number
+} | null>(null)
+const isBotThinking = ref(false)
+const botMoveStatus = ref<string | null>(null)
 
 
 
@@ -337,6 +357,13 @@ async function updateBoardState(fen: string) {
 
 async function handleMove(uci: string) {
   try {
+    let moveSAN = uci
+    try {
+      moveSAN = await FormatMove(currentFEN.value, uci, 'san')
+    } catch {
+      // fallback to uci
+    }
+
     const nextState = await MakeMove(currentFEN.value, uci)
     const from = uci.slice(0, 2)
     const to = uci.slice(2, 4)
@@ -359,13 +386,27 @@ async function handleMove(uci: string) {
       ply: currentPly.value,
       moveNumber: moveNum,
       isWhite,
-      san: uci,
+      san: moveSAN,
       uci,
       fen: nextState.fen,
       variationLevel: 0,
     })
 
     await updateBoardState(nextState.fen)
+
+    // If simulated match is active and game is not finished, trigger bot response!
+    if (activeSimulation.value && !isBotThinking.value) {
+      if (nextState.isCheckmate) {
+        const winner = isWhite ? 'Player' : activeSimulation.value.playerName
+        gameTags.value.Result = isWhite ? '1-0' : '0-1'
+        botMoveStatus.value = `Checkmate! ${winner} wins.`
+      } else if (nextState.isStalemate) {
+        gameTags.value.Result = '1/2-1/2'
+        botMoveStatus.value = 'Game drawn by stalemate.'
+      } else {
+        await triggerSimulatedOpponentMove()
+      }
+    }
   } catch (err) {
     console.error('Move execution failed:', err)
   }
@@ -1083,6 +1124,175 @@ function handlePreviewCandidateMove(uci: string) {
   const to = uci.slice(2, 4)
   lastMove.value = { from, to }
 }
+
+// ==========================================
+// Annotation, NAG & Variation Operations
+// ==========================================
+
+async function handleSetNAG(ply: number, nag: number) {
+  const move = flatMoves.value.find(m => m.ply === ply)
+  if (move) {
+    move.nags = [nag]
+  }
+  try {
+    await SetGameNAG(ply, nag)
+  } catch (err) {
+    // Ignore backend missing active game if moving in freeboard mode
+  }
+}
+
+async function handleClearNAGs(ply: number) {
+  const move = flatMoves.value.find(m => m.ply === ply)
+  if (move) {
+    move.nags = []
+  }
+  try {
+    await ClearGameNAGs(ply)
+  } catch (err) {
+    // Ignore backend missing active game if moving in freeboard mode
+  }
+}
+
+async function handleSetComment(ply: number, comment: string) {
+  const move = flatMoves.value.find(m => m.ply === ply)
+  if (move) {
+    move.comment = comment
+  }
+  try {
+    await AddGameComment(ply, comment)
+  } catch (err) {
+    // Ignore backend missing active game if moving in freeboard mode
+  }
+}
+
+async function handlePromoteVariation(ply: number, varIdx: number) {
+  try {
+    await PromoteVariation(ply, varIdx)
+    if (activeGameId.value) {
+      await handleLoadGame(activeGameId.value)
+    }
+  } catch (err) {
+    alert(`Could not promote variation: ${err}`)
+  }
+}
+
+async function handleDeleteVariation(ply: number, varIdx: number) {
+  try {
+    await DeleteVariation(ply, varIdx)
+    if (activeGameId.value) {
+      await handleLoadGame(activeGameId.value)
+    }
+  } catch (err) {
+    alert(`Could not delete variation: ${err}`)
+  }
+}
+
+// ==========================================
+// Player Simulation Sparring Bot Logic
+// ==========================================
+
+async function handleStartSimulationMatch(payload: {
+  playerName: string
+  userColor: 'white' | 'black'
+  timeControlMinutes: number
+  personality: playerbot.PlayerPersonality
+}) {
+  showPlayerSimulationModal.value = false
+  activeSimulation.value = payload
+  botMoveStatus.value = `Sparring Match vs ${payload.playerName} (Elo ~${payload.personality.estimatedElo || 2400})`
+
+  // Start fresh game with proper tags
+  activeGameId.value = undefined
+  gameAnalysis.value = null
+  const whiteName = payload.userColor === 'white' ? 'Player' : `${payload.playerName} (Simulated)`
+  const blackName = payload.userColor === 'black' ? 'Player' : `${payload.playerName} (Simulated)`
+  gameTags.value = {
+    White: whiteName,
+    Black: blackName,
+    WhiteElo: payload.userColor === 'black' ? String(payload.personality.peakElo || payload.personality.estimatedElo || 2400) : '1500',
+    BlackElo: payload.userColor === 'white' ? String(payload.personality.peakElo || payload.personality.estimatedElo || 2400) : '1500',
+    Date: new Date().toISOString().split('T')[0].replace(/-/g, '.'),
+    Result: '*',
+    Event: `Simulated Match vs ${payload.playerName}`,
+  }
+  history.value = [{ fen: startingFEN, lastMove: null }]
+  flatMoves.value = []
+  flipped.value = payload.userColor === 'black'
+  await updateBoardState(startingFEN)
+
+  // If simulated bot is White, trigger bot's opening move!
+  if (payload.userColor === 'black') {
+    await triggerSimulatedOpponentMove()
+  }
+}
+
+function stopSimulation() {
+  activeSimulation.value = null
+  botMoveStatus.value = null
+  isBotThinking.value = false
+}
+
+async function triggerSimulatedOpponentMove() {
+  if (!activeSimulation.value || isBotThinking.value) return
+  isBotThinking.value = true
+  botMoveStatus.value = `${activeSimulation.value.playerName} is thinking...`
+  try {
+    const isBotWhite = activeSimulation.value.userColor === 'black'
+    await new Promise(r => setTimeout(r, 400))
+    const simMove = await GetSimulatedMove(
+      activeSimulation.value.playerName,
+      currentFEN.value,
+      isBotWhite
+    )
+    if (!simMove || !simMove.uci) {
+      botMoveStatus.value = `${activeSimulation.value.playerName} has no moves.`
+      return
+    }
+
+    botMoveStatus.value = simMove.commentary || `${activeSimulation.value.playerName} played ${simMove.san || simMove.uci}`
+
+    const nextState = await MakeMove(currentFEN.value, simMove.uci)
+    const from = simMove.uci.slice(0, 2)
+    const to = simMove.uci.slice(2, 4)
+
+    history.value.push({
+      fen: nextState.fen,
+      lastMove: { from, to },
+    })
+    currentPly.value = history.value.length - 1
+    lastMove.value = { from, to }
+
+    const moveNum = Math.floor((currentPly.value - 1) / 2) + 1
+    const isWhite = (currentPly.value % 2) !== 0
+    flatMoves.value.push({
+      index: flatMoves.value.length,
+      ply: currentPly.value,
+      moveNumber: moveNum,
+      isWhite,
+      san: simMove.san || simMove.uci,
+      uci: simMove.uci,
+      fen: nextState.fen,
+      comment: simMove.commentary,
+      variationLevel: 0,
+    })
+
+    await updateBoardState(nextState.fen)
+
+    if (nextState.isCheckmate) {
+      const winner = isBotWhite ? activeSimulation.value.playerName : 'Player'
+      gameTags.value.Result = isBotWhite ? '1-0' : '0-1'
+      botMoveStatus.value = `Checkmate! ${winner} wins.`
+    } else if (nextState.isStalemate) {
+      gameTags.value.Result = '1/2-1/2'
+      botMoveStatus.value = 'Game drawn by stalemate.'
+    }
+  } catch (err: any) {
+    console.error('Simulated bot move failed:', err)
+    botMoveStatus.value = `Bot move error: ${err?.message || err}`
+  } finally {
+    isBotThinking.value = false
+  }
+}
 </script>
 
 <template>
@@ -1132,6 +1342,7 @@ function handlePreviewCandidateMove(uci: string) {
       @show-about="showAboutModal = true"
       @database-maintenance="showMaintenanceModal = true"
       @online-sync="showOnlineSyncModal = true"
+      @simulate-player="showPlayerSimulationModal = true"
     />
 
 
@@ -1164,6 +1375,34 @@ function handlePreviewCandidateMove(uci: string) {
         class="left-col flex flex-col items-center justify-between gap-2 w-full md:w-auto shrink-0 overflow-y-auto"
         :style="{ width: isMdScreen ? `${leftColWidth}px` : '100%' }"
       >
+        <!-- Player Simulation Sparring Match Status -->
+        <div
+          v-if="activeSimulation"
+          class="w-full bg-gradient-to-r from-purple-950/80 via-zinc-900 to-purple-950/80 border border-purple-500/40 rounded-xl p-2.5 flex items-center justify-between text-xs shadow-md animate-fade-in"
+        >
+          <div class="flex items-center gap-2 min-w-0">
+            <div class="w-7 h-7 rounded-lg bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 shrink-0">
+              <Bot class="w-4 h-4" :class="{ 'animate-pulse text-purple-400': isBotThinking }" />
+            </div>
+            <div class="truncate">
+              <div class="flex items-center gap-1.5">
+                <span class="font-bold text-zinc-100">{{ activeSimulation.playerName }}</span>
+                <span class="px-1.5 py-0.5 rounded text-[10px] bg-purple-900/60 text-purple-200 font-mono">
+                  ~{{ activeSimulation.personality.estimatedElo || 2400 }} Elo
+                </span>
+                <span v-if="isBotThinking" class="text-[10px] text-amber-400 animate-pulse">Thinking...</span>
+              </div>
+              <p class="text-[11px] text-zinc-400 truncate">{{ botMoveStatus || 'Sparring match active' }}</p>
+            </div>
+          </div>
+          <button
+            class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] border border-zinc-700 hover:border-zinc-600 transition-colors shrink-0 ml-2 cursor-pointer"
+            @click="stopSimulation"
+          >
+            End Sparring
+          </button>
+        </div>
+
         <!-- Interactive Chessboard -->
         <Chessboard
           :fen="currentFEN"
@@ -1279,6 +1518,11 @@ function handlePreviewCandidateMove(uci: string) {
                 @last="goLast"
                 @toggle-play="toggleAutoplay"
                 @copy-p-g-n="handleExportPGN"
+                @set-n-a-g="handleSetNAG"
+                @clear-n-a-gs="handleClearNAGs"
+                @set-comment="handleSetComment"
+                @promote-variation="handlePromoteVariation"
+                @delete-variation="handleDeleteVariation"
               />
             </div>
           </div>
@@ -1475,6 +1719,14 @@ function handlePreviewCandidateMove(uci: string) {
       :active-db-name="dbInfo?.name"
       @db-updated="handleDatabaseUpdated"
       @close="showOnlineSyncModal = false"
+    />
+
+    <!-- Player Simulation Sparring Bot Modal -->
+    <PlayerSimulationModal
+      v-if="showPlayerSimulationModal"
+      :active-db-name="dbInfo?.name"
+      @start-match="handleStartSimulationMatch"
+      @close="showPlayerSimulationModal = false"
     />
 
 
