@@ -75,6 +75,7 @@ const emit = defineEmits<{
   (e: 'openSettings'): void
   (e: 'showShortcuts'): void
   (e: 'showAbout'): void
+  (e: 'databaseMaintenance'): void
 }>()
 
 
@@ -172,6 +173,14 @@ onUnmounted(() => {
           @click="selectItem(() => emit('closeDB'))"
         >
           <span class="flex items-center gap-2"><Trash2 class="w-3.5 h-3.5 text-amber-400" /> Close Database</span>
+        </button>
+        <button
+          v-if="dbName"
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => emit('databaseMaintenance'))"
+        >
+          <span class="flex items-center gap-2"><Wrench class="w-3.5 h-3.5 text-emerald-400" /> Database Maintenance...</span>
+          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+M</span>
         </button>
 
         <div class="h-px bg-zinc-800 my-1" />
@@ -401,6 +410,13 @@ onUnmounted(() => {
           @click="selectItem(() => emit('minePuzzles'))"
         >
           <span class="flex items-center gap-2"><Pickaxe class="w-3.5 h-3.5 text-amber-400" /> Mine Puzzles from Database Games...</span>
+        </button>
+        <button
+          v-if="dbName"
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => emit('databaseMaintenance'))"
+        >
+          <span class="flex items-center gap-2"><Wrench class="w-3.5 h-3.5 text-emerald-400" /> Database Maintenance & Tools...</span>
         </button>
       </div>
     </div>

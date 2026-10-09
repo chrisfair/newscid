@@ -213,6 +213,20 @@ func formatECO(eco uint16) string {
 	return fmt.Sprintf("%c%02d", letter, num)
 }
 
+func parseECO(s string) uint16 {
+	s = strings.TrimSpace(strings.ToUpper(s))
+	if len(s) < 3 {
+		return 0
+	}
+	if s[0] < 'A' || s[0] > 'E' {
+		return 0
+	}
+	letterOffset := uint16(s[0]-'A') * 100
+	var num int
+	fmt.Sscanf(s[1:], "%d", &num)
+	return letterOffset + uint16(num)
+}
+
 // matchesCriteria checks if an entry matches the given search criteria.
 func (db *Database) matchesCriteria(entry *IndexEntry, criteria *SearchCriteria) bool {
 	// 1. Deleted check
@@ -480,6 +494,14 @@ func (db *Database) SaveGame(game *chess.Game) (int, error) {
 		return 0, fmt.Errorf("updating namebase: %w", err)
 	}
 
+	var wElo, bElo int
+	if val := game.Tag("WhiteElo"); val != "" && val != "?" {
+		fmt.Sscanf(val, "%d", &wElo)
+	}
+	if val := game.Tag("BlackElo"); val != "" && val != "?" {
+		fmt.Sscanf(val, "%d", &bElo)
+	}
+
 	// 4. Create IndexEntry
 	entry := &IndexEntry{
 		Offset:       offset,
@@ -489,6 +511,9 @@ func (db *Database) SaveGame(game *chess.Game) (int, error) {
 		EventID:      eID,
 		SiteID:       sID,
 		RoundID:      rID,
+		WhiteElo:     uint16(wElo),
+		BlackElo:     uint16(bElo),
+		EcoCode:      parseECO(game.Tag("ECO")),
 		Result:       game.Result,
 		Date:         game.Tag("Date"),
 		NumHalfMoves: uint16(game.PlyCount),

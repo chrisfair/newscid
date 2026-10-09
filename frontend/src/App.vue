@@ -17,6 +17,7 @@ import ProgressiveTacticsModal from './components/ProgressiveTacticsModal.vue'
 import PuzzleMinerModal from './components/PuzzleMinerModal.vue'
 import HeaderSearchModal from './components/HeaderSearchModal.vue'
 import AboutModal from './components/AboutModal.vue'
+import DatabaseMaintenanceModal from './components/DatabaseMaintenanceModal.vue'
 
 
 // Import Wails backend bindings
@@ -131,6 +132,7 @@ const showPuzzleMinerModal = ref(false)
 const showShortcutsModal = ref(false)
 const showAboutModal = ref(false)
 const showSearchModal = ref(false)
+const showMaintenanceModal = ref(false)
 const showImportModal = ref(false)
 const importPGNText = ref('')
 
@@ -601,6 +603,15 @@ async function handleOpenDiscoveredBase(path: string) {
   }
 }
 
+async function handleDatabaseUpdated() {
+  await refreshGames()
+  const info = await GetDatabaseInfo()
+  if (info) {
+    dbInfo.value = info
+    totalGames.value = info.numGames
+  }
+}
+
 async function handleLoadGame(id: number) {
   try {
     const g = await GetGame(id)
@@ -1066,6 +1077,7 @@ async function handleSelectEngine(path: string) {
       @open-settings="handleOpenSettings"
       @show-shortcuts="showShortcutsModal = true"
       @show-about="showAboutModal = true"
+      @database-maintenance="showMaintenanceModal = true"
     />
 
 
@@ -1385,6 +1397,16 @@ async function handleSelectEngine(path: string) {
       :initial-criteria="searchFilter"
       @apply-search="handleSearch"
       @close="showSearchModal = false"
+    />
+
+    <!-- Database Maintenance & Tools Modal -->
+    <DatabaseMaintenanceModal
+      v-if="showMaintenanceModal"
+      :db-name="dbInfo?.name"
+      :db-path="dbInfo?.basePath"
+      :total-games="totalGames"
+      @db-updated="handleDatabaseUpdated"
+      @close="showMaintenanceModal = false"
     />
 
 

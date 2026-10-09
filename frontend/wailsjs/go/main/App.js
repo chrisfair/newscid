@@ -26,12 +26,20 @@ export function CloseDatabase() {
   return window['go']['main']['App']['CloseDatabase']();
 }
 
+export function CompactDatabase() {
+  return window['go']['main']['App']['CompactDatabase']();
+}
+
 export function CountSearchMatches(arg1) {
   return window['go']['main']['App']['CountSearchMatches'](arg1);
 }
 
 export function CreateDatabase(arg1, arg2) {
   return window['go']['main']['App']['CreateDatabase'](arg1, arg2);
+}
+
+export function DeleteDuplicateGames(arg1) {
+  return window['go']['main']['App']['DeleteDuplicateGames'](arg1);
 }
 
 export function DeleteGame(arg1, arg2) {
@@ -44,6 +52,10 @@ export function DeleteRepertoire(arg1) {
 
 export function ExportPGN(arg1) {
   return window['go']['main']['App']['ExportPGN'](arg1);
+}
+
+export function FindDuplicateGames(arg1) {
+  return window['go']['main']['App']['FindDuplicateGames'](arg1);
 }
 
 export function GetAvailableEngines() {
@@ -60,6 +72,10 @@ export function GetBoardThemes() {
 
 export function GetDatabaseInfo() {
   return window['go']['main']['App']['GetDatabaseInfo']();
+}
+
+export function GetDatabaseStatistics() {
+  return window['go']['main']['App']['GetDatabaseStatistics']();
 }
 
 export function GetDiscoveredDatabases() {
@@ -114,6 +130,14 @@ export function GetVersionInfo() {
   return window['go']['main']['App']['GetVersionInfo']();
 }
 
+export function ImportPGNBatch(arg1) {
+  return window['go']['main']['App']['ImportPGNBatch'](arg1);
+}
+
+export function ImportPGNFileBatch(arg1) {
+  return window['go']['main']['App']['ImportPGNFileBatch'](arg1);
+}
+
 export function IsScidDriverAvailable() {
   return window['go']['main']['App']['IsScidDriverAvailable']();
 }
@@ -136,6 +160,10 @@ export function OpenDatabase(arg1) {
 
 export function OpenFileDialog() {
   return window['go']['main']['App']['OpenFileDialog']();
+}
+
+export function OpenPGNFileDialog() {
+  return window['go']['main']['App']['OpenPGNFileDialog']();
 }
 
 export function ParseFEN(arg1) {
@@ -166,12 +194,20 @@ export function SearchPosition(arg1) {
   return window['go']['main']['App']['SearchPosition'](arg1);
 }
 
+export function SortDatabase(arg1) {
+  return window['go']['main']['App']['SortDatabase'](arg1);
+}
+
 export function StartEngine(arg1) {
   return window['go']['main']['App']['StartEngine'](arg1);
 }
 
 export function StopEngine() {
   return window['go']['main']['App']['StopEngine']();
+}
+
+export function VerifyDatabase() {
+  return window['go']['main']['App']['VerifyDatabase']();
 }
 
 export function VerifyRepertoireMove(arg1, arg2, arg3) {

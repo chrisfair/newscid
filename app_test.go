@@ -229,3 +229,123 @@ func TestAppVersionInfo(t *testing.T) {
 	assert.NotEmpty(t, v.Platform)
 	t.Logf("App Version: %s (Commit: %s, Platform: %s)", v.Version, v.GitCommit, v.Platform)
 }
+
+func TestAppDatabaseMaintenanceOperations(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+
+	// 1. Errors when no database open
+	_, err := app.CompactDatabase()
+	assert.Error(t, err)
+	assert.Error(t, app.SortDatabase(scid.SortCriteria{Field: scid.SortByDate}))
+	_, err = app.FindDuplicateGames(scid.DuplicateCriteria{ExactMoves: true})
+	assert.Error(t, err)
+	_, err = app.DeleteDuplicateGames(scid.DuplicateCriteria{ExactMoves: true})
+	assert.Error(t, err)
+	_, err = app.VerifyDatabase()
+	assert.Error(t, err)
+	_, err = app.GetDatabaseStatistics()
+	assert.Error(t, err)
+	_, err = app.ImportPGNBatch("1. e4")
+	assert.Error(t, err)
+	_, err = app.ImportPGNFileBatch("somefile.pgn")
+	assert.Error(t, err)
+
+	// 2. Create a test database
+	tmpDir := t.TempDir()
+	basePath := filepath.Join(tmpDir, "app_test_db")
+	dbInfo, err := app.CreateDatabase(basePath, "App Maintenance Test DB")
+	require.NoError(t, err)
+	assert.Equal(t, 0, dbInfo.NumGames)
+
+	// 3. Batch PGN Import
+	pgnBatch := `[Event "Round 1"]
+[Site "City A"]
+[Date "2024.01.01"]
+[Round "1"]
+[White "Carlsen, Magnus"]
+[Black "Nakamura, Hikaru"]
+[Result "1-0"]
+[WhiteElo "2830"]
+[BlackElo "2780"]
+[ECO "C88"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 1-0
+
+[Event "Round 1"]
+[Site "City A"]
+[Date "2024.01.01"]
+[Round "1"]
+[White "Carlsen, Magnus"]
+[Black "Nakamura, Hikaru"]
+[Result "1-0"]
+[WhiteElo "2830"]
+[BlackElo "2780"]
+[ECO "C88"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 1-0
+
+[Event "Round 2"]
+[Site "City B"]
+[Date "2023.05.10"]
+[Round "2"]
+[White "Caruana, Fabiano"]
+[Black "Nepomniachtchi, Ian"]
+[Result "0-1"]
+[WhiteElo "2790"]
+[BlackElo "2770"]
+[ECO "B90"]
+
+1. e4 c5 2. Nf3 d6 3. d4 cxd4 0-1
+`
+	importStats, err := app.ImportPGNBatch(pgnBatch)
+	require.NoError(t, err)
+	assert.Equal(t, 3, importStats.Imported)
+
+	// 4. Database Statistics
+	stats, err := app.GetDatabaseStatistics()
+	require.NoError(t, err)
+	assert.Equal(t, 3, stats.TotalGames)
+	assert.Equal(t, 2, stats.WhiteWins)
+	assert.Equal(t, 1, stats.BlackWins)
+	assert.Equal(t, 2830, stats.MaxElo)
+
+	// 5. Duplicate Detection & Deletion
+	dupGroups, err := app.FindDuplicateGames(scid.DuplicateCriteria{ExactMoves: true})
+	require.NoError(t, err)
+	assert.Len(t, dupGroups, 1)
+	assert.Equal(t, 2, dupGroups[0].Count)
+
+	deletedCount, err := app.DeleteDuplicateGames(scid.DuplicateCriteria{ExactMoves: true})
+	require.NoError(t, err)
+	assert.Equal(t, 1, deletedCount)
+
+	// 6. Sort Database
+	err = app.SortDatabase(scid.SortCriteria{Field: scid.SortByDate, Ascending: true})
+	require.NoError(t, err)
+
+	// 7. Verify Database
+	report, err := app.VerifyDatabase()
+	require.NoError(t, err)
+	assert.Equal(t, 3, report.TotalGames)
+	assert.Equal(t, 2, report.ActiveGames)
+	assert.Equal(t, 1, report.DeletedGames)
+	assert.Equal(t, "OK", report.Status)
+
+	// 8. Compact Database
+	compactStats, err := app.CompactDatabase()
+	require.NoError(t, err)
+	assert.Equal(t, 3, compactStats.OriginalGames)
+	assert.Equal(t, 2, compactStats.CompactedGames)
+	assert.Equal(t, 1, compactStats.PurgedGames)
+
+	// 9. Batch PGN File Import
+	filePGN := filepath.Join(tmpDir, "single.pgn")
+	err = os.WriteFile(filePGN, []byte("[Event \"Extra\"]\n[White \"A\"]\n[Black \"B\"]\n[Result \"*\"]\n\n1. d4 *"), 0644)
+	require.NoError(t, err)
+
+	fileStats, err := app.ImportPGNFileBatch(filePGN)
+	require.NoError(t, err)
+	assert.Equal(t, 1, fileStats.Imported)
+}
+
