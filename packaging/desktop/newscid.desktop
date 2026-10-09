@@ -1,0 +1,22 @@
+[Desktop Entry]
+Name=NewScid
+GenericName=Chess Information Database
+Comment=Modern Chess Information Database (Scid vs. PC Rewrite)
+Exec=newscid %F
+Icon=newscid
+Terminal=false
+Type=Application
+Categories=Game;BoardGame;
+MimeType=application/x-chess-pgn;application/vnd.chess-pgn;application/x-scid-database;
+Keywords=chess;scid;database;uci;engine;pgn;fen;analysis;repertoire;tactics;
+StartupNotify=true
+StartupWMClass=newscid
+Actions=NewGame;OpenDatabase;
+
+[Desktop Action NewGame]
+Name=New Game
+Exec=newscid --new-game
+
+[Desktop Action OpenDatabase]
+Name=Open Database...
+Exec=newscid --open

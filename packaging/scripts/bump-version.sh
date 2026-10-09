@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VERSION_FILE="VERSION"
+WAILS_FILE="wails.json"
+PKG_VERSION_FILE="pkg/version/version.go"
+FRONTEND_PKG="frontend/package.json"
+
+if [ ! -f "${VERSION_FILE}" ]; then
+    echo "1.0.0" > "${VERSION_FILE}"
+fi
+
+CURRENT_VERSION=$(tr -d ' \n\r' < "${VERSION_FILE}")
+
+# Parse SemVer
+IFS='.' read -r MAJOR MINOR PATCH <<< "${CURRENT_VERSION}"
+MAJOR=${MAJOR:-1}
+MINOR=${MINOR:-0}
+PATCH=${PATCH:-0}
+
+ACTION="${1:-get}"
+
+case "${ACTION}" in
+    get|current)
+        echo "${CURRENT_VERSION}"
+        exit 0
+        ;;
+    patch)
+        PATCH=$((PATCH + 1))
+        NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+        ;;
+    minor)
+        MINOR=$((MINOR + 1))
+        PATCH=0
+        NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+        ;;
+    major)
+        MAJOR=$((MAJOR + 1))
+        MINOR=0
+        PATCH=0
+        NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+        ;;
+    set)
+        if [ -z "${2:-}" ]; then
+            echo "Error: 'set' requires version argument (e.g. bump-version.sh set 1.2.3)" >&2
+            exit 1
+        fi
+        NEW_VERSION="$2"
+        ;;
+    *)
+        echo "Usage: $0 [get|patch|minor|major|set <version>]"
+        exit 1
+        ;;
+esac
+
+echo "==> Bumping version: ${CURRENT_VERSION} -> ${NEW_VERSION}"
+
+# 1. Update VERSION file
+echo "${NEW_VERSION}" > "${VERSION_FILE}"
+
+# 2. Update wails.json
+if [ -f "${WAILS_FILE}" ]; then
+    sed -i -E "s/\"productVersion\": *\"[^\"]+\"/\"productVersion\": \"${NEW_VERSION}\"/" "${WAILS_FILE}"
+fi
+
+# 3. Update pkg/version/version.go default
+if [ -f "${PKG_VERSION_FILE}" ]; then
+    sed -i -E "s/Version *= *\"[^\"]+\"/Version = \"${NEW_VERSION}\"/" "${PKG_VERSION_FILE}"
+fi
+
+# 4. Update frontend/package.json
+if [ -f "${FRONTEND_PKG}" ]; then
+    sed -i -E "s/\"version\": *\"[^\"]+\"/\"version\": \"${NEW_VERSION}\"/" "${FRONTEND_PKG}"
+fi
+
+echo "✔ Version synchronized across VERSION, wails.json, pkg/version, and frontend/package.json: v${NEW_VERSION}"

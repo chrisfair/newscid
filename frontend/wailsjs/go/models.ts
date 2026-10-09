@@ -770,3 +770,32 @@ export namespace tree {
 
 }
 
+export namespace version {
+	
+	export class Info {
+	    version: string;
+	    gitCommit: string;
+	    buildDate: string;
+	    channel: string;
+	    goVersion: string;
+	    platform: string;
+	    compiler: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Info(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.gitCommit = source["gitCommit"];
+	        this.buildDate = source["buildDate"];
+	        this.channel = source["channel"];
+	        this.goVersion = source["goVersion"];
+	        this.platform = source["platform"];
+	        this.compiler = source["compiler"];
+	    }
+	}
+
+}
+

@@ -1,0 +1,20 @@
+class Newscid < Formula
+  desc "Modern Chess Information Database (Scid vs. PC Rewrite)"
+  homepage "https://github.com/christopherpatrickfair/newscid"
+  url "https://github.com/christopherpatrickfair/newscid/archive/refs/tags/v{{VERSION}}.tar.gz"
+  sha256 "{{SOURCE_SHA256}}"
+  license "GPL-3.0-or-later"
+
+  depends_on "go" => :build
+  depends_on "node" => :build
+
+  def install
+    system "npm", "install", "--prefix", "frontend"
+    system "wails", "build", "-platform", "darwin/universal"
+    bin.install "build/bin/newscid"
+  end
+
+  test do
+    assert_predicate bin/"newscid", :exist?
+  end
+end

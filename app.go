@@ -21,6 +21,7 @@ import (
 	"newscid/pkg/repertoire"
 	"newscid/pkg/sets"
 	"newscid/pkg/tree"
+	"newscid/pkg/version"
 )
 
 // DatabaseInfo holds metadata about the currently opened database.
@@ -792,6 +793,11 @@ func (a *App) MinePuzzlesFromDatabase(playerName string, maxGames int) ([]puzzle
 
 func (a *App) IsScidDriverAvailable() bool {
 	return a.driver.IsAvailable()
+}
+
+// GetVersionInfo returns current application version and runtime metadata.
+func (a *App) GetVersionInfo() version.Info {
+	return version.Get()
 }
 
 

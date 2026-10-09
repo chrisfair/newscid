@@ -221,6 +221,11 @@ func TestAppHeaderSearch(t *testing.T) {
 	t.Logf("App HeaderSearch found %d Fischer wins with MinMoves>=5 (page len: %d)", page.Total, len(page.Games))
 }
 
-
-
-
+func TestAppVersionInfo(t *testing.T) {
+	app := NewApp()
+	v := app.GetVersionInfo()
+	assert.NotEmpty(t, v.Version)
+	assert.NotEmpty(t, v.GoVersion)
+	assert.NotEmpty(t, v.Platform)
+	t.Logf("App Version: %s (Commit: %s, Platform: %s)", v.Version, v.GitCommit, v.Platform)
+}

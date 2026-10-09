@@ -110,6 +110,10 @@ export function GetScidSystemBases() {
   return window['go']['main']['App']['GetScidSystemBases']();
 }
 
+export function GetVersionInfo() {
+  return window['go']['main']['App']['GetVersionInfo']();
+}
+
 export function IsScidDriverAvailable() {
   return window['go']['main']['App']['IsScidDriverAvailable']();
 }

@@ -1,5 +1,9 @@
 build/bin
+build/dist
+build/staging
+build/.cache
 node_modules
 frontend/dist
 coverage.out
 newscid
+

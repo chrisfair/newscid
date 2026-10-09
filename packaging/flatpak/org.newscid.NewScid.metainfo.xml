@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.newscid.NewScid</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>NewScid</name>
+  <summary>Modern Chess Information Database (Scid vs. PC Rewrite)</summary>
+  <description>
+    <p>
+      NewScid is a fresh, database-compatible rewrite of Scid vs. PC featuring a modern,
+      responsive user interface powered by Wails v2 (Go backend) and Vue 3 (TypeScript + Vite).
+    </p>
+    <p>Features include:</p>
+    <ul>
+      <li>Native binary compatibility with Scid .si4, .sn4, and .sg4 databases</li>
+      <li>Lightning fast index search and Huffman/coordinate game decompression</li>
+      <li>Comprehensive PGN parsing and export with NAGs, commentary, and variations</li>
+      <li>Opening Tree Explorer with live move statistics and candidate scoring</li>
+      <li>Real-time UCI chess engine analysis with evaluation curve graphs and blunder detection</li>
+      <li>Opening Repertoire Trainer with spaced-repetition move recall</li>
+      <li>Tactics challenge ladder and automated database puzzle miner</li>
+      <li>Multiple chessboard themes and 17 vector piece sets</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">org.newscid.NewScid.desktop</launchable>
+  <url type="homepage">https://github.com/christopherpatrickfair/newscid</url>
+  <url type="bugtracker">https://github.com/christopherpatrickfair/newscid/issues</url>
+  <developer id="org.newscid">
+    <name>Christopher Patrick Fair</name>
+  </developer>
+  <provides>
+    <binary>newscid</binary>
+    <mediatype>application/x-chess-pgn</mediatype>
+    <mediatype>application/vnd.chess-pgn</mediatype>
+    <mediatype>application/x-scid-database</mediatype>
+  </provides>
+  <releases>
+    <release version="1.0.0" date="2026-10-09">
+      <description>
+        <p>Initial release of NewScid with full Scid database support and modern UI.</p>
+      </description>
+    </release>
+  </releases>
+  <content_rating type="oars-1.1" />
+</component>

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Do not remove this test for UTF-8: if “Ω” doesn’t appear as greek uppercase omega letter enclosed in quotation marks, you should use an editor that supports UTF-8, not this one. -->
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>newscid</id>
+    <version>1.0.0</version>
+    <packageSourceUrl>https://github.com/christopherpatrickfair/newscid</packageSourceUrl>
+    <owners>Christopher Patrick Fair</owners>
+    <title>NewScid</title>
+    <authors>Christopher Patrick Fair</authors>
+    <projectUrl>https://github.com/christopherpatrickfair/newscid</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/christopherpatrickfair/newscid/main/build/appicon.png</iconUrl>
+    <copyright>2026 Christopher Patrick Fair</copyright>
+    <licenseUrl>https://raw.githubusercontent.com/christopherpatrickfair/newscid/main/LICENSE</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <projectSourceUrl>https://github.com/christopherpatrickfair/newscid</projectSourceUrl>
+    <docsUrl>https://github.com/christopherpatrickfair/newscid/blob/main/README.md</docsUrl>
+    <bugTrackerUrl>https://github.com/christopherpatrickfair/newscid/issues</bugTrackerUrl>
+    <tags>chess database scid uci engine pgn fen repertoire tactics</tags>
+    <summary>Modern Chess Information Database (Scid vs. PC Rewrite)</summary>
+    <description><![CDATA[
+NewScid is a fresh, database-compatible rewrite of Scid vs. PC featuring a modern,
+intuitive user interface built with Wails v2 (Go backend) and Vue 3 (TypeScript + Vite).
+
+Key Highlights:
+- Full SCID Database Compatibility: Native binary support for .si4, .sn4, and .sg4 databases
+- Modern Vue 3 Interface: Interactive chessboard with legal move hints, scorebook notation, and replay controls
+- Opening Tree Explorer: Dynamically calculates move statistics, frequencies, and candidate scores
+- Real-Time UCI Engine Analysis: Live communication with UCI chess engines, eval bar, and PV lines
+- Repertoire Trainer & Tactics Rush: Spaced-repetition opening study and tactical puzzle challenges
+- Customizable Themes: 17 vector piece sets and 12 board color themes
+]]></description>
+    <releaseNotes>https://github.com/christopherpatrickfair/newscid/releases</releaseNotes>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

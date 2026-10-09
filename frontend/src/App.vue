@@ -16,6 +16,7 @@ import OpeningTrainerModal from './components/OpeningTrainerModal.vue'
 import ProgressiveTacticsModal from './components/ProgressiveTacticsModal.vue'
 import PuzzleMinerModal from './components/PuzzleMinerModal.vue'
 import HeaderSearchModal from './components/HeaderSearchModal.vue'
+import AboutModal from './components/AboutModal.vue'
 
 
 // Import Wails backend bindings
@@ -128,6 +129,7 @@ const showOpeningTrainerModal = ref(false)
 const showProgressiveTacticsModal = ref(false)
 const showPuzzleMinerModal = ref(false)
 const showShortcutsModal = ref(false)
+const showAboutModal = ref(false)
 const showSearchModal = ref(false)
 const showImportModal = ref(false)
 const importPGNText = ref('')
@@ -1063,6 +1065,7 @@ async function handleSelectEngine(path: string) {
       @change-theme="currentThemeId = $event"
       @open-settings="handleOpenSettings"
       @show-shortcuts="showShortcutsModal = true"
+      @show-about="showAboutModal = true"
     />
 
 
@@ -1366,6 +1369,12 @@ async function handleSelectEngine(path: string) {
     <KeyboardShortcutsModal
       v-if="showShortcutsModal"
       @close="showShortcutsModal = false"
+    />
+
+    <!-- About NewScid Modal -->
+    <AboutModal
+      v-if="showAboutModal"
+      @close="showAboutModal = false"
     />
 
     <!-- Header / General Search Modal (Ctrl+H) -->

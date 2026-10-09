@@ -1,0 +1,48 @@
+name: newscid
+base: core24
+version: '1.0.0'
+summary: Modern Chess Information Database (Scid vs. PC Rewrite)
+description: |
+  NewScid is a fresh, database-compatible rewrite of Scid vs. PC featuring a modern,
+  intuitive user interface built with Wails v2 (Go backend) and Vue 3 (TypeScript + Vite).
+  
+  Features include:
+  - Native binary support for .si4 (Index), .sn4 (NameBase), and .sg4 (Game Data) databases.
+  - Native PGN parser and exporter with full variations and annotation support.
+  - Opening Tree Explorer dynamically calculating move frequencies and score percentages.
+  - Real-time UCI chess engine analysis with evaluation graphs and blunder alerts.
+  - Tactics challenge ladder and automated database puzzle miner.
+  - Customizable board themes and 17 vector piece sets.
+
+grade: stable
+confinement: strict
+
+architectures:
+  - build-on: amd64
+
+apps:
+  newscid:
+    command: usr/bin/newscid
+    desktop: usr/share/applications/newscid.desktop
+    extensions: [gnome]
+    plugs:
+      - home
+      - network
+      - opengl
+      - wayland
+      - x11
+      - desktop
+      - desktop-legacy
+      - audio-playback
+
+parts:
+  newscid:
+    plugin: dump
+    source: build/staging/snap/stage
+    organize:
+      newscid: usr/bin/newscid
+    stage:
+      - usr/bin/newscid
+      - usr/share/applications/newscid.desktop
+      - usr/share/icons/hicolor
+      - usr/share/metainfo/org.newscid.NewScid.metainfo.xml

@@ -1,0 +1,9 @@
+VERIFICATION
+Verification is intended to assist the Chocolatey moderators and community
+in verifying that this package's contents are trustworthy.
+
+NewScid is open-source chess database software hosted at:
+https://github.com/christopherpatrickfair/newscid
+
+The installer / binary can be verified from the official GitHub Releases page:
+https://github.com/christopherpatrickfair/newscid/releases
