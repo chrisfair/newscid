@@ -189,5 +189,38 @@ func TestAppNewFeatures(t *testing.T) {
 	}
 }
 
+func TestAppHeaderSearch(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+
+	tacticsPath := "/usr/share/scid/bases/tactics"
+	if _, err := os.Stat(tacticsPath + ".si4"); os.IsNotExist(err) {
+		t.Skip("Tactics base not found on system, skipping app search test")
+	}
+
+	_, err := app.OpenDatabase(tacticsPath)
+	require.NoError(t, err)
+	defer app.CloseDatabase()
+
+	// Count Fischer matches
+	fischerCount, err := app.CountSearchMatches(scid.SearchCriteria{
+		Player: "Fischer",
+	})
+	require.NoError(t, err)
+	assert.Greater(t, fischerCount, 0)
+
+	// Fetch page with advanced criteria
+	page, err := app.GetGames(0, 10, scid.SearchCriteria{
+		Player:   "Fischer",
+		Result:   "1-0",
+		MinMoves: 5,
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, page)
+	assert.LessOrEqual(t, len(page.Games), 10)
+	t.Logf("App HeaderSearch found %d Fischer wins with MinMoves>=5 (page len: %d)", page.Total, len(page.Games))
+}
+
+
 
 

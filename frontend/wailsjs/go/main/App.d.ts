@@ -22,6 +22,8 @@ export function ClassifyOpening(arg1:Array<string>):Promise<eco.Entry>;
 
 export function CloseDatabase():Promise<void>;
 
+export function CountSearchMatches(arg1:scid.SearchCriteria):Promise<number>;
+
 export function CreateDatabase(arg1:string,arg2:string):Promise<main.DatabaseInfo>;
 
 export function DeleteGame(arg1:number,arg2:boolean):Promise<void>;

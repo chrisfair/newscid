@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import {
   Search,
   ChevronLeft,
@@ -8,7 +8,9 @@ import {
   Trash2,
   Save,
   Database,
-  Filter
+  Filter,
+  Sliders,
+  X
 } from '@lucide/vue'
 
 export interface GameSummary {
@@ -34,12 +36,14 @@ const props = defineProps<{
   pageSize: number
   activeGameId?: number
   dbName?: string
+  activeCriteria?: Record<string, any>
 }>()
 
 const emit = defineEmits<{
   (e: 'loadGame', id: number): void
   (e: 'pageChange', page: number): void
-  (e: 'search', criteria: { player?: string; result?: string; eco?: string }): void
+  (e: 'search', criteria: any): void
+  (e: 'openAdvancedSearch'): void
   (e: 'newGame'): void
   (e: 'saveGame'): void
   (e: 'deleteGame', id: number): void
@@ -49,8 +53,22 @@ const searchPlayer = ref('')
 const filterResult = ref('')
 const searchECO = ref('')
 
+// Sync props.activeCriteria with inline inputs
+watch(() => props.activeCriteria, (c) => {
+  if (c) {
+    searchPlayer.value = c.player || c.white || ''
+    filterResult.value = c.result || ''
+    searchECO.value = c.eco || (c.ecoFrom ? `${c.ecoFrom}-${c.ecoTo || ''}` : '')
+  } else {
+    searchPlayer.value = ''
+    filterResult.value = ''
+    searchECO.value = ''
+  }
+}, { immediate: true })
+
 function onSearchInput() {
   emit('search', {
+    ...props.activeCriteria,
     player: searchPlayer.value.trim() || undefined,
     result: filterResult.value || undefined,
     eco: searchECO.value.trim() || undefined,
@@ -61,8 +79,38 @@ function clearFilters() {
   searchPlayer.value = ''
   filterResult.value = ''
   searchECO.value = ''
-  onSearchInput()
+  emit('search', {})
 }
+
+const hasActiveCriteria = computed(() => {
+  if (!props.activeCriteria) return false
+  return Object.values(props.activeCriteria).some(v => v !== undefined && v !== '' && v !== false)
+})
+
+const activeBadges = computed(() => {
+  if (!props.activeCriteria) return []
+  const list: string[] = []
+  const c = props.activeCriteria
+  if (c.player) list.push(`Player: ${c.player}`)
+  if (c.white) list.push(`White: ${c.white}`)
+  if (c.black) list.push(`Black: ${c.black}`)
+  if (c.result) list.push(`Result: ${c.result}`)
+  if (c.eco) list.push(`ECO: ${c.eco}`)
+  if (c.ecoFrom || c.ecoTo) list.push(`ECO: ${c.ecoFrom || ''}–${c.ecoTo || ''}`)
+  if (c.yearFrom || c.yearTo) list.push(`Year: ${c.yearFrom || ''}–${c.yearTo || ''}`)
+  if (c.dateFrom || c.dateTo) list.push(`Date: ${c.dateFrom || ''}–${c.dateTo || ''}`)
+  if (c.minElo) list.push(`Elo ≥ ${c.minElo}`)
+  if (c.maxElo) list.push(`Elo ≤ ${c.maxElo}`)
+  if (c.whiteEloMin) list.push(`White Elo ≥ ${c.whiteEloMin}`)
+  if (c.blackEloMin) list.push(`Black Elo ≥ ${c.blackEloMin}`)
+  if (c.event) list.push(`Event: ${c.event}`)
+  if (c.site) list.push(`Site: ${c.site}`)
+  if (c.round) list.push(`Round: ${c.round}`)
+  if (c.minMoves || c.maxMoves) list.push(`Moves: ${c.minMoves || 1}–${c.maxMoves || '∞'}`)
+  if (c.hasVariations) list.push('Has Variations')
+  if (c.onlyDeleted) list.push('Deleted Games')
+  return list
+})
 
 const totalPages = () => Math.max(1, Math.ceil(props.totalGames / props.pageSize))
 </script>
@@ -84,8 +132,8 @@ const totalPages = () => Math.max(1, Math.ceil(props.totalGames / props.pageSize
           <input
             v-model="searchPlayer"
             type="text"
-            placeholder="Player name..."
-            class="bg-zinc-800 border border-zinc-700 rounded-lg pl-8 pr-3 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-hidden focus:border-emerald-500 w-36"
+            placeholder="Quick player..."
+            class="bg-zinc-800 border border-zinc-700 rounded-lg pl-8 pr-3 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-hidden focus:border-emerald-500 w-32"
             @input="onSearchInput"
           />
         </div>
@@ -96,25 +144,35 @@ const totalPages = () => Math.max(1, Math.ceil(props.totalGames / props.pageSize
           @change="onSearchInput"
         >
           <option value="">Any Result</option>
-          <option value="1-0">1-0 (White)</option>
-          <option value="0-1">0-1 (Black)</option>
-          <option value="1/2-1/2">1/2-1/2 (Draw)</option>
+          <option value="1-0">1-0</option>
+          <option value="0-1">0-1</option>
+          <option value="1/2-1/2">½-½</option>
         </select>
 
         <input
           v-model="searchECO"
           type="text"
-          placeholder="ECO (e.g. B90)"
-          class="bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-hidden focus:border-emerald-500 w-24"
+          placeholder="ECO"
+          class="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-hidden focus:border-emerald-500 w-16 font-mono"
           @input="onSearchInput"
         />
 
+        <!-- Advanced Search Button -->
         <button
-          v-if="searchPlayer || filterResult || searchECO"
-          class="text-xs text-zinc-400 hover:text-zinc-200 underline cursor-pointer"
+          class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700 text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+          title="Advanced Header / General Search (Ctrl+H)"
+          @click="emit('openAdvancedSearch')"
+        >
+          <Sliders class="w-3 h-3 text-emerald-400" />
+          <span>Advanced</span>
+        </button>
+
+        <button
+          v-if="hasActiveCriteria"
+          class="text-xs text-zinc-400 hover:text-red-400 underline cursor-pointer ml-1"
           @click="clearFilters"
         >
-          Reset
+          Clear
         </button>
       </div>
 
@@ -138,6 +196,32 @@ const totalPages = () => Math.max(1, Math.ceil(props.totalGames / props.pageSize
           <span>Save</span>
         </button>
       </div>
+    </div>
+
+    <!-- Active Filter Banner -->
+    <div
+      v-if="hasActiveCriteria && activeBadges.length > 0"
+      class="bg-emerald-950/40 border-b border-emerald-800/40 px-3 py-1.5 flex items-center justify-between text-xs"
+    >
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <span class="text-emerald-400 font-semibold flex items-center gap-1 text-[11px]">
+          <Filter class="w-3 h-3" /> Active Filter ({{ totalGames.toLocaleString() }} matches):
+        </span>
+        <span
+          v-for="badge in activeBadges"
+          :key="badge"
+          class="px-2 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-300 font-mono text-[11px]"
+        >
+          {{ badge }}
+        </span>
+      </div>
+      <button
+        class="text-zinc-400 hover:text-red-400 flex items-center gap-1 cursor-pointer transition-colors text-[11px] ml-2 whitespace-nowrap"
+        @click="clearFilters"
+      >
+        <X class="w-3 h-3" />
+        <span>Clear</span>
+      </button>
     </div>
 
     <!-- Games Table -->

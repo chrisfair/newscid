@@ -603,12 +603,26 @@ export namespace scid {
 	    player?: string;
 	    event?: string;
 	    site?: string;
+	    round?: string;
 	    dateFrom?: string;
 	    dateTo?: string;
+	    yearFrom?: number;
+	    yearTo?: number;
 	    result?: string;
 	    eco?: string;
+	    ecoFrom?: string;
+	    ecoTo?: string;
 	    minElo?: number;
 	    maxElo?: number;
+	    whiteEloMin?: number;
+	    whiteEloMax?: number;
+	    blackEloMin?: number;
+	    blackEloMax?: number;
+	    minMoves?: number;
+	    maxMoves?: number;
+	    hasVariations?: boolean;
+	    ignoreDeleted?: boolean;
+	    onlyDeleted?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new SearchCriteria(source);
@@ -621,12 +635,26 @@ export namespace scid {
 	        this.player = source["player"];
 	        this.event = source["event"];
 	        this.site = source["site"];
+	        this.round = source["round"];
 	        this.dateFrom = source["dateFrom"];
 	        this.dateTo = source["dateTo"];
+	        this.yearFrom = source["yearFrom"];
+	        this.yearTo = source["yearTo"];
 	        this.result = source["result"];
 	        this.eco = source["eco"];
+	        this.ecoFrom = source["ecoFrom"];
+	        this.ecoTo = source["ecoTo"];
 	        this.minElo = source["minElo"];
 	        this.maxElo = source["maxElo"];
+	        this.whiteEloMin = source["whiteEloMin"];
+	        this.whiteEloMax = source["whiteEloMax"];
+	        this.blackEloMin = source["blackEloMin"];
+	        this.blackEloMax = source["blackEloMax"];
+	        this.minMoves = source["minMoves"];
+	        this.maxMoves = source["maxMoves"];
+	        this.hasVariations = source["hasVariations"];
+	        this.ignoreDeleted = source["ignoreDeleted"];
+	        this.onlyDeleted = source["onlyDeleted"];
 	    }
 	}
 

@@ -203,6 +203,18 @@ func (a *App) GetGames(offset, limit int, criteria scid.SearchCriteria) (*GamesP
 	return &GamesPage{Total: total, Games: games}, nil
 }
 
+// CountSearchMatches returns the number of games matching the specified search criteria.
+func (a *App) CountSearchMatches(criteria scid.SearchCriteria) (int, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	if !a.db.IsOpen {
+		return 0, nil
+	}
+
+	return a.db.CountMatches(criteria), nil
+}
+
 func (a *App) GetGame(gameID int) (*chess.Game, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

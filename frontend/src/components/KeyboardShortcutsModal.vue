@@ -14,6 +14,7 @@ const shortcuts = [
   ]},
   { group: 'Database & Files', items: [
     { key: 'Ctrl+O', desc: 'Open database (.si4, .pgn)' },
+    { key: 'Ctrl+H', desc: 'Header / General database search' },
     { key: 'Ctrl+N', desc: 'Start a new game' },
     { key: 'Ctrl+S', desc: 'Save current game to open database' },
     { key: 'Ctrl+Del', desc: 'Delete current game from database' },
