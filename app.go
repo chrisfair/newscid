@@ -77,6 +77,7 @@ type EventListener = func(eventName string, optionalData ...interface{})
 type App struct {
 	ctx             context.Context
 	mu              sync.RWMutex
+	listenerMu      sync.RWMutex
 	eventListener   EventListener
 	db              *scid.Database
 	eco             *eco.Classifier
@@ -133,10 +134,24 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
-// SetEventListener attaches a callback to receive runtime events (for SSE / WebSockets).
-func (a *App) SetEventListener(l EventListener) {
+// shutdown is called when the app terminates.
+func (a *App) shutdown(ctx context.Context) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	if a.engine != nil {
+		_ = a.engine.Quit()
+		a.engine = nil
+	}
+	if a.db != nil && a.db.IsOpen {
+		_ = a.db.Close()
+	}
+}
+
+// SetEventListener attaches a callback to receive runtime events (for SSE / WebSockets).
+func (a *App) SetEventListener(l EventListener) {
+	a.listenerMu.Lock()
+	defer a.listenerMu.Unlock()
 	a.eventListener = l
 }
 
@@ -144,9 +159,9 @@ func (a *App) emitEvent(eventName string, optionalData ...interface{}) {
 	if a.ctx != nil && a.ctx.Value("events") != nil {
 		runtime.EventsEmit(a.ctx, eventName, optionalData...)
 	}
-	a.mu.RLock()
+	a.listenerMu.RLock()
 	listener := a.eventListener
-	a.mu.RUnlock()
+	a.listenerMu.RUnlock()
 	if listener != nil {
 		listener(eventName, optionalData...)
 	}
@@ -610,7 +625,7 @@ func (a *App) SearchPosition(fen string) ([]*scid.GameSummary, error) {
 		limit = 2000
 	}
 
-	var results []*scid.GameSummary
+	results := make([]*scid.GameSummary, 0)
 	for i := 1; i <= limit; i++ {
 		g, err := a.db.GetGame(i)
 		if err != nil {

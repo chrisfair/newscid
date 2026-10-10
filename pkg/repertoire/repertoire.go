@@ -156,11 +156,11 @@ func (m *Manager) populateLine(rep *Repertoire, sanMoves []string, comment strin
 	}
 }
 
-// CoreFEN strips clock and fullmove count for reliable position lookup.
+// CoreFEN strips clock, fullmove count, and ephemeral en-passant for reliable position lookup.
 func CoreFEN(fen string) string {
-	parts := strings.Split(fen, " ")
-	if len(parts) >= 4 {
-		return parts[0] + " " + parts[1] + " " + parts[2] + " " + parts[3]
+	parts := strings.Split(strings.TrimSpace(fen), " ")
+	if len(parts) >= 3 {
+		return parts[0] + " " + parts[1] + " " + parts[2]
 	}
 	return fen
 }

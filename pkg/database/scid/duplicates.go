@@ -81,7 +81,7 @@ func (db *Database) FindDuplicates(criteria DuplicateCriteria) ([]DuplicateGroup
 		groupsMap[key] = append(groupsMap[key], gameNum)
 	}
 
-	var duplicateGroups []DuplicateGroup
+	duplicateGroups := make([]DuplicateGroup, 0)
 	for key, ids := range groupsMap {
 		if len(ids) > 1 {
 			var summaries []*GameSummary
