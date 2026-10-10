@@ -61,6 +61,8 @@ type BoardState struct {
 	LegalMoves  []string `json:"legalMoves"` // UCI moves
 	FullMove    int      `json:"fullMove"`
 	HalfMove    int      `json:"halfMove"`
+	MoveUCI     string   `json:"moveUci,omitempty"`
+	MoveSAN     string   `json:"moveSan,omitempty"`
 }
 
 // GamesPage encapsulates paginated game results.
@@ -564,19 +566,29 @@ func (a *App) ParseFEN(fen string) (*BoardState, error) {
 	return makeBoardState(b), nil
 }
 
-func (a *App) MakeMove(fen string, moveUCI string) (*BoardState, error) {
+func (a *App) MakeMove(fen string, moveStr string) (*BoardState, error) {
 	b, err := chess.ParseFEN(fen)
 	if err != nil {
 		return nil, err
 	}
 
-	m, err := b.ParseUCI(moveUCI)
+	m, err := b.ParseUCI(moveStr)
+	var moveSAN string
 	if err != nil {
-		return nil, err
+		m, err = b.ParseSAN(moveStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid move %q: %w", moveStr, err)
+		}
+		moveSAN = moveStr
+	} else {
+		moveSAN = b.MoveToSAN(m)
 	}
 
 	b.MakeMove(m)
-	return makeBoardState(b), nil
+	state := makeBoardState(b)
+	state.MoveUCI = m.String()
+	state.MoveSAN = moveSAN
+	return state, nil
 }
 
 func (a *App) GetLegalMoves(fen string) ([]string, error) {
