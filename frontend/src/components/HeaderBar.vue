@@ -164,7 +164,7 @@ defineExpose({
 
           <div
             v-if="showBasesDropdown"
-            class="absolute top-full left-0 mt-1 w-84 max-h-[440px] overflow-y-auto bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl py-1 z-50 text-xs divide-y divide-zinc-800"
+            class="absolute top-full left-0 mt-1 min-w-[340px] max-w-md w-max max-h-[440px] overflow-y-auto bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl py-1 z-50 text-xs divide-y divide-zinc-800"
           >
             <div v-for="(dbs, category) in groupedDatabases" :key="category" class="py-1">
               <div class="px-3 py-1 text-[10px] font-bold text-zinc-400 uppercase tracking-wider bg-zinc-950/70 flex items-center justify-between">
