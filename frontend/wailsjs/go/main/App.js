@@ -86,6 +86,10 @@ export function DeleteVariation(arg1, arg2) {
   return window['go']['main']['App']['DeleteVariation'](arg1, arg2);
 }
 
+export function DispatchRPC(arg1, arg2) {
+  return window['go']['main']['App']['DispatchRPC'](arg1, arg2);
+}
+
 export function DownloadTWICIssue(arg1) {
   return window['go']['main']['App']['DownloadTWICIssue'](arg1);
 }
@@ -420,6 +424,10 @@ export function SetEngineMultiPV(arg1) {
 
 export function SetEngineThreads(arg1) {
   return window['go']['main']['App']['SetEngineThreads'](arg1);
+}
+
+export function SetEventListener(arg1) {
+  return window['go']['main']['App']['SetEventListener'](arg1);
 }
 
 export function SetGameNAG(arg1, arg2) {

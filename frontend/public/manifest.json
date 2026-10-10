@@ -1,0 +1,19 @@
+{
+  "name": "NewScid - Modern Chess Information Database",
+  "short_name": "NewScid",
+  "description": "High-performance chess database, analysis, and training suite",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/appicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["games", "utilities", "education"]
+}

@@ -5,6 +5,7 @@ import {engine} from '../models';
 import {eco} from '../models';
 import {scid} from '../models';
 import {main} from '../models';
+import {json} from '../models';
 import {online} from '../models';
 import {gameexport} from '../models';
 import {chess} from '../models';
@@ -61,6 +62,8 @@ export function DeleteRepertoire(arg1:string):Promise<void>;
 export function DeleteSyncProfile(arg1:string):Promise<void>;
 
 export function DeleteVariation(arg1:number,arg2:number):Promise<void>;
+
+export function DispatchRPC(arg1:string,arg2:Array<json.RawMessage>):Promise<any>;
 
 export function DownloadTWICIssue(arg1:number):Promise<online.TWICIssueResult>;
 
@@ -229,6 +232,8 @@ export function SetEngineHash(arg1:number):Promise<void>;
 export function SetEngineMultiPV(arg1:number):Promise<void>;
 
 export function SetEngineThreads(arg1:number):Promise<void>;
+
+export function SetEventListener(arg1:any):Promise<void>;
 
 export function SetGameNAG(arg1:number,arg2:number):Promise<void>;
 

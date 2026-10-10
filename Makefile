@@ -2,11 +2,11 @@
 # Automated dependency management, testing, and building
 
 .DEFAULT_GOAL := help
-.PHONY: help deps setup dev build build-frontend generate test test-coverage lint clean clean-dist run \
+.PHONY: help deps setup dev build build-frontend generate test test-coverage lint clean clean-dist run serve \
         install install-user uninstall \
         appimage package-appimage snap package-snap deb package-deb pacman package-pacman \
         chocolatey choco package-chocolatey package-choco brew homebrew package-brew \
-        flatpak package-flatpak packages package package-all package-checksums \
+        flatpak package-flatpak android android-apk packages package package-all package-checksums \
         version bump-patch bump-minor bump-major tag-release
 
 # Application Metadata & Versioning (Single source of truth: VERSION)
@@ -115,6 +115,14 @@ run: ## Run the built production application binary
 		$(MAKE) build && ./build/bin/newscid; \
 	fi
 
+serve: build ## Run NewScid in standalone web / mobile server mode (for Android / browser / PWA)
+	@if [ -f build/bin/newscid ]; then \
+		printf "$(BOLD)$(BLUE)==> Launching NewScid Server on http://0.0.0.0:8080...$(RESET)\n"; \
+		./build/bin/newscid serve --host 0.0.0.0 --port 8080; \
+	else \
+		$(MAKE) build && ./build/bin/newscid serve --host 0.0.0.0 --port 8080; \
+	fi
+
 # ==============================================================================
 # Versioning & Release Management
 # ==============================================================================
@@ -186,7 +194,12 @@ flatpak: build ## Build Flatpak bundle or staged export package
 
 package-flatpak: flatpak ## Alias for flatpak
 
-packages: appimage snap deb pacman chocolatey brew flatpak package-checksums ## Build all distribution packages (Linux, Windows, macOS)
+android: android-apk ## Build standalone installable Android APK and Termux ARM64 binary
+
+android-apk: ## Build standalone installable Android APK package (.apk)
+	@./packaging/scripts/build-android.sh
+
+packages: appimage snap deb pacman chocolatey brew flatpak android package-checksums ## Build all distribution packages (Linux, Windows, macOS, Android)
 	@printf "\n$(BOLD)$(GREEN)========================================================================$(RESET)\n"
 	@printf "$(BOLD)$(GREEN)✔ All packages successfully generated in $(DIST_DIR)/$(RESET)\n"
 	@printf "$(BOLD)$(GREEN)========================================================================$(RESET)\n"
