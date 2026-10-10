@@ -140,13 +140,13 @@ const totalPages = () => Math.max(1, Math.ceil(props.totalGames / props.pageSize
 
         <select
           v-model="filterResult"
-          class="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-hidden focus:border-emerald-500"
+          class="bg-zinc-800 border border-zinc-700 rounded-lg pl-2 pr-6 py-1 text-xs text-zinc-100 font-medium focus:outline-hidden focus:border-emerald-500 cursor-pointer"
           @change="onSearchInput"
         >
-          <option value="">Any Result</option>
-          <option value="1-0">1-0</option>
-          <option value="0-1">0-1</option>
-          <option value="1/2-1/2">½-½</option>
+          <option value="" class="bg-zinc-900 text-zinc-100">Any Result</option>
+          <option value="1-0" class="bg-zinc-900 text-zinc-100">1-0</option>
+          <option value="0-1" class="bg-zinc-900 text-zinc-100">0-1</option>
+          <option value="1/2-1/2" class="bg-zinc-900 text-zinc-100">½-½</option>
         </select>
 
         <input
