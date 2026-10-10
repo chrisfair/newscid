@@ -111,6 +111,8 @@ onMounted(async () => {
   await loadAvailableBooks()
   if (activeTab.value === 'book') {
     await queryCurrentBook()
+  } else {
+    emit('refresh')
   }
 })
 

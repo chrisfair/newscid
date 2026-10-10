@@ -211,6 +211,8 @@ type MoveNode struct {
 	UCI        string      `json:"uci"`
 	FEN        string      `json:"fen"`
 	Comment    string      `json:"comment,omitempty"`
+	Clock      string      `json:"clock,omitempty"`
+	EMT        string      `json:"emt,omitempty"`
 	NAGs       []int       `json:"nags,omitempty"`
 	Variations []*MoveNode `json:"variations,omitempty"`
 	Next       *MoveNode   `json:"next,omitempty"`

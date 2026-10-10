@@ -878,17 +878,31 @@ func (a *App) GetBestMove(fen string, moves []string, movetimeMs int) (string, e
 
 func (a *App) AnnotateCurrentGame(movetimeMs int) (*engine.GameAnalysis, error) {
 	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	if a.activeGame == nil {
+		a.mu.Unlock()
 		return nil, fmt.Errorf("no active game to annotate")
 	}
-
 	if err := a.ensureEngineLocked(); err != nil {
+		a.mu.Unlock()
 		return nil, err
 	}
+	eng := a.engine
+	g := a.activeGame
+	a.mu.Unlock()
 
-	return engine.AnnotateGame(a.activeGame, a.engine, movetimeMs)
+	return engine.AnnotateGame(g, eng, movetimeMs, func(ply, total int, ma engine.MoveAnalysis) {
+		pct := 0
+		if total > 0 {
+			pct = int(float64(ply) / float64(total) * 100)
+		}
+		a.emitEvent("annotate:progress", map[string]interface{}{
+			"currentPly": ply,
+			"totalPlies": total,
+			"percent":    pct,
+			"san":        ma.SAN,
+			"scoreCp":    ma.ScoreCp,
+		})
+	})
 }
 
 func (a *App) AnnotatePGN(pgnContent string, movetimeMs int) (*engine.GameAnalysis, error) {
@@ -898,14 +912,27 @@ func (a *App) AnnotatePGN(pgnContent string, movetimeMs int) (*engine.GameAnalys
 	}
 
 	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	a.activeGame = g
 	if err := a.ensureEngineLocked(); err != nil {
+		a.mu.Unlock()
 		return nil, err
 	}
+	eng := a.engine
+	a.mu.Unlock()
 
-	return engine.AnnotateGame(g, a.engine, movetimeMs)
+	return engine.AnnotateGame(g, eng, movetimeMs, func(ply, total int, ma engine.MoveAnalysis) {
+		pct := 0
+		if total > 0 {
+			pct = int(float64(ply) / float64(total) * 100)
+		}
+		a.emitEvent("annotate:progress", map[string]interface{}{
+			"currentPly": ply,
+			"totalPlies": total,
+			"percent":    pct,
+			"san":        ma.SAN,
+			"scoreCp":    ma.ScoreCp,
+		})
+	})
 }
 
 

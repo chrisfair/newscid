@@ -312,3 +312,33 @@ func TestPGNWithCommentsNAGsAndVariations(t *testing.T) {
 	assert.Contains(t, exported, "2. f4")
 }
 
+func TestPGNWithClockAndEMT(t *testing.T) {
+	pgnSample := `[Event "Rapid Match"]
+[White "Carlsen"]
+[Black "Nakamura"]
+[Result "1-0"]
+
+1. e4 {[%clk 0:10:00]} 1... c5 {Sicilian Defense [%clk 0:10:00] [%emt 0:00:03]} 2. Nf3 {[%clk 0:09:58]} 2... d6 {[%clk 0:09:59]} 1-0`
+
+	game, err := chess.ParsePGN(pgnSample)
+	require.NoError(t, err)
+
+	// Move 1: e4 has clock 0:10:00 and NO comment box text
+	e4 := game.RootMove
+	assert.Equal(t, "e4", e4.SAN)
+	assert.Equal(t, "0:10:00", e4.Clock)
+	assert.Empty(t, e4.Comment)
+
+	// Move 1... c5: has text comment "Sicilian Defense", clock 0:10:00, emt 0:00:03
+	c5 := e4.Next
+	assert.Equal(t, "c5", c5.SAN)
+	assert.Equal(t, "Sicilian Defense", c5.Comment)
+	assert.Equal(t, "0:10:00", c5.Clock)
+	assert.Equal(t, "0:00:03", c5.EMT)
+
+	exported := game.ExportPGN()
+	assert.Contains(t, exported, "[%clk 0:10:00]")
+	assert.Contains(t, exported, "Sicilian Defense")
+}
+
+

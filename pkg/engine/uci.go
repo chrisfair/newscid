@@ -52,6 +52,7 @@ type Engine struct {
 	isAnalyzing      bool
 	stopChan         chan struct{}
 	bestMoveListener chan string
+	readyListener    chan struct{}
 	lastEval         EvalInfo
 	onEval           func(EvalInfo)
 	multiPV          int
@@ -263,8 +264,43 @@ func (e *Engine) Analyze(fen string, moves []string, maxDepth int) error {
 	return nil
 }
 
+// StopAndSync halts any ongoing search and synchronizes with the engine via isready / readyok.
+func (e *Engine) StopAndSync() error {
+	e.mu.Lock()
+	if e.stdin == nil {
+		e.mu.Unlock()
+		return fmt.Errorf("engine not started")
+	}
+
+	readyCh := make(chan struct{}, 1)
+	e.readyListener = readyCh
+
+	if e.isAnalyzing {
+		fmt.Fprintln(e.stdin, "stop")
+		e.isAnalyzing = false
+	}
+	fmt.Fprintln(e.stdin, "isready")
+	e.mu.Unlock()
+
+	select {
+	case <-readyCh:
+		e.mu.Lock()
+		e.readyListener = nil
+		e.mu.Unlock()
+		return nil
+	case <-time.After(1500 * time.Millisecond):
+		e.mu.Lock()
+		e.readyListener = nil
+		e.mu.Unlock()
+		return nil
+	}
+}
+
 // SearchBestMove searches for the best move in a given position with time limit in milliseconds.
 func (e *Engine) SearchBestMove(fen string, moves []string, movetimeMs int) (string, EvalInfo, error) {
+	// First ensure any previous search is stopped and engine is ready
+	_ = e.StopAndSync()
+
 	e.mu.Lock()
 	if e.stdin == nil {
 		e.mu.Unlock()
@@ -293,6 +329,7 @@ func (e *Engine) SearchBestMove(fen string, moves []string, movetimeMs int) (str
 		e.mu.Lock()
 		eval := e.lastEval
 		e.bestMoveListener = nil
+		e.isAnalyzing = false
 		e.mu.Unlock()
 		return best, eval, nil
 	case <-time.After(time.Duration(movetimeMs+3000) * time.Millisecond):
@@ -300,6 +337,7 @@ func (e *Engine) SearchBestMove(fen string, moves []string, movetimeMs int) (str
 		eval := e.lastEval
 		best := eval.BestMove
 		e.bestMoveListener = nil
+		e.isAnalyzing = false
 		e.mu.Unlock()
 		if best != "" {
 			return best, eval, nil
@@ -412,6 +450,17 @@ func (e *Engine) listenOutput() {
 
 				if cb != nil {
 					cb(currEval)
+				}
+			}
+		} else if line == "readyok" {
+			e.mu.Lock()
+			listener := e.readyListener
+			e.mu.Unlock()
+
+			if listener != nil {
+				select {
+				case listener <- struct{}{}:
+				default:
 				}
 			}
 		}
