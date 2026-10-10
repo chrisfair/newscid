@@ -230,7 +230,12 @@ func TestChessComClient(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, filteredPGN, "west17")
 
-	// 5. User not found
+	// 5. FetchUserGames with maxLimit (reverse chronological processing)
+	limitedPGN, err := client.FetchUserGames("west17", 0, 0, 1)
+	require.NoError(t, err)
+	assert.Contains(t, limitedPGN, "west17")
+
+	// 6. User not found
 	_, err = client.FetchArchives("notfound")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")

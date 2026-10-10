@@ -221,7 +221,7 @@ func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *sci
 
 	// 2. Fetch from Chess.com
 	if strings.TrimSpace(opts.ChessComUsername) != "" {
-		chessComPGN, err := sm.ChessCom.FetchUserGames(opts.ChessComUsername, 0, 0)
+		chessComPGN, err := sm.ChessCom.FetchUserGames(opts.ChessComUsername, 0, 0, opts.MaxGames)
 		if err != nil {
 			res.Errors = append(res.Errors, fmt.Sprintf("Chess.com error: %v", err))
 		} else if strings.TrimSpace(chessComPGN) != "" {
