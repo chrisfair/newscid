@@ -92,6 +92,7 @@ const opponentForm = ref({
   createProfile: true,
   ratedOnly: false,
   autoDeduplicate: true,
+  maxGames: 200,
 })
 const isImportingOpponent = ref(false)
 const opponentImportResult = ref<online.SyncResult | null>(null)
@@ -151,7 +152,7 @@ async function handleImportOpponentGames() {
       createProfile: opponentForm.value.createProfile,
       ratedOnly: opponentForm.value.ratedOnly,
       autoDeduplicate: opponentForm.value.autoDeduplicate,
-      maxGames: 0,
+      maxGames: Number(opponentForm.value.maxGames) || 0,
     }))
 
     opponentImportResult.value = res
@@ -1009,20 +1010,30 @@ function formatDate(ms: number): string {
           </div>
         </div>
 
-        <!-- Preferences Checkboxes -->
-        <div class="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+        <!-- Preferences Checkboxes & Limit -->
+        <div class="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 grid grid-cols-1 md:grid-cols-4 gap-3 text-xs items-center">
           <label class="flex items-center gap-2 cursor-pointer">
             <input v-model="opponentForm.autoDeduplicate" type="checkbox" class="rounded accent-purple-500" />
-            <span class="text-zinc-300">Auto-deduplicate games</span>
+            <span class="text-zinc-300">Auto-deduplicate</span>
           </label>
           <label class="flex items-center gap-2 cursor-pointer">
             <input v-model="opponentForm.ratedOnly" type="checkbox" class="rounded accent-purple-500" />
-            <span class="text-zinc-300">Rated games only</span>
+            <span class="text-zinc-300">Rated only</span>
           </label>
           <label class="flex items-center gap-2 cursor-pointer">
             <input v-model="opponentForm.createProfile" type="checkbox" class="rounded accent-purple-500" />
-            <span class="text-zinc-300">Save as ongoing study profile</span>
+            <span class="text-zinc-300">Save as study profile</span>
           </label>
+          <div class="flex items-center gap-2">
+            <span class="text-zinc-400">Limit:</span>
+            <select v-model="opponentForm.maxGames" class="bg-zinc-900 border border-zinc-700/80 rounded px-2 py-1 text-xs text-zinc-200 font-mono">
+              <option :value="100">100 games</option>
+              <option :value="200">200 (Rec.)</option>
+              <option :value="500">500 games</option>
+              <option :value="1000">1,000 games</option>
+              <option :value="0">All games</option>
+            </select>
+          </div>
         </div>
 
         <!-- Import Result Card -->

@@ -119,7 +119,8 @@ func (c *ChessComClient) FetchMonthlyPGN(archiveURL string) (string, error) {
 
 // FetchUserGames retrieves games for a Chess.com player across relevant monthly archives.
 // If sinceYear > 0 and sinceMonth > 0, older archives are skipped.
-func (c *ChessComClient) FetchUserGames(username string, sinceYear, sinceMonth int) (string, error) {
+// If maxLimit is provided and > 0, archives are processed from most recent backwards until maxLimit games are retrieved.
+func (c *ChessComClient) FetchUserGames(username string, sinceYear, sinceMonth int, maxLimit ...int) (string, error) {
 	archives, err := c.FetchArchives(username)
 	if err != nil {
 		return "", err
@@ -129,9 +130,24 @@ func (c *ChessComClient) FetchUserGames(username string, sinceYear, sinceMonth i
 		return "", nil
 	}
 
-	var pgnBuilder strings.Builder
+	maxGames := 0
+	if len(maxLimit) > 0 && maxLimit[0] > 0 {
+		maxGames = maxLimit[0]
+	}
 
-	for _, archURL := range archives {
+	// If maxGames > 0 and no specific sinceYear/Month filter, process archives newest-first
+	// so the user gets recent games immediately without waiting for hundreds of old archives.
+	targetArchives := append([]string(nil), archives...)
+	if maxGames > 0 && sinceYear == 0 && sinceMonth == 0 {
+		for i, j := 0, len(targetArchives)-1; i < j; i, j = i+1, j-1 {
+			targetArchives[i], targetArchives[j] = targetArchives[j], targetArchives[i]
+		}
+	}
+
+	var pgnBuilder strings.Builder
+	gameCount := 0
+
+	for _, archURL := range targetArchives {
 		// Filter by sinceYear and sinceMonth if specified
 		if sinceYear > 0 && sinceMonth > 0 {
 			// Expected URL structure: .../games/{YYYY}/{MM}
@@ -157,6 +173,10 @@ func (c *ChessComClient) FetchUserGames(username string, sinceYear, sinceMonth i
 		if strings.TrimSpace(pgnText) != "" {
 			pgnBuilder.WriteString(pgnText)
 			pgnBuilder.WriteString("\n\n")
+			gameCount += strings.Count(pgnText, "[Event ")
+			if maxGames > 0 && gameCount >= maxGames {
+				break
+			}
 		}
 	}
 

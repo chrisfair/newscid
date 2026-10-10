@@ -69,6 +69,7 @@ const loadingStats = ref(false)
 const isAggregating = ref(false)
 const isFetchingOnline = ref(false)
 const autoFetchOnline = ref(true)
+const onlineMaxGames = ref<number>(200)
 
 onMounted(async () => {
   await loadPersonas()
@@ -297,7 +298,7 @@ async function handleFetchOnlineGames(targetPersonaId?: string) {
   }
 
   try {
-    const res = await FetchPersonaOnlineGames(pId, 0)
+    const res = await FetchPersonaOnlineGames(pId, onlineMaxGames.value)
     let summary = `Fetched ${res.imported} game(s) into persona database (${res.chessComGames} Chess.com, ${res.lichessGames} Lichess)`
     if (res.duplicatesSkipped > 0) {
       summary += `, ${res.duplicatesSkipped} duplicates skipped`
@@ -522,8 +523,8 @@ function handleStartSparring() {
               </div>
             </div>
 
-            <!-- Online Auto-fetch Option -->
-            <div class="flex items-center justify-between pt-2 border-t border-zinc-800/80 text-xs">
+            <!-- Online Auto-fetch & Limit Options -->
+            <div class="flex items-center justify-between pt-2 border-t border-zinc-800/80 text-xs gap-3">
               <label class="flex items-center gap-2 text-zinc-300 cursor-pointer select-none">
                 <input
                   v-model="autoFetchOnline"
@@ -532,12 +533,23 @@ function handleStartSparring() {
                 />
                 <span class="text-zinc-300 text-[11px] font-medium flex items-center gap-1.5">
                   <Globe class="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Auto-fetch online games from Chess.com & Lichess on save</span>
+                  <span>Auto-fetch online games on save</span>
                 </span>
               </label>
-              <span v-if="editChessCom || editLichess" class="text-[10px] text-emerald-400 font-mono">
-                Handles auto-link to persona identifiers & dedicated base
-              </span>
+
+              <div class="flex items-center gap-2">
+                <label class="text-[11px] text-zinc-400 font-semibold whitespace-nowrap">Fetch Limit:</label>
+                <select
+                  v-model="onlineMaxGames"
+                  class="bg-zinc-900 border border-zinc-700/80 rounded-md px-2 py-1 text-xs text-zinc-200 focus:outline-hidden focus:border-emerald-500 font-mono"
+                >
+                  <option :value="100">100 games (Fast)</option>
+                  <option :value="200">200 games (Recommended)</option>
+                  <option :value="500">500 games</option>
+                  <option :value="1000">1,000 games</option>
+                  <option :value="0">All games (Slow on large bases)</option>
+                </select>
+              </div>
             </div>
           </div>
 

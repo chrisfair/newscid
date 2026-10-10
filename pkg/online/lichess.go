@@ -28,7 +28,11 @@ func NewLichessClient() *LichessClient {
 	return &LichessClient{
 		BaseURL: DefaultLichessBaseURL,
 		HTTPClient: &http.Client{
-			Timeout: DefaultHTTPTimeout,
+			Transport: &http.Transport{
+				Proxy:                 http.ProxyFromEnvironment,
+				ResponseHeaderTimeout: 30 * time.Second,
+				IdleConnTimeout:       90 * time.Second,
+			},
 		},
 		UserAgent: DefaultOnlineUserAgent,
 	}
