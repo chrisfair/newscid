@@ -2,6 +2,7 @@ package tree
 
 import (
 	"sort"
+	"strings"
 
 	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
@@ -168,20 +169,11 @@ func SearchPositionInGames(fen string, games []*chess.Game) []int {
 	return matched
 }
 
-// coreFEN strips the halfmove clock and fullmove number for position matching.
+// coreFEN strips the halfmove clock, fullmove number, and ephemeral en-passant square for robust position matching.
 func coreFEN(fen string) string {
-	parts := [4]string{}
-	idx := 0
-	start := 0
-	for i := 0; i < len(fen) && idx < 4; i++ {
-		if fen[i] == ' ' {
-			parts[idx] = fen[start:i]
-			idx++
-			start = i + 1
-		}
-	}
-	if idx == 4 {
-		return parts[0] + " " + parts[1] + " " + parts[2] + " " + parts[3]
+	parts := strings.Split(strings.TrimSpace(fen), " ")
+	if len(parts) >= 3 {
+		return parts[0] + " " + parts[1] + " " + parts[2]
 	}
 	return fen
 }

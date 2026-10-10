@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"flag"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 var assets embed.FS
 
 func runServer(app *App, host string, port int, dataDir string) {
+	defer app.shutdown(context.Background())
 	srv := server.New(server.ServerConfig{
 		Host:     host,
 		Port:     port,
@@ -95,6 +97,7 @@ func main() {
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 		OnStartup:        app.startup,
+		OnShutdown:       app.shutdown,
 		Bind: []interface{}{
 			app,
 		},

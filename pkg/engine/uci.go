@@ -320,20 +320,30 @@ func (e *Engine) Stop() error {
 	return nil
 }
 
-// Quit stops the engine process.
+// Quit stops the engine process gracefully, or forces kill if it does not exit within 1 second.
 func (e *Engine) Quit() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	if e.stdin != nil {
 		fmt.Fprintln(e.stdin, "quit")
-		e.stdin.Close()
+		_ = e.stdin.Close()
 	}
-	if e.cmd != nil {
-		_ = e.cmd.Wait()
+	if e.cmd != nil && e.cmd.Process != nil {
+		done := make(chan struct{})
+		go func() {
+			_ = e.cmd.Wait()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(1 * time.Second):
+			_ = e.cmd.Process.Kill()
+		}
 	}
 	e.cmd = nil
 	e.stdin = nil
+	e.isAnalyzing = false
 	return nil
 }
 

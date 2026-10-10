@@ -2,7 +2,7 @@
 # Automated dependency management, testing, and building
 
 .DEFAULT_GOAL := help
-.PHONY: help deps setup dev build build-frontend generate test test-coverage lint clean clean-dist run serve \
+.PHONY: help deps setup dev build build-frontend generate test functional-test test-coverage lint clean clean-dist run serve \
         install install-user uninstall \
         appimage package-appimage snap package-snap deb package-deb pacman package-pacman \
         chocolatey choco package-chocolatey package-choco brew homebrew package-brew \
@@ -92,6 +92,11 @@ test: ## Run all Go unit and integration tests with testify
 	@printf "$(BOLD)$(BLUE)==> Running test suite across all packages...$(RESET)\n"
 	@go test -v -count=1 ./...
 	@printf "$(BOLD)$(GREEN)✔ All tests passed successfully.$(RESET)\n"
+
+functional-test: ## Run end-to-end functional playthrough across all 108 App RPC subsystems
+	@printf "$(BOLD)$(BLUE)==> Running comprehensive functional playthrough harness...$(RESET)\n"
+	@python3 functional_tester.py
+	@printf "$(BOLD)$(GREEN)✔ Functional playthrough passed with 100%% success.$(RESET)\n"
 
 test-coverage: ## Run tests with code coverage analysis
 	@printf "$(BOLD)$(BLUE)==> Running tests with coverage...$(RESET)\n"
