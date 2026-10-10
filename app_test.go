@@ -1,6 +1,8 @@
 package main
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -15,8 +17,10 @@ import (
 
 	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
+	"newscid/pkg/gameexport"
 	"newscid/pkg/online"
 	"newscid/pkg/persona"
+	"newscid/pkg/tournament"
 )
 
 
@@ -867,5 +871,455 @@ func TestAppPersonaOperations(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestAppPolyglotAndECO(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
 
+	// Polyglot Books
+	books := app.GetPolyglotBooks()
+	t.Logf("Discovered polyglot books: %v", books)
+
+	if len(books) > 0 {
+		firstBook := books[0]
+		moves, err := app.QueryPolyglotBook(chess.StartingFEN, firstBook)
+		require.NoError(t, err)
+		assert.NotEmpty(t, moves)
+
+		pickBest, err := app.GetPolyglotBookMove(chess.StartingFEN, firstBook, true)
+		require.NoError(t, err)
+		require.NotNil(t, pickBest)
+		assert.NotEmpty(t, pickBest.SAN)
+
+		pickWeighted, err := app.GetPolyglotBookMove(chess.StartingFEN, firstBook, false)
+		require.NoError(t, err)
+		require.NotNil(t, pickWeighted)
+	}
+
+	// Empty / invalid book path
+	emptyMoves, err := app.QueryPolyglotBook(chess.StartingFEN, "")
+	require.NoError(t, err)
+	assert.Empty(t, emptyMoves)
+
+	_, err = app.QueryPolyglotBook("invalid fen string", "some_book.bin")
+	assert.Error(t, err)
+
+	// ECO Sections
+	sections := app.GetECOSections()
+	assert.Len(t, sections, 5)
+
+	// ECO Search
+	bEntries := app.SearchECO("B", "Sicilian", 10)
+	assert.NotEmpty(t, bEntries)
+
+	// ECO Classify
+	classified := app.ClassifyMoves([]string{"e4", "c5", "Nf3", "d6", "d4", "cxd4", "Nxd4", "Nf6", "Nc3", "a6"})
+	assert.True(t, strings.HasPrefix(classified.Code, "B90"))
+}
+
+func TestAppTablebaseAndSolitaire(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+
+	// 1. Test Tablebase probe (too many pieces error)
+	_, err := app.ProbeTablebase(chess.StartingFEN)
+	assert.Error(t, err) // 32 pieces > 7
+
+	// 2. Solitaire with no game loaded
+	_, err = app.StartGuessTheMove(0, "white")
+	assert.Error(t, err)
+
+	_, err = app.GetGuessTheMoveState()
+	assert.Error(t, err)
+
+	_, err = app.SubmitGuessTheMove("e4")
+	assert.Error(t, err)
+
+	_, _, err = app.GetGuessTheMoveHint()
+	assert.Error(t, err)
+
+	_, err = app.SkipGuessTheMove()
+	assert.Error(t, err)
+
+	// Load a game into activeGame via PGN
+	pgn := `[Event "Paris Opera"]
+[Site "Paris"]
+[Date "1858.11.02"]
+[Round "1"]
+[White "Morphy, Paul"]
+[Black "Duke of Brunswick"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 d6 3. d4 Bg4 1-0`
+	game, err := chess.ParsePGN(pgn)
+	require.NoError(t, err)
+	require.NotNil(t, game)
+	app.activeGame = game
+
+	// Start Guess-the-Move as White
+	sess, err := app.StartGuessTheMove(0, "white")
+	require.NoError(t, err)
+	assert.NotNil(t, sess)
+	assert.Equal(t, "Morphy, Paul", sess.White)
+	assert.Equal(t, 3, sess.TotalTurns)
+
+	// State check
+	state, err := app.GetGuessTheMoveState()
+	require.NoError(t, err)
+	assert.Equal(t, sess.White, state.White)
+
+	// Hint
+	hint, level, err := app.GetGuessTheMoveHint()
+	require.NoError(t, err)
+	assert.Equal(t, 1, level)
+	assert.Contains(t, hint, "Pawn")
+
+	// Wrong guess
+	fb, err := app.SubmitGuessTheMove("d2d4")
+	require.NoError(t, err)
+	assert.False(t, fb.IsMatch)
+	assert.Equal(t, 0, fb.PointsEarned)
+
+	// Correct guess (White plays e4, opponent replies e5)
+	fb, err = app.SubmitGuessTheMove("e4")
+	require.NoError(t, err)
+	assert.True(t, fb.IsMatch)
+	assert.Equal(t, 7, fb.PointsEarned) // 7 points because 1 hint used
+	assert.Equal(t, "e5", fb.OpponentReplySAN)
+
+	// Skip next turn (Nf3)
+	skipFb, err := app.SkipGuessTheMove()
+	require.NoError(t, err)
+	assert.False(t, skipFb.IsMatch)
+	assert.Equal(t, "Nf3", skipFb.ActualMoveSAN)
+	assert.Equal(t, "d6", skipFb.OpponentReplySAN)
+
+	// Final turn (d4)
+	fb, err = app.SubmitGuessTheMove("d4")
+	require.NoError(t, err)
+	assert.True(t, fb.IsMatch)
+	assert.True(t, fb.IsFinished)
+	require.NotNil(t, fb.Summary)
+	assert.Greater(t, fb.Summary.Score, 0)
+}
+
+func TestAppRatingTrackerAndDemographics(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+
+	// Error when no database is open
+	_, err := app.GetRatingEvolution("Morphy, Paul")
+	assert.Error(t, err)
+
+	_, err = app.GetDatabaseDemographics()
+	assert.Error(t, err)
+
+	// Mock database
+	db := scid.NewDatabase()
+	db.IsOpen = true
+	db.Names = scid.NewNameBase()
+	w1 := db.Names.AddName(scid.NamePlayer, "Morphy, Paul")
+	b1 := db.Names.AddName(scid.NamePlayer, "Anderssen, Adolf")
+	ev := db.Names.AddName(scid.NameEvent, "Paris Match")
+
+	db.Entries = append(db.Entries, &scid.IndexEntry{
+		WhiteID:      w1,
+		BlackID:      b1,
+		EventID:      ev,
+		WhiteElo:     2600,
+		BlackElo:     2550,
+		Result:       chess.ResultWhiteWins,
+		Date:         "1858.12.20",
+		EcoCode:      250,
+		NumHalfMoves: 60,
+	})
+
+	app.db = db
+
+	// Rating evolution
+	evo, err := app.GetRatingEvolution("Morphy, Paul")
+	require.NoError(t, err)
+	assert.Equal(t, 1, evo.TotalGames)
+	assert.Equal(t, 2600, evo.PeakRating)
+
+	// Demographics
+	demo, err := app.GetDatabaseDemographics()
+	require.NoError(t, err)
+	assert.Equal(t, 1, demo.TotalGames)
+	assert.Equal(t, 1, demo.WhiteWins)
+	assert.Equal(t, 2575, demo.AvgRating)
+}
+
+func TestAppUpdateGameHeaders(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+
+	_, err := app.UpdateGameHeaders(1, map[string]string{"White": "New Name"})
+	assert.Error(t, err)
+
+	db := scid.NewDatabase()
+	db.IsOpen = true
+	db.Names = scid.NewNameBase()
+	w := db.Names.AddName(scid.NamePlayer, "Player A")
+	b := db.Names.AddName(scid.NamePlayer, "Player B")
+	db.Entries = append(db.Entries, &scid.IndexEntry{
+		WhiteID: w,
+		BlackID: b,
+		Date:    "2020.01.01",
+	})
+	app.db = db
+
+	// Update headers
+	sum, err := app.UpdateGameHeaders(1, map[string]string{
+		"White":    "Carlsen, Magnus",
+		"WhiteElo": "2882",
+		"ECO":      "C50",
+		"Result":   "1-0",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Carlsen, Magnus", sum.White)
+	assert.Equal(t, 2882, sum.WhiteElo)
+	assert.Equal(t, "C50", sum.ECO)
+	assert.Equal(t, chess.Result("1-0"), sum.Result)
+}
+
+func makeAppTWICZip(t *testing.T, filename, content string) []byte {
+	t.Helper()
+	buf := new(bytes.Buffer)
+	zw := zip.NewWriter(buf)
+	w, err := zw.Create(filename)
+	require.NoError(t, err)
+	_, err = w.Write([]byte(content))
+	require.NoError(t, err)
+	require.NoError(t, zw.Close())
+	return buf.Bytes()
+}
+
+func TestAppTWICDownloader(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+
+	// 1. Errors when db not open
+	_, err := app.DownloadTWICIssue(100)
+	assert.Error(t, err)
+
+	_, err = app.DownloadTWICRange(100, 102)
+	assert.Error(t, err)
+
+	// 2. Open test db
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "app_twic_test")
+	db := scid.NewDatabase()
+	err = db.Create(dbPath, "App TWIC Test")
+	require.NoError(t, err)
+	defer db.Close()
+	app.db = db
+
+	// 3. Mock TWIC server
+	samplePGN := `[Event "World Cup"]
+[Site "Baku"]
+[Date "2023.08.15"]
+[Round "1"]
+[White "Carlsen, Magnus"]
+[Black "Praggnanandhaa, R"]
+[Result "1-0"]
+
+1. d4 Nf6 2. c4 e6 1-0`
+
+	zipData := makeAppTWICZip(t, "twic1500.pgn", samplePGN)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodHead {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.Header().Set("Content-Type", "application/zip")
+		w.WriteHeader(http.StatusOK)
+		w.Write(zipData)
+	}))
+	defer server.Close()
+
+	app.twicClient = &online.TWICClient{
+		BaseURLTemplate: server.URL + "/twic%dg.zip",
+		HTTPClient:      server.Client(),
+		UserAgent:       "AppTest/1.0",
+	}
+
+	// Single issue download
+	res, err := app.DownloadTWICIssue(1500)
+	require.NoError(t, err)
+	assert.Equal(t, 1500, res.IssueNumber)
+	assert.Equal(t, 1, res.GamesImported)
+
+	// Check issue exists
+	exists, err := app.CheckTWICIssue(1500)
+	require.NoError(t, err)
+	assert.True(t, exists)
+
+	// Range download
+	batch, err := app.DownloadTWICRange(1501, 1502)
+	require.NoError(t, err)
+	assert.Equal(t, 2, batch.TotalImported)
+	assert.Equal(t, 3, app.db.NumGames())
+}
+
+func TestAppEngineMatch(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+
+	assert.False(t, app.IsEngineMatchRunning())
+	assert.False(t, app.StopEngineMatch())
+
+	// Test DB for auto-save
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "engine_match_app_test")
+	db := scid.NewDatabase()
+	err := db.Create(dbPath, "Engine Match Test Base")
+	require.NoError(t, err)
+	defer db.Close()
+	app.db = db
+
+	cfg := tournament.EngineMatchConfig{
+		Engine1: tournament.EngineConfig{
+			Name: "EngineOne",
+		},
+		Engine2: tournament.EngineConfig{
+			Name: "EngineTwo",
+		},
+		Rounds:          2,
+		TimeControlMs:   50,
+		MaxPlies:        8,
+		AlternateColors: true,
+		AutoSaveToDB:    true,
+	}
+
+	summary, err := app.StartEngineMatch(cfg)
+	require.NoError(t, err)
+	assert.Equal(t, 2, len(summary.Games))
+	assert.Equal(t, 2, summary.Rounds)
+	assert.Equal(t, 2, app.db.NumGames())
+	assert.False(t, app.IsEngineMatchRunning())
+}
+
+func TestAppStandardizePlayerNames(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+
+	// No database open
+	_, err := app.StandardizePlayerNames()
+	assert.Error(t, err)
+
+	// Create temporary database
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "spellcheck_app_test")
+	db := scid.NewDatabase()
+	err = db.Create(dbPath, "Spellcheck Test Base")
+	require.NoError(t, err)
+	defer db.Close()
+	app.db = db
+
+	// Import game with non-standard names
+	pgn := `[Event "World Championship"]
+[Site "London"]
+[Date "2018.11.09"]
+[Round "1"]
+[White "Magnus Carlsen"]
+[Black "Caruana, F."]
+[Result "1/2-1/2"]
+
+1. e4 e5 1/2-1/2`
+
+	_, err = app.ImportPGNBatch(pgn)
+	require.NoError(t, err)
+
+	summary, err := app.StandardizePlayerNames()
+	require.NoError(t, err)
+	assert.NotNil(t, summary)
+	assert.True(t, summary.CorrectionsMade >= 2)
+	assert.Equal(t, 1, summary.GamesUpdated)
+}
+
+func TestAppExportGameHTMLAndLaTeX(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+
+	// Errors when no game / DB
+	_, err := app.ExportCurrentGameHTML(gameexport.HTMLExportOptions{})
+	assert.Error(t, err)
+	_, err = app.ExportCurrentGameLaTeX(gameexport.LaTeXExportOptions{})
+	assert.Error(t, err)
+	_, err = app.ExportGameHTML(1, gameexport.HTMLExportOptions{})
+	assert.Error(t, err)
+	_, err = app.ExportGameLaTeX(1, gameexport.LaTeXExportOptions{})
+	assert.Error(t, err)
+
+	// Create test DB
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "export_app_test")
+	db := scid.NewDatabase()
+	err = db.Create(dbPath, "Export Test Base")
+	require.NoError(t, err)
+	defer db.Close()
+	app.db = db
+
+	pgn := `[Event "Candidates Tournament"]
+[Site "Madrid"]
+[Date "2022.06.17"]
+[Round "1"]
+[White "Nepomniachtchi, Ian"]
+[Black "Ding, Liren"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 1-0`
+
+	_, err = app.ImportPGNBatch(pgn)
+	require.NoError(t, err)
+
+	_, err = app.GetGame(1)
+	require.NoError(t, err)
+
+	// Test ExportCurrentGameHTML
+	htmlCur, err := app.ExportCurrentGameHTML(gameexport.HTMLExportOptions{
+		Theme:          "light",
+		IncludeDiagram: true,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, htmlCur, "Nepomniachtchi, Ian")
+	assert.Contains(t, htmlCur, "Ding, Liren")
+	assert.Contains(t, htmlCur, "<svg")
+
+	// Test ExportGameHTML by number
+	htmlNum, err := app.ExportGameHTML(1, gameexport.HTMLExportOptions{
+		Theme:          "dark",
+		IncludeDiagram: false,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, htmlNum, "Nepomniachtchi, Ian")
+
+	// Test ExportCurrentGameLaTeX
+	latexCur, err := app.ExportCurrentGameLaTeX(gameexport.LaTeXExportOptions{
+		IncludeDiagram: true,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, latexCur, "\\documentclass")
+	assert.Contains(t, latexCur, "Nepomniachtchi, Ian")
+	assert.Contains(t, latexCur, "\\chessboard")
+
+	// Test ExportGameLaTeX by number
+	latexNum, err := app.ExportGameLaTeX(1, gameexport.LaTeXExportOptions{
+		IncludeDiagram: false,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, latexNum, "Nepomniachtchi, Ian")
+
+	// Test SaveExportFile
+	exportFilePath := filepath.Join(tmpDir, "exported_game.html")
+	err = app.SaveExportFile(exportFilePath, htmlCur)
+	require.NoError(t, err)
+	savedBytes, err := os.ReadFile(exportFilePath)
+	require.NoError(t, err)
+	assert.Equal(t, htmlCur, string(savedBytes))
+
+	// SaveExportFile error with empty path
+	err = app.SaveExportFile("", htmlCur)
+	assert.Error(t, err)
+}
 

@@ -19,13 +19,18 @@ import (
 	"newscid/pkg/database/sciddriver"
 	"newscid/pkg/eco"
 	"newscid/pkg/engine"
+	"newscid/pkg/gameexport"
 	"newscid/pkg/online"
 	"newscid/pkg/persona"
 	"newscid/pkg/playerbot"
+	"newscid/pkg/polyglot"
 	"newscid/pkg/puzzleminer"
 	"newscid/pkg/repertoire"
 	"newscid/pkg/sets"
+	"newscid/pkg/stats"
+	"newscid/pkg/tablebase"
 	"newscid/pkg/tournament"
+	"newscid/pkg/training"
 	"newscid/pkg/tree"
 	"newscid/pkg/version"
 )
@@ -65,21 +70,28 @@ type RepertoireCheckResult struct {
 
 // App struct
 type App struct {
-	ctx        context.Context
-	mu         sync.RWMutex
-	db         *scid.Database
-	eco        *eco.Classifier
-	driver     *sciddriver.Driver
-	engine     *engine.Engine
-	activeGame    *chess.Game
-	repMgr        *repertoire.Manager
-	profileMgr    *online.ProfileManager
-	syncMgr       *online.SyncManager
-	personaMgr    *persona.PersonaManager
-	engineMultiPV int
-	engineThreads int
-	engineHashMB  int
-	notationStyle chess.NotationStyle
+	ctx             context.Context
+	mu              sync.RWMutex
+	db              *scid.Database
+	eco             *eco.Classifier
+	driver          *sciddriver.Driver
+	engine          *engine.Engine
+	activeGame      *chess.Game
+	repMgr          *repertoire.Manager
+	profileMgr      *online.ProfileManager
+	syncMgr         *online.SyncManager
+	personaMgr      *persona.PersonaManager
+	personaBotCache map[string]*playerbot.PlayerPersonality
+	polyglotBooks   map[string]*polyglot.Book
+	tablebaseClient *tablebase.Client
+	solitaireSession *training.SolitaireSession
+	twicClient      *online.TWICClient
+	matchCancel     context.CancelFunc
+	matchRunning    bool
+	engineMultiPV   int
+	engineThreads   int
+	engineHashMB    int
+	notationStyle   chess.NotationStyle
 }
 
 // NewApp creates a new App application struct
@@ -95,14 +107,18 @@ func NewApp() *App {
 	personaMgr, _ := persona.NewPersonaManager("")
 
 	return &App{
-		db:            scid.NewDatabase(),
-		eco:           classifier,
-		driver:        sciddriver.NewDriver(),
-		repMgr:        repertoire.NewManager(""),
-		profileMgr:    profileMgr,
-		syncMgr:       online.NewSyncManager(profileMgr),
-		personaMgr:    personaMgr,
-		engineMultiPV: 1,
+		db:              scid.NewDatabase(),
+		eco:             classifier,
+		driver:          sciddriver.NewDriver(),
+		repMgr:          repertoire.NewManager(""),
+		profileMgr:      profileMgr,
+		syncMgr:         online.NewSyncManager(profileMgr),
+		twicClient:      online.NewTWICClient(),
+		personaMgr:      personaMgr,
+		personaBotCache: make(map[string]*playerbot.PlayerPersonality),
+		polyglotBooks:   make(map[string]*polyglot.Book),
+		tablebaseClient: tablebase.NewClient(),
+		engineMultiPV:   1,
 	}
 }
 
@@ -278,6 +294,31 @@ func (a *App) DeleteGame(gameID int, deleted bool) error {
 	}
 
 	return a.db.DeleteGame(gameID, deleted)
+}
+
+// UpdateGameHeaders updates game metadata tags in the database and active game.
+func (a *App) UpdateGameHeaders(gameID int, tags map[string]string) (*scid.GameSummary, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.db == nil || !a.db.IsOpen {
+		return nil, fmt.Errorf("no database open")
+	}
+
+	if err := a.db.UpdateGameTags(gameID, tags); err != nil {
+		return nil, err
+	}
+
+	if a.activeGame != nil && a.activeGame.ID == gameID {
+		for k, v := range tags {
+			a.activeGame.SetTag(k, v)
+		}
+		if res, ok := tags["Result"]; ok && res != "" {
+			a.activeGame.Result = chess.Result(res)
+		}
+	}
+
+	return a.db.GetGameSummary(gameID)
 }
 
 // CompactDatabase physically cleans deleted games from disk and defragments game data offsets.
@@ -1069,6 +1110,139 @@ func (a *App) FetchChessComPreview(username string) ([]string, error) {
 }
 
 // ==========================================
+// TWIC (The Week In Chess) Bulletins
+// ==========================================
+
+// DownloadTWICIssue downloads and imports a single TWIC issue into the currently active database.
+func (a *App) DownloadTWICIssue(issue int) (*online.TWICIssueResult, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.db == nil || !a.db.IsOpen {
+		return nil, fmt.Errorf("no database is currently open; open or create a database first")
+	}
+
+	return a.twicClient.ImportIssue(context.Background(), issue, a.db)
+}
+
+// DownloadTWICRange downloads and imports a range of TWIC issues [startIssue..endIssue] into the active database.
+func (a *App) DownloadTWICRange(startIssue, endIssue int) (*online.TWICBatchResult, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.db == nil || !a.db.IsOpen {
+		return nil, fmt.Errorf("no database is currently open; open or create a database first")
+	}
+
+	progressFn := func(currentIssue, processedIssues, totalIssues, gamesImported int) {
+		a.emitEvent("twic:progress", map[string]interface{}{
+			"currentIssue":    currentIssue,
+			"processedIssues": processedIssues,
+			"totalIssues":     totalIssues,
+			"gamesImported":   gamesImported,
+		})
+	}
+
+	return a.twicClient.ImportRange(context.Background(), startIssue, endIssue, a.db, progressFn)
+}
+
+// CheckTWICIssue checks if a particular TWIC issue exists on the server.
+func (a *App) CheckTWICIssue(issue int) (bool, error) {
+	return a.twicClient.CheckIssueExists(context.Background(), issue)
+}
+
+// GetLatestTWICIssue automatically detects the latest published TWIC issue number.
+func (a *App) GetLatestTWICIssue() (int, error) {
+	return a.twicClient.FindLatestIssue(context.Background(), 1560)
+}
+
+// ==========================================
+// Engine vs. Engine Match & Tournament
+// ==========================================
+
+// StartEngineMatch launches an automated engine vs engine match.
+func (a *App) StartEngineMatch(cfg tournament.EngineMatchConfig) (*tournament.EngineMatchSummary, error) {
+	a.mu.Lock()
+	if a.matchRunning {
+		a.mu.Unlock()
+		return nil, fmt.Errorf("an engine match is already currently running")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	a.matchCancel = cancel
+	a.matchRunning = true
+	targetDB := a.db
+	a.mu.Unlock()
+
+	defer func() {
+		a.mu.Lock()
+		a.matchRunning = false
+		a.matchCancel = nil
+		a.mu.Unlock()
+	}()
+
+	// 1. Resolve Player 1
+	var p1 tournament.EnginePlayer
+	var err error
+	if cfg.Engine1.Path != "" {
+		p1, err = tournament.NewUCIEnginePlayer(cfg.Engine1.Name, cfg.Engine1.Path, cfg.Engine1.Options)
+		if err != nil {
+			return nil, fmt.Errorf("initializing Engine 1: %w", err)
+		}
+		defer p1.Close()
+	} else {
+		p1 = tournament.NewMockEnginePlayer(cfg.Engine1.Name)
+	}
+
+	// 2. Resolve Player 2
+	var p2 tournament.EnginePlayer
+	if cfg.Engine2.Path != "" {
+		p2, err = tournament.NewUCIEnginePlayer(cfg.Engine2.Name, cfg.Engine2.Path, cfg.Engine2.Options)
+		if err != nil {
+			return nil, fmt.Errorf("initializing Engine 2: %w", err)
+		}
+		defer p2.Close()
+	} else {
+		p2 = tournament.NewMockEnginePlayer(cfg.Engine2.Name)
+	}
+
+	runner := tournament.NewEngineMatchRunner(p1, p2, cfg, targetDB)
+
+	onProgress := func(prog tournament.EngineMatchProgress) {
+		a.emitEvent("enginematch:progress", prog)
+	}
+	onGameEnd := func(game *tournament.EngineGameResult, p1Score, p2Score float64) {
+		a.emitEvent("enginematch:gameend", map[string]interface{}{
+			"game":         game,
+			"engine1Score": p1Score,
+			"engine2Score": p2Score,
+		})
+	}
+
+	return runner.Run(ctx, onProgress, onGameEnd)
+}
+
+// StopEngineMatch aborts any currently active engine match.
+func (a *App) StopEngineMatch() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.matchCancel != nil {
+		a.matchCancel()
+		a.matchRunning = false
+		a.matchCancel = nil
+		return true
+	}
+	return false
+}
+
+// IsEngineMatchRunning reports whether an automated engine match is currently executing.
+func (a *App) IsEngineMatchRunning() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.matchRunning
+}
+
+
+// ==========================================
 // Notation Styles & Formatting
 // ==========================================
 
@@ -1312,8 +1486,8 @@ func (a *App) GetSimulatedMove(playerName string, fen string, isWhite bool) (*pl
 		return simMove, nil
 	}
 
-	// 2. Out of book: calibrate engine with player's estimated Elo
-	limit, uciElo, skill := playerbot.CalibrateEngineSettings(personality.EstimatedElo)
+	// 2. Out of book: calibrate engine with player's estimated Elo and style
+	limit, uciElo, skill, contempt := personality.CalibrateEngineSettingsForPersona()
 
 	a.mu.Lock()
 	eng := a.engine
@@ -1325,6 +1499,9 @@ func (a *App) GetSimulatedMove(playerName string, fen string, isWhite bool) (*pl
 			_ = eng.SetOption("UCI_Elo", strconv.Itoa(uciElo))
 		}
 		_ = eng.SetOption("Skill Level", strconv.Itoa(skill))
+		if contempt != 0 {
+			_ = eng.SetOption("Contempt", strconv.Itoa(contempt))
+		}
 
 		bestUCI, _, err := eng.SearchBestMove(fen, nil, 800)
 		if err == nil && bestUCI != "" {
@@ -1340,7 +1517,89 @@ func (a *App) GetSimulatedMove(playerName string, fen string, isWhite bool) (*pl
 				SAN:        san,
 				IsBook:     false,
 				EloTarget:  personality.EstimatedElo,
-				Commentary: fmt.Sprintf("🧠 %s calculated move at calibrated %d Elo", personality.Name, personality.EstimatedElo),
+				Commentary: fmt.Sprintf("🧠 %s (%s, %d Elo) calculated out-of-book move", personality.Name, personality.PlayStyle, personality.EstimatedElo),
+			}, nil
+		}
+	}
+
+	// Fallback if engine is not running: pick a legal move
+	b, err := chess.ParseFEN(fen)
+	if err != nil {
+		return nil, err
+	}
+	moves := b.GenerateLegalMoves()
+	if len(moves) == 0 {
+		return nil, fmt.Errorf("no legal moves available")
+	}
+	m := moves[rand.Intn(len(moves))]
+	return &playerbot.SimulatedMove{
+		UCI:        m.String(),
+		SAN:        b.MoveToSAN(m),
+		IsBook:     false,
+		EloTarget:  personality.EstimatedElo,
+		Commentary: fmt.Sprintf("🎲 %s played fallback move", personality.Name),
+	}, nil
+}
+
+// GetPersonaSimulatedMove queries the persona's full game repertoire and returns their most common
+// historical move. If out of their historical games, it computes an engine move calibrated to their
+// human Elo, contempt rating, and tactical aggression style.
+func (a *App) GetPersonaSimulatedMove(personaID string, fen string, isWhite bool) (*playerbot.SimulatedMove, error) {
+	a.mu.Lock()
+	if a.personaBotCache == nil {
+		a.personaBotCache = make(map[string]*playerbot.PlayerPersonality)
+	}
+	personality := a.personaBotCache[personaID]
+	a.mu.Unlock()
+
+	var err error
+	if personality == nil {
+		personality, err = a.GetPersonaPersonality(personaID)
+		if err != nil {
+			return nil, err
+		}
+		a.mu.Lock()
+		a.personaBotCache[personaID] = personality
+		a.mu.Unlock()
+	}
+
+	// 1. Check personal full-game tree (plays most common response or sole response)
+	if simMove, inBook := personality.SelectSimulatedMove(fen, isWhite); inBook {
+		return simMove, nil
+	}
+
+	// 2. Out of personal game tree: calibrate engine settings with style, contempt, and Elo
+	limit, uciElo, skill, contempt := personality.CalibrateEngineSettingsForPersona()
+
+	a.mu.Lock()
+	eng := a.engine
+	a.mu.Unlock()
+
+	if eng != nil {
+		if limit {
+			_ = eng.SetOption("UCI_LimitStrength", "true")
+			_ = eng.SetOption("UCI_Elo", strconv.Itoa(uciElo))
+		}
+		_ = eng.SetOption("Skill Level", strconv.Itoa(skill))
+		if contempt != 0 {
+			_ = eng.SetOption("Contempt", strconv.Itoa(contempt))
+		}
+
+		bestUCI, _, err := eng.SearchBestMove(fen, nil, 800)
+		if err == nil && bestUCI != "" {
+			board, _ := chess.ParseFEN(fen)
+			san := bestUCI
+			if board != nil {
+				if m, err := board.ParseUCI(bestUCI); err == nil {
+					san = board.MoveToSAN(m)
+				}
+			}
+			return &playerbot.SimulatedMove{
+				UCI:        bestUCI,
+				SAN:        san,
+				IsBook:     false,
+				EloTarget:  personality.EstimatedElo,
+				Commentary: fmt.Sprintf("🧠 %s (%s, %d Elo) calculated out-of-book move", personality.Name, personality.PlayStyle, personality.EstimatedElo),
 			}, nil
 		}
 	}
@@ -1393,6 +1652,9 @@ func (a *App) SavePersona(p *persona.Persona) (*persona.Persona, error) {
 	if err != nil {
 		return nil, err
 	}
+	a.mu.Lock()
+	delete(a.personaBotCache, saved.ID)
+	a.mu.Unlock()
 	_, _ = a.personaMgr.EnsurePersonaDatabase(saved)
 	return saved, nil
 }
@@ -1402,6 +1664,9 @@ func (a *App) DeletePersona(id string) error {
 	if a.personaMgr == nil {
 		return fmt.Errorf("persona manager not initialized")
 	}
+	a.mu.Lock()
+	delete(a.personaBotCache, id)
+	a.mu.Unlock()
 	return a.personaMgr.DeletePersona(id)
 }
 
@@ -1533,6 +1798,10 @@ func (a *App) FetchPersonaOnlineGames(personaID string, maxGames int) (*online.S
 		return nil, err
 	}
 
+	a.mu.Lock()
+	delete(a.personaBotCache, personaID)
+	a.mu.Unlock()
+
 	return res, nil
 }
 
@@ -1550,7 +1819,16 @@ func (a *App) AggregatePersonaGames(personaID string) (*persona.AggregateResult,
 		return nil, fmt.Errorf("no database open to aggregate games from")
 	}
 
-	return a.personaMgr.AggregateGames(db, personaID)
+	res, err := a.personaMgr.AggregateGames(db, personaID)
+	if err != nil {
+		return nil, err
+	}
+
+	a.mu.Lock()
+	delete(a.personaBotCache, personaID)
+	a.mu.Unlock()
+
+	return res, nil
 }
 
 // OpenPersonaDatabase opens the persona's dedicated database as the active database in NewScid.
@@ -1674,4 +1952,317 @@ func (a *App) ExportCrosstableText(eventName string, site string, date string) (
 	}
 	return ct.CrossTableText, nil
 }
+
+// GetPolyglotBooks returns discovered Polyglot opening books (.bin) on the system.
+func (a *App) GetPolyglotBooks() []string {
+	return polyglot.DiscoverBooks()
+}
+
+// QueryPolyglotBook returns moves from a Polyglot book for the specified position FEN.
+func (a *App) QueryPolyglotBook(fen string, bookPath string) ([]polyglot.BookMove, error) {
+	if strings.TrimSpace(bookPath) == "" {
+		return []polyglot.BookMove{}, nil
+	}
+
+	a.mu.Lock()
+	if a.polyglotBooks == nil {
+		a.polyglotBooks = make(map[string]*polyglot.Book)
+	}
+	book, ok := a.polyglotBooks[bookPath]
+	var err error
+	if !ok {
+		book, err = polyglot.OpenBook(bookPath)
+		if err != nil {
+			a.mu.Unlock()
+			return nil, err
+		}
+		a.polyglotBooks[bookPath] = book
+	}
+	a.mu.Unlock()
+
+	var b *chess.Board
+	if strings.TrimSpace(fen) == "" || fen == chess.StartingFEN {
+		b = chess.NewBoard()
+	} else {
+		parsed, err := chess.ParseFEN(fen)
+		if err != nil {
+			return nil, fmt.Errorf("parsing FEN %q: %w", fen, err)
+		}
+		b = parsed
+	}
+
+	return book.FindMoves(b)
+}
+
+// GetPolyglotBookMove selects a book move according to weights or chooses the best move.
+func (a *App) GetPolyglotBookMove(fen string, bookPath string, pickBest bool) (*polyglot.BookMove, error) {
+	moves, err := a.QueryPolyglotBook(fen, bookPath)
+	if err != nil {
+		return nil, err
+	}
+	if len(moves) == 0 {
+		return nil, nil
+	}
+	if pickBest || len(moves) == 1 {
+		return &moves[0], nil
+	}
+
+	totalWeight := 0
+	for _, m := range moves {
+		totalWeight += m.Weight
+	}
+	if totalWeight <= 0 {
+		return &moves[0], nil
+	}
+
+	r := rand.Intn(totalWeight)
+	running := 0
+	for i := range moves {
+		running += moves[i].Weight
+		if r < running {
+			return &moves[i], nil
+		}
+	}
+	return &moves[0], nil
+}
+
+// GetECOSections returns the 5 primary ECO classifications with game/line counts.
+func (a *App) GetECOSections() []eco.SectionSummary {
+	a.mu.RLock()
+	classifier := a.eco
+	a.mu.RUnlock()
+
+	if classifier == nil {
+		return nil
+	}
+	return classifier.GetSections()
+}
+
+// SearchECO queries ECO openings by section (A-E or ALL) and optional keywords.
+func (a *App) SearchECO(section string, query string, limit int) []*eco.Entry {
+	a.mu.RLock()
+	classifier := a.eco
+	a.mu.RUnlock()
+
+	if classifier == nil {
+		return nil
+	}
+	return classifier.Search(section, query, limit)
+}
+
+// ClassifyMoves identifies the ECO code and opening name for a sequence of moves.
+func (a *App) ClassifyMoves(sans []string) *eco.Entry {
+	a.mu.RLock()
+	classifier := a.eco
+	a.mu.RUnlock()
+
+	if classifier == nil {
+		return &eco.Entry{Code: "A00", Name: "Unknown"}
+	}
+	return classifier.Classify(sans)
+}
+
+// ProbeTablebase queries Syzygy endgame tablebases for a position (up to 7 pieces).
+func (a *App) ProbeTablebase(fen string) (*tablebase.TablebaseResult, error) {
+	a.mu.RLock()
+	client := a.tablebaseClient
+	a.mu.RUnlock()
+	if client == nil {
+		client = tablebase.NewClient()
+	}
+	return client.Probe(fen)
+}
+
+// StartGuessTheMove initializes a Solitaire Chess session for the given game and side.
+func (a *App) StartGuessTheMove(gameID int, userSide string) (*training.SolitaireSession, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	var g *chess.Game
+	if a.db != nil && a.db.IsOpen && gameID > 0 {
+		game, err := a.db.GetGame(gameID)
+		if err != nil {
+			return nil, fmt.Errorf("loading game %d: %w", gameID, err)
+		}
+		g = game
+	} else if a.activeGame != nil {
+		g = a.activeGame
+	} else {
+		return nil, fmt.Errorf("no game loaded for Guess-the-Move training")
+	}
+
+	session, err := training.NewSolitaireSession(g, userSide)
+	if err != nil {
+		return nil, err
+	}
+	a.solitaireSession = session
+	return session, nil
+}
+
+// GetGuessTheMoveState returns the current Solitaire Chess session if active.
+func (a *App) GetGuessTheMoveState() (*training.SolitaireSession, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if a.solitaireSession == nil {
+		return nil, fmt.Errorf("no active guess-the-move session")
+	}
+	return a.solitaireSession, nil
+}
+
+// SubmitGuessTheMove submits the user's move guess and returns evaluation feedback.
+func (a *App) SubmitGuessTheMove(guess string) (*training.GuessFeedback, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.solitaireSession == nil {
+		return nil, fmt.Errorf("no active guess-the-move session")
+	}
+	feedback := a.solitaireSession.SubmitGuess(guess)
+	return feedback, nil
+}
+
+// GetGuessTheMoveHint requests a progressive hint for the current turn.
+func (a *App) GetGuessTheMoveHint() (string, int, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.solitaireSession == nil {
+		return "", 0, fmt.Errorf("no active guess-the-move session")
+	}
+	hintText, level := a.solitaireSession.GetHint()
+	return hintText, level, nil
+}
+
+// SkipGuessTheMove reveals the actual move and advances to the next turn.
+func (a *App) SkipGuessTheMove() (*training.GuessFeedback, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.solitaireSession == nil {
+		return nil, fmt.Errorf("no active guess-the-move session")
+	}
+	feedback := a.solitaireSession.RevealAndSkip()
+	return feedback, nil
+}
+
+// GetRatingEvolution calculates chronological rating progression for a player or persona.
+func (a *App) GetRatingEvolution(playerOrPersona string) (*stats.RatingTrackerResult, error) {
+	a.mu.RLock()
+	db := a.db
+	pMgr := a.personaMgr
+	a.mu.RUnlock()
+
+	if db == nil || !db.IsOpen {
+		return nil, fmt.Errorf("no database open")
+	}
+
+	aliases := []string{playerOrPersona}
+	if pMgr != nil {
+		if p, err := pMgr.GetPersona(playerOrPersona); err == nil && p != nil {
+			aliases = append([]string{p.DisplayName}, p.Identifiers...)
+			if p.ChessComUsername != "" {
+				aliases = append(aliases, p.ChessComUsername)
+			}
+			if p.LichessUsername != "" {
+				aliases = append(aliases, p.LichessUsername)
+			}
+		}
+	}
+
+	return stats.CalculateRatingTracker(db, aliases)
+}
+
+// GetDatabaseDemographics returns demographic distributions for the active database.
+func (a *App) GetDatabaseDemographics() (*stats.DatabaseDemographics, error) {
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+
+	if db == nil || !db.IsOpen {
+		return nil, fmt.Errorf("no database open")
+	}
+
+	return stats.CalculateDatabaseDemographics(db)
+}
+
+// StandardizePlayerNames applies spelling standardizations across the active database.
+func (a *App) StandardizePlayerNames() (*scid.SpellCheckSummary, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.db == nil || !a.db.IsOpen {
+		return nil, fmt.Errorf("no database open")
+	}
+
+	return a.db.StandardizePlayerNames()
+}
+
+// ExportCurrentGameHTML exports the currently loaded game as standalone HTML.
+func (a *App) ExportCurrentGameHTML(opts gameexport.HTMLExportOptions) (string, error) {
+	a.mu.RLock()
+	g := a.activeGame
+	a.mu.RUnlock()
+
+	if g == nil {
+		return "", fmt.Errorf("no active game loaded")
+	}
+
+	return gameexport.ExportGameHTML(g, opts)
+}
+
+// ExportGameHTML exports a specific game by index as standalone HTML.
+func (a *App) ExportGameHTML(gameNum int, opts gameexport.HTMLExportOptions) (string, error) {
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+
+	if db == nil || !db.IsOpen {
+		return "", fmt.Errorf("no database open")
+	}
+
+	g, err := db.GetGame(gameNum)
+	if err != nil {
+		return "", fmt.Errorf("failed to load game %d: %w", gameNum, err)
+	}
+
+	return gameexport.ExportGameHTML(g, opts)
+}
+
+// ExportCurrentGameLaTeX exports the currently loaded game as a LaTeX document.
+func (a *App) ExportCurrentGameLaTeX(opts gameexport.LaTeXExportOptions) (string, error) {
+	a.mu.RLock()
+	g := a.activeGame
+	a.mu.RUnlock()
+
+	if g == nil {
+		return "", fmt.Errorf("no active game loaded")
+	}
+
+	return gameexport.ExportGameLaTeX(g, opts)
+}
+
+// ExportGameLaTeX exports a specific game by index as a LaTeX document.
+func (a *App) ExportGameLaTeX(gameNum int, opts gameexport.LaTeXExportOptions) (string, error) {
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+
+	if db == nil || !db.IsOpen {
+		return "", fmt.Errorf("no database open")
+	}
+
+	g, err := db.GetGame(gameNum)
+	if err != nil {
+		return "", fmt.Errorf("failed to load game %d: %w", gameNum, err)
+	}
+
+	return gameexport.ExportGameLaTeX(g, opts)
+}
+
+// SaveExportFile writes exported content (HTML, LaTeX, PGN, etc.) to a file on disk.
+func (a *App) SaveExportFile(filePath, content string) error {
+	if filePath == "" {
+		return fmt.Errorf("file path cannot be empty")
+	}
+	return os.WriteFile(filePath, []byte(content), 0644)
+}
+
+
 

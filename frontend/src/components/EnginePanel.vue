@@ -44,6 +44,7 @@ const props = withDefaults(defineProps<{
   discoveredEngines?: EngineOption[]
   selectedEngine?: string
   multiPv?: number
+  tablebaseResult?: any
 }>(), {
   evalInfo: null,
   isAnalyzing: false,
@@ -51,6 +52,7 @@ const props = withDefaults(defineProps<{
   discoveredEngines: () => [],
   selectedEngine: '',
   multiPv: 1,
+  tablebaseResult: null,
 })
 
 const emit = defineEmits<{
@@ -366,8 +368,24 @@ function handleApplyHash(h: number) {
 
       </div>
 
-      <!-- Right side: Score & Depth Badge -->
+      <!-- Right side: Tablebase & Score & Depth Badge -->
       <div class="flex items-center gap-2 shrink-0">
+        <!-- Syzygy Tablebase Badge -->
+        <div
+          v-if="tablebaseResult"
+          class="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono border shadow-xs"
+          :class="{
+            'bg-emerald-950/70 border-emerald-600/60 text-emerald-300': tablebaseResult.category === 'win',
+            'bg-rose-950/70 border-rose-600/60 text-rose-300': tablebaseResult.category === 'loss',
+            'bg-amber-950/70 border-amber-600/60 text-amber-300': tablebaseResult.category === 'draw',
+            'bg-zinc-800 border-zinc-700 text-zinc-300': !['win', 'loss', 'draw'].includes(tablebaseResult.category)
+          }"
+          :title="`Syzygy Tablebase (${tablebaseResult.pieceCount} pieces): ${tablebaseResult.summaryText}`"
+        >
+          <span class="font-bold">⚡ TB:</span>
+          <span>{{ tablebaseResult.summaryText }}</span>
+        </div>
+
         <span class="text-xs text-zinc-500 font-mono">D: {{ evalInfo?.depth || 0 }}</span>
         <span
           class="px-2.5 py-1 rounded font-mono font-bold text-sm tracking-wider shadow-inner"

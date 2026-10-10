@@ -34,6 +34,7 @@ const emit = defineEmits<{
   (e: 'close'): void
   (e: 'startMatch', payload: {
     playerName: string
+    personaId?: string
     userColor: 'white' | 'black'
     timeControlMinutes: number
     personality: playerbot.PlayerPersonality
@@ -161,6 +162,7 @@ function handleStartMatch() {
 
   emit('startMatch', {
     playerName: personality.value.name,
+    personaId: selectedPersona.value?.id,
     userColor: finalColor,
     timeControlMinutes: timeControl.value,
     personality: personality.value
@@ -337,11 +339,16 @@ function handleStartMatch() {
                   <span class="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
                     {{ personality.estimatedElo }} Elo
                   </span>
+                  <span v-if="personality.playStyle" class="px-2 py-0.5 rounded-full text-xs font-mono font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                    {{ personality.playStyle }}
+                  </span>
                 </h3>
                 <p class="text-xs text-zinc-400 flex items-center gap-2 mt-0.5">
                   <span>{{ personality.totalGames }} historical games</span>
                   <span>•</span>
                   <span>Peak {{ personality.peakElo }} Elo</span>
+                  <span v-if="personality.avgGamePlies">•</span>
+                  <span v-if="personality.avgGamePlies">Avg {{ (personality.avgGamePlies / 2).toFixed(0) }} moves</span>
                 </p>
               </div>
             </div>

@@ -140,9 +140,32 @@ func DecodeGameData(raw []byte, entry *IndexEntry, nb *NameBase) (*chess.Game, e
 	}
 
 	// 4. Decode moves
-	rootMove, plyCount, err := decodeVariation(r, startBoard.Clone(), 0)
+	var commentNodes []*chess.MoveNode
+	rootMove, plyCount, err := decodeVariation(r, startBoard.Clone(), 0, &commentNodes)
 	if err != nil && err != io.EOF {
 		return nil, err
+	}
+
+	// 5. Decode comments (null-terminated UTF-8 strings following moves)
+	for _, node := range commentNodes {
+		var commentBytes []byte
+		for {
+			cb, err := r.ReadByte()
+			if err != nil {
+				break
+			}
+			if cb == 0 {
+				break
+			}
+			commentBytes = append(commentBytes, cb)
+		}
+		if len(commentBytes) > 0 {
+			if node.Comment != "" {
+				node.Comment += " " + string(commentBytes)
+			} else {
+				node.Comment = string(commentBytes)
+			}
+		}
 	}
 
 	game.RootMove = rootMove
@@ -150,7 +173,7 @@ func DecodeGameData(raw []byte, entry *IndexEntry, nb *NameBase) (*chess.Game, e
 	return game, nil
 }
 
-func decodeVariation(r *bytes.Reader, b *chess.Board, level int) (*chess.MoveNode, int, error) {
+func decodeVariation(r *bytes.Reader, b *chess.Board, level int, commentNodes *[]*chess.MoveNode) (*chess.MoveNode, int, error) {
 	var root *chess.MoveNode
 	var curr *chess.MoveNode
 	var prevBoard *chess.Board
@@ -171,7 +194,7 @@ func decodeVariation(r *bytes.Reader, b *chess.Board, level int) (*chess.MoveNod
 			// Variation starts: child of previous position before curr move
 			if curr != nil && prevBoard != nil {
 				varBoard := prevBoard.Clone()
-				varNode, _, err := decodeVariation(r, varBoard, level+1)
+				varNode, _, err := decodeVariation(r, varBoard, level+1, commentNodes)
 				if err != nil && err != io.EOF {
 					return root, plyCount, err
 				}
@@ -185,7 +208,9 @@ func decodeVariation(r *bytes.Reader, b *chess.Board, level int) (*chess.MoveNod
 				curr.NAGs = append(curr.NAGs, int(nagByte))
 			}
 		case EncodeComment:
-			// Marker indicating comment
+			if curr != nil {
+				*commentNodes = append(*commentNodes, curr)
+			}
 		default:
 			prevBoard = b.Clone()
 			move, err := decodePieceMove(r, b, bVal)
@@ -351,15 +376,22 @@ func EncodeGameData(game *chess.Game) ([]byte, error) {
 	}
 
 	// 3. Encode Moves
+	var comments []string
 	if game.RootMove != nil {
-		encodeNodeTree(&buf, b, game.RootMove)
+		encodeNodeTree(&buf, b, game.RootMove, &comments)
 	}
 	buf.WriteByte(EncodeEndGame)
+
+	// 4. Encode Comments
+	for _, c := range comments {
+		buf.WriteString(c)
+		buf.WriteByte(0)
+	}
 
 	return buf.Bytes(), nil
 }
 
-func encodeNodeTree(buf *bytes.Buffer, b *chess.Board, node *chess.MoveNode) {
+func encodeNodeTree(buf *bytes.Buffer, b *chess.Board, node *chess.MoveNode, comments *[]string) {
 	curr := node
 	for curr != nil {
 		beforeBoard := b.Clone()
@@ -374,11 +406,17 @@ func encodeNodeTree(buf *bytes.Buffer, b *chess.Board, node *chess.MoveNode) {
 			buf.WriteByte(byte(nag))
 		}
 
+		// Comment
+		if curr.Comment != "" {
+			buf.WriteByte(EncodeComment)
+			*comments = append(*comments, curr.Comment)
+		}
+
 		// Variations
 		for _, v := range curr.Variations {
 			buf.WriteByte(EncodeStartMarker)
 			varBoard := beforeBoard.Clone()
-			encodeNodeTree(buf, varBoard, v)
+			encodeNodeTree(buf, varBoard, v, comments)
 			buf.WriteByte(EncodeEndMarker)
 		}
 

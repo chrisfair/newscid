@@ -30,6 +30,14 @@ export function AnnotatePGN(arg1, arg2) {
   return window['go']['main']['App']['AnnotatePGN'](arg1, arg2);
 }
 
+export function CheckTWICIssue(arg1) {
+  return window['go']['main']['App']['CheckTWICIssue'](arg1);
+}
+
+export function ClassifyMoves(arg1) {
+  return window['go']['main']['App']['ClassifyMoves'](arg1);
+}
+
 export function ClassifyOpening(arg1) {
   return window['go']['main']['App']['ClassifyOpening'](arg1);
 }
@@ -78,8 +86,32 @@ export function DeleteVariation(arg1, arg2) {
   return window['go']['main']['App']['DeleteVariation'](arg1, arg2);
 }
 
+export function DownloadTWICIssue(arg1) {
+  return window['go']['main']['App']['DownloadTWICIssue'](arg1);
+}
+
+export function DownloadTWICRange(arg1, arg2) {
+  return window['go']['main']['App']['DownloadTWICRange'](arg1, arg2);
+}
+
 export function ExportCrosstableText(arg1, arg2, arg3) {
   return window['go']['main']['App']['ExportCrosstableText'](arg1, arg2, arg3);
+}
+
+export function ExportCurrentGameHTML(arg1) {
+  return window['go']['main']['App']['ExportCurrentGameHTML'](arg1);
+}
+
+export function ExportCurrentGameLaTeX(arg1) {
+  return window['go']['main']['App']['ExportCurrentGameLaTeX'](arg1);
+}
+
+export function ExportGameHTML(arg1, arg2) {
+  return window['go']['main']['App']['ExportGameHTML'](arg1, arg2);
+}
+
+export function ExportGameLaTeX(arg1, arg2) {
+  return window['go']['main']['App']['ExportGameLaTeX'](arg1, arg2);
 }
 
 export function ExportPGN(arg1) {
@@ -122,6 +154,10 @@ export function GetBoardThemes() {
   return window['go']['main']['App']['GetBoardThemes']();
 }
 
+export function GetDatabaseDemographics() {
+  return window['go']['main']['App']['GetDatabaseDemographics']();
+}
+
 export function GetDatabaseInfo() {
   return window['go']['main']['App']['GetDatabaseInfo']();
 }
@@ -142,6 +178,10 @@ export function GetDiscoveredEngines() {
   return window['go']['main']['App']['GetDiscoveredEngines']();
 }
 
+export function GetECOSections() {
+  return window['go']['main']['App']['GetECOSections']();
+}
+
 export function GetEngineEval() {
   return window['go']['main']['App']['GetEngineEval']();
 }
@@ -156,6 +196,18 @@ export function GetGame(arg1) {
 
 export function GetGames(arg1, arg2, arg3) {
   return window['go']['main']['App']['GetGames'](arg1, arg2, arg3);
+}
+
+export function GetGuessTheMoveHint() {
+  return window['go']['main']['App']['GetGuessTheMoveHint']();
+}
+
+export function GetGuessTheMoveState() {
+  return window['go']['main']['App']['GetGuessTheMoveState']();
+}
+
+export function GetLatestTWICIssue() {
+  return window['go']['main']['App']['GetLatestTWICIssue']();
 }
 
 export function GetLegalMoves(arg1) {
@@ -178,6 +230,10 @@ export function GetPersonaPersonality(arg1) {
   return window['go']['main']['App']['GetPersonaPersonality'](arg1);
 }
 
+export function GetPersonaSimulatedMove(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetPersonaSimulatedMove'](arg1, arg2, arg3);
+}
+
 export function GetPersonaStatistics(arg1) {
   return window['go']['main']['App']['GetPersonaStatistics'](arg1);
 }
@@ -194,8 +250,20 @@ export function GetPlayerPersonality(arg1) {
   return window['go']['main']['App']['GetPlayerPersonality'](arg1);
 }
 
+export function GetPolyglotBookMove(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetPolyglotBookMove'](arg1, arg2, arg3);
+}
+
+export function GetPolyglotBooks() {
+  return window['go']['main']['App']['GetPolyglotBooks']();
+}
+
 export function GetProgressivePuzzle(arg1) {
   return window['go']['main']['App']['GetProgressivePuzzle'](arg1);
+}
+
+export function GetRatingEvolution(arg1) {
+  return window['go']['main']['App']['GetRatingEvolution'](arg1);
 }
 
 export function GetRepertoire(arg1) {
@@ -246,6 +314,10 @@ export function ImportPlayerGames(arg1) {
   return window['go']['main']['App']['ImportPlayerGames'](arg1);
 }
 
+export function IsEngineMatchRunning() {
+  return window['go']['main']['App']['IsEngineMatchRunning']();
+}
+
 export function IsScidDriverAvailable() {
   return window['go']['main']['App']['IsScidDriverAvailable']();
 }
@@ -286,8 +358,16 @@ export function ParsePGN(arg1) {
   return window['go']['main']['App']['ParsePGN'](arg1);
 }
 
+export function ProbeTablebase(arg1) {
+  return window['go']['main']['App']['ProbeTablebase'](arg1);
+}
+
 export function PromoteVariation(arg1, arg2) {
   return window['go']['main']['App']['PromoteVariation'](arg1, arg2);
+}
+
+export function QueryPolyglotBook(arg1, arg2) {
+  return window['go']['main']['App']['QueryPolyglotBook'](arg1, arg2);
 }
 
 export function RecordRepertoirePractice(arg1, arg2, arg3, arg4) {
@@ -296,6 +376,10 @@ export function RecordRepertoirePractice(arg1, arg2, arg3, arg4) {
 
 export function RemovePersonaIdentifier(arg1, arg2) {
   return window['go']['main']['App']['RemovePersonaIdentifier'](arg1, arg2);
+}
+
+export function SaveExportFile(arg1, arg2) {
+  return window['go']['main']['App']['SaveExportFile'](arg1, arg2);
 }
 
 export function SaveFileDialog(arg1) {
@@ -316,6 +400,10 @@ export function SaveRepertoire(arg1) {
 
 export function SaveSyncProfile(arg1) {
   return window['go']['main']['App']['SaveSyncProfile'](arg1);
+}
+
+export function SearchECO(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SearchECO'](arg1, arg2, arg3);
 }
 
 export function SearchPosition(arg1) {
@@ -342,16 +430,40 @@ export function SetNotationStyle(arg1) {
   return window['go']['main']['App']['SetNotationStyle'](arg1);
 }
 
+export function SkipGuessTheMove() {
+  return window['go']['main']['App']['SkipGuessTheMove']();
+}
+
 export function SortDatabase(arg1) {
   return window['go']['main']['App']['SortDatabase'](arg1);
+}
+
+export function StandardizePlayerNames() {
+  return window['go']['main']['App']['StandardizePlayerNames']();
 }
 
 export function StartEngine(arg1) {
   return window['go']['main']['App']['StartEngine'](arg1);
 }
 
+export function StartEngineMatch(arg1) {
+  return window['go']['main']['App']['StartEngineMatch'](arg1);
+}
+
+export function StartGuessTheMove(arg1, arg2) {
+  return window['go']['main']['App']['StartGuessTheMove'](arg1, arg2);
+}
+
 export function StopEngine() {
   return window['go']['main']['App']['StopEngine']();
+}
+
+export function StopEngineMatch() {
+  return window['go']['main']['App']['StopEngineMatch']();
+}
+
+export function SubmitGuessTheMove(arg1) {
+  return window['go']['main']['App']['SubmitGuessTheMove'](arg1);
 }
 
 export function SuggestPersonaIdentifiers(arg1, arg2) {
@@ -360,6 +472,10 @@ export function SuggestPersonaIdentifiers(arg1, arg2) {
 
 export function SyncOnlineProfile(arg1) {
   return window['go']['main']['App']['SyncOnlineProfile'](arg1);
+}
+
+export function UpdateGameHeaders(arg1, arg2) {
+  return window['go']['main']['App']['UpdateGameHeaders'](arg1, arg2);
 }
 
 export function VerifyDatabase() {

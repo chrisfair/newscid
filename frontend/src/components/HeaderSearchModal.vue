@@ -12,7 +12,10 @@ import {
   CheckCircle2,
   Sliders,
   FileSearch,
-  Hash
+  Hash,
+  Layers,
+  MessageSquare,
+  Shield
 } from '@lucide/vue'
 import { CountSearchMatches } from '../../wailsjs/go/main/App'
 import { scid } from '../../wailsjs/go/models'
@@ -28,7 +31,7 @@ const emit = defineEmits<{
   (e: 'applySearch', criteria: scid.SearchCriteria): void
 }>()
 
-const criteria = reactive<scid.SearchCriteria>({
+const criteria = reactive(new scid.SearchCriteria({
   white: '',
   black: '',
   player: '',
@@ -54,7 +57,31 @@ const criteria = reactive<scid.SearchCriteria>({
   hasVariations: false,
   ignoreDeleted: true,
   onlyDeleted: false
+}))
+
+const matCriteria = reactive({
+  whiteQ: -1,
+  whiteR: -1,
+  whiteB: -1,
+  whiteN: -1,
+  whiteP: -1,
+  blackQ: -1,
+  blackR: -1,
+  blackB: -1,
+  blackN: -1,
+  blackP: -1,
+  diffQueens: -99,
+  diffRooks: -99,
+  diffBishops: -99,
+  diffKnights: -99,
+  diffPawns: -99,
+  oppositeBishops: false,
+  matchEndOnly: false,
 })
+
+const pawnStructure = ref('')
+const commentText = ref('')
+const annotator = ref('')
 
 const isCounting = ref(false)
 const matchCount = ref<number | null>(null)
@@ -62,6 +89,18 @@ const matchCount = ref<number | null>(null)
 onMounted(() => {
   if (props.initialCriteria) {
     Object.assign(criteria, props.initialCriteria)
+    if (props.initialCriteria.material) {
+      Object.assign(matCriteria, props.initialCriteria.material)
+    }
+    if (props.initialCriteria.pawnStructure) {
+      pawnStructure.value = props.initialCriteria.pawnStructure
+    }
+    if (props.initialCriteria.commentText) {
+      commentText.value = props.initialCriteria.commentText
+    }
+    if (props.initialCriteria.annotator) {
+      annotator.value = props.initialCriteria.annotator
+    }
   }
 })
 
@@ -91,6 +130,28 @@ function resetFilters() {
   criteria.hasVariations = false
   criteria.ignoreDeleted = true
   criteria.onlyDeleted = false
+
+  matCriteria.whiteQ = -1
+  matCriteria.whiteR = -1
+  matCriteria.whiteB = -1
+  matCriteria.whiteN = -1
+  matCriteria.whiteP = -1
+  matCriteria.blackQ = -1
+  matCriteria.blackR = -1
+  matCriteria.blackB = -1
+  matCriteria.blackN = -1
+  matCriteria.blackP = -1
+  matCriteria.diffQueens = -99
+  matCriteria.diffRooks = -99
+  matCriteria.diffBishops = -99
+  matCriteria.diffKnights = -99
+  matCriteria.diffPawns = -99
+  matCriteria.oppositeBishops = false
+  matCriteria.matchEndOnly = false
+
+  pawnStructure.value = ''
+  commentText.value = ''
+  annotator.value = ''
   matchCount.value = null
 }
 
@@ -121,6 +182,25 @@ function cleanCriteria(): scid.SearchCriteria {
   if (criteria.hasVariations) c.hasVariations = true
   if (criteria.onlyDeleted) c.onlyDeleted = true
   if (criteria.ignoreDeleted !== undefined) c.ignoreDeleted = criteria.ignoreDeleted
+
+  const isMatActive = matCriteria.whiteQ >= 0 || matCriteria.whiteR >= 0 || matCriteria.whiteB >= 0 || matCriteria.whiteN >= 0 || matCriteria.whiteP >= 0 ||
+    matCriteria.blackQ >= 0 || matCriteria.blackR >= 0 || matCriteria.blackB >= 0 || matCriteria.blackN >= 0 || matCriteria.blackP >= 0 ||
+    matCriteria.diffQueens !== -99 || matCriteria.diffRooks !== -99 || matCriteria.diffBishops !== -99 || matCriteria.diffKnights !== -99 || matCriteria.diffPawns !== -99 ||
+    matCriteria.oppositeBishops
+
+  if (isMatActive) {
+    c.material = { ...matCriteria }
+  }
+  if (pawnStructure.value) {
+    c.pawnStructure = pawnStructure.value
+  }
+  if (commentText.value.trim()) {
+    c.commentText = commentText.value.trim()
+  }
+  if (annotator.value.trim()) {
+    c.annotator = annotator.value.trim()
+  }
+
   return c
 }
 
@@ -436,7 +516,132 @@ function handleSearch() {
           </div>
         </div>
 
-        <!-- 4. FLAGS & OPTIONS -->
+        <!-- 4. MATERIAL & PAWN STRUCTURE -->
+        <div class="p-4 rounded-lg bg-zinc-950/70 border border-zinc-800 space-y-3">
+          <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+            <div class="flex items-center gap-2 text-sm font-semibold text-zinc-200">
+              <Layers class="w-4 h-4 text-purple-400" />
+              <span>Material & Pawn Structure Search</span>
+            </div>
+            <span class="text-[11px] text-zinc-500">(-1 = any piece count, -99 = any diff)</span>
+          </div>
+
+          <!-- White Pieces -->
+          <div class="space-y-1">
+            <span class="text-xs font-medium text-zinc-400">White Pieces:</span>
+            <div class="grid grid-cols-5 gap-2">
+              <div>
+                <label class="block text-[10px] text-zinc-500 mb-0.5">Queen (Q)</label>
+                <input v-model.number="matCriteria.whiteQ" type="number" placeholder="-1" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-hidden focus:border-purple-500" />
+              </div>
+              <div>
+                <label class="block text-[10px] text-zinc-500 mb-0.5">Rook (R)</label>
+                <input v-model.number="matCriteria.whiteR" type="number" placeholder="-1" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-hidden focus:border-purple-500" />
+              </div>
+              <div>
+                <label class="block text-[10px] text-zinc-500 mb-0.5">Bishop (B)</label>
+                <input v-model.number="matCriteria.whiteB" type="number" placeholder="-1" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-hidden focus:border-purple-500" />
+              </div>
+              <div>
+                <label class="block text-[10px] text-zinc-500 mb-0.5">Knight (N)</label>
+                <input v-model.number="matCriteria.whiteN" type="number" placeholder="-1" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-hidden focus:border-purple-500" />
+              </div>
+              <div>
+                <label class="block text-[10px] text-zinc-500 mb-0.5">Pawns (P)</label>
+                <input v-model.number="matCriteria.whiteP" type="number" placeholder="-1" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-hidden focus:border-purple-500" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Black Pieces -->
+          <div class="space-y-1">
+            <span class="text-xs font-medium text-zinc-400">Black Pieces:</span>
+            <div class="grid grid-cols-5 gap-2">
+              <div>
+                <label class="block text-[10px] text-zinc-500 mb-0.5">Queen (Q)</label>
+                <input v-model.number="matCriteria.blackQ" type="number" placeholder="-1" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-hidden focus:border-purple-500" />
+              </div>
+              <div>
+                <label class="block text-[10px] text-zinc-500 mb-0.5">Rook (R)</label>
+                <input v-model.number="matCriteria.blackR" type="number" placeholder="-1" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-hidden focus:border-purple-500" />
+              </div>
+              <div>
+                <label class="block text-[10px] text-zinc-500 mb-0.5">Bishop (B)</label>
+                <input v-model.number="matCriteria.blackB" type="number" placeholder="-1" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-hidden focus:border-purple-500" />
+              </div>
+              <div>
+                <label class="block text-[10px] text-zinc-500 mb-0.5">Knight (N)</label>
+                <input v-model.number="matCriteria.blackN" type="number" placeholder="-1" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-hidden focus:border-purple-500" />
+              </div>
+              <div>
+                <label class="block text-[10px] text-zinc-500 mb-0.5">Pawns (P)</label>
+                <input v-model.number="matCriteria.blackP" type="number" placeholder="-1" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-200 focus:outline-hidden focus:border-purple-500" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Pawn Structure Preset -->
+          <div class="pt-2 border-t border-zinc-800/60 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-zinc-400 mb-1">Pawn Structure Template</label>
+              <select
+                v-model="pawnStructure"
+                class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-200 focus:outline-hidden focus:border-purple-500"
+              >
+                <option value="">Any Structure</option>
+                <option value="carlsbad">Carlsbad Formation (c3, d4, e3 vs c6, d5, e6)</option>
+                <option value="isolani">Isolani / IQP (Isolated Queen's Pawn on d4/d5)</option>
+                <option value="french_chain">French Pawn Chain (d4, e5 vs d5, e6)</option>
+                <option value="maroczy_bind">Maróczy Bind (c4 + e4 vs d6)</option>
+                <option value="hedgehog">Hedgehog Formation (c5, d6, e6, a6, b6)</option>
+                <option value="dragon">Dragon Formation (c5, d6, g6)</option>
+                <option value="stonewall">Stonewall Formation (c3, d4, e3, f4)</option>
+              </select>
+            </div>
+
+            <div class="flex flex-col justify-end gap-2">
+              <label class="flex items-center gap-2 cursor-pointer select-none">
+                <input v-model="matCriteria.oppositeBishops" type="checkbox" class="rounded border-zinc-700 text-purple-500 focus:ring-0" />
+                <span class="text-xs text-zinc-300">Opposite-Colored Bishops (Endgame)</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer select-none">
+                <input v-model="matCriteria.matchEndOnly" type="checkbox" class="rounded border-zinc-700 text-purple-500 focus:ring-0" />
+                <span class="text-xs text-zinc-300">Match in Final Board Position Only</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. ANNOTATION & COMMENTARY SEARCH -->
+        <div class="p-4 rounded-lg bg-zinc-950/70 border border-zinc-800 space-y-3">
+          <div class="flex items-center gap-2 text-sm font-semibold text-zinc-200 border-b border-zinc-800/80 pb-2">
+            <MessageSquare class="w-4 h-4 text-emerald-400" />
+            <span>Annotation & Commentary Search</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-zinc-400 mb-1">Annotator Name</label>
+              <input
+                v-model="annotator"
+                type="text"
+                placeholder="e.g. Kasparov, G. or Shipov"
+                class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-200 focus:outline-hidden focus:border-emerald-500"
+              />
+            </div>
+            <div>
+              <label class="block text-zinc-400 mb-1">Commentary Keywords</label>
+              <input
+                v-model="commentText"
+                type="text"
+                placeholder="e.g. novelty, tactical blunder, king attack"
+                class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-200 focus:outline-hidden focus:border-emerald-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. FLAGS & OPTIONS -->
         <div class="p-4 rounded-lg bg-zinc-950/70 border border-zinc-800 flex flex-wrap items-center gap-6">
           <label class="flex items-center gap-2 cursor-pointer select-none">
             <input
