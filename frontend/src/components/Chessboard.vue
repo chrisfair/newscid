@@ -36,6 +36,7 @@ const props = withDefaults(defineProps<{
   showEvalBar?: boolean
   evalScore?: number | null // centipawns
   evalMate?: number | null  // moves to mate
+  boardSize?: number | null // dynamic responsive board dimension
 }>(), {
   legalMoves: () => [],
   pieceSet: 'cburnett',
@@ -53,6 +54,7 @@ const props = withDefaults(defineProps<{
   showEvalBar: false,
   evalScore: null,
   evalMate: null,
+  boardSize: null,
 })
 
 const emit = defineEmits<{
@@ -362,11 +364,18 @@ watch(() => props.fen, (newFEN) => {
 </script>
 
 <template>
-  <div class="chessboard-wrapper flex items-stretch gap-2.5 select-none" @contextmenu.prevent>
+  <div
+    class="chessboard-wrapper flex items-stretch gap-2.5 select-none justify-center shrink-0"
+    :style="{
+      height: boardSize ? `${boardSize}px` : undefined,
+    }"
+    @contextmenu.prevent
+  >
     <!-- PyChess-style Vertical Evaluation Gauge -->
     <div
       v-if="showEvalBar"
       class="eval-bar w-3.5 flex flex-col justify-between bg-zinc-950 rounded-sm overflow-hidden border border-zinc-700/80 relative shadow-inner select-none transition-all duration-300"
+      :style="{ height: boardSize ? `${boardSize}px` : undefined }"
       :title="`Evaluation: ${evalLabel}`"
     >
       <div
@@ -388,13 +397,22 @@ watch(() => props.fen, (newFEN) => {
     </div>
 
     <!-- Main Chessboard Container -->
-    <div class="chessboard-container relative select-none">
+    <div
+      class="chessboard-container relative select-none flex items-center justify-center shrink-0"
+      :style="{
+        width: boardSize ? `${boardSize}px` : undefined,
+        height: boardSize ? `${boardSize}px` : undefined,
+      }"
+    >
       <div
         class="board-grid relative"
         :style="{
           '--light-color': boardTheme.light,
           '--dark-color': boardTheme.dark,
           '--highlight-color': boardTheme.highlight,
+          '--board-size': boardSize ? `${boardSize}px` : undefined,
+          width: boardSize ? `${boardSize}px` : undefined,
+          height: boardSize ? `${boardSize}px` : undefined,
         }"
       >
         <div
@@ -536,8 +554,10 @@ watch(() => props.fen, (newFEN) => {
   grid-template-columns: repeat(8, 1fr);
   grid-template-rows: repeat(8, 1fr);
   aspect-ratio: 1 / 1;
-  width: min(80vh, 80vw, 640px);
-  height: min(80vh, 80vw, 640px);
+  width: var(--board-size, min(80vh, 80vw, 640px));
+  height: var(--board-size, min(80vh, 80vw, 640px));
+  max-width: 100%;
+  max-height: 100%;
   border-radius: 4px;
   overflow: hidden;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
