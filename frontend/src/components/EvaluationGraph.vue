@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Sparkles, TrendingUp, AlertOctagon, AlertCircle, HelpCircle } from '@lucide/vue'
+import { Sparkles, TrendingUp, AlertOctagon, AlertCircle, HelpCircle, Clock } from '@lucide/vue'
 
 export interface MoveAnalysisItem {
   ply: number
@@ -27,6 +27,7 @@ const props = defineProps<{
   analysis: GameAnalysisData | null
   currentPly: number
   isAnalyzingGame?: boolean
+  moves?: Array<{ ply: number; clock?: string; emt?: string; san?: string }>
 }>()
 
 const emit = defineEmits<{
@@ -104,6 +105,43 @@ function formatCp(cp: number): string {
   const sign = cp > 0 ? '+' : ''
   return `${sign}${(cp / 100).toFixed(2)}`
 }
+
+// Clock & Time Trouble Analysis
+function parseClockSeconds(clockStr?: string): number | null {
+  if (!clockStr) return null
+  const parts = clockStr.split(':').map(p => parseFloat(p))
+  if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2]
+  } else if (parts.length === 2) {
+    return parts[0] * 60 + parts[1]
+  } else if (parts.length === 1 && !isNaN(parts[0])) {
+    return parts[0]
+  }
+  return null
+}
+
+const clockPoints = computed(() => {
+  if (!props.moves || props.moves.length === 0) return []
+  const hasClocks = props.moves.some(m => !!m.clock || !!m.emt)
+  if (!hasClocks) return []
+  const validMoves = props.moves.filter(m => !!m.clock || !!m.emt)
+  const total = validMoves.length
+  return validMoves.map((m, idx) => {
+    const secs = parseClockSeconds(m.clock) ?? 0
+    return {
+      ply: m.ply,
+      san: m.san || '',
+      clock: m.clock || '',
+      secs,
+      isTimeTrouble: secs > 0 && secs < 30,
+      x: getX(idx, total)
+    }
+  })
+})
+
+const timeTroubleMoves = computed(() => {
+  return clockPoints.value.filter(pt => pt.isTimeTrouble)
+})
 </script>
 
 <template>
@@ -156,6 +194,26 @@ function formatCp(cp: number): string {
         <span class="text-yellow-400 flex items-center gap-0.5" title="Inaccuracies (?!)">
           <span class="font-bold">{{ analysis.blackInaccs }}</span> ?!
         </span>
+      </div>
+    </div>
+
+    <!-- Clock Sparkline & Time Trouble Banner (if clock data present) -->
+    <div
+      v-if="clockPoints.length > 0"
+      class="clock-sparkline-bar flex items-center justify-between px-2.5 py-1 bg-zinc-900/70 rounded-lg border border-zinc-800/80 text-[11px] font-mono shadow-xs"
+    >
+      <div class="flex items-center gap-1.5 text-zinc-300">
+        <Clock class="w-3.5 h-3.5 text-sky-400" />
+        <span class="text-zinc-400">Clock Dynamics:</span>
+        <span class="text-zinc-200 font-semibold">{{ clockPoints.length }} timed moves</span>
+      </div>
+
+      <div v-if="timeTroubleMoves.length > 0" class="flex items-center gap-1.5 text-amber-400 font-semibold">
+        <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+        <span>{{ timeTroubleMoves.length }} time trouble scramble{{ timeTroubleMoves.length > 1 ? 's' : '' }} (&lt;30s)</span>
+      </div>
+      <div v-else class="text-emerald-400/80 text-[10px] flex items-center gap-1">
+        <span>✓ No severe time scrambles</span>
       </div>
     </div>
 

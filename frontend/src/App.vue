@@ -132,6 +132,112 @@ const gameTags = ref<Record<string, string>>({
 const flatMoves = ref<FlatMove[]>([])
 const activeGameId = ref<number | undefined>(undefined)
 
+// Multi-Game Tabbed Workspace State
+export interface GameTab {
+  id: string
+  title: string
+  activeGameId?: number
+  gameTags: Record<string, string>
+  history: { fen: string; lastMove: { from: string; to: string } | null }[]
+  flatMoves: FlatMove[]
+  currentPly: number
+  gameAnalysis: GameAnalysisData | null
+}
+
+const openGameTabs = ref<GameTab[]>([
+  {
+    id: 'tab-1',
+    title: 'Game 1',
+    activeGameId: undefined,
+    gameTags: {
+      White: 'White',
+      Black: 'Black',
+      Date: '????.??.??',
+      Result: '*',
+      Event: 'Casual Game',
+    },
+    history: [{ fen: startingFEN, lastMove: null }],
+    flatMoves: [],
+    currentPly: 0,
+    gameAnalysis: null,
+  }
+])
+const activeGameTabIdx = ref(0)
+
+function saveCurrentTabSnapshot() {
+  if (activeGameTabIdx.value < 0 || activeGameTabIdx.value >= openGameTabs.value.length) return
+  const cur = openGameTabs.value[activeGameTabIdx.value]
+  cur.activeGameId = activeGameId.value
+  cur.gameTags = { ...gameTags.value }
+  cur.history = [...history.value]
+  cur.flatMoves = [...flatMoves.value]
+  cur.currentPly = currentPly.value
+  cur.gameAnalysis = gameAnalysis.value ? JSON.parse(JSON.stringify(gameAnalysis.value)) : null
+  if (gameTags.value.White && gameTags.value.Black && (gameTags.value.White !== 'White' || gameTags.value.Black !== 'Black')) {
+    cur.title = `${gameTags.value.White} vs ${gameTags.value.Black}`
+  }
+}
+
+function restoreTabState(tab: GameTab) {
+  activeGameId.value = tab.activeGameId
+  gameTags.value = { ...tab.gameTags }
+  history.value = [...tab.history]
+  flatMoves.value = [...tab.flatMoves]
+  currentPly.value = tab.currentPly
+  gameAnalysis.value = tab.gameAnalysis ? JSON.parse(JSON.stringify(tab.gameAnalysis)) : null
+  jumpToPly(tab.currentPly)
+}
+
+function switchGameTab(idx: number) {
+  if (idx === activeGameTabIdx.value || idx < 0 || idx >= openGameTabs.value.length) return
+  saveCurrentTabSnapshot()
+  activeGameTabIdx.value = idx
+  restoreTabState(openGameTabs.value[idx])
+}
+
+function openNewGameTab() {
+  saveCurrentTabSnapshot()
+  const newNum = openGameTabs.value.length + 1
+  const newTab: GameTab = {
+    id: `tab-${Date.now()}-${newNum}`,
+    title: `Game ${newNum}`,
+    activeGameId: undefined,
+    gameTags: {
+      White: 'White',
+      Black: 'Black',
+      Date: new Date().toISOString().split('T')[0].replace(/-/g, '.'),
+      Result: '*',
+      Event: 'Casual Game',
+    },
+    history: [{ fen: startingFEN, lastMove: null }],
+    flatMoves: [],
+    currentPly: 0,
+    gameAnalysis: null,
+  }
+  openGameTabs.value.push(newTab)
+  activeGameTabIdx.value = openGameTabs.value.length - 1
+  restoreTabState(newTab)
+}
+
+function closeGameTab(idx: number) {
+  if (openGameTabs.value.length <= 1) {
+    handleNewGame()
+    openGameTabs.value[0].title = 'Game 1'
+    return
+  }
+  if (activeGameTabIdx.value === idx) {
+    const nextIdx = idx === 0 ? 1 : idx - 1
+    restoreTabState(openGameTabs.value[nextIdx])
+    openGameTabs.value.splice(idx, 1)
+    activeGameTabIdx.value = idx === 0 ? 0 : idx - 1
+  } else {
+    openGameTabs.value.splice(idx, 1)
+    if (activeGameTabIdx.value > idx) {
+      activeGameTabIdx.value--
+    }
+  }
+}
+
 // Database State
 const dbInfo = ref<{ basePath: string; name: string; numGames: number; description: string } | null>(null)
 const systemBases = ref<string[]>([])
@@ -955,6 +1061,17 @@ async function handleLoadGame(id: number) {
     flatMoves.value = moves
 
     jumpToPly(0)
+
+    const curTab = openGameTabs.value[activeGameTabIdx.value]
+    if (curTab) {
+      curTab.title = `${g.tags?.White || 'White'} vs ${g.tags?.Black || 'Black'}`
+      curTab.activeGameId = id
+      curTab.gameTags = { ...g.tags }
+      curTab.history = [...newHistory]
+      curTab.flatMoves = [...moves]
+      curTab.currentPly = 0
+      curTab.gameAnalysis = null
+    }
   } catch (err) {
     alert(`Error loading game ${id}: ${err}`)
   }
@@ -1029,6 +1146,17 @@ function handleNewGame() {
   history.value = [{ fen: startingFEN, lastMove: null }]
   flatMoves.value = []
   jumpToPly(0)
+
+  const curTab = openGameTabs.value[activeGameTabIdx.value]
+  if (curTab) {
+    curTab.title = `Game ${activeGameTabIdx.value + 1}`
+    curTab.activeGameId = undefined
+    curTab.gameTags = { ...gameTags.value }
+    curTab.history = [{ fen: startingFEN, lastMove: null }]
+    curTab.flatMoves = []
+    curTab.currentPly = 0
+    curTab.gameAnalysis = null
+  }
 }
 
 // Game Navigation
@@ -1872,6 +2000,14 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
     icon: 'bar-chart-3',
     category: 'Options',
     action: toggleEvalBar
+  },
+  {
+    id: 'new-workspace-tab',
+    title: 'New Workspace Tab',
+    subtitle: 'Open an independent chess game and analysis tab',
+    icon: 'plus',
+    category: 'Actions',
+    action: openNewGameTab
   }
 ])
 </script>
@@ -1977,6 +2113,42 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       @change-theme="currentThemeId = $event"
       @toggle-flip="flipped = !flipped"
     />
+
+    <!-- Multi-Game Tabbed Workspace Strip -->
+    <div
+      v-if="!zenMode"
+      class="workspace-tabs-bar flex items-center gap-1.5 px-3 py-1 bg-zinc-950 border-b border-zinc-800/80 text-xs overflow-x-auto select-none"
+    >
+      <div
+        v-for="(tab, idx) in openGameTabs"
+        :key="tab.id"
+        class="group flex items-center gap-2 px-3 py-1.5 rounded-t-lg border-t border-x cursor-pointer transition-all max-w-[240px]"
+        :class="activeGameTabIdx === idx
+          ? 'bg-zinc-900 border-zinc-700 text-zinc-100 font-semibold shadow-xs'
+          : 'bg-zinc-950/60 border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50'"
+        @click="switchGameTab(idx)"
+      >
+        <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="activeGameTabIdx === idx ? 'bg-emerald-400' : 'bg-zinc-600'" />
+        <span class="truncate">{{ tab.title }}</span>
+        <button
+          v-if="openGameTabs.length > 1"
+          class="w-4 h-4 ml-1 rounded hover:bg-zinc-800 hover:text-rose-400 flex items-center justify-center text-zinc-500 opacity-60 group-hover:opacity-100 transition-all text-[11px]"
+          title="Close tab"
+          @click.stop="closeGameTab(idx)"
+        >
+          ✕
+        </button>
+      </div>
+
+      <button
+        class="px-2.5 py-1 rounded-md hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors flex items-center gap-1 text-xs cursor-pointer ml-1"
+        title="Open new game tab"
+        @click="openNewGameTab"
+      >
+        <span class="font-bold text-sm leading-none">+</span>
+        <span class="text-[11px]">New Tab</span>
+      </button>
+    </div>
 
     <!-- Main Workspace (Split Grid) -->
     <div class="workspace-grid flex-1 flex flex-col md:flex-row overflow-hidden p-2 gap-1 relative">
@@ -2139,11 +2311,12 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         <div class="tab-content flex-1 overflow-hidden p-2">
           <!-- 1. Notation & Evaluation Curve View -->
           <div v-show="activeTab === 'notation'" class="h-full flex flex-col gap-2">
-            <!-- Evaluation Graph -->
+            <!-- Evaluation Graph with Clock & Time Trouble Sparkline -->
             <EvaluationGraph
               :analysis="gameAnalysis"
               :current-ply="currentPly"
               :is-analyzing-game="isAnalyzingGame"
+              :moves="flatMoves"
               @jump="jumpToPly"
               @annotate="handleAnnotateGame"
             />
