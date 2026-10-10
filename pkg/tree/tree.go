@@ -99,6 +99,10 @@ func BuildTreeFromGames(fen string, games []*chess.Game) *TreeResult {
 		return moveStats[i].Count > moveStats[j].Count
 	})
 
+	if moveStats == nil {
+		moveStats = []*MoveStat{}
+	}
+
 	return &TreeResult{
 		FEN:        fen,
 		TotalGames: totalGamesMatching,
@@ -109,7 +113,7 @@ func BuildTreeFromGames(fen string, games []*chess.Game) *TreeResult {
 // BuildTreeFromDatabase searches the database for games matching the position and aggregates move stats.
 func BuildTreeFromDatabase(db *scid.Database, fen string, maxGames int) (*TreeResult, error) {
 	if !db.IsOpen {
-		return &TreeResult{FEN: fen}, nil
+		return &TreeResult{FEN: fen, Moves: []*MoveStat{}}, nil
 	}
 
 	var sampledGames []*chess.Game

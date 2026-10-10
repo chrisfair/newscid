@@ -664,6 +664,8 @@ export namespace main {
 	    legalMoves: string[];
 	    fullMove: number;
 	    halfMove: number;
+	    moveUci?: string;
+	    moveSan?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new BoardState(source);
@@ -679,6 +681,8 @@ export namespace main {
 	        this.legalMoves = source["legalMoves"];
 	        this.fullMove = source["fullMove"];
 	        this.halfMove = source["halfMove"];
+	        this.moveUci = source["moveUci"];
+	        this.moveSan = source["moveSan"];
 	    }
 	}
 	export class DatabaseInfo {

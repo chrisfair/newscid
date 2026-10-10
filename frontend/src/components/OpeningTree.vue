@@ -24,12 +24,16 @@ export interface TreeData {
 }
 
 const props = defineProps<{
+  fen?: string
   treeData: TreeData | null
   loading?: boolean
+  dbOpen?: boolean
 }>()
 
 const emit = defineEmits<{
-  (e: 'playMove', san: string): void
+  (e: 'playMove', uci: string): void
+  (e: 'refresh'): void
+  (e: 'openDb'): void
 }>()
 
 // Active tab: 'db' or 'book'
@@ -59,14 +63,15 @@ async function loadAvailableBooks() {
 }
 
 async function queryCurrentBook() {
-  if (!selectedBook.value || !props.treeData?.fen) {
+  const targetFen = props.fen || props.treeData?.fen
+  if (!selectedBook.value || !targetFen) {
     bookMoves.value = []
     return
   }
 
   loadingBook.value = true
   try {
-    const res = await QueryPolyglotBook(props.treeData.fen, selectedBook.value)
+    const res = await QueryPolyglotBook(targetFen, selectedBook.value)
     bookMoves.value = res || []
   } catch (err) {
     console.error('Failed to query polyglot book:', err)
@@ -76,7 +81,7 @@ async function queryCurrentBook() {
   }
 }
 
-watch(() => props.treeData?.fen, () => {
+watch(() => [props.fen, props.treeData?.fen], () => {
   if (activeTab.value === 'book') {
     queryCurrentBook()
   }
@@ -89,6 +94,8 @@ watch(selectedBook, () => {
 watch(activeTab, (tab) => {
   if (tab === 'book') {
     queryCurrentBook()
+  } else {
+    emit('refresh')
   }
 })
 
@@ -149,14 +156,34 @@ function formatBookName(path: string) {
           </option>
         </select>
 
-        <div v-if="loading || loadingBook" class="animate-spin w-3.5 h-3.5 border-2 border-emerald-500 border-t-transparent rounded-full" />
+        <button
+          class="p-1 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors cursor-pointer"
+          title="Refresh Opening Tree"
+          @click="activeTab === 'book' ? queryCurrentBook() : emit('refresh')"
+        >
+          <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': loading || loadingBook }" />
+        </button>
       </div>
     </div>
 
     <!-- Tree Table: DB Tree View -->
     <div v-if="activeTab === 'db'" class="table-container flex-1 overflow-y-auto">
-      <div v-if="movesList.length === 0" class="text-zinc-500 text-xs italic text-center py-8">
-        No database games match this position.
+      <div v-if="movesList.length === 0" class="text-zinc-400 text-xs text-center py-8 px-4 space-y-3">
+        <template v-if="!dbOpen">
+          <p class="font-medium text-zinc-300">No database is currently open.</p>
+          <p class="text-[11px] text-zinc-500">Open a database to analyze games, or switch to the "Opening Book (.bin)" tab above.</p>
+          <button
+            class="px-3 py-1.5 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 border border-emerald-500/40 rounded-lg text-xs font-semibold transition-all cursor-pointer inline-flex items-center gap-1.5"
+            @click="emit('openDb')"
+          >
+            <Database class="w-3.5 h-3.5" />
+            <span>Open Database</span>
+          </button>
+        </template>
+        <template v-else>
+          <p class="italic text-zinc-500">No database games match this position.</p>
+          <p class="text-[11px] text-zinc-600">The current board position is out of the opened database's repertoire.</p>
+        </template>
       </div>
 
       <table v-else class="w-full text-left font-mono text-xs border-collapse">
@@ -173,7 +200,8 @@ function formatBookName(path: string) {
             v-for="m in movesList"
             :key="m.move"
             class="hover:bg-emerald-950/30 transition-colors cursor-pointer group"
-            @click="emit('playMove', m.move)"
+            :title="`Click to play ${m.move} on board`"
+            @click="emit('playMove', m.uci || m.move)"
           >
             <!-- Move SAN / Styled -->
             <td class="py-2 px-3 font-bold text-emerald-400 group-hover:text-emerald-300 flex items-center gap-1.5">
@@ -252,7 +280,8 @@ function formatBookName(path: string) {
             v-for="bm in bookMoves"
             :key="bm.uci"
             class="hover:bg-purple-950/30 transition-colors cursor-pointer group"
-            @click="emit('playMove', bm.san)"
+            :title="`Click to play book move ${bm.san} on board`"
+            @click="emit('playMove', bm.uci || bm.san)"
           >
             <!-- Move SAN / Styled -->
             <td class="py-2 px-3 font-bold text-purple-400 group-hover:text-purple-300 flex items-center gap-1.5">

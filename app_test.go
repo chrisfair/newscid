@@ -83,6 +83,8 @@ func TestAppDatabaseAndEngineDiscovery(t *testing.T) {
 		tree, err := app.GetOpeningTree("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 		require.NoError(t, err)
 		assert.NotNil(t, tree)
+		assert.Greater(t, tree.TotalGames, 0)
+		assert.NotEmpty(t, tree.Moves)
 	}
 }
 

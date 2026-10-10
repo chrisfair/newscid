@@ -647,6 +647,12 @@ watch(currentFEN, (newFen) => {
   updateTablebase(newFen)
 })
 
+watch(activeTab, (newTab) => {
+  if (newTab === 'tree') {
+    fetchOpeningTree(currentFEN.value)
+  }
+})
+
 // ==========================================
 // Board & Move Logic
 // ==========================================
@@ -673,17 +679,21 @@ async function updateBoardState(fen: string) {
   }
 }
 
-async function handleMove(uci: string) {
+async function handleMove(moveInput: string) {
   try {
     const evalBefore = evalInfo.value?.scoreCp || 0
-    let moveSAN = uci
+    let moveSAN = moveInput
     try {
-      moveSAN = await FormatMove(currentFEN.value, uci, 'san')
+      moveSAN = await FormatMove(currentFEN.value, moveInput, 'san')
     } catch {
-      // fallback to uci
+      // fallback
     }
 
-    const nextState = await MakeMove(currentFEN.value, uci)
+    const nextState = await MakeMove(currentFEN.value, moveInput)
+    const uci = nextState.moveUci || moveInput
+    if (nextState.moveSan) {
+      moveSAN = nextState.moveSan
+    }
     const from = uci.slice(0, 2)
     const to = uci.slice(2, 4)
 
@@ -2348,9 +2358,13 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           <!-- 2. Opening Tree View -->
           <div v-show="activeTab === 'tree'" class="h-full">
             <OpeningTree
+              :fen="currentFEN"
               :tree-data="treeData"
               :loading="treeLoading"
+              :db-open="!!dbInfo"
               @play-move="handleMove"
+              @refresh="fetchOpeningTree(currentFEN)"
+              @open-db="handleOpenDB"
             />
           </div>
 
