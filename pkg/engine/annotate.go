@@ -34,7 +34,7 @@ type GameAnalysis struct {
 }
 
 // AnnotateGame analyzes all moves in a game using a running UCI engine.
-func AnnotateGame(game *chess.Game, eng *Engine, movetimeMs int) (*GameAnalysis, error) {
+func AnnotateGame(game *chess.Game, eng *Engine, movetimeMs int, progressCb ...func(ply, total int, ma MoveAnalysis)) (*GameAnalysis, error) {
 	if eng == nil {
 		return nil, fmt.Errorf("engine not provided")
 	}
@@ -50,6 +50,11 @@ func AnnotateGame(game *chess.Game, eng *Engine, movetimeMs int) (*GameAnalysis,
 
 	if game.RootMove == nil {
 		return analysis, nil
+	}
+
+	totalPlies := 0
+	for countNode := game.RootMove; countNode != nil; countNode = countNode.Next {
+		totalPlies++
 	}
 
 	board := chess.NewBoard()
@@ -149,7 +154,7 @@ func AnnotateGame(game *chess.Game, eng *Engine, movetimeMs int) (*GameAnalysis,
 		}
 		curr.Comment = comment
 
-		analysis.MoveAnalyses = append(analysis.MoveAnalyses, MoveAnalysis{
+		ma := MoveAnalysis{
 			Ply:      ply,
 			SAN:      curr.SAN,
 			UCI:      curr.UCI,
@@ -159,7 +164,12 @@ func AnnotateGame(game *chess.Game, eng *Engine, movetimeMs int) (*GameAnalysis,
 			DeltaCp:  loss,
 			NAG:      nag,
 			Comment:  comment,
-		})
+		}
+		analysis.MoveAnalyses = append(analysis.MoveAnalyses, ma)
+
+		if len(progressCb) > 0 && progressCb[0] != nil {
+			progressCb[0](ply, totalPlies, ma)
+		}
 
 		prevScoreCp = scoreCp
 

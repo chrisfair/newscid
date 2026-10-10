@@ -119,6 +119,8 @@ export namespace chess {
 	    uci: string;
 	    fen: string;
 	    comment?: string;
+	    clock?: string;
+	    emt?: string;
 	    nags?: number[];
 	    variations?: MoveNode[];
 	    next?: MoveNode;
@@ -134,6 +136,8 @@ export namespace chess {
 	        this.uci = source["uci"];
 	        this.fen = source["fen"];
 	        this.comment = source["comment"];
+	        this.clock = source["clock"];
+	        this.emt = source["emt"];
 	        this.nags = source["nags"];
 	        this.variations = this.convertValues(source["variations"], MoveNode);
 	        this.next = this.convertValues(source["next"], MoveNode);

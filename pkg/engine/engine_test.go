@@ -358,3 +358,37 @@ func TestCheckEngineAvailabilityPaths(t *testing.T) {
 	assert.False(t, cfg3.Available)
 }
 
+func TestAnnotateGameWhileAnalyzing(t *testing.T) {
+	engines := engine.FindAvailableEngines()
+	if len(engines) == 0 {
+		t.Skip("No UCI engines found, skipping test")
+	}
+
+	eng := engine.NewEngine(engines[0])
+	err := eng.Start()
+	require.NoError(t, err)
+	defer eng.Quit()
+
+	// Simulate user having live analysis running on the board
+	err = eng.Analyze("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", nil, 0)
+	require.NoError(t, err)
+
+	game, err := chess.ParsePGN("1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0")
+	require.NoError(t, err)
+
+	progressCalls := 0
+	analysis, err := engine.AnnotateGame(game, eng, 100, func(ply, total int, ma engine.MoveAnalysis) {
+		progressCalls++
+		assert.Equal(t, ply, progressCalls)
+		assert.Equal(t, 7, total)
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, analysis)
+	assert.Equal(t, 7, progressCalls)
+	assert.Equal(t, 7, len(analysis.MoveAnalyses))
+	// Qxf7# is checkmate
+	lastMove := analysis.MoveAnalyses[len(analysis.MoveAnalyses)-1]
+	assert.Equal(t, "Qxf7#", lastMove.SAN)
+}
+
+

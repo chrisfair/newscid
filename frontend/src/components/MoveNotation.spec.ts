@@ -262,8 +262,54 @@ describe('MoveNotation.vue', () => {
 
     expect(wrapper.text()).toContain('!!')
     expect(wrapper.text()).toContain('??')
-    expect(wrapper.text()).toContain('1:29:45')
-    expect(wrapper.text()).toContain('1:28:10')
+    // Clock times are rendered in hover hints/tooltips, not raw distracting text
+    expect(wrapper.html()).toContain('1:29:45')
+    expect(wrapper.html()).toContain('1:28:10')
+  })
+
+  it('renders [%clk ...] tags as hover hints and never in distracting comment boxes below moves', () => {
+    const movesWithClockComments = [
+      {
+        index: 0,
+        ply: 1,
+        moveNumber: 1,
+        isWhite: true,
+        san: 'e4',
+        uci: 'e2e4',
+        fen: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1',
+        comment: '[%clk 0:10:00]',
+        variationLevel: 0,
+      },
+      {
+        index: 1,
+        ply: 2,
+        moveNumber: 1,
+        isWhite: false,
+        san: 'c5',
+        uci: 'c7c5',
+        fen: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2',
+        comment: 'Sicilian Defense [%clk 0:09:58]',
+        variationLevel: 0,
+      }
+    ]
+
+    const wrapper = mount(MoveNotation, {
+      props: {
+        moves: movesWithClockComments,
+        currentPly: 1,
+      }
+    })
+
+    // Move 1 (e4): only has %clk, so NO comment-box should exist for it
+    const commentBoxes = wrapper.findAll('.comment-box')
+    // Only move 1... c5 has real commentary ("Sicilian Defense")
+    expect(commentBoxes.length).toBe(1)
+    expect(commentBoxes[0].text()).toBe('Sicilian Defense')
+    expect(commentBoxes[0].text()).not.toContain('%clk')
+
+    // Both moves have clock times in hint attributes
+    expect(wrapper.html()).toContain('Clock: 0:10:00')
+    expect(wrapper.html()).toContain('Clock: 0:09:58')
   })
 })
 

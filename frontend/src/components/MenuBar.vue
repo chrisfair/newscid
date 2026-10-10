@@ -660,6 +660,57 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- WINDOWS MENU -->
+    <div class="relative">
+      <button
+        class="px-3 py-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer font-medium"
+        :class="{ 'bg-zinc-800 text-white shadow-xs': activeMenu === 'windows' }"
+        @click="toggleMenu('windows')"
+        @mouseenter="handleMenuHover('windows')"
+      >
+        Windows
+      </button>
+
+      <div
+        v-if="activeMenu === 'windows'"
+        class="absolute top-full left-0 mt-1 min-w-[340px] w-max bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-2xl py-1.5 z-50 text-xs"
+      >
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('openTreeWindow'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><BookOpen class="w-4 h-4 shrink-0 text-emerald-400" /> Opening Tree &amp; Repertoire...</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">F3</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('showCrosstable'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Trophy class="w-4 h-4 shrink-0 text-amber-400" /> Tournament Crosstable...</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+T</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('ecoBrowser'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><BookOpen class="w-4 h-4 shrink-0 text-blue-400" /> ECO Opening Directory...</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('playerPersonas'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Users class="w-4 h-4 shrink-0 text-emerald-400" /> Player Personas Explorer...</span>
+        </button>
+        <div class="h-px bg-zinc-800 my-1 mx-2" />
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('databaseStats'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><BarChart3 class="w-4 h-4 shrink-0 text-cyan-400" /> Database Summary &amp; Analytics...</span>
+        </button>
+      </div>
+    </div>
+
     <!-- OPTIONS MENU -->
     <div class="relative">
       <button

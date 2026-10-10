@@ -260,6 +260,7 @@ const engineMultiPv = ref(1)
 // Game Analysis & Blunder Detection
 const gameAnalysis = ref<GameAnalysisData | null>(null)
 const isAnalyzingGame = ref(false)
+const annotationProgress = ref<{ currentPly: number; totalPlies: number; percent: number } | null>(null)
 
 // Trial Mode
 const trialMode = ref(false)
@@ -608,9 +609,12 @@ onMounted(async () => {
       selectedEngine.value = availableEngines.value[0]
     }
 
-    // 4. Listen to live engine events
+    // 4. Listen to live engine events & annotation progress
     EventsOn('engine:eval', (data: EvalInfo) => {
       evalInfo.value = data
+    })
+    EventsOn('annotate:progress', (data: { currentPly: number; totalPlies: number; percent: number }) => {
+      annotationProgress.value = data
     })
 
     const initMPV = await GetEngineMultiPV()
@@ -1073,6 +1077,8 @@ async function handleLoadGame(id: number) {
         uci: curr.uci,
         fen: curr.fen,
         comment: curr.comment,
+        clock: (curr as any).clock,
+        emt: (curr as any).emt,
         nags: curr.nags,
         variationLevel: 0,
       })
@@ -1367,8 +1373,21 @@ function buildCurrentGamePGN(): string {
       }
     }
 
+    const commentTokens: string[] = []
     if (m.comment) {
-      moveText += ` {${m.comment}}`
+      const clean = m.comment.replace(/\[%clk\s+[^\]]+\]/gi, '').replace(/\[%emt\s+[^\]]+\]/gi, '').trim()
+      if (clean) {
+        commentTokens.push(clean)
+      }
+    }
+    if (m.clock) {
+      commentTokens.push(`[%clk ${m.clock}]`)
+    }
+    if (m.emt) {
+      commentTokens.push(`[%emt ${m.emt}]`)
+    }
+    if (commentTokens.length > 0) {
+      moveText += ` {${commentTokens.join(' ')}}`
     }
 
     moveText += ' '
@@ -1388,6 +1407,7 @@ async function handleAnnotateGame() {
     return
   }
   isAnalyzingGame.value = true
+  annotationProgress.value = { currentPly: 0, totalPlies: flatMoves.value.length, percent: 0 }
   try {
     const pgn = buildCurrentGamePGN()
     const analysis = await AnnotatePGN(pgn, 150)
@@ -1417,6 +1437,7 @@ async function handleAnnotateGame() {
     alert(`Game annotation failed: ${err}`)
   } finally {
     isAnalyzingGame.value = false
+    annotationProgress.value = null
   }
 }
 
@@ -1493,6 +1514,8 @@ async function confirmImportPGN() {
         uci: curr.uci,
         fen: curr.fen,
         comment: curr.comment,
+        clock: (curr as any).clock,
+        emt: (curr as any).emt,
         nags: curr.nags,
         variationLevel: 0,
       })
@@ -2406,6 +2429,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
               :analysis="gameAnalysis"
               :current-ply="currentPly"
               :is-analyzing-game="isAnalyzingGame"
+              :progress="annotationProgress"
               :moves="flatMoves"
               @jump="jumpToPly"
               @annotate="handleAnnotateGame"

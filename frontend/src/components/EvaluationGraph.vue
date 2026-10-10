@@ -27,6 +27,7 @@ const props = defineProps<{
   analysis: GameAnalysisData | null
   currentPly: number
   isAnalyzingGame?: boolean
+  progress?: { currentPly: number; totalPlies: number; percent: number } | null
   moves?: Array<{ ply: number; clock?: string; emt?: string; san?: string }>
 }>()
 
@@ -163,8 +164,8 @@ const timeTroubleMoves = computed(() => {
         :disabled="isAnalyzingGame"
         @click="emit('annotate')"
       >
-        <Sparkles class="w-3.5 h-3.5" />
-        <span>{{ isAnalyzingGame ? 'Analyzing Game...' : (analysis && analysis.moveAnalyses && analysis.moveAnalyses.length > 0 ? 'Re-Annotate' : 'Annotate Game') }}</span>
+        <Sparkles class="w-3.5 h-3.5" :class="{ 'animate-spin': isAnalyzingGame }" />
+        <span>{{ isAnalyzingGame ? (progress ? `Analyzing (${progress.percent}%)...` : 'Analyzing Game...') : (analysis && analysis.moveAnalyses && analysis.moveAnalyses.length > 0 ? 'Re-Annotate' : 'Annotate Game') }}</span>
       </button>
     </div>
 
@@ -312,6 +313,21 @@ const timeTroubleMoves = computed(() => {
           </g>
         </svg>
       </template>
+
+      <!-- Progress indicator while analyzing -->
+      <div v-else-if="isAnalyzingGame" class="flex flex-col items-center justify-center gap-2 text-zinc-300 w-full max-w-xs px-4 text-center">
+        <div class="flex items-center gap-2 text-xs font-semibold text-amber-400">
+          <Sparkles class="w-4 h-4 animate-spin text-amber-400" />
+          <span>Analyzing Position (Ply {{ progress?.currentPly || 1 }} / {{ progress?.totalPlies || '...' }})</span>
+        </div>
+        <div class="w-full bg-zinc-800 rounded-full h-2 overflow-hidden border border-zinc-700/80">
+          <div
+            class="bg-gradient-to-r from-amber-500 to-emerald-500 h-2 rounded-full transition-all duration-300"
+            :style="{ width: `${progress?.percent || 5}%` }"
+          />
+        </div>
+        <span class="text-[10px] text-zinc-400 font-mono">{{ progress?.percent || 0 }}% completed</span>
+      </div>
 
       <!-- Placeholder if game not analyzed yet -->
       <div v-else class="flex flex-col items-center justify-center gap-1.5 text-zinc-500 text-xs">

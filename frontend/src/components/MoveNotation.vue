@@ -151,12 +151,52 @@ function handleClearNAGs() {
   emit('clearNAGs', props.currentPly)
 }
 
+// Helper to extract clean comment, clock, and emt from a move
+function parseMoveMetadata(m?: FlatMove) {
+  if (!m) return { cleanComment: '', clock: '', emt: '' }
+  let clock = m.clock || ''
+  let emt = m.emt || ''
+  let cleanComment = m.comment || ''
+
+  if (cleanComment) {
+    const clkMatch = cleanComment.match(/\[%clk\s+([^\]]+)\]/i)
+    if (clkMatch) {
+      if (!clock) clock = clkMatch[1].trim()
+      cleanComment = cleanComment.replace(/\[%clk\s+[^\]]+\]/gi, '')
+    }
+    const emtMatch = cleanComment.match(/\[%emt\s+([^\]]+)\]/i)
+    if (emtMatch) {
+      if (!emt) emt = emtMatch[1].trim()
+      cleanComment = cleanComment.replace(/\[%emt\s+[^\]]+\]/gi, '')
+    }
+    cleanComment = cleanComment.trim()
+  }
+
+  return { cleanComment, clock, emt }
+}
+
+function getMoveHint(m?: FlatMove): string {
+  if (!m) return ''
+  const parts: string[] = [formatMove(m)]
+  const { clock, emt, cleanComment } = parseMoveMetadata(m)
+  if (clock) {
+    parts.push(`Clock: ${clock}`)
+  }
+  if (emt) {
+    parts.push(`Elapsed: ${emt}`)
+  }
+  if (cleanComment) {
+    parts.push(`"${cleanComment}"`)
+  }
+  return parts.join(' • ')
+}
+
 function openCommentModal(ply?: number) {
   const targetPly = ply !== undefined ? ply : props.currentPly
   if (targetPly <= 0) return
   editingCommentPly.value = targetPly
   const m = findMoveByPly(targetPly)
-  commentInput.value = m?.comment || ''
+  commentInput.value = parseMoveMetadata(m).cleanComment
   showCommentModal.value = true
 }
 
@@ -390,12 +430,12 @@ function getClassificationBadge(m: FlatMove | undefined) {
       <!-- Add / Edit Comment Button -->
       <button
         class="px-2 py-1 rounded-lg text-xs font-medium bg-zinc-800/80 hover:bg-zinc-700/80 text-zinc-200 transition-colors flex items-center gap-1"
-        :class="currentMove?.comment ? 'text-sky-300 border border-sky-500/30' : ''"
-        :title="currentMove?.comment ? 'Edit move comment' : 'Add comment to move'"
+        :class="parseMoveMetadata(currentMove).cleanComment ? 'text-sky-300 border border-sky-500/30' : ''"
+        :title="parseMoveMetadata(currentMove).cleanComment ? 'Edit move comment' : 'Add comment to move'"
         @click="openCommentModal()"
       >
         <MessageSquare class="w-3.5 h-3.5 text-sky-400" />
-        <span>{{ currentMove?.comment ? 'Edit Comment' : 'Add Comment' }}</span>
+        <span>{{ parseMoveMetadata(currentMove).cleanComment ? 'Edit Comment' : 'Add Comment' }}</span>
       </button>
     </div>
 
@@ -453,6 +493,7 @@ function getClassificationBadge(m: FlatMove | undefined) {
                 :class="pair.white.ply === currentPly
                   ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-400'
                   : 'text-zinc-200 hover:bg-zinc-700/60'"
+                :title="getMoveHint(pair.white)"
                 @click="emit('jump', pair.white.ply)"
                 @dblclick="openCommentModal(pair.white.ply)"
               >
@@ -471,21 +512,29 @@ function getClassificationBadge(m: FlatMove | undefined) {
                 >
                   {{ formatNAG(nag) }}
                 </span>
-                <span v-if="pair.white.clock" class="text-[10px] text-zinc-400 font-mono ml-0.5 opacity-75" :title="`Clock: ${pair.white.clock}`">
-                  {{ pair.white.clock }}
+                <span
+                  v-if="parseMoveMetadata(pair.white).clock"
+                  class="text-zinc-500 hover:text-zinc-300 ml-0.5 inline-flex items-center opacity-60 hover:opacity-100 transition-opacity"
+                  :title="`Remaining: ${parseMoveMetadata(pair.white).clock}${parseMoveMetadata(pair.white).emt ? ` (Spent: ${parseMoveMetadata(pair.white).emt})` : ''}`"
+                >
+                  <Clock class="w-2.5 h-2.5" />
                 </span>
-                <span v-if="pair.white.comment" class="w-1.5 h-1.5 rounded-full bg-sky-400 ml-1 inline-block" title="Has comment" />
+                <span
+                  v-if="parseMoveMetadata(pair.white).cleanComment"
+                  class="w-1.5 h-1.5 rounded-full bg-sky-400 ml-1 inline-block"
+                  :title="`Comment: ${parseMoveMetadata(pair.white).cleanComment}`"
+                />
               </button>
             </div>
 
             <!-- White Inline Comment -->
             <div
-              v-if="pair.white?.comment"
+              v-if="pair.white && parseMoveMetadata(pair.white).cleanComment"
               class="comment-box mt-0.5 ml-2 p-1 px-2 rounded bg-zinc-950/70 border border-zinc-800/60 text-xs text-zinc-400 font-sans italic flex items-start gap-1"
-              @click="openCommentModal(pair.white.ply)"
+              @click="openCommentModal(pair.white?.ply)"
             >
               <MessageSquare class="w-3 h-3 text-sky-400 shrink-0 mt-0.5" />
-              <span>{{ pair.white.comment }}</span>
+              <span>{{ parseMoveMetadata(pair.white).cleanComment }}</span>
             </div>
 
             <!-- White Variations (if any) -->
@@ -505,6 +554,7 @@ function getClassificationBadge(m: FlatMove | undefined) {
                     :key="vm.ply"
                     class="hover:text-emerald-400 cursor-pointer mr-1"
                     :class="vm.ply === currentPly ? 'text-emerald-400 font-bold' : ''"
+                    :title="getMoveHint(vm)"
                     @click="emit('jump', vm.ply)"
                   >
                     {{ vm.isWhite ? `${vm.moveNumber}. ` : '' }}{{ formatMove(vm) }}
@@ -540,6 +590,7 @@ function getClassificationBadge(m: FlatMove | undefined) {
                 :class="pair.black.ply === currentPly
                   ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-400'
                   : 'text-zinc-200 hover:bg-zinc-700/60'"
+                :title="getMoveHint(pair.black)"
                 @click="emit('jump', pair.black.ply)"
                 @dblclick="openCommentModal(pair.black.ply)"
               >
@@ -558,21 +609,29 @@ function getClassificationBadge(m: FlatMove | undefined) {
                 >
                   {{ formatNAG(nag) }}
                 </span>
-                <span v-if="pair.black.clock" class="text-[10px] text-zinc-400 font-mono ml-0.5 opacity-75" :title="`Clock: ${pair.black.clock}`">
-                  {{ pair.black.clock }}
+                <span
+                  v-if="parseMoveMetadata(pair.black).clock"
+                  class="text-zinc-500 hover:text-zinc-300 ml-0.5 inline-flex items-center opacity-60 hover:opacity-100 transition-opacity"
+                  :title="`Remaining: ${parseMoveMetadata(pair.black).clock}${parseMoveMetadata(pair.black).emt ? ` (Spent: ${parseMoveMetadata(pair.black).emt})` : ''}`"
+                >
+                  <Clock class="w-2.5 h-2.5" />
                 </span>
-                <span v-if="pair.black.comment" class="w-1.5 h-1.5 rounded-full bg-sky-400 ml-1 inline-block" title="Has comment" />
+                <span
+                  v-if="parseMoveMetadata(pair.black).cleanComment"
+                  class="w-1.5 h-1.5 rounded-full bg-sky-400 ml-1 inline-block"
+                  :title="`Comment: ${parseMoveMetadata(pair.black).cleanComment}`"
+                />
               </button>
             </div>
 
             <!-- Black Inline Comment -->
             <div
-              v-if="pair.black?.comment"
+              v-if="pair.black && parseMoveMetadata(pair.black).cleanComment"
               class="comment-box mt-0.5 ml-2 p-1 px-2 rounded bg-zinc-950/70 border border-zinc-800/60 text-xs text-zinc-400 font-sans italic flex items-start gap-1"
-              @click="openCommentModal(pair.black.ply)"
+              @click="openCommentModal(pair.black?.ply)"
             >
               <MessageSquare class="w-3 h-3 text-sky-400 shrink-0 mt-0.5" />
-              <span>{{ pair.black.comment }}</span>
+              <span>{{ parseMoveMetadata(pair.black).cleanComment }}</span>
             </div>
 
             <!-- Black Variations (if any) -->
@@ -592,6 +651,7 @@ function getClassificationBadge(m: FlatMove | undefined) {
                     :key="vm.ply"
                     class="hover:text-emerald-400 cursor-pointer mr-1"
                     :class="vm.ply === currentPly ? 'text-emerald-400 font-bold' : ''"
+                    :title="getMoveHint(vm)"
                     @click="emit('jump', vm.ply)"
                   >
                     {{ vm.isWhite ? `${vm.moveNumber}. ` : '' }}{{ formatMove(vm) }}

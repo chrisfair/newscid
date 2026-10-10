@@ -4,9 +4,15 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
+)
+
+var (
+	clkRegex = regexp.MustCompile(`(?i)\[%clk\s+([^\]]+)\]`)
+	emtRegex = regexp.MustCompile(`(?i)\[%emt\s+([^\]]+)\]`)
 )
 
 // PGNGame represents a game parsed from or exported to PGN.
@@ -69,9 +75,19 @@ func writeMoveNodeTree(sb *strings.Builder, node *MoveNode, moveNum int, isWhite
 			sb.WriteString(fmt.Sprintf(" %s", FormatNAG(nag)))
 		}
 
-		// Comments
+		// Comments & Clock metadata
+		var commentParts []string
 		if curr.Comment != "" {
-			sb.WriteString(fmt.Sprintf(" {%s}", curr.Comment))
+			commentParts = append(commentParts, curr.Comment)
+		}
+		if curr.Clock != "" {
+			commentParts = append(commentParts, fmt.Sprintf("[%%clk %s]", curr.Clock))
+		}
+		if curr.EMT != "" {
+			commentParts = append(commentParts, fmt.Sprintf("[%%emt %s]", curr.EMT))
+		}
+		if len(commentParts) > 0 {
+			sb.WriteString(fmt.Sprintf(" {%s}", strings.Join(commentParts, " ")))
 		}
 
 		// Variations
@@ -257,9 +273,34 @@ func parseTokensToMoveTree(tokens []string, initialBoard *Board) (*MoveNode, int
 
 		// Skip comments and attach to previous move
 		if strings.HasPrefix(t, "{") && strings.HasSuffix(t, "}") {
-			comment := strings.Trim(t, "{}")
+			rawComment := strings.Trim(t, "{}")
+			cleanComment := rawComment
+			var clkVal, emtVal string
+
+			if m := clkRegex.FindStringSubmatch(cleanComment); len(m) > 1 {
+				clkVal = strings.TrimSpace(m[1])
+				cleanComment = clkRegex.ReplaceAllString(cleanComment, "")
+			}
+			if m := emtRegex.FindStringSubmatch(cleanComment); len(m) > 1 {
+				emtVal = strings.TrimSpace(m[1])
+				cleanComment = emtRegex.ReplaceAllString(cleanComment, "")
+			}
+			cleanComment = strings.TrimSpace(cleanComment)
+
 			if curr != nil {
-				curr.Comment = comment
+				if clkVal != "" {
+					curr.Clock = clkVal
+				}
+				if emtVal != "" {
+					curr.EMT = emtVal
+				}
+				if cleanComment != "" {
+					if curr.Comment != "" {
+						curr.Comment += " " + cleanComment
+					} else {
+						curr.Comment = cleanComment
+					}
+				}
 			}
 			continue
 		}
