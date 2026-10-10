@@ -31,6 +31,7 @@ import {
   OpenFileDialog,
   ImportPlayerGames
 } from '../../wailsjs/go/main/App'
+import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import { online } from '../../wailsjs/go/models'
 
 const props = defineProps<{
@@ -137,8 +138,17 @@ async function handleImportOpponentGames() {
 
   isImportingOpponent.value = true
   errorMessage.value = ''
-  statusMessage.value = ''
+  statusMessage.value = 'Connecting to online chess servers...'
   opponentImportResult.value = null
+
+  let cancelEvents: (() => void) | null = null
+  if (typeof window !== 'undefined' && (window as any).runtime?.EventsOnMultiple) {
+    cancelEvents = EventsOn('online:fetch-progress', (progress: any) => {
+      if (progress && progress.message) {
+        statusMessage.value = progress.message
+      }
+    })
+  }
 
   try {
     const displayName = opponentForm.value.playerName.trim() || opponentForm.value.chessComUsername.trim() || opponentForm.value.lichessUsername.trim()
@@ -167,6 +177,12 @@ async function handleImportOpponentGames() {
   } catch (err: any) {
     errorMessage.value = `Opponent import failed: ${err?.message || err}`
   } finally {
+    if (cancelEvents) {
+      cancelEvents()
+    }
+    if (typeof window !== 'undefined' && (window as any).runtime?.EventsOff) {
+      EventsOff('online:fetch-progress')
+    }
     isImportingOpponent.value = false
   }
 }
