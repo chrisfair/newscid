@@ -31,6 +31,7 @@ const shortcuts = [
     { key: 'Ctrl+Z / Ctrl+Y', desc: 'Undo / Redo move' },
     { key: 'Ctrl+G', desc: 'Guess the Move (Solitaire Chess training)' },
     { key: 'F2', desc: 'Toggle live UCI engine analysis' },
+    { key: 'F3', desc: 'Opening Tree & Repertoire Explorer Window' },
     { key: 'F6', desc: 'ECO Opening Classification Browser' },
     { key: 'F7', desc: 'Tournament Crosstables & Standings (Swiss & Round-Robin)' },
     { key: 'F1', desc: 'User Manual & Online Help' },

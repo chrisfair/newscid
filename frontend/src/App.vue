@@ -5,6 +5,7 @@ import HeaderBar, { PieceSetOption, BoardThemeOption, DiscoveredDatabase } from 
 import Chessboard from './components/Chessboard.vue'
 import MoveNotation, { FlatMove } from './components/MoveNotation.vue'
 import OpeningTree, { TreeData } from './components/OpeningTree.vue'
+import OpeningTreeModal from './components/OpeningTreeModal.vue'
 import EnginePanel, { EvalInfo, EngineOption } from './components/EnginePanel.vue'
 import GameBrowser, { GameSummary } from './components/GameBrowser.vue'
 import BoardSetupModal from './components/BoardSetupModal.vue'
@@ -299,6 +300,14 @@ const showCommandPalette = ref(false)
 const showExplainMoveModal = ref(false)
 const showBlunderVaultModal = ref(false)
 const showOpponentScoutModal = ref(false)
+const showOpeningTreeModal = ref(false)
+
+function handleOpenTreeWindow() {
+  showOpeningTreeModal.value = true
+  activeTab.value = 'tree'
+  fetchOpeningTree(currentFEN.value)
+}
+
 const zenMode = ref(false)
 function toggleZenMode() {
   zenMode.value = !zenMode.value
@@ -893,6 +902,9 @@ function handleKeydown(e: KeyboardEvent) {
   } else if (e.key === 'F2') {
     e.preventDefault()
     toggleAnalysis()
+  } else if (e.key === 'F3') {
+    e.preventDefault()
+    handleOpenTreeWindow()
   } else if (e.key === 'F6') {
     e.preventDefault()
     showEcoBrowserModal.value = !showEcoBrowserModal.value
@@ -920,10 +932,11 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
-async function fetchOpeningTree(fen: string) {
+async function fetchOpeningTree(fen?: any) {
+  const targetFen = (typeof fen === 'string' && fen.trim()) ? fen.trim() : (currentFEN.value || startingFEN)
   treeLoading.value = true
   try {
-    const res = await GetOpeningTree(fen)
+    const res = await GetOpeningTree(targetFen)
     treeData.value = res as TreeData
   } catch (err) {
     console.error('Error fetching opening tree:', err)
@@ -1306,24 +1319,85 @@ async function handlePasteFEN() {
   }
 }
 
+// Helper to build full PGN string including headers and moves
+function buildCurrentGamePGN(): string {
+  const tags = { ...gameTags.value }
+  if (!tags.Event) tags.Event = 'Casual Game'
+  if (!tags.Site) tags.Site = 'NewScid'
+  if (!tags.Date) tags.Date = new Date().toISOString().split('T')[0].replace(/-/g, '.')
+  if (!tags.Round) tags.Round = '1'
+  if (!tags.White) tags.White = 'White'
+  if (!tags.Black) tags.Black = 'Black'
+  if (!tags.Result) tags.Result = '*'
+
+  const startFen = history.value[0]?.fen
+  if (startFen && startFen !== startingFEN) {
+    tags.SetUp = '1'
+    tags.FEN = startFen
+  }
+
+  let pgn = ''
+  const standardTagOrder = ['Event', 'Site', 'Date', 'Round', 'White', 'Black', 'Result']
+  for (const tag of standardTagOrder) {
+    pgn += `[${tag} "${tags[tag] || '?' }"]\n`
+  }
+  for (const [k, v] of Object.entries(tags)) {
+    if (!standardTagOrder.includes(k) && v) {
+      pgn += `[${k} "${v}"]\n`
+    }
+  }
+  pgn += '\n'
+
+  let moveText = ''
+  for (let i = 0; i < flatMoves.value.length; i++) {
+    const m = flatMoves.value[i]
+    if (m.isWhite) {
+      moveText += `${m.moveNumber}. ${m.san}`
+    } else {
+      if (i === 0) {
+        moveText += `${m.moveNumber}... ${m.san}`
+      } else {
+        moveText += ` ${m.san}`
+      }
+    }
+
+    if (m.nags && m.nags.length > 0) {
+      for (const nag of m.nags) {
+        moveText += ` $${nag}`
+      }
+    }
+
+    if (m.comment) {
+      moveText += ` {${m.comment}}`
+    }
+
+    moveText += ' '
+  }
+
+  const result = tags.Result || '*'
+  moveText += result
+
+  return pgn + moveText.trim() + '\n'
+}
+
 // Full Game Analysis (Annotate)
 async function handleAnnotateGame() {
   if (isAnalyzingGame.value) return
   if (flatMoves.value.length === 0) {
-    alert('There are no moves in the current game to annotate.')
+    alert('There are no moves in the current game to annotate. Play some moves on the board or load a game first.')
     return
   }
   isAnalyzingGame.value = true
   try {
-    const gameObj: any = {
-      tags: gameTags.value,
-      startFen: history.value[0].fen,
-      result: gameTags.value.Result || '*',
-      plyCount: flatMoves.value.length,
-    }
-    const pgn = await ExportPGN(gameObj)
+    const pgn = buildCurrentGamePGN()
     const analysis = await AnnotatePGN(pgn, 150)
     gameAnalysis.value = analysis as GameAnalysisData
+
+    // Update active tab snapshot
+    const curTab = openGameTabs.value[activeGameTabIdx.value]
+    if (curTab) {
+      curTab.gameAnalysis = analysis as GameAnalysisData
+    }
 
     // Update flatMoves with NAGs and comments
     if (analysis.moveAnalyses) {
@@ -1337,6 +1411,7 @@ async function handleAnnotateGame() {
         }
       }
     }
+    activeTab.value = 'notation'
     alert(`Annotation Complete!\nWhite Accuracy: ${analysis.whiteAccuracy}%\nBlack Accuracy: ${analysis.blackAccuracy}%\nBlunders: White ${analysis.whiteBlunders}, Black ${analysis.blackBlunders}`)
   } catch (err) {
     alert(`Game annotation failed: ${err}`)
@@ -1435,13 +1510,7 @@ async function confirmImportPGN() {
 
 async function handleExportPGN() {
   try {
-    const gameObj: any = {
-      tags: gameTags.value,
-      startFen: history.value[0].fen,
-      result: gameTags.value.Result || '*',
-      plyCount: flatMoves.value.length,
-    }
-    const pgn = await ExportPGN(gameObj)
+    const pgn = buildCurrentGamePGN()
     let success = false
     try {
       success = await ClipboardSetText(pgn)
@@ -1888,6 +1957,15 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
     action: () => { showProgressiveTacticsModal.value = true }
   },
   {
+    id: 'opening-tree',
+    title: 'Opening Tree Window (F3)',
+    subtitle: 'Explore master opening statistics, candidate moves & Polyglot books',
+    icon: 'book-open',
+    category: 'Openings',
+    shortcut: 'F3',
+    action: handleOpenTreeWindow
+  },
+  {
     id: 'opening-trainer',
     title: 'Opening Repertoire Builder & Trainer',
     subtitle: 'Learn and quiz your opening lines',
@@ -2056,6 +2134,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       @annotate-game="handleAnnotateGame"
       @play-vs-engine="handlePlayVsEngine"
       @tactics-trainer="handleTacticsTrainer"
+      @opening-tree="handleOpenTreeWindow"
+      @open-tree-window="handleOpenTreeWindow"
       @opening-trainer="showOpeningTrainerModal = true"
       @progressive-tactics="showProgressiveTacticsModal = true"
       @mine-puzzles="showPuzzleMinerModal = true"
@@ -2362,9 +2442,17 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
               :tree-data="treeData"
               :loading="treeLoading"
               :db-open="!!dbInfo"
+              :db-name="dbInfo?.name"
+              :eco-code="gameTags.ECO"
+              :opening-name="gameTags.Opening || gameTags.Event"
+              :discovered-databases="discoveredDatabases"
               @play-move="handleMove"
               @refresh="fetchOpeningTree(currentFEN)"
               @open-db="handleOpenDB"
+              @open-discovered-db="handleOpenDiscoveredBase"
+              @go-first="goFirst"
+              @go-prev="goPrev"
+              @pop-out-window="handleOpenTreeWindow"
             />
           </div>
 
@@ -2482,6 +2570,26 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       :board-theme="currentTheme"
       @load-into-app="handleLoadTacticsIntoApp"
       @close="showTacticsModal = false"
+    />
+
+    <!-- Dedicated Opening Tree & Repertoire Explorer Window (F3) -->
+    <OpeningTreeModal
+      :is-open="showOpeningTreeModal"
+      :fen="currentFEN"
+      :tree-data="treeData"
+      :loading="treeLoading"
+      :db-open="!!dbInfo"
+      :db-name="dbInfo?.name"
+      :eco-code="gameTags.ECO"
+      :opening-name="gameTags.Opening || gameTags.Event"
+      :discovered-databases="discoveredDatabases"
+      @play-move="handleMove"
+      @refresh="fetchOpeningTree(currentFEN)"
+      @open-db="handleOpenDB"
+      @open-discovered-db="handleOpenDiscoveredBase"
+      @go-first="goFirst"
+      @go-prev="goPrev"
+      @close="showOpeningTreeModal = false"
     />
 
     <!-- Opening Repertoire Builder & Trainer Modal -->
