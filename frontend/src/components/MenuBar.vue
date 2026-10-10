@@ -19,6 +19,9 @@ import {
   Palette,
   Shuffle,
   ChevronRight,
+  ChevronLeft,
+  ChevronsRight,
+  ChevronsLeft,
   Sparkles,
   Swords,
   Copy,
@@ -164,12 +167,12 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="app-menubar relative z-40 bg-zinc-950 border-b border-zinc-800/80 px-2 py-0.5 flex items-center gap-1 text-xs select-none">
+  <div class="app-menubar relative z-40 bg-zinc-950 border-b border-zinc-800/80 px-2.5 py-1 flex items-center gap-1 text-xs select-none">
     <!-- FILE MENU -->
     <div class="relative">
       <button
-        class="px-2.5 py-1 rounded hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-        :class="{ 'bg-zinc-800 text-white': activeMenu === 'file' }"
+        class="px-3 py-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer font-medium"
+        :class="{ 'bg-zinc-800 text-white shadow-xs': activeMenu === 'file' }"
         @click="toggleMenu('file')"
         @mouseenter="handleMenuHover('file')"
       >
@@ -178,80 +181,80 @@ onUnmounted(() => {
 
       <div
         v-if="activeMenu === 'file'"
-        class="absolute top-full left-0 mt-0.5 w-56 bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-2xl py-1 z-50 text-xs"
+        class="absolute top-full left-0 mt-1 min-w-[320px] w-max bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-2xl py-1.5 z-50 text-xs"
       >
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('openDB'))"
         >
-          <span class="flex items-center gap-2"><FolderOpen class="w-3.5 h-3.5 text-emerald-400" /> Open Database...</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+O</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><FolderOpen class="w-4 h-4 shrink-0 text-emerald-400" /> Open Database...</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+O</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('createDB'))"
         >
-          <span class="flex items-center gap-2"><FileText class="w-3.5 h-3.5 text-zinc-400" /> New Database...</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><FileText class="w-4 h-4 shrink-0 text-zinc-400" /> New Database...</span>
         </button>
         <button
           v-if="dbName"
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('closeDB'))"
         >
-          <span class="flex items-center gap-2"><Trash2 class="w-3.5 h-3.5 text-amber-400" /> Close Database</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Trash2 class="w-4 h-4 shrink-0 text-amber-400" /> Close Database</span>
         </button>
         <button
           v-if="dbName"
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('databaseMaintenance'))"
         >
-          <span class="flex items-center gap-2"><Wrench class="w-3.5 h-3.5 text-emerald-400" /> Database Maintenance...</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+M</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Wrench class="w-4 h-4 shrink-0 text-emerald-400" /> Database Maintenance...</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+M</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('onlineSync'))"
         >
-          <span class="flex items-center gap-2"><Globe class="w-3.5 h-3.5 text-cyan-400" /> Online Account Sync...</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Chess.com/Lichess</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Globe class="w-4 h-4 shrink-0 text-cyan-400" /> Online Account Sync...</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Chess.com / Lichess</span>
         </button>
 
-        <div class="h-px bg-zinc-800 my-1" />
+        <div class="h-px bg-zinc-800 my-1 mx-2" />
 
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('importPGN'))"
         >
-          <span class="flex items-center gap-2"><ClipboardPaste class="w-3.5 h-3.5 text-zinc-400" /> Import PGN Game...</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+I</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><ClipboardPaste class="w-4 h-4 shrink-0 text-zinc-400" /> Import PGN Game...</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+I</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('exportPGN'))"
         >
-          <span class="flex items-center gap-2"><Copy class="w-3.5 h-3.5 text-zinc-400" /> Export PGN Game</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+E</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Copy class="w-4 h-4 shrink-0 text-zinc-400" /> Export PGN Game</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+E</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('exportGame'))"
         >
-          <span class="flex items-center gap-2"><Download class="w-3.5 h-3.5 text-emerald-400" /> Export Game (HTML / LaTeX)...</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+Shift+E</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Download class="w-4 h-4 shrink-0 text-emerald-400" /> Export Game (HTML / LaTeX)...</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+Shift+E</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('copyFEN'))"
         >
-          <span class="flex items-center gap-2"><Copy class="w-3.5 h-3.5 text-zinc-400" /> Copy FEN to Clipboard</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+C</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Copy class="w-4 h-4 shrink-0 text-zinc-400" /> Copy FEN to Clipboard</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+C</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('pasteFEN'))"
         >
-          <span class="flex items-center gap-2"><ClipboardPaste class="w-3.5 h-3.5 text-zinc-400" /> Paste FEN from Clipboard</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+V</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><ClipboardPaste class="w-4 h-4 shrink-0 text-zinc-400" /> Paste FEN from Clipboard</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+V</span>
         </button>
       </div>
     </div>
@@ -259,8 +262,8 @@ onUnmounted(() => {
     <!-- EDIT MENU -->
     <div class="relative">
       <button
-        class="px-2.5 py-1 rounded hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-        :class="{ 'bg-zinc-800 text-white': activeMenu === 'edit' }"
+        class="px-3 py-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer font-medium"
+        :class="{ 'bg-zinc-800 text-white shadow-xs': activeMenu === 'edit' }"
         @click="toggleMenu('edit')"
         @mouseenter="handleMenuHover('edit')"
       >
@@ -269,41 +272,41 @@ onUnmounted(() => {
 
       <div
         v-if="activeMenu === 'edit'"
-        class="absolute top-full left-0 mt-0.5 w-60 bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-2xl py-1 z-50 text-xs"
+        class="absolute top-full left-0 mt-1 min-w-[320px] w-max bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-2xl py-1.5 z-50 text-xs"
       >
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('setupBoard'))"
         >
-          <span class="flex items-center gap-2"><Sliders class="w-3.5 h-3.5 text-purple-400" /> Setup Board / FEN Editor...</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+B</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Sliders class="w-4 h-4 shrink-0 text-purple-400" /> Setup Board / FEN Editor...</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+B</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('toggleTrialMode'))"
         >
-          <span class="flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full" :class="trialMode ? 'bg-amber-400' : 'bg-zinc-600'" />
-            Trial Mode {{ trialMode ? '(Active)' : '(Off)' }}
+          <span class="flex items-center gap-2.5 whitespace-nowrap">
+            <span class="w-2.5 h-2.5 rounded-full shrink-0" :class="trialMode ? 'bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.6)]' : 'bg-zinc-600'" />
+            <span>Trial Mode {{ trialMode ? '(Active)' : '(Off)' }}</span>
           </span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+Space</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+Space</span>
         </button>
 
-        <div class="h-px bg-zinc-800 my-1" />
+        <div class="h-px bg-zinc-800 my-1 mx-2" />
 
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('undoMove'))"
         >
-          <span class="flex items-center gap-2"><Undo2 class="w-3.5 h-3.5 text-zinc-400" /> Undo Move</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+Z</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Undo2 class="w-4 h-4 shrink-0 text-zinc-400" /> Undo Move</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+Z</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('redoMove'))"
         >
-          <span class="flex items-center gap-2"><Redo2 class="w-3.5 h-3.5 text-zinc-400" /> Redo Move</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+Y</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Redo2 class="w-4 h-4 shrink-0 text-zinc-400" /> Redo Move</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+Y</span>
         </button>
       </div>
     </div>
@@ -311,8 +314,8 @@ onUnmounted(() => {
     <!-- GAME MENU -->
     <div class="relative">
       <button
-        class="px-2.5 py-1 rounded hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-        :class="{ 'bg-zinc-800 text-white': activeMenu === 'game' }"
+        class="px-3 py-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer font-medium"
+        :class="{ 'bg-zinc-800 text-white shadow-xs': activeMenu === 'game' }"
         @click="toggleMenu('game')"
         @mouseenter="handleMenuHover('game')"
       >
@@ -321,73 +324,73 @@ onUnmounted(() => {
 
       <div
         v-if="activeMenu === 'game'"
-        class="absolute top-full left-0 mt-0.5 w-56 bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-2xl py-1 z-50 text-xs"
+        class="absolute top-full left-0 mt-1 min-w-[320px] w-max bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-2xl py-1.5 z-50 text-xs"
       >
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('newGame'))"
         >
-          <span class="flex items-center gap-2"><FileText class="w-3.5 h-3.5 text-emerald-400" /> New Game</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+N</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><FileText class="w-4 h-4 shrink-0 text-emerald-400" /> New Game</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+N</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('saveGame'))"
         >
-          <span class="flex items-center gap-2"><Save class="w-3.5 h-3.5 text-blue-400" /> Save Current Game</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+S</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Save class="w-4 h-4 shrink-0 text-blue-400" /> Save Current Game</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+S</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('editTags'))"
         >
-          <span class="flex items-center gap-2"><FileEdit class="w-3.5 h-3.5 text-emerald-400" /> Edit Game Headers...</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+T</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><FileEdit class="w-4 h-4 shrink-0 text-emerald-400" /> Edit Game Headers...</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+T</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('deleteGame'))"
         >
-          <span class="flex items-center gap-2"><Trash2 class="w-3.5 h-3.5 text-red-400" /> Delete Game</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+Del</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Trash2 class="w-4 h-4 shrink-0 text-red-400" /> Delete Game</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+Del</span>
         </button>
 
-        <div class="h-px bg-zinc-800 my-1" />
+        <div class="h-px bg-zinc-800 my-1 mx-2" />
 
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('firstGame'))"
         >
-          <span>First Game</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+Home</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><ChevronsLeft class="w-4 h-4 shrink-0 text-zinc-400" /> First Game</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+Home</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('prevGame'))"
         >
-          <span>Previous Game</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+Up</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><ChevronLeft class="w-4 h-4 shrink-0 text-zinc-400" /> Previous Game</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+Up</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('nextGame'))"
         >
-          <span>Next Game</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+Down</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><ChevronRight class="w-4 h-4 shrink-0 text-zinc-400" /> Next Game</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+Down</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('lastGame'))"
         >
-          <span>Last Game</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+End</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><ChevronsRight class="w-4 h-4 shrink-0 text-zinc-400" /> Last Game</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+End</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('randomGame'))"
         >
-          <span class="flex items-center gap-2"><Shuffle class="w-3.5 h-3.5 text-zinc-400" /> Random Game</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+?</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Shuffle class="w-4 h-4 shrink-0 text-zinc-400" /> Random Game</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+?</span>
         </button>
       </div>
     </div>
@@ -395,8 +398,8 @@ onUnmounted(() => {
     <!-- SEARCH MENU -->
     <div class="relative">
       <button
-        class="px-2.5 py-1 rounded hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-        :class="{ 'bg-zinc-800 text-white': activeMenu === 'search' }"
+        class="px-3 py-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer font-medium"
+        :class="{ 'bg-zinc-800 text-white shadow-xs': activeMenu === 'search' }"
         @click="toggleMenu('search')"
         @mouseenter="handleMenuHover('search')"
       >
@@ -405,20 +408,20 @@ onUnmounted(() => {
 
       <div
         v-if="activeMenu === 'search'"
-        class="absolute top-full left-0 mt-0.5 w-64 bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-2xl py-1 z-50 text-xs"
+        class="absolute top-full left-0 mt-1 min-w-[320px] w-max bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-2xl py-1.5 z-50 text-xs"
       >
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('searchHeader'))"
         >
-          <span class="flex items-center gap-2"><Filter class="w-3.5 h-3.5 text-blue-400" /> Header / General Search...</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+H</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Filter class="w-4 h-4 shrink-0 text-blue-400" /> Header / General Search...</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+H</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('searchPosition'))"
         >
-          <span class="flex items-center gap-2"><Search class="w-3.5 h-3.5 text-emerald-400" /> Search Current Position</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Search class="w-4 h-4 shrink-0 text-emerald-400" /> Search Current Position</span>
         </button>
       </div>
     </div>
@@ -426,8 +429,8 @@ onUnmounted(() => {
     <!-- TOOLS MENU -->
     <div class="relative">
       <button
-        class="px-2.5 py-1 rounded hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-        :class="{ 'bg-zinc-800 text-white': activeMenu === 'tools' }"
+        class="px-3 py-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer font-medium"
+        :class="{ 'bg-zinc-800 text-white shadow-xs': activeMenu === 'tools' }"
         @click="toggleMenu('tools')"
         @mouseenter="handleMenuHover('tools')"
       >
@@ -436,80 +439,80 @@ onUnmounted(() => {
 
       <div
         v-if="activeMenu === 'tools'"
-        class="absolute top-full left-0 mt-0.5 w-64 bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-2xl py-1 z-50 text-xs"
+        class="absolute top-full left-0 mt-1 min-w-[380px] w-max bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-2xl py-1.5 z-50 text-xs"
       >
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('annotateGame'))"
         >
-          <span class="flex items-center gap-2"><Sparkles class="w-3.5 h-3.5 text-amber-400" /> Full Game Analysis (Annotate)</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Sparkles class="w-4 h-4 shrink-0 text-amber-400" /> Full Game Analysis (Annotate)</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('toggleAnalysis'))"
         >
-          <span class="flex items-center gap-2"><Cpu class="w-3.5 h-3.5 text-emerald-400" /> {{ isAnalyzing ? 'Stop Engine Analysis' : 'Start Live Analysis' }}</span>
-          <span class="text-[10px] text-zinc-500 font-mono">F2</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Cpu class="w-4 h-4 shrink-0 text-emerald-400" /> {{ isAnalyzing ? 'Stop Engine Analysis' : 'Start Live Analysis' }}</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">F2</span>
         </button>
-        <div class="h-px bg-zinc-800 my-1" />
+        <div class="h-px bg-zinc-800 my-1 mx-2" />
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('minePuzzles'))"
         >
-          <span class="flex items-center gap-2"><Pickaxe class="w-3.5 h-3.5 text-amber-400" /> Mine Puzzles from Database Games...</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Pickaxe class="w-4 h-4 shrink-0 text-amber-400" /> Mine Puzzles from Database Games...</span>
         </button>
         <button
           v-if="dbName"
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('databaseMaintenance'))"
         >
-          <span class="flex items-center gap-2"><Wrench class="w-3.5 h-3.5 text-emerald-400" /> Database Maintenance & Tools...</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Wrench class="w-4 h-4 shrink-0 text-emerald-400" /> Database Maintenance & Tools...</span>
         </button>
         <button
           v-if="dbName"
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('standardizeNames'))"
         >
-          <span class="flex items-center gap-2"><Sparkles class="w-3.5 h-3.5 text-purple-400" /> Standardize Player Names (Spellcheck)...</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Sparkles class="w-4 h-4 shrink-0 text-purple-400" /> Standardize Player Names (Spellcheck)...</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('onlineSync'))"
         >
-          <span class="flex items-center gap-2"><Globe class="w-3.5 h-3.5 text-cyan-400" /> Online Account Sync (Chess.com & Lichess)...</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Globe class="w-4 h-4 shrink-0 text-cyan-400" /> Online Account Sync (Chess.com & Lichess)...</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('twicDownloader'))"
         >
-          <span class="flex items-center gap-2"><Download class="w-3.5 h-3.5 text-cyan-400" /> Download TWIC Bulletins...</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Download class="w-4 h-4 shrink-0 text-cyan-400" /> Download TWIC Bulletins...</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('playerPersonas'))"
         >
-          <span class="flex items-center gap-2"><Users class="w-3.5 h-3.5 text-purple-400" /> Player Personas & Aliases...</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Users class="w-4 h-4 shrink-0 text-purple-400" /> Player Personas & Aliases...</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('showCrosstable'))"
         >
-          <span class="flex items-center gap-2"><Trophy class="w-3.5 h-3.5 text-amber-400" /> Tournament Crosstables & Standings...</span>
-          <span class="text-[10px] text-zinc-500 font-mono">F7</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Trophy class="w-4 h-4 shrink-0 text-amber-400" /> Tournament Crosstables & Standings...</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">F7</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('ecoBrowser'))"
         >
-          <span class="flex items-center gap-2"><BookOpen class="w-3.5 h-3.5 text-emerald-400" /> ECO Opening Classification Browser...</span>
-          <span class="text-[10px] text-zinc-500 font-mono">F6</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><BookOpen class="w-4 h-4 shrink-0 text-emerald-400" /> ECO Opening Classification Browser...</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">F6</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('databaseStats'))"
         >
-          <span class="flex items-center gap-2"><BarChart3 class="w-3.5 h-3.5 text-emerald-400" /> Database Demographics & Rating Tracker...</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+D</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><BarChart3 class="w-4 h-4 shrink-0 text-emerald-400" /> Database Demographics & Rating Tracker...</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+D</span>
         </button>
       </div>
     </div>
@@ -517,8 +520,8 @@ onUnmounted(() => {
     <!-- PLAY MENU -->
     <div class="relative">
       <button
-        class="px-2.5 py-1 rounded hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-        :class="{ 'bg-zinc-800 text-white': activeMenu === 'play' }"
+        class="px-3 py-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer font-medium"
+        :class="{ 'bg-zinc-800 text-white shadow-xs': activeMenu === 'play' }"
         @click="toggleMenu('play')"
         @mouseenter="handleMenuHover('play')"
       >
@@ -527,67 +530,66 @@ onUnmounted(() => {
 
       <div
         v-if="activeMenu === 'play'"
-        class="absolute top-full left-0 mt-0.5 w-68 bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-2xl py-1 z-50 text-xs"
+        class="absolute top-full left-0 mt-1 min-w-[360px] w-max bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-2xl py-1.5 z-50 text-xs"
       >
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('playVsEngine'))"
         >
-          <span class="flex items-center gap-2"><Swords class="w-3.5 h-3.5 text-amber-400" /> Play Against Engine...</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Swords class="w-4 h-4 shrink-0 text-amber-400" /> Play Against Engine...</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('engineMatch'))"
         >
-          <span class="flex items-center gap-2"><Swords class="w-3.5 h-3.5 text-cyan-400" /> Engine vs Engine Match...</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Swords class="w-4 h-4 shrink-0 text-cyan-400" /> Engine vs Engine Match...</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('simulatePlayer'))"
         >
-          <span class="flex items-center gap-2"><Bot class="w-3.5 h-3.5 text-purple-400" /> Simulate Database Player (Sparring)...</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Bot class="w-4 h-4 shrink-0 text-purple-400" /> Simulate Database Player (Sparring)...</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('playerPersonas'))"
         >
-          <span class="flex items-center gap-2"><Users class="w-3.5 h-3.5 text-emerald-400" /> Player Personas (Spar & Aggregate)...</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Users class="w-4 h-4 shrink-0 text-emerald-400" /> Player Personas (Spar & Aggregate)...</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('tacticsTrainer'))"
         >
-          <span class="flex items-center gap-2"><Award class="w-3.5 h-3.5 text-blue-400" /> Tactics Puzzle Trainer...</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Award class="w-4 h-4 shrink-0 text-blue-400" /> Tactics Puzzle Trainer...</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('guessTheMove'))"
         >
-          <span class="flex items-center gap-2"><Award class="w-3.5 h-3.5 text-amber-400" /> Guess the Move (Solitaire Chess)...</span>
-          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+G</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Award class="w-4 h-4 shrink-0 text-amber-400" /> Guess the Move (Solitaire Chess)...</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+G</span>
         </button>
-        <div class="h-px bg-zinc-800 my-1" />
+        <div class="h-px bg-zinc-800 my-1 mx-2" />
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('progressiveTactics'))"
         >
-          <span class="flex items-center gap-2"><Zap class="w-3.5 h-3.5 text-amber-400" /> Progressive Tactics Challenge...</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Zap class="w-4 h-4 shrink-0 text-amber-400" /> Progressive Tactics Challenge...</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('openingTrainer'))"
         >
-          <span class="flex items-center gap-2"><BookOpen class="w-3.5 h-3.5 text-emerald-400" /> Opening Builder & Trainer...</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><BookOpen class="w-4 h-4 shrink-0 text-emerald-400" /> Opening Builder & Trainer...</span>
         </button>
       </div>
     </div>
 
-
     <!-- OPTIONS MENU -->
     <div class="relative">
       <button
-        class="px-2.5 py-1 rounded hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-        :class="{ 'bg-zinc-800 text-white': activeMenu === 'options' }"
+        class="px-3 py-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer font-medium"
+        :class="{ 'bg-zinc-800 text-white shadow-xs': activeMenu === 'options' }"
         @click="toggleMenu('options')"
         @mouseenter="handleMenuHover('options')"
       >
@@ -596,34 +598,34 @@ onUnmounted(() => {
 
       <div
         v-if="activeMenu === 'options'"
-        class="absolute top-full left-0 mt-0.5 w-64 bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-2xl py-1 z-50 text-xs"
+        class="absolute top-full left-0 mt-1 min-w-[320px] w-max bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-2xl py-1.5 z-50 text-xs"
       >
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('toggleFlip'))"
         >
-          <span class="flex items-center gap-2"><RotateCcw class="w-3.5 h-3.5 text-zinc-400" /> Flip Board</span>
-          <span class="text-[10px] text-zinc-500 font-mono">F</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><RotateCcw class="w-4 h-4 shrink-0 text-zinc-400" /> Flip Board</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">F</span>
         </button>
-        <div class="h-px bg-zinc-800 my-1" />
+        <div class="h-px bg-zinc-800 my-1 mx-2" />
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('openSettings'))"
         >
-          <span class="flex items-center gap-2"><Palette class="w-3.5 h-3.5 text-emerald-400" /> Board Themes & Piece Sets...</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Palette class="w-4 h-4 shrink-0 text-emerald-400" /> Board Themes & Piece Sets...</span>
         </button>
-        <div class="h-px bg-zinc-800 my-1" />
-        <div class="px-3 py-1 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Notation Style</div>
+        <div class="h-px bg-zinc-800 my-1 mx-2" />
+        <div class="px-3.5 py-1 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Notation Style</div>
         <button
           v-for="opt in notationOptions"
           :key="opt.id"
-          class="w-full text-left px-3 py-1 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => setNotationStyle(opt.id))"
         >
-          <span class="flex items-center gap-2">
+          <span class="flex items-center gap-2.5 whitespace-nowrap">
             <span :class="currentStyle === opt.id ? 'text-amber-400 font-bold' : 'text-zinc-400'">{{ opt.name }}</span>
           </span>
-          <Check v-if="currentStyle === opt.id" class="w-3 h-3 text-amber-400" />
+          <Check v-if="currentStyle === opt.id" class="w-3.5 h-3.5 text-amber-400 shrink-0" />
         </button>
       </div>
     </div>
@@ -631,8 +633,8 @@ onUnmounted(() => {
     <!-- HELP MENU -->
     <div class="relative">
       <button
-        class="px-2.5 py-1 rounded hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-        :class="{ 'bg-zinc-800 text-white': activeMenu === 'help' }"
+        class="px-3 py-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer font-medium"
+        :class="{ 'bg-zinc-800 text-white shadow-xs': activeMenu === 'help' }"
         @click="toggleMenu('help')"
         @mouseenter="handleMenuHover('help')"
       >
@@ -641,41 +643,41 @@ onUnmounted(() => {
 
       <div
         v-if="activeMenu === 'help'"
-        class="absolute top-full left-0 mt-0.5 w-60 bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-2xl py-1 z-50 text-xs"
+        class="absolute top-full left-0 mt-1 min-w-[300px] w-max bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-2xl py-1.5 z-50 text-xs"
       >
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('showHelp'))"
         >
-          <span class="flex items-center gap-2"><BookOpen class="w-3.5 h-3.5 text-emerald-400" /> Online Help & Guides...</span>
-          <span class="text-[10px] text-zinc-500 font-mono">F1</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><BookOpen class="w-4 h-4 shrink-0 text-emerald-400" /> Online Help & Guides...</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">F1</span>
         </button>
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('openWebDocs'))"
         >
-          <span class="flex items-center gap-2"><ExternalLink class="w-3.5 h-3.5 text-cyan-400" /> Web Documentation (Online)...</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><ExternalLink class="w-4 h-4 shrink-0 text-cyan-400" /> Web Documentation (Online)...</span>
         </button>
-        <div class="h-px bg-zinc-800 my-1" />
+        <div class="h-px bg-zinc-800 my-1 mx-2" />
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('showShortcuts'))"
         >
-          <span class="flex items-center gap-2"><HelpCircle class="w-3.5 h-3.5 text-emerald-400" /> Keyboard Shortcuts</span>
-          <span class="text-[10px] text-zinc-500 font-mono">?</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><HelpCircle class="w-4 h-4 shrink-0 text-emerald-400" /> Keyboard Shortcuts</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">?</span>
         </button>
-        <div class="h-px bg-zinc-800 my-1" />
+        <div class="h-px bg-zinc-800 my-1 mx-2" />
         <button
-          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('showAbout'))"
         >
-          <span class="flex items-center gap-2"><Info class="w-3.5 h-3.5 text-zinc-400" /> About NewScid</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Info class="w-4 h-4 shrink-0 text-zinc-400" /> About NewScid</span>
         </button>
       </div>
     </div>
 
     <!-- TRIAL MODE BADGE INDICATOR -->
-    <div v-if="trialMode" class="ml-auto flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[11px] font-semibold animate-pulse">
+    <div v-if="trialMode" class="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[11px] font-semibold animate-pulse">
       <span class="w-1.5 h-1.5 rounded-full bg-amber-400" />
       <span>Trial Mode Active</span>
       <button
