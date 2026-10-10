@@ -233,6 +233,7 @@ install-user: build ## Install binary, desktop entry, mime info, and icons to ~/
 	@install -Dm644 packaging/desktop/org.newscid.NewScid.metainfo.xml $(HOME)/.local/share/metainfo/org.newscid.NewScid.metainfo.xml
 	@install -Dm644 packaging/desktop/newscid.mime.xml $(HOME)/.local/share/mime/packages/newscid.xml
 	@install -Dm644 packaging/man/newscid.1 $(HOME)/.local/share/man/man1/newscid.1
+	@python3 packaging/scripts/generate-appicon-svg.py 2>/dev/null || true
 	@python3 packaging/scripts/generate-icons.py build/appicon.png build/staging/icons
 	@for size in 16 32 48 64 128 256 512 1024; do \
 		if [ -f "build/staging/icons/$${size}x$${size}.png" ]; then \

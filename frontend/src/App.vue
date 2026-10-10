@@ -2387,7 +2387,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
               :class="activeTab === 'notation'
                 ? 'bg-emerald-600 text-white shadow-sm'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'"
-              @click="activeTab === 'notation'"
+              @click="activeTab = 'notation'"
             >
               Notation & Analysis
             </button>
@@ -2396,7 +2396,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
               :class="activeTab === 'tree'
                 ? 'bg-emerald-600 text-white shadow-sm'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'"
-              @click="activeTab === 'tree'"
+              @click="activeTab = 'tree'"
             >
               Opening Tree
             </button>
@@ -2405,7 +2405,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
               :class="activeTab === 'info'
                 ? 'bg-emerald-600 text-white shadow-sm'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'"
-              @click="activeTab === 'info'"
+              @click="activeTab = 'info'"
             >
               Game Info
             </button>

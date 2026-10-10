@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <!-- Background Gradient: Deep obsidian into dark jewel emerald -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0d2b20" />
+      <stop offset="40%" stop-color="#081d15" />
+      <stop offset="80%" stop-color="#040f0b" />
+      <stop offset="100%" stop-color="#010604" />
+    </linearGradient>
+
+    <!-- Border Gradient: Vivid emerald ring -->
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="30%" stop-color="#10b981" />
+      <stop offset="70%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#022c22" />
+    </linearGradient>
+
+    <!-- Center Radial Glow -->
+    <radialGradient id="centerGlow" cx="50%" cy="46%" r="42%">
+      <stop offset="0%" stop-color="#10b981" stop-opacity="0.40" />
+      <stop offset="45%" stop-color="#059669" stop-opacity="0.15" />
+      <stop offset="85%" stop-color="#040f0b" stop-opacity="0.02" />
+      <stop offset="100%" stop-color="#010604" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Knight Platinum/Ivory Gradient -->
+    <linearGradient id="knightGrad" x1="15%" y1="5%" x2="85%" y2="95%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="30%" stop-color="#f8fafc" />
+      <stop offset="65%" stop-color="#e2e8f0" />
+      <stop offset="90%" stop-color="#94a3b8" />
+      <stop offset="100%" stop-color="#64748b" />
+    </linearGradient>
+
+    <!-- Emerald Accent Gradient -->
+    <linearGradient id="knightAccent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6ee7b7" />
+      <stop offset="50%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+
+    <!-- Drop Shadows -->
+    <filter id="dropShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="20" stdDeviation="28" flood-color="#000000" flood-opacity="0.65" />
+    </filter>
+    <filter id="knightShadow" x="-25%" y="-20%" width="150%" height="145%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000000" flood-opacity="0.6" />
+    </filter>
+
+    <clipPath id="squircleClip">
+      <rect x="52" y="52" width="920" height="920" rx="210" ry="210" />
+    </clipPath>
+  </defs>
+
+  <!-- Base App Squircle with Shadow -->
+  <rect x="52" y="52" width="920" height="920" rx="210" ry="210" fill="url(#bgGrad)" filter="url(#dropShadow)" />
+
+  <!-- Clipped Interior Details -->
+  <g clip-path="url(#squircleClip)">
+    <!-- Subtle Geometric Chessboard Texture -->
+    <g opacity="0.05" fill="#ffffff">
+      <rect x="112" y="112" width="100" height="100" rx="8" />
+      <rect x="312" y="112" width="100" height="100" rx="8" />
+      <rect x="512" y="112" width="100" height="100" rx="8" />
+      <rect x="712" y="112" width="100" height="100" rx="8" />
+
+      <rect x="212" y="212" width="100" height="100" rx="8" />
+      <rect x="412" y="212" width="100" height="100" rx="8" />
+      <rect x="612" y="212" width="100" height="100" rx="8" />
+      <rect x="812" y="212" width="100" height="100" rx="8" />
+
+      <rect x="112" y="312" width="100" height="100" rx="8" />
+      <rect x="312" y="312" width="100" height="100" rx="8" />
+      <rect x="512" y="312" width="100" height="100" rx="8" />
+      <rect x="712" y="312" width="100" height="100" rx="8" />
+
+      <rect x="212" y="412" width="100" height="100" rx="8" />
+      <rect x="412" y="412" width="100" height="100" rx="8" />
+      <rect x="612" y="412" width="100" height="100" rx="8" />
+      <rect x="812" y="412" width="100" height="100" rx="8" />
+
+      <rect x="112" y="512" width="100" height="100" rx="8" />
+      <rect x="312" y="512" width="100" height="100" rx="8" />
+      <rect x="512" y="512" width="100" height="100" rx="8" />
+      <rect x="712" y="512" width="100" height="100" rx="8" />
+
+      <rect x="212" y="612" width="100" height="100" rx="8" />
+      <rect x="412" y="612" width="100" height="100" rx="8" />
+      <rect x="612" y="612" width="100" height="100" rx="8" />
+      <rect x="812" y="612" width="100" height="100" rx="8" />
+
+      <rect x="112" y="712" width="100" height="100" rx="8" />
+      <rect x="312" y="712" width="100" height="100" rx="8" />
+      <rect x="512" y="712" width="100" height="100" rx="8" />
+      <rect x="712" y="712" width="100" height="100" rx="8" />
+
+      <rect x="212" y="812" width="100" height="100" rx="8" />
+      <rect x="412" y="812" width="100" height="100" rx="8" />
+      <rect x="612" y="812" width="100" height="100" rx="8" />
+      <rect x="812" y="812" width="100" height="100" rx="8" />
+    </g>
+
+    <!-- Ambient Center Light -->
+    <circle cx="512" cy="480" r="380" fill="url(#centerGlow)" />
+
+    <!-- Top Gloss Sheen -->
+    <path d="M 52,52 L 972,52 C 972,52 972,340 512,460 C 52,340 52,52 52,52 Z" fill="#ffffff" opacity="0.04" />
+  </g>
+
+  <!-- Premium Inner & Outer Strokes -->
+  <rect x="52" y="52" width="920" height="920" rx="210" ry="210" fill="none" stroke="url(#borderGrad)" stroke-width="12" />
+  <rect x="62" y="62" width="900" height="900" rx="200" ry="200" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2" />
+
+  <!-- Center Chess Knight -->
+  <g filter="url(#knightShadow)" transform="translate(512, 505) scale(15) translate(-25, -24)">
+    <!-- Staunty Knight Body -->
+    <path fill="url(#knightGrad)" stroke="#0f172a" stroke-linejoin="round" stroke-width="1.1" d="M25.192 23.015c-.1654 6.9672-11.758 5.2189-11.516 18.104l22.86.1184c-2.094-6.442 9.69-25.16-11.931-32.258v-.0001s-2.4381-2.601-5.9655-2.8237l.2227 3.5347-4.5583 4.5816c-2.6294 3.1455-8.7347 8.3784-7.7513 9.6111 3.1158 5.3041 6.3306 4.4316 6.3306 4.4316 4.2418-4.5433 5.8193-2.0894 12.309-5.2997z"/>
+    
+    <!-- Jaw and Ear Shadow -->
+    <path d="M19.32 14.694c-.7757.8609-.6902 1.1156-.8137 2.1503.8055.1232 1.5069.2398 2.2486.0656 2.3809-1.262.075-3.4026-1.4347-2.2162z" fill="#090d16" opacity=".5"/>
+    
+    <!-- Glowing Intelligent Emerald Eye -->
+    <circle cx="19.8" cy="15.6" r="1.25" fill="url(#knightAccent)" />
+    <circle cx="19.5" cy="15.3" r="0.45" fill="#ffffff" />
+    
+    <!-- Muzzle / Nostril -->
+    <path d="M9.1916 22.166c-.8496.4078-.9984.9608-1.0565 1.4754.7288.4181 1.8765-.1255 2.0412-1.4316l-.9846-.044z" fill="#090d16" opacity=".45"/>
+    
+    <!-- Mane Highlight Crest -->
+    <path fill="#ffffff" opacity="0.85" d="M8.1905 25.15s.6525 1.1374-1.1019-1.641c.6594-1.9774 8.263-9.0796 12.438-13.534l-.1836-3.0857s1.0689 1.6901 1.2475 3.468c-4.3898 4.39-12.22 10.833-12.824 13.213.023.6738.24 1.0278.4231 1.5797z"/>
+    
+    <!-- Chest Muscle Contour -->
+    <path d="M13.26 28.257c2.0291-3.3367 8.3914-3.2239 11.932-5.2424.3228.1024.1304 1.3697.2398 1.23.8476-1.0903 2.9259-3.279.8684-6.8743.5214 5.9575-13.718 5.5912-15.89 10.305-.2005.4355 2.1818.7932 2.85.5818z" fill="#1e293b" opacity=".35"/>
+    
+    <!-- Base Pedestal -->
+    <path fill="url(#knightGrad)" stroke="#0f172a" stroke-linejoin="round" stroke-width="1.1" d="M25 36.457s-9.1309.048-11.691 1.6192c-1.7273 1.0602-2.1348 3.6514-1.8998 6.3237h27.182c.235-2.6723-.1725-5.2636-1.8999-6.3237-2.5597-1.5711-11.691-1.6192-11.691-1.6192z"/>
+    
+    <!-- Pedestal Emerald Accent Inset -->
+    <path fill="url(#knightAccent)" opacity="0.95" d="M14.2 41.8h21.6v2.2H14.2z" rx="0.4" />
+  </g>
+</svg>
