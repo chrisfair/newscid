@@ -813,6 +813,58 @@ func TestAppPersonaOperations(t *testing.T) {
 	require.NoError(t, err)
 	personasAfter, _ := app.GetPersonas()
 	assert.Empty(t, personasAfter)
+
+	// 12. Test FetchPersonaOnlineGames with mock Lichess server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-chess-pgn")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`[Event "Online Persona Game"]
+[Site "lichess.org"]
+[Date "2024.03.15"]
+[White "OnlineUser123"]
+[Black "Grandmaster"]
+[Result "1-0"]
+[WhiteElo "2450"]
+[BlackElo "2500"]
+
+1. e4 e5 2. Nf3 1-0`))
+	}))
+	defer server.Close()
+
+	app.syncMgr.Lichess.BaseURL = server.URL
+
+	pOnline, err := app.SavePersona(&persona.Persona{
+		DisplayName:     "Online Persona",
+		LichessUsername: "OnlineUser123",
+		DatabasePath:    filepath.Join(tempDir, "online_persona_db"),
+	})
+	require.NoError(t, err)
+	assert.Contains(t, pOnline.Identifiers, "OnlineUser123")
+
+	fetchRes, err := app.FetchPersonaOnlineGames(pOnline.ID, 10)
+	require.NoError(t, err)
+	assert.Equal(t, 1, fetchRes.TotalDownloaded)
+	assert.Equal(t, 1, fetchRes.Imported)
+	assert.Equal(t, 1, fetchRes.LichessGames)
+
+	// Verify stats can now be calculated from dedicated database even if active DB has no games for this persona
+	statsOnline, err := app.GetPersonaStatistics(pOnline.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, statsOnline.TotalGames)
+	assert.Equal(t, 1, statsOnline.Wins)
+	assert.Equal(t, 2450, statsOnline.PeakElo)
+
+	// Error when persona has no online usernames
+	pNoOnline, err := app.SavePersona(&persona.Persona{
+		DisplayName: "No Online User",
+	})
+	require.NoError(t, err)
+	_, err = app.FetchPersonaOnlineGames(pNoOnline.ID, 10)
+	assert.Error(t, err)
+
+	// Error when persona does not exist
+	_, err = app.FetchPersonaOnlineGames("invalid-id", 10)
+	assert.Error(t, err)
 }
 
 

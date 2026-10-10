@@ -94,6 +94,10 @@ export function FetchLichessPreview(arg1, arg2) {
   return window['go']['main']['App']['FetchLichessPreview'](arg1, arg2);
 }
 
+export function FetchPersonaOnlineGames(arg1, arg2) {
+  return window['go']['main']['App']['FetchPersonaOnlineGames'](arg1, arg2);
+}
+
 export function FindDuplicateGames(arg1) {
   return window['go']['main']['App']['FindDuplicateGames'](arg1);
 }

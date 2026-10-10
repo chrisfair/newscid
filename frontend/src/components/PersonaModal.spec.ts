@@ -80,6 +80,15 @@ vi.mock('../../wailsjs/go/main/App', () => ({
     totalPersonaGames: 47,
   })),
   OpenPersonaDatabase: vi.fn(async () => {}),
+  FetchPersonaOnlineGames: vi.fn(async () => ({
+    profileName: 'Christopher Fair',
+    totalDownloaded: 15,
+    imported: 15,
+    duplicatesSkipped: 3,
+    lichessGames: 10,
+    chessComGames: 5,
+    errors: [],
+  })),
 }))
 
 describe('PersonaModal.vue', () => {
@@ -168,5 +177,33 @@ describe('PersonaModal.vue', () => {
 
     const displayNameInput = wrapper.find('input[placeholder*="Christopher Fair"]').element as HTMLInputElement
     expect(displayNameInput.value).toBe('New Player Persona')
+  })
+
+  it('fetches online games when Fetch Online Games button is clicked', async () => {
+    const wrapper = mount(PersonaModal)
+    await flushPromises()
+
+    const fetchBtn = wrapper.findAll('button').find(b => b.text().includes('Fetch Online Games'))
+    expect(fetchBtn).toBeDefined()
+    expect(fetchBtn!.attributes('disabled')).toBeUndefined()
+
+    await fetchBtn!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Fetched 15 game(s) into persona database')
+    expect(wrapper.text()).toContain('5 Chess.com, 10 Lichess')
+  })
+
+  it('auto-fetches online games upon saving when auto-fetch is checked and online usernames exist', async () => {
+    const wrapper = mount(PersonaModal)
+    await flushPromises()
+
+    const saveBtn = wrapper.findAll('button').find(b => b.text().includes('Save Persona'))
+    expect(saveBtn).toBeDefined()
+
+    await saveBtn!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Fetched 15 game(s) into persona database')
   })
 })
