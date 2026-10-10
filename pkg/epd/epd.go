@@ -6,20 +6,23 @@ import (
 	"strings"
 )
 
-// Record represents a parsed Extended Position Description (EPD) line.
-type Record struct {
-	FENCore  string            `json:"fenCore"`  // Pieces, turn, castling, en-passant (4 fields)
-	FullFEN  string            `json:"fullFen"`  // Full 6-field standard FEN (with 0 1 default clock)
-	Opcodes  map[string]string `json:"opcodes"`  // All parsed opcode: value pairs
-	BestMove string            `json:"bestMove,omitempty"` // "bm" opcode
-	AvoidMove string           `json:"avoidMove,omitempty"`// "am" opcode
-	ID       string            `json:"id,omitempty"`       // "id" opcode
-	Comment  string            `json:"comment,omitempty"`  // "c0" opcode
-	EvalCP   *int              `json:"evalCp,omitempty"`   // "ce" opcode (centipawns)
+// EPDRecord represents a parsed Extended Position Description (EPD) line.
+type EPDRecord struct {
+	FENCore   string            `json:"fenCore"`            // Pieces, turn, castling, en-passant (4 fields)
+	FullFEN   string            `json:"fullFen"`            // Full 6-field standard FEN (with 0 1 default clock)
+	Opcodes   map[string]string `json:"opcodes"`            // All parsed opcode: value pairs
+	BestMove  string            `json:"bestMove,omitempty"`  // "bm" opcode
+	AvoidMove string            `json:"avoidMove,omitempty"` // "am" opcode
+	ID        string            `json:"id,omitempty"`        // "id" opcode
+	Comment   string            `json:"comment,omitempty"`   // "c0" opcode
+	EvalCP    *int              `json:"evalCp,omitempty"`    // "ce" opcode (centipawns)
 }
 
-// Parse parses an EPD string into a structured Record.
-func Parse(epdLine string) (*Record, error) {
+// Record is an alias for EPDRecord.
+type Record = EPDRecord
+
+// Parse parses an EPD string into a structured EPDRecord.
+func Parse(epdLine string) (*EPDRecord, error) {
 	line := strings.TrimSpace(epdLine)
 	if line == "" {
 		return nil, fmt.Errorf("empty EPD line")
@@ -33,7 +36,7 @@ func Parse(epdLine string) (*Record, error) {
 	fenCore := strings.Join(parts[0:4], " ")
 	fullFEN := fenCore + " 0 1"
 
-	rec := &Record{
+	rec := &EPDRecord{
 		FENCore: fenCore,
 		FullFEN: fullFEN,
 		Opcodes: make(map[string]string),
@@ -48,7 +51,7 @@ func Parse(epdLine string) (*Record, error) {
 }
 
 // parseOpcodes extracts opcode value pairs separated by semicolons.
-func parseOpcodes(s string, rec *Record) {
+func parseOpcodes(s string, rec *EPDRecord) {
 	rawOps := strings.Split(s, ";")
 	for _, raw := range rawOps {
 		op := strings.TrimSpace(raw)

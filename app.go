@@ -2388,7 +2388,7 @@ func (a *App) GenerateRandomChess960() (*chess960.Position, error) {
 // ==========================================
 
 // ParseEPD parses an EPD string into structured fields with opcodes.
-func (a *App) ParseEPD(epdString string) (*epd.Record, error) {
+func (a *App) ParseEPD(epdString string) (*epd.EPDRecord, error) {
 	return epd.Parse(epdString)
 }
 
