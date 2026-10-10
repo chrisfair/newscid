@@ -145,7 +145,7 @@ function formatBookName(path: string) {
               <span v-if="openingName" class="text-zinc-300 font-medium truncate max-w-md">
                 {{ openingName }}
               </span>
-              <span v-if="dbName" class="text-zinc-500">• Base: {{ dbName }}</span>
+              <span class="text-zinc-500">• {{ dbOpen ? `Base: ${dbName || 'Open Base'}` : 'Master Repertoire Tree' }}</span>
             </div>
           </div>
         </div>
@@ -195,9 +195,9 @@ function formatBookName(path: string) {
             @click="activeTab = 'db'"
           >
             <Database class="w-3.5 h-3.5" />
-            <span>Database Tree</span>
+            <span>{{ dbOpen ? 'Database Tree' : 'Master Tree' }}</span>
             <span class="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-zinc-900 text-zinc-300">
-              {{ totalGames }} games
+              {{ totalGames }} {{ dbOpen ? 'games' : 'weight' }}
             </span>
           </button>
 
@@ -351,7 +351,10 @@ function formatBookName(path: string) {
                       <span class="w-10 text-right text-xs font-semibold text-zinc-300">
                         {{ m.scorePct.toFixed(1) }}%
                       </span>
-                      <div class="flex-1 h-2.5 rounded-full overflow-hidden bg-zinc-800 flex shadow-inner">
+                      <div
+                        v-if="(m.whiteWins + m.draws + m.blackWins) > 0 && m.count > 0"
+                        class="flex-1 h-2.5 rounded-full overflow-hidden bg-zinc-800 flex shadow-inner"
+                      >
                         <!-- White win bar -->
                         <div
                           class="bg-zinc-200 h-full"
@@ -371,16 +374,31 @@ function formatBookName(path: string) {
                           :title="`Black Wins: ${m.blackWins} (${((m.blackWins / m.count) * 100).toFixed(1)}%)`"
                         />
                       </div>
+                      <div
+                        v-else
+                        class="flex-1 h-2.5 rounded-full overflow-hidden bg-zinc-800 flex shadow-inner"
+                      >
+                        <div
+                          class="bg-emerald-500 h-full"
+                          :style="{ width: `${Math.min(100, Math.max(0, m.scorePct))}%` }"
+                          :title="`Score Percentage: ${m.scorePct.toFixed(1)}%`"
+                        />
+                      </div>
                     </div>
                   </td>
 
                   <!-- W / D / L Breakdown -->
                   <td class="py-2.5 px-3 text-right text-xs text-zinc-400 whitespace-nowrap">
-                    <span class="text-zinc-200 font-medium">{{ m.whiteWins }}</span>
-                    <span class="text-zinc-600 px-1">/</span>
-                    <span class="text-zinc-400">{{ m.draws }}</span>
-                    <span class="text-zinc-600 px-1">/</span>
-                    <span class="text-zinc-400">{{ m.blackWins }}</span>
+                    <template v-if="(m.whiteWins + m.draws + m.blackWins) > 0">
+                      <span class="text-zinc-200 font-medium">{{ m.whiteWins }}</span>
+                      <span class="text-zinc-600 px-1">/</span>
+                      <span class="text-zinc-400">{{ m.draws }}</span>
+                      <span class="text-zinc-600 px-1">/</span>
+                      <span class="text-zinc-400">{{ m.blackWins }}</span>
+                    </template>
+                    <template v-else>
+                      <span class="text-purple-400 font-mono text-xs">Book</span>
+                    </template>
                   </td>
                 </tr>
               </tbody>

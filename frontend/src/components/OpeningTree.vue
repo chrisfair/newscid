@@ -134,7 +134,7 @@ function formatBookName(path: string) {
           @click="activeTab = 'db'"
         >
           <Database class="w-3.5 h-3.5" />
-          <span>DB Tree</span>
+          <span>{{ dbOpen ? 'DB Tree' : 'Master Tree' }}</span>
           <span class="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-zinc-900 text-zinc-400 font-normal">
             {{ totalGames }}
           </span>
@@ -310,7 +310,10 @@ function formatBookName(path: string) {
                 <span class="w-9 text-right text-[11px] text-zinc-400">
                   {{ m.scorePct.toFixed(1) }}%
                 </span>
-                <div class="flex-1 h-2 rounded-full overflow-hidden bg-zinc-800 flex">
+                <div
+                  v-if="(m.whiteWins + m.draws + m.blackWins) > 0 && m.count > 0"
+                  class="flex-1 h-2 rounded-full overflow-hidden bg-zinc-800 flex"
+                >
                   <!-- White win bar -->
                   <div
                     class="bg-zinc-300 h-full"
@@ -330,16 +333,31 @@ function formatBookName(path: string) {
                     :title="`Black Wins: ${m.blackWins}`"
                   />
                 </div>
+                <div
+                  v-else
+                  class="flex-1 h-2 rounded-full overflow-hidden bg-zinc-800 flex"
+                >
+                  <div
+                    class="bg-emerald-500 h-full"
+                    :style="{ width: `${Math.min(100, Math.max(0, m.scorePct))}%` }"
+                    :title="`Score Percentage: ${m.scorePct.toFixed(1)}%`"
+                  />
+                </div>
               </div>
             </td>
 
             <!-- W / D / L Breakdown -->
             <td class="py-2 px-2 text-right text-[11px] text-zinc-400 whitespace-nowrap">
-              <span class="text-zinc-200">{{ m.whiteWins }}</span>
-              <span class="text-zinc-500">/</span>
-              <span class="text-zinc-400">{{ m.draws }}</span>
-              <span class="text-zinc-500">/</span>
-              <span class="text-zinc-400">{{ m.blackWins }}</span>
+              <template v-if="(m.whiteWins + m.draws + m.blackWins) > 0">
+                <span class="text-zinc-200">{{ m.whiteWins }}</span>
+                <span class="text-zinc-500">/</span>
+                <span class="text-zinc-400">{{ m.draws }}</span>
+                <span class="text-zinc-500">/</span>
+                <span class="text-zinc-400">{{ m.blackWins }}</span>
+              </template>
+              <template v-else>
+                <span class="text-purple-400 font-mono text-[10px]">Book</span>
+              </template>
             </td>
           </tr>
         </tbody>

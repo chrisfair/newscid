@@ -624,9 +624,68 @@ func (a *App) ExportPGN(game *chess.Game) (string, error) {
 
 func (a *App) GetOpeningTree(fen string) (*tree.TreeResult, error) {
 	a.mu.RLock()
-	defer a.mu.RUnlock()
+	db := a.db
+	a.mu.RUnlock()
 
-	return tree.BuildTreeFromDatabase(a.db, fen, 1000)
+	var res *tree.TreeResult
+	var err error
+	if db != nil && db.IsOpen {
+		res, err = tree.BuildTreeFromDatabase(db, fen, 1000)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// If database is open and has matching moves, return it
+	if res != nil && len(res.Moves) > 0 {
+		return res, nil
+	}
+
+	// Fallback to Polyglot Master Opening Book (Performance.bin or Elo2400.bin) if DB has 0 moves or is not open
+	books := polyglot.DiscoverBooks()
+	if len(books) > 0 {
+		preferredBook := books[0]
+		for _, b := range books {
+			if strings.Contains(b, "Performance.bin") {
+				preferredBook = b
+				break
+			}
+			if strings.Contains(b, "Elo2400.bin") {
+				preferredBook = b
+			}
+		}
+
+		bMoves, err := a.QueryPolyglotBook(fen, preferredBook)
+		if err == nil && len(bMoves) > 0 {
+			var treeMoves []*tree.MoveStat
+			totalWeight := 0
+			for _, bm := range bMoves {
+				totalWeight += int(bm.Weight)
+			}
+			for _, bm := range bMoves {
+				pct := 0.0
+				if totalWeight > 0 {
+					pct = (float64(bm.Weight) / float64(totalWeight)) * 100.0
+				}
+				treeMoves = append(treeMoves, &tree.MoveStat{
+					Move:     bm.SAN,
+					UCI:      bm.UCI,
+					Count:    int(bm.Weight),
+					ScorePct: pct,
+				})
+			}
+			return &tree.TreeResult{
+				FEN:        fen,
+				TotalGames: totalWeight,
+				Moves:      treeMoves,
+			}, nil
+		}
+	}
+
+	if res != nil {
+		return res, nil
+	}
+	return &tree.TreeResult{FEN: fen, Moves: []*tree.MoveStat{}}, nil
 }
 
 func (a *App) SearchPosition(fen string) ([]*scid.GameSummary, error) {
