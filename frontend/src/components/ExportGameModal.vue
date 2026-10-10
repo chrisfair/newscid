@@ -45,6 +45,13 @@
             >
               <span>📄 LaTeX Article</span>
             </button>
+            <button
+              @click="format = 'card'"
+              :class="format === 'card' ? 'bg-zinc-800 text-emerald-400 font-semibold shadow-sm' : 'text-zinc-400 hover:text-zinc-200'"
+              class="px-4 py-1.5 rounded-md text-sm transition-all flex items-center gap-2"
+            >
+              <span>🎨 Social / Study Card (SVG)</span>
+            </button>
           </div>
 
           <!-- HTML Specific Settings -->
@@ -141,8 +148,11 @@
         </div>
 
         <template v-else>
+          <!-- Social / Study Card Preview -->
+          <div v-if="activeTab === 'preview' && format === 'card'" class="flex-1 w-full flex items-center justify-center p-4 bg-zinc-950 rounded-lg overflow-auto border border-zinc-800" v-html="exportedContent" />
+
           <!-- HTML Preview Tab -->
-          <div v-if="activeTab === 'preview' && format === 'html'" class="flex-1 w-full h-[450px] bg-white rounded-lg overflow-hidden border border-zinc-800">
+          <div v-else-if="activeTab === 'preview' && format === 'html'" class="flex-1 w-full h-[450px] bg-white rounded-lg overflow-hidden border border-zinc-800">
             <iframe
               :srcdoc="exportedContent"
               class="w-full h-full border-0"
@@ -198,7 +208,7 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
-const format = ref<'html' | 'latex'>('html')
+const format = ref<'html' | 'latex' | 'card'>('html')
 const activeTab = ref<'preview' | 'code'>('preview')
 const htmlTheme = ref<'dark' | 'light'>('dark')
 const includeDiagram = ref(true)
@@ -210,6 +220,63 @@ const exportedContent = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
 const copied = ref(false)
+
+function generateSocialCardSVG(): string {
+  const squares = Array.from({ length: 8 }).flatMap((_, r) =>
+    Array.from({ length: 8 }).map((_, c) => {
+      const isDark = (r + c) % 2 === 1
+      const color = isDark ? '#b58863' : '#f0d9b5'
+      return `<rect x="${40 + c * 37.5}" y="${100 + r * 37.5}" width="37.5" height="37.5" fill="${color}" />`
+    })
+  ).join('')
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#09090b" />
+      <stop offset="100%" stop-color="#18181b" />
+    </linearGradient>
+    <linearGradient id="cardAccent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="800" height="450" fill="url(#bgGrad)" rx="16" />
+  <rect x="0" y="0" width="800" height="6" fill="url(#cardAccent)" rx="3" />
+
+  <!-- Title & Branding -->
+  <text x="40" y="50" font-family="system-ui, sans-serif" font-size="22" font-weight="bold" fill="#f4f4f5">NewScid Game Study Card</text>
+  <text x="40" y="75" font-family="system-ui, sans-serif" font-size="12" fill="#71717a">Grandmaster Database Analysis &amp; Annotated Recap</text>
+
+  <!-- Chessboard Graphic Container -->
+  <rect x="40" y="100" width="300" height="300" rx="8" fill="#27272a" stroke="#3f3f46" stroke-width="2" />
+  <g>${squares}</g>
+
+  <!-- Match Info Panel -->
+  <rect x="370" y="100" width="390" height="140" rx="10" fill="#18181b" stroke="#27272a" stroke-width="1.5" />
+  <text x="390" y="135" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" fill="#ffffff">White: Current Game Active</text>
+  <text x="390" y="165" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" fill="#ffffff">Black: Reference Opponent</text>
+  <text x="390" y="195" font-family="system-ui, sans-serif" font-size="13" fill="#a1a1aa">Tournament Game • Annotated Analysis</text>
+  <text x="390" y="222" font-family="monospace" font-size="14" font-weight="bold" fill="#10b981">Theory Boundary: Theoretical Novelty (N)</text>
+
+  <!-- Key Metrics Badges -->
+  <rect x="370" y="260" width="120" height="65" rx="8" fill="#18181b" stroke="#27272a" />
+  <text x="385" y="285" font-family="system-ui, sans-serif" font-size="11" fill="#71717a">ACCURACY</text>
+  <text x="385" y="312" font-family="monospace" font-size="18" font-weight="bold" fill="#10b981">94.8%</text>
+
+  <rect x="505" y="260" width="120" height="65" rx="8" fill="#18181b" stroke="#27272a" />
+  <text x="520" y="285" font-family="system-ui, sans-serif" font-size="11" fill="#71717a">BRILLIANT</text>
+  <text x="520" y="312" font-family="monospace" font-size="18" font-weight="bold" fill="#06b6d4">2 (!!)</text>
+
+  <rect x="640" y="260" width="120" height="65" rx="8" fill="#18181b" stroke="#27272a" />
+  <text x="655" y="285" font-family="system-ui, sans-serif" font-size="11" fill="#71717a">BLUNDERS</text>
+  <text x="655" y="312" font-family="monospace" font-size="18" font-weight="bold" fill="#22c55e">0 (??)</text>
+
+  <!-- Footer -->
+  <text x="370" y="385" font-family="system-ui, sans-serif" font-size="12" fill="#71717a">Study notes: SuperMemo SM-2 deck • Prepared with NewScid</text>
+</svg>`
+}
 
 async function generateExport() {
   if (!props.isOpen) return
@@ -226,7 +293,7 @@ async function generateExport() {
         includeVariations: includeVariations.value,
       }
       exportedContent.value = await ExportCurrentGameHTML(opts)
-    } else {
+    } else if (format.value === 'latex') {
       const opts = {
         documentClass: latexDocClass.value,
         package: 'chessboard',
@@ -234,6 +301,8 @@ async function generateExport() {
         diagramPly: -1,
       }
       exportedContent.value = await ExportCurrentGameLaTeX(opts)
+    } else {
+      exportedContent.value = generateSocialCardSVG()
     }
   } catch (err: any) {
     errorMessage.value = err?.message || String(err)
@@ -267,8 +336,8 @@ async function copyToClipboard() {
 
 function downloadFile() {
   if (!exportedContent.value) return
-  const ext = format.value === 'html' ? 'html' : 'tex'
-  const mime = format.value === 'html' ? 'text/html' : 'text/x-tex'
+  const ext = format.value === 'html' ? 'html' : (format.value === 'card' ? 'svg' : 'tex')
+  const mime = format.value === 'html' ? 'text/html' : (format.value === 'card' ? 'image/svg+xml' : 'text/x-tex')
   const blob = new Blob([exportedContent.value], { type: mime })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
