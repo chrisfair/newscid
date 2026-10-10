@@ -207,6 +207,36 @@ def main():
     ok, epd_str = run_test("ExportEPD", "ExportEPD", start_fen, {"bm": "e4", "id": "Start-01"})
     check("ExportEPD", ok, epd_str and "bm e4;" in epd_str)
 
+    # Positional Imbalance & Material Radar
+    ok, imb_rep = run_test("GetPositionalImbalance", "GetPositionalImbalance", start_fen)
+    check("GetPositionalImbalance", ok, imb_rep and imb_rep.get("materialDelta") == 0 and imb_rep.get("white", {}).get("hasBishopPair") is True)
+
+    # Natural Language Move Explainer
+    fen_expl = "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 1 5"
+    ok, expl = run_test("ExplainMove: Castling", "ExplainMove", fen_expl, "e1g1", 40, "e1g1")
+    check("ExplainMove: Castling", ok, expl and "castles" in expl.get("detailedText", "").lower() and "Castling" in expl.get("tacticalMotifs", []))
+
+    # Personal Blunder Vault (SM-2 Spaced Repetition)
+    blunder_p = {
+        "id": "func-test-blunder",
+        "fen": start_fen,
+        "playerName": "FuncTester",
+        "userColor": "white",
+        "playedMove": "f2f3",
+        "bestMove": "e2e4",
+        "deltaCp": -190,
+        "event": "Online Blitz",
+        "date": "2026.10.10"
+    }
+    ok, _ = run_test("AddBlunderToVault", "AddBlunderToVault", blunder_p)
+    check("AddBlunderToVault", ok, True)
+
+    ok, due_blunders = run_test("GetDueBlunderPuzzles", "GetDueBlunderPuzzles")
+    check("GetDueBlunderPuzzles", ok, due_blunders is not None and len(due_blunders) >= 1)
+
+    ok, reviewed_p = run_test("RecordBlunderReview", "RecordBlunderReview", "func-test-blunder", 4)
+    check("RecordBlunderReview", ok, reviewed_p and reviewed_p.get("repetitions") == 1)
+
     # -------------------------------------------------------------
     # 3. Database Lifecycle, Game CRUD, Searching & Maintenance
     # -------------------------------------------------------------
@@ -296,6 +326,9 @@ def main():
 
     ok, rating_res = run_test("GetRatingEvolution (Carlsen, Magnus)", "GetRatingEvolution", "Carlsen, Magnus")
     check("GetRatingEvolution", ok, rating_res is not None)
+
+    ok, scout_res = run_test("GenerateOpponentScoutingReport (Morphy)", "GenerateOpponentScoutingReport", "Morphy")
+    check("GenerateOpponentScoutingReport", ok, scout_res and scout_res.get("totalGames") >= 1 and scout_res.get("whiteRecord", {}).get("wins") >= 1)
 
     # Duplicate check & Verification
     ok, dups = run_test("FindDuplicateGames", "FindDuplicateGames", {"matchMoves": True})

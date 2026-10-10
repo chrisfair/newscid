@@ -32,8 +32,13 @@ import EngineMatchModal from './components/EngineMatchModal.vue'
 import ExportGameModal from './components/ExportGameModal.vue'
 import Chess960Modal from './components/Chess960Modal.vue'
 import CoordinateTrainerModal from './components/CoordinateTrainerModal.vue'
-import { Bot } from '@lucide/vue'
-import { playerbot, persona, scid, tournament } from '../wailsjs/go/models'
+import CommandPalette, { CommandItem } from './components/CommandPalette.vue'
+import ImbalanceBar from './components/ImbalanceBar.vue'
+import ExplainMoveModal from './components/ExplainMoveModal.vue'
+import BlunderVaultModal from './components/BlunderVaultModal.vue'
+import OpponentScoutModal from './components/OpponentScoutModal.vue'
+import { Bot, Sparkles, Brain, Shield, Maximize2, Minimize2, AlertTriangle } from '@lucide/vue'
+import { playerbot, persona, scid, tournament, imbalance, explainer, blundervault, scout } from '../wailsjs/go/models'
 
 // Import Wails backend bindings
 import {
@@ -81,6 +86,13 @@ import {
   DeleteVariation,
   GetSimulatedMove,
   GetPersonaSimulatedMove,
+  GetPositionalImbalance,
+  ExplainMove,
+  GetDueBlunderPuzzles,
+  GetAllBlunderPuzzles,
+  RecordBlunderReview,
+  AddBlunderToVault,
+  GenerateOpponentScoutingReport,
 } from '../wailsjs/go/main/App'
 import { EventsOn, EventsOff, ClipboardSetText, ClipboardGetText, BrowserOpenURL } from '../wailsjs/runtime/runtime'
 
@@ -177,6 +189,78 @@ const showEngineMatchModal = ref(false)
 const showExportGameModal = ref(false)
 const showChess960Modal = ref(false)
 const showCoordinateTrainerModal = ref(false)
+const showCommandPalette = ref(false)
+const showExplainMoveModal = ref(false)
+const showBlunderVaultModal = ref(false)
+const showOpponentScoutModal = ref(false)
+const zenMode = ref(false)
+function toggleZenMode() {
+  zenMode.value = !zenMode.value
+}
+
+// Positional Imbalance State
+const imbalanceReport = ref<imbalance.Report | null>(null)
+async function updateImbalance(fen: string) {
+  try {
+    const report = await GetPositionalImbalance(fen)
+    imbalanceReport.value = report
+  } catch (e) {
+    console.warn('Failed to get imbalance:', e)
+  }
+}
+
+// Move Explainer Target State
+const explainMoveTarget = ref<{ beforeFen: string; moveUci: string; scoreCp?: number; bestMove?: string } | null>(null)
+function handleExplainMove(ply: number) {
+  const m = flatMoves.value.find(item => item.ply === ply)
+  if (!m) {
+    if (flatMoves.value.length > 0) {
+      const lastM = flatMoves.value[flatMoves.value.length - 1]
+      const prevFen = history.value[lastM.ply - 1]?.fen || startingFEN
+      explainMoveTarget.value = {
+        beforeFen: prevFen,
+        moveUci: lastM.uci || lastM.san,
+        scoreCp: evalInfo.value?.scoreCp,
+        bestMove: evalInfo.value?.bestMove
+      }
+      showExplainMoveModal.value = true
+    }
+    return
+  }
+  const prevFen = history.value[ply - 1]?.fen || startingFEN
+  explainMoveTarget.value = {
+    beforeFen: prevFen,
+    moveUci: m.uci || m.san,
+    scoreCp: evalInfo.value?.scoreCp,
+    bestMove: evalInfo.value?.bestMove
+  }
+  showExplainMoveModal.value = true
+}
+
+// Blunder Radar Guardrail State
+const blunderRadarAlert = ref<string | null>(null)
+let radarTimer: any = null
+function triggerBlunderRadar(warning: string) {
+  blunderRadarAlert.value = warning
+  if (radarTimer) clearTimeout(radarTimer)
+  radarTimer = setTimeout(() => {
+    blunderRadarAlert.value = null
+  }, 4500)
+}
+
+function handleLoadVaultPuzzle(fen: string) {
+  showBlunderVaultModal.value = false
+  handleSetupBoardApply(fen)
+}
+
+// Theory Boundary & Novelty State
+const isTheoreticalNovelty = computed(() => {
+  if (currentPly.value <= 1) return false
+  if (!treeData.value || treeData.value.moves.length === 0) {
+    return currentPly.value >= 4 && currentPly.value <= 40
+  }
+  return false
+})
 
 // PyChess & Modern Analysis Features
 const soundEnabled = ref(localStorage.getItem('newscid:soundEnabled') !== 'false')
@@ -471,6 +555,9 @@ async function updateBoardState(fen: string) {
     // Update opening tree for this position
     fetchOpeningTree(state.fen)
 
+    // Update positional imbalance metrics
+    updateImbalance(state.fen)
+
     // If live engine analysis is active, send position
     if (isAnalyzing.value) {
       AnalyzePosition(state.fen, [], 20).catch(console.error)
@@ -482,6 +569,7 @@ async function updateBoardState(fen: string) {
 
 async function handleMove(uci: string) {
   try {
+    const evalBefore = evalInfo.value?.scoreCp || 0
     let moveSAN = uci
     try {
       moveSAN = await FormatMove(currentFEN.value, uci, 'san')
@@ -518,6 +606,15 @@ async function handleMove(uci: string) {
     })
 
     await updateBoardState(nextState.fen)
+
+    // Blunder Radar evaluation check (if analysis is active)
+    if (isAnalyzing.value && evalInfo.value?.scoreCp !== undefined) {
+      const evalAfter = evalInfo.value.scoreCp
+      const swing = isWhite ? (evalBefore - evalAfter) : (evalAfter - evalBefore)
+      if (swing >= 200) {
+        triggerBlunderRadar(`⚠️ Blunder Radar: Move dropped evaluation by ${(swing / 100).toFixed(1)} pawns!`)
+      }
+    }
 
     // If simulated match is active and game is not finished, trigger bot response!
     if (activeSimulation.value && !isBotThinking.value) {
@@ -666,6 +763,9 @@ function handleKeydown(e: KeyboardEvent) {
     } else if (e.key === 't' || e.key === 'T') {
       e.preventDefault()
       handleOpenEditTags()
+    } else if (e.key === 'k' || e.key === 'K') {
+      e.preventDefault()
+      showCommandPalette.value = !showCommandPalette.value
     }
     return
   }
@@ -696,6 +796,8 @@ function handleKeydown(e: KeyboardEvent) {
     goLast()
   } else if (e.key === 'f' || e.key === 'F') {
     flipped.value = !flipped.value
+  } else if (e.key === 'z' || e.key === 'Z') {
+    toggleZenMode()
   } else if (e.key === ' ') {
     e.preventDefault()
     toggleAutoplay()
@@ -1532,6 +1634,246 @@ async function handleStandardizeNames() {
     alert(`Failed to standardize player names: ${err?.message || err}`)
   }
 }
+
+// Universal Command Palette & Spotlight Commands List
+const commandPaletteItems = computed<CommandItem[]>(() => [
+  {
+    id: 'cmd-palette',
+    title: 'Command Palette',
+    subtitle: 'Search all commands, study tools, and database features',
+    icon: 'search',
+    category: 'Actions',
+    shortcut: 'Ctrl+K',
+    action: () => { showCommandPalette.value = true }
+  },
+  {
+    id: 'zen-mode',
+    title: zenMode.value ? 'Exit Zen Mode' : 'Enter Zen / Classical Study Mode',
+    subtitle: 'Distraction-free focus board layout for calculation and analysis',
+    icon: 'maximize-2',
+    category: 'Options',
+    shortcut: 'Z',
+    action: toggleZenMode
+  },
+  {
+    id: 'explain-move',
+    title: 'Explain This Move',
+    subtitle: 'Natural language conceptual breakdown of tactical motifs & plans',
+    icon: 'sparkles',
+    category: 'Analysis',
+    action: () => handleExplainMove(currentPly.value)
+  },
+  {
+    id: 'blunder-vault',
+    title: 'Personal Blunder Vault',
+    subtitle: 'SuperMemo SM-2 Spaced Repetition personal mistake trainer',
+    icon: 'brain',
+    category: 'Training',
+    action: () => { showBlunderVaultModal.value = true }
+  },
+  {
+    id: 'opponent-scout',
+    title: 'Opponent Scouting Card & Prep Matrix',
+    subtitle: 'Generate preparation dossier and repertoire vulnerability report',
+    icon: 'shield',
+    category: 'Training',
+    action: () => { showOpponentScoutModal.value = true }
+  },
+  {
+    id: 'new-game',
+    title: 'New Game',
+    subtitle: 'Clear board and start fresh game',
+    icon: 'file-text',
+    category: 'Actions',
+    shortcut: 'Ctrl+N',
+    action: handleNewGame
+  },
+  {
+    id: 'open-db',
+    title: 'Open Database...',
+    subtitle: 'Open an existing Scid database',
+    icon: 'folder-open',
+    category: 'Actions',
+    shortcut: 'Ctrl+O',
+    action: handleOpenDB
+  },
+  {
+    id: 'save-game',
+    title: 'Save Current Game',
+    subtitle: 'Save or append game into database',
+    icon: 'save',
+    category: 'Actions',
+    shortcut: 'Ctrl+S',
+    action: handleSaveCurrentGame
+  },
+  {
+    id: 'setup-board',
+    title: 'Setup Board / FEN Editor',
+    subtitle: 'Custom position setup and FEN verification',
+    icon: 'sliders',
+    category: 'Actions',
+    shortcut: 'Ctrl+B',
+    action: () => { showSetupBoardModal.value = true }
+  },
+  {
+    id: 'search-games',
+    title: 'Search Database Games',
+    subtitle: 'Filter games by player, rating, result, event, ECO',
+    icon: 'search',
+    category: 'Actions',
+    shortcut: 'Ctrl+H',
+    action: () => { showSearchModal.value = true }
+  },
+  {
+    id: 'tactics-trainer',
+    title: 'Tactics Puzzle Trainer',
+    subtitle: 'Solve tactical puzzles with rating progression',
+    icon: 'award',
+    category: 'Training',
+    action: handleTacticsTrainer
+  },
+  {
+    id: 'guess-the-move',
+    title: 'Guess the Move (Solitaire Chess)',
+    subtitle: 'Play master games move by move and score prediction accuracy',
+    icon: 'award',
+    category: 'Training',
+    shortcut: 'Ctrl+G',
+    action: () => { showGuessTheMoveModal.value = true }
+  },
+  {
+    id: 'progressive-tactics',
+    title: 'Progressive Tactics Challenge',
+    subtitle: 'Survival puzzle rush ladder against time',
+    icon: 'zap',
+    category: 'Training',
+    action: () => { showProgressiveTacticsModal.value = true }
+  },
+  {
+    id: 'opening-trainer',
+    title: 'Opening Repertoire Builder & Trainer',
+    subtitle: 'Learn and quiz your opening lines',
+    icon: 'book-open',
+    category: 'Openings',
+    action: () => { showOpeningTrainerModal.value = true }
+  },
+  {
+    id: 'coordinate-trainer',
+    title: 'Coordinate & Vision Trainer',
+    subtitle: 'Practice board algebraic square recognition speed',
+    icon: 'target',
+    category: 'Training',
+    action: () => { showCoordinateTrainerModal.value = true }
+  },
+  {
+    id: 'chess960',
+    title: 'Chess960 (Fischer Random)',
+    subtitle: 'Generate any of the 960 starting positions',
+    icon: 'dices',
+    category: 'Actions',
+    action: () => { showChess960Modal.value = true }
+  },
+  {
+    id: 'play-engine',
+    title: 'Play Against Engine',
+    subtitle: 'Spar with UCI engine at customized strength and time controls',
+    icon: 'swords',
+    category: 'Actions',
+    action: handlePlayVsEngine
+  },
+  {
+    id: 'simulate-player',
+    title: 'Simulate Database Player (Sparring)',
+    subtitle: 'Play against an AI modeled on a database grandmaster',
+    icon: 'bot',
+    category: 'Actions',
+    action: () => { showPlayerSimulationModal.value = true }
+  },
+  {
+    id: 'player-personas',
+    title: 'Player Personas & Aliases',
+    subtitle: 'Manage aggregate styles, biographical info, and FIDE ratings',
+    icon: 'users',
+    category: 'Training',
+    action: () => { showPersonaModal.value = true }
+  },
+  {
+    id: 'engine-match',
+    title: 'Engine vs Engine Match',
+    subtitle: 'Automated tournament duel between UCI engines',
+    icon: 'swords',
+    category: 'Actions',
+    action: () => { showEngineMatchModal.value = true }
+  },
+  {
+    id: 'tournament-crosstable',
+    title: 'Tournament Crosstables & Standings',
+    subtitle: 'Calculate berger tables, tiebreaks, and round-by-round results',
+    icon: 'trophy',
+    category: 'Actions',
+    shortcut: 'F7',
+    action: () => { showTournamentCrosstableModal.value = true }
+  },
+  {
+    id: 'eco-browser',
+    title: 'ECO Opening Repertoire Browser',
+    subtitle: 'Explore full encyclopedia of chess openings A00-E99',
+    icon: 'book-open',
+    category: 'Openings',
+    shortcut: 'F6',
+    action: () => { showEcoBrowserModal.value = true }
+  },
+  {
+    id: 'database-stats',
+    title: 'Database Demographics & Rating Tracker',
+    subtitle: 'Visual rating history and performance metrics',
+    icon: 'bar-chart-3',
+    category: 'Actions',
+    shortcut: 'Ctrl+D',
+    action: () => { showDatabaseStatsModal.value = true }
+  },
+  {
+    id: 'twic-downloader',
+    title: 'Download TWIC Bulletins',
+    subtitle: 'Download and import weekly grandmaster tournaments',
+    icon: 'download',
+    category: 'Actions',
+    action: () => { showTwicModal.value = true }
+  },
+  {
+    id: 'export-game',
+    title: 'Export Game (PGN / HTML / LaTeX / Cards)',
+    subtitle: 'Publish publication-grade diagrams and social cards',
+    icon: 'download',
+    category: 'Actions',
+    shortcut: 'Ctrl+Shift+E',
+    action: () => { showExportGameModal.value = true }
+  },
+  {
+    id: 'toggle-threat',
+    title: threatMode.value ? 'Disable Threat Heatmap' : 'Enable Threat Heatmap',
+    subtitle: 'Highlight attacked and tactical danger squares on board',
+    icon: 'eye',
+    category: 'Options',
+    action: toggleThreatMode
+  },
+  {
+    id: 'toggle-blindfold',
+    title: blindfoldMode.value ? 'Disable Blindfold Mode' : 'Enable Blindfold Mode',
+    subtitle: 'Hide piece graphics to train visualization',
+    icon: 'eye-off',
+    category: 'Options',
+    action: toggleBlindfold
+  },
+  {
+    id: 'toggle-eval-bar',
+    title: showEvalBar.value ? 'Hide Evaluation Bar' : 'Show Evaluation Bar',
+    subtitle: 'Toggle live win-probability eval gauge beside board',
+    icon: 'bar-chart-3',
+    category: 'Options',
+    action: toggleEvalBar
+  }
+])
 </script>
 
 <template>
@@ -1598,17 +1940,24 @@ async function handleStandardizeNames() {
       :blindfold="blindfoldMode"
       :threat-mode="threatMode"
       :show-eval-bar="showEvalBar"
+      :zen-mode="zenMode"
       @toggle-sound="toggleSound"
       @toggle-blindfold="toggleBlindfold"
       @toggle-threat-mode="toggleThreatMode"
       @toggle-eval-bar="toggleEvalBar"
       @chess960="showChess960Modal = true"
       @coordinate-trainer="showCoordinateTrainerModal = true"
+      @command-palette="showCommandPalette = true"
+      @blunder-vault="showBlunderVaultModal = true"
+      @opponent-scout="showOpponentScoutModal = true"
+      @toggle-zen-mode="toggleZenMode"
+      @explain-move="handleExplainMove(currentPly)"
     />
 
 
     <!-- Top Header Bar -->
     <HeaderBar
+      v-if="!zenMode"
       ref="headerBarRef"
       :db-name="dbInfo?.name"
       :system-bases="systemBases"
@@ -1664,6 +2013,27 @@ async function handleStandardizeNames() {
           </button>
         </div>
 
+        <!-- Theory Novelty Pill -->
+        <div
+          v-if="isTheoreticalNovelty"
+          class="w-full flex items-center justify-between px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 font-semibold shadow-xs"
+        >
+          <span class="flex items-center gap-1.5">
+            <Sparkles class="w-3.5 h-3.5 text-amber-400" />
+            <span>Theoretical Novelty (N)</span>
+          </span>
+          <span class="text-[10px] text-amber-400/80 font-mono">Out of Book • 0 Games</span>
+        </div>
+
+        <!-- Blunder Radar Alert Banner -->
+        <div
+          v-if="blunderRadarAlert"
+          class="w-full flex items-center gap-2 px-3 py-1.5 bg-rose-950/90 border border-rose-500/50 rounded-xl text-xs text-rose-200 font-semibold shadow-md animate-pulse"
+        >
+          <AlertTriangle class="w-4 h-4 text-rose-400 shrink-0" />
+          <span class="truncate">{{ blunderRadarAlert }}</span>
+        </div>
+
         <!-- Interactive Chessboard -->
         <Chessboard
           :fen="currentFEN"
@@ -1682,6 +2052,11 @@ async function handleStandardizeNames() {
           :arrows="engineArrows"
           @move="handleMove"
         />
+
+        <!-- Interactive Material & Positional Imbalance Bar -->
+        <div class="w-full">
+          <ImbalanceBar :report="imbalanceReport" />
+        </div>
 
         <!-- Live Engine Analysis Bar -->
         <div class="w-full">
@@ -1792,6 +2167,7 @@ async function handleStandardizeNames() {
                 @set-comment="handleSetComment"
                 @promote-variation="handlePromoteVariation"
                 @delete-variation="handleDeleteVariation"
+                @explain-move="handleExplainMove"
               />
             </div>
           </div>
@@ -1853,7 +2229,7 @@ async function handleStandardizeNames() {
 
     <!-- Vertical Drag Splitter (between Workspace and Database Drawer) -->
     <div
-      v-if="bottomDrawerOpen"
+      v-if="!zenMode && bottomDrawerOpen"
       class="flex items-center justify-center h-2 cursor-row-resize hover:bg-emerald-500/20 active:bg-emerald-500/40 transition-colors group select-none relative z-10 shrink-0"
       :class="{ 'bg-emerald-500/30': isResizingV }"
       title="Drag to resize database drawer (Double-click to reset)"
@@ -1868,7 +2244,7 @@ async function handleStandardizeNames() {
 
     <!-- Bottom Panel: Database Games Browser (Collapsible & Resizable) -->
     <div
-      v-if="bottomDrawerOpen"
+      v-if="!zenMode && bottomDrawerOpen"
       class="bottom-drawer shrink-0 px-2 pb-2 transition-all duration-75 overflow-hidden"
       :style="{ height: `${bottomDrawerHeight}px` }"
     >
@@ -2135,5 +2511,48 @@ async function handleStandardizeNames() {
         </div>
       </div>
     </div>
+
+    <!-- Zen Mode Floating Exit Indicator -->
+    <button
+      v-if="zenMode"
+      class="fixed bottom-4 right-4 z-50 px-3 py-1.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 border border-zinc-700 text-xs font-semibold flex items-center gap-1.5 shadow-2xl cursor-pointer backdrop-blur-sm"
+      @click="toggleZenMode"
+    >
+      <Minimize2 class="w-3.5 h-3.5 text-emerald-400" />
+      <span>Exit Zen Mode (Z)</span>
+    </button>
+
+    <!-- Universal Command Palette Modal (Ctrl+K) -->
+    <CommandPalette
+      :is-open="showCommandPalette"
+      :commands="commandPaletteItems"
+      @close="showCommandPalette = false"
+    />
+
+    <!-- Natural Language Move Explainer Modal -->
+    <ExplainMoveModal
+      v-if="showExplainMoveModal"
+      :before-fen="explainMoveTarget?.beforeFen || startingFEN"
+      :move-uci="explainMoveTarget?.moveUci || ''"
+      :score-cp="explainMoveTarget?.scoreCp"
+      :best-move="explainMoveTarget?.bestMove"
+      @close="showExplainMoveModal = false"
+    />
+
+    <!-- Personal Blunder Vault (SuperMemo SM-2 Spaced Repetition) Modal -->
+    <BlunderVaultModal
+      v-if="showBlunderVaultModal"
+      :board-theme="currentTheme"
+      :piece-set="currentPieceSet"
+      @close="showBlunderVaultModal = false"
+    />
+
+    <!-- Opponent Scouting Dossier & Repertoire Prep Modal -->
+    <OpponentScoutModal
+      v-if="showOpponentScoutModal"
+      :active-db-name="dbInfo?.name"
+      @load-game="handleLoadGame"
+      @close="showOpponentScoutModal = false"
+    />
   </div>
 </template>

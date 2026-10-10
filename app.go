@@ -16,6 +16,7 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"newscid/pkg/blundervault"
 	"newscid/pkg/chess"
 	"newscid/pkg/chess960"
 	"newscid/pkg/database/scid"
@@ -23,13 +24,16 @@ import (
 	"newscid/pkg/eco"
 	"newscid/pkg/engine"
 	"newscid/pkg/epd"
+	"newscid/pkg/explainer"
 	"newscid/pkg/gameexport"
+	"newscid/pkg/imbalance"
 	"newscid/pkg/online"
 	"newscid/pkg/persona"
 	"newscid/pkg/playerbot"
 	"newscid/pkg/polyglot"
 	"newscid/pkg/puzzleminer"
 	"newscid/pkg/repertoire"
+	"newscid/pkg/scout"
 	"newscid/pkg/sets"
 	"newscid/pkg/stats"
 	"newscid/pkg/tablebase"
@@ -101,6 +105,7 @@ type App struct {
 	engineThreads   int
 	engineHashMB    int
 	notationStyle   chess.NotationStyle
+	blunderVault    *blundervault.Vault
 }
 
 // NewApp creates a new App application struct
@@ -115,6 +120,10 @@ func NewApp() *App {
 	profileMgr, _ := online.NewProfileManager("")
 	personaMgr, _ := persona.NewPersonaManager("")
 
+	configDir, _ := os.UserConfigDir()
+	vaultPath := filepath.Join(configDir, "newscid", "blunder_vault.json")
+	bVault, _ := blundervault.NewVault(vaultPath)
+
 	return &App{
 		db:              scid.NewDatabase(),
 		eco:             classifier,
@@ -128,6 +137,7 @@ func NewApp() *App {
 		polyglotBooks:   make(map[string]*polyglot.Book),
 		tablebaseClient: tablebase.NewClient(),
 		engineMultiPV:   1,
+		blunderVault:    bVault,
 	}
 }
 
@@ -2386,6 +2396,92 @@ func (a *App) ParseEPD(epdString string) (*epd.Record, error) {
 func (a *App) ExportEPD(fen string, opcodes map[string]string) (string, error) {
 	return epd.Format(fen, opcodes), nil
 }
+
+// ==========================================
+// Positional & Material Imbalance
+// ==========================================
+
+// GetPositionalImbalance analyzes the material, pawn structure, king safety, and territory control.
+func (a *App) GetPositionalImbalance(fen string) (*imbalance.Report, error) {
+	b, err := chess.ParseFEN(fen)
+	if err != nil {
+		return nil, err
+	}
+	return imbalance.AnalyzeBoard(b), nil
+}
+
+// ==========================================
+// Natural Language Move Explainer
+// ==========================================
+
+// ExplainMove generates plain-English coaching explanations of a move and its motifs.
+func (a *App) ExplainMove(beforeFEN, moveUCI string, scoreCp int, bestMove string) (*explainer.Explanation, error) {
+	return explainer.ExplainMove(beforeFEN, moveUCI, scoreCp, bestMove)
+}
+
+// ==========================================
+// Personal Blunder Spaced-Repetition Vault
+// ==========================================
+
+// GetDueBlunderPuzzles returns blunder flashcards due for spaced-repetition review.
+func (a *App) GetDueBlunderPuzzles() ([]*blundervault.Puzzle, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if a.blunderVault == nil {
+		return []*blundervault.Puzzle{}, nil
+	}
+	return a.blunderVault.GetDuePuzzles(), nil
+}
+
+// GetAllBlunderPuzzles returns all blunder flashcards in the vault.
+func (a *App) GetAllBlunderPuzzles() ([]*blundervault.Puzzle, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if a.blunderVault == nil {
+		return []*blundervault.Puzzle{}, nil
+	}
+	return a.blunderVault.GetAllPuzzles(), nil
+}
+
+// RecordBlunderReview records a review grade (0-5) and recalculates SM-2 interval.
+func (a *App) RecordBlunderReview(id string, quality int) (*blundervault.Puzzle, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.blunderVault == nil {
+		return nil, fmt.Errorf("blunder vault not initialized")
+	}
+	return a.blunderVault.RecordReview(id, quality)
+}
+
+// AddBlunderToVault adds a new blunder puzzle into the vault.
+func (a *App) AddBlunderToVault(p *blundervault.Puzzle) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.blunderVault == nil {
+		return fmt.Errorf("blunder vault not initialized")
+	}
+	return a.blunderVault.AddPuzzle(p)
+}
+
+// ==========================================
+// Opponent Scouting & Prep Matrix
+// ==========================================
+
+// GenerateOpponentScoutingReport builds an in-depth dossier on a player from the current database.
+func (a *App) GenerateOpponentScoutingReport(playerName string) (*scout.Report, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if a.db == nil || !a.db.IsOpen {
+		return nil, fmt.Errorf("no database is currently open")
+	}
+
+	games, _, err := a.db.GetGameSummaries(0, 100000, scid.SearchCriteria{})
+	if err != nil {
+		return nil, err
+	}
+	return scout.GenerateReport(playerName, games), nil
+}
+
 
 
 

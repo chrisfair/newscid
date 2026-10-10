@@ -22,6 +22,10 @@ import {puzzleminer} from '../models';
 import {tablebase} from '../models';
 import {chess960} from '../models';
 import {epd} from '../models';
+import {imbalance} from '../models';
+import {explainer} from '../models';
+import {blundervault} from '../models';
+import {scout} from '../models';
 
 export function AddGameComment(arg1:number,arg2:string):Promise<void>;
 
@@ -276,3 +280,17 @@ export function GenerateRandomChess960():Promise<chess960.Position>;
 export function ParseEPD(arg1:string):Promise<epd.EPDRecord>;
 
 export function ExportEPD(arg1:epd.EPDRecord):Promise<string>;
+
+export function GetPositionalImbalance(arg1:string):Promise<imbalance.Report>;
+
+export function ExplainMove(arg1:string,arg2:string,arg3:number,arg4:string):Promise<explainer.Explanation>;
+
+export function GetDueBlunderPuzzles():Promise<Array<blundervault.Puzzle>>;
+
+export function GetAllBlunderPuzzles():Promise<Array<blundervault.Puzzle>>;
+
+export function RecordBlunderReview(arg1:string,arg2:number):Promise<blundervault.Puzzle>;
+
+export function AddBlunderToVault(arg1:blundervault.Puzzle):Promise<void>;
+
+export function GenerateOpponentScoutingReport(arg1:string):Promise<scout.Report>;

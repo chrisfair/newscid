@@ -200,4 +200,70 @@ describe('MoveNotation.vue', () => {
     expect(wrapper.emitted('setComment')).toBeTruthy()
     expect(wrapper.emitted('setComment')![0]).toEqual([3, 'Updated brilliant development'])
   })
+
+  it('renders accuracy bar and triggers explain move', async () => {
+    const wrapper = mount(MoveNotation, {
+      props: {
+        moves: sampleMoves,
+        currentPly: 3,
+        whiteAccuracy: 94.2,
+        blackAccuracy: 88.5,
+      }
+    })
+
+    const accuracyBar = wrapper.find('.accuracy-bar')
+    expect(accuracyBar.exists()).toBe(true)
+    expect(accuracyBar.text()).toContain('94.2%')
+    expect(accuracyBar.text()).toContain('88.5%')
+
+    // Find and click Explain Move button
+    const explainBtn = wrapper.findAll('.annotation-palette button').find(b => b.text().includes('Explain Move'))
+    expect(explainBtn).toBeDefined()
+    await explainBtn!.trigger('click')
+
+    expect(wrapper.emitted('explainMove')).toBeTruthy()
+    expect(wrapper.emitted('explainMove')![0]).toEqual([3])
+  })
+
+  it('renders move classification badges and clock display', () => {
+    const movesWithBadges: FlatMove[] = [
+      {
+        index: 0,
+        ply: 1,
+        moveNumber: 1,
+        isWhite: true,
+        san: 'e4',
+        uci: 'e2e4',
+        fen: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1',
+        variationLevel: 0,
+        classification: 'brilliant',
+        clock: '1:29:45',
+      },
+      {
+        index: 1,
+        ply: 2,
+        moveNumber: 1,
+        isWhite: false,
+        san: 'e5',
+        uci: 'e7e5',
+        fen: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2',
+        variationLevel: 0,
+        classification: 'blunder',
+        clock: '1:28:10',
+      }
+    ]
+
+    const wrapper = mount(MoveNotation, {
+      props: {
+        moves: movesWithBadges,
+        currentPly: 2,
+      }
+    })
+
+    expect(wrapper.text()).toContain('!!')
+    expect(wrapper.text()).toContain('??')
+    expect(wrapper.text()).toContain('1:29:45')
+    expect(wrapper.text()).toContain('1:28:10')
+  })
 })
+

@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"newscid/pkg/blundervault"
 	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
 	"newscid/pkg/gameexport"
@@ -1361,4 +1362,61 @@ func TestAppChess960AndEPD(t *testing.T) {
 	assert.Contains(t, exportedEPD, "bm e4;")
 	assert.Contains(t, exportedEPD, "id \"Start-Pos\";")
 }
+
+func TestAppImbalanceExplainerVaultScout(t *testing.T) {
+	app := NewApp()
+
+	// 1. Imbalance Report
+	imb, err := app.GetPositionalImbalance("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	require.NoError(t, err)
+	assert.Equal(t, 0, imb.MaterialDelta)
+	assert.True(t, imb.White.HasBishopPair)
+
+	// 2. Move Explainer
+	exp, err := app.ExplainMove("r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 1 5", "e1g1", 30, "e1g1")
+	require.NoError(t, err)
+	assert.Equal(t, "O-O", exp.MoveSAN)
+	assert.Contains(t, exp.DetailedText, "castles")
+
+	// 3. Blunder Vault
+	err = app.AddBlunderToVault(&blundervault.Puzzle{
+		ID:         "app-p1",
+		FEN:        chess.StartingFEN,
+		PlayerName: "Tester",
+		PlayedMove: "e2e4",
+		BestMove:   "d2d4",
+		DeltaCp:    -180,
+	})
+	require.NoError(t, err)
+
+	puzzles, err := app.GetAllBlunderPuzzles()
+	require.NoError(t, err)
+	assert.NotEmpty(t, puzzles)
+
+	reviewed, err := app.RecordBlunderReview("app-p1", 4)
+	require.NoError(t, err)
+	assert.Equal(t, 1, reviewed.Repetitions)
+
+	// 4. Opponent Scouting (requires DB)
+	tmpDir, _ := os.MkdirTemp("", "scout_test*")
+	defer os.RemoveAll(tmpDir)
+	dbPath := filepath.Join(tmpDir, "scout_test.si4")
+	_, err = app.CreateDatabase(dbPath, "Scout DB")
+	require.NoError(t, err)
+
+	_, err = app.ImportPGNBatch(`[Event "Match"]
+[White "Carlsen, M"]
+[Black "Nakamura, H"]
+[Result "1-0"]
+[ECO "B90"]
+
+1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 1-0`)
+	require.NoError(t, err)
+
+	scoutReport, err := app.GenerateOpponentScoutingReport("Carlsen")
+	require.NoError(t, err)
+	assert.Equal(t, 1, scoutReport.TotalGames)
+	assert.Equal(t, 1, scoutReport.WhiteRecord.Wins)
+}
+
 
