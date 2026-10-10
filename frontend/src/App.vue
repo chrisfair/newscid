@@ -30,6 +30,8 @@ import EditTagsModal from './components/EditTagsModal.vue'
 import TWICDownloadModal from './components/TWICDownloadModal.vue'
 import EngineMatchModal from './components/EngineMatchModal.vue'
 import ExportGameModal from './components/ExportGameModal.vue'
+import Chess960Modal from './components/Chess960Modal.vue'
+import CoordinateTrainerModal from './components/CoordinateTrainerModal.vue'
 import { Bot } from '@lucide/vue'
 import { playerbot, persona, scid, tournament } from '../wailsjs/go/models'
 
@@ -173,6 +175,74 @@ const showEditTagsModal = ref(false)
 const showTwicModal = ref(false)
 const showEngineMatchModal = ref(false)
 const showExportGameModal = ref(false)
+const showChess960Modal = ref(false)
+const showCoordinateTrainerModal = ref(false)
+
+// PyChess & Modern Analysis Features
+const soundEnabled = ref(localStorage.getItem('newscid:soundEnabled') !== 'false')
+function toggleSound() {
+  soundEnabled.value = !soundEnabled.value
+  localStorage.setItem('newscid:soundEnabled', String(soundEnabled.value))
+}
+
+const blindfoldMode = ref(false)
+function toggleBlindfold() {
+  blindfoldMode.value = !blindfoldMode.value
+}
+
+const threatMode = ref(false)
+function toggleThreatMode() {
+  threatMode.value = !threatMode.value
+}
+
+const showEvalBar = ref(localStorage.getItem('newscid:showEvalBar') !== 'false')
+function toggleEvalBar() {
+  showEvalBar.value = !showEvalBar.value
+  localStorage.setItem('newscid:showEvalBar', String(showEvalBar.value))
+}
+
+const threatSquares = computed(() => {
+  if (!threatMode.value || !legalMoves.value) return []
+  const set = new Set<string>()
+  for (const m of legalMoves.value) {
+    if (m.length >= 4) {
+      set.add(m.slice(2, 4))
+    }
+  }
+  return Array.from(set)
+})
+
+const evalScore = computed(() => evalInfo.value?.scoreCp ?? 0)
+const evalMate = computed(() => evalInfo.value?.mateIn ?? 0)
+
+const engineArrows = computed(() => {
+  if (!isAnalyzing.value || !evalInfo.value?.bestMove || evalInfo.value.bestMove.length < 4) {
+    return []
+  }
+  const from = evalInfo.value.bestMove.slice(0, 2)
+  const to = evalInfo.value.bestMove.slice(2, 4)
+  return [{ from, to, color: '#38bdf8' }]
+})
+
+function handleLoadChess960(pos: { id: number; fen: string; pieces: string; isClassic: boolean }) {
+  activeGameId.value = undefined
+  gameAnalysis.value = null
+  gameTags.value = {
+    White: 'Player 1',
+    Black: 'Player 2',
+    Date: new Date().toISOString().split('T')[0].replace(/-/g, '.'),
+    Result: '*',
+    Event: `Chess960 #${pos.id} (${pos.pieces})`,
+    SetUp: '1',
+    FEN: pos.fen,
+  }
+  history.value = [{ fen: pos.fen, lastMove: null }]
+  flatMoves.value = []
+  jumpToPly(0)
+  updateBoardState(pos.fen)
+  showChess960Modal.value = false
+}
+
 const tablebaseResult = ref<any>(null)
 const selectedSimulationPersona = ref<persona.Persona | undefined>(undefined)
 const showImportModal = ref(false)
@@ -1524,6 +1594,16 @@ async function handleStandardizeNames() {
       @engine-match="showEngineMatchModal = true"
       @export-game="showExportGameModal = true"
       @standardize-names="handleStandardizeNames"
+      :sound-enabled="soundEnabled"
+      :blindfold="blindfoldMode"
+      :threat-mode="threatMode"
+      :show-eval-bar="showEvalBar"
+      @toggle-sound="toggleSound"
+      @toggle-blindfold="toggleBlindfold"
+      @toggle-threat-mode="toggleThreatMode"
+      @toggle-eval-bar="toggleEvalBar"
+      @chess960="showChess960Modal = true"
+      @coordinate-trainer="showCoordinateTrainerModal = true"
     />
 
 
@@ -1593,6 +1673,13 @@ async function handleStandardizeNames() {
           :flipped="flipped"
           :last-move="lastMove"
           :in-check="inCheck"
+          :sound-enabled="soundEnabled"
+          :blindfold="blindfoldMode"
+          :show-eval-bar="showEvalBar"
+          :eval-score="evalScore"
+          :eval-mate="evalMate"
+          :threat-squares="threatSquares"
+          :arrows="engineArrows"
           @move="handleMove"
         />
 
@@ -2002,6 +2089,19 @@ async function handleStandardizeNames() {
       v-if="showExportGameModal"
       :is-open="showExportGameModal"
       @close="showExportGameModal = false"
+    />
+
+    <!-- Chess960 (Fischer Random) Modal -->
+    <Chess960Modal
+      v-if="showChess960Modal"
+      @close="showChess960Modal = false"
+      @load-position="handleLoadChess960"
+    />
+
+    <!-- Board Vision & Coordinate Trainer Modal -->
+    <CoordinateTrainerModal
+      v-if="showCoordinateTrainerModal"
+      @close="showCoordinateTrainerModal = false"
     />
 
 

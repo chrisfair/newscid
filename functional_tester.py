@@ -192,6 +192,21 @@ def main():
     ok, class_moves = run_test("ClassifyMoves", "ClassifyMoves", ["e4", "c5"])
     check("ClassifyMoves", ok, class_moves and class_moves.get("code") == "B20")
 
+    # Chess960 (Fischer Random Chess)
+    ok, c960_classic = run_test("GetChess960Position: 518 (Classic)", "GetChess960Position", 518)
+    check("GetChess960Position: 518", ok, c960_classic and c960_classic.get("pieces") == "RNBQKBNR" and c960_classic.get("isClassic") is True)
+
+    ok, c960_rand = run_test("GenerateRandomChess960", "GenerateRandomChess960")
+    check("GenerateRandomChess960", ok, c960_rand and len(c960_rand.get("pieces", "")) == 8)
+
+    # EPD (Extended Position Description)
+    epd_sample = 'r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/8/PPPP1PPP/RNBQK1NR b KQkq - bm d5; id "Test-01"; c0 "Fork threat";'
+    ok, epd_rec = run_test("ParseEPD", "ParseEPD", epd_sample)
+    check("ParseEPD", ok, epd_rec and epd_rec.get("bestMove") == "d5" and epd_rec.get("id") == "Test-01")
+
+    ok, epd_str = run_test("ExportEPD", "ExportEPD", start_fen, {"bm": "e4", "id": "Start-01"})
+    check("ExportEPD", ok, epd_str and "bm e4;" in epd_str)
+
     # -------------------------------------------------------------
     # 3. Database Lifecycle, Game CRUD, Searching & Maintenance
     # -------------------------------------------------------------

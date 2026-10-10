@@ -2465,3 +2465,43 @@ export namespace version {
 
 }
 
+export namespace chess960 {
+	export class Position {
+	    id: number;
+	    fen: string;
+	    rank: string;
+	    pieces: string;
+	    isClassic: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new Position(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.fen = source["fen"];
+	        this.rank = source["rank"];
+	        this.pieces = source["pieces"];
+	        this.isClassic = source["isClassic"];
+	    }
+	}
+}
+
+export namespace epd {
+	export class EPDRecord {
+	    fen: string;
+	    operations: Record<string, string>;
+
+	    static createFrom(source: any = {}) {
+	        return new EPDRecord(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.fen = source["fen"];
+	        this.operations = source["operations"];
+	    }
+	}
+}
+

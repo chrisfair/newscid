@@ -493,3 +493,20 @@ export function VerifyDatabase() {
 export function VerifyRepertoireMove(arg1, arg2, arg3) {
   return window['go']['main']['App']['VerifyRepertoireMove'](arg1, arg2, arg3);
 }
+
+export function GetChess960Position(arg1) {
+  return window['go']['main']['App']['GetChess960Position'](arg1);
+}
+
+export function GenerateRandomChess960() {
+  return window['go']['main']['App']['GenerateRandomChess960']();
+}
+
+export function ParseEPD(arg1) {
+  return window['go']['main']['App']['ParseEPD'](arg1);
+}
+
+export function ExportEPD(arg1) {
+  return window['go']['main']['App']['ExportEPD'](arg1);
+}
+

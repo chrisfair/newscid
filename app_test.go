@@ -1323,3 +1323,42 @@ func TestAppExportGameHTMLAndLaTeX(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestAppChess960AndEPD(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+
+	// 1. Chess960 Classic
+	pos518, err := app.GetChess960Position(518)
+	require.NoError(t, err)
+	assert.Equal(t, 518, pos518.ID)
+	assert.Equal(t, "RNBQKBNR", pos518.Pieces)
+	assert.True(t, pos518.IsClassic)
+
+	// 2. Chess960 Random
+	posRand, err := app.GenerateRandomChess960()
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, posRand.ID, 0)
+	assert.Less(t, posRand.ID, 960)
+	assert.Len(t, posRand.Pieces, 8)
+
+	// 3. EPD Parse
+	epdLine := `r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/8/PPPP1PPP/RNBQK1NR b KQkq - bm d5; id "Puzzle-01"; c0 "Fork threat"; ce 50;`
+	rec, err := app.ParseEPD(epdLine)
+	require.NoError(t, err)
+	assert.Equal(t, "d5", rec.BestMove)
+	assert.Equal(t, "Puzzle-01", rec.ID)
+	assert.Equal(t, "Fork threat", rec.Comment)
+	require.NotNil(t, rec.EvalCP)
+	assert.Equal(t, 50, *rec.EvalCP)
+
+	// 4. EPD Export
+	exportedEPD, err := app.ExportEPD("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", map[string]string{
+		"bm": "e4",
+		"id": "Start-Pos",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, exportedEPD, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -")
+	assert.Contains(t, exportedEPD, "bm e4;")
+	assert.Contains(t, exportedEPD, "id \"Start-Pos\";")
+}
+

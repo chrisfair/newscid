@@ -20,6 +20,8 @@ import {tournament} from '../models';
 import {version} from '../models';
 import {puzzleminer} from '../models';
 import {tablebase} from '../models';
+import {chess960} from '../models';
+import {epd} from '../models';
 
 export function AddGameComment(arg1:number,arg2:string):Promise<void>;
 
@@ -266,3 +268,11 @@ export function UpdateGameHeaders(arg1:number,arg2:Record<string, string>):Promi
 export function VerifyDatabase():Promise<scid.VerificationReport>;
 
 export function VerifyRepertoireMove(arg1:string,arg2:string,arg3:string):Promise<main.RepertoireCheckResult>;
+
+export function GetChess960Position(arg1:number):Promise<chess960.Position>;
+
+export function GenerateRandomChess960():Promise<chess960.Position>;
+
+export function ParseEPD(arg1:string):Promise<epd.EPDRecord>;
+
+export function ExportEPD(arg1:epd.EPDRecord):Promise<string>;
