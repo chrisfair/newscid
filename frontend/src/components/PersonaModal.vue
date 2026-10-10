@@ -32,6 +32,7 @@ import {
   OpenPersonaDatabase,
   FetchPersonaOnlineGames
 } from '../../wailsjs/go/main/App'
+import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import { persona } from '../../wailsjs/go/models'
 
 const props = defineProps<{
@@ -294,7 +295,19 @@ async function handleFetchOnlineGames(targetPersonaId?: string) {
   isFetchingOnline.value = true
   statusMessage.value = {
     type: 'info',
-    text: 'Connecting to Chess.com & Lichess to download games...'
+    text: 'Connecting to online chess servers...'
+  }
+
+  let cancelEvents: (() => void) | null = null
+  if (typeof window !== 'undefined' && (window as any).runtime?.EventsOnMultiple) {
+    cancelEvents = EventsOn('online:fetch-progress', (progress: any) => {
+      if (progress && progress.message) {
+        statusMessage.value = {
+          type: 'info',
+          text: progress.message
+        }
+      }
+    })
   }
 
   try {
@@ -325,6 +338,12 @@ async function handleFetchOnlineGames(targetPersonaId?: string) {
       text: `Online fetch failed: ${err?.message || err}`
     }
   } finally {
+    if (cancelEvents) {
+      cancelEvents()
+    }
+    if (typeof window !== 'undefined' && (window as any).runtime?.EventsOff) {
+      EventsOff('online:fetch-progress')
+    }
     isFetchingOnline.value = false
   }
 }

@@ -121,6 +121,15 @@ func (c *ChessComClient) FetchMonthlyPGN(archiveURL string) (string, error) {
 // If sinceYear > 0 and sinceMonth > 0, older archives are skipped.
 // If maxLimit is provided and > 0, archives are processed from most recent backwards until maxLimit games are retrieved.
 func (c *ChessComClient) FetchUserGames(username string, sinceYear, sinceMonth int, maxLimit ...int) (string, error) {
+	maxGames := 0
+	if len(maxLimit) > 0 && maxLimit[0] > 0 {
+		maxGames = maxLimit[0]
+	}
+	return c.FetchUserGamesWithProgress(username, sinceYear, sinceMonth, maxGames, nil)
+}
+
+// FetchUserGamesWithProgress retrieves games for a Chess.com player with real-time progress callbacks.
+func (c *ChessComClient) FetchUserGamesWithProgress(username string, sinceYear, sinceMonth int, maxGames int, progress ProgressFn) (string, error) {
 	archives, err := c.FetchArchives(username)
 	if err != nil {
 		return "", err
@@ -128,11 +137,6 @@ func (c *ChessComClient) FetchUserGames(username string, sinceYear, sinceMonth i
 
 	if len(archives) == 0 {
 		return "", nil
-	}
-
-	maxGames := 0
-	if len(maxLimit) > 0 && maxLimit[0] > 0 {
-		maxGames = maxLimit[0]
 	}
 
 	// If maxGames > 0 and no specific sinceYear/Month filter, process archives newest-first
@@ -147,7 +151,7 @@ func (c *ChessComClient) FetchUserGames(username string, sinceYear, sinceMonth i
 	var pgnBuilder strings.Builder
 	gameCount := 0
 
-	for _, archURL := range targetArchives {
+	for idx, archURL := range targetArchives {
 		// Filter by sinceYear and sinceMonth if specified
 		if sinceYear > 0 && sinceMonth > 0 {
 			// Expected URL structure: .../games/{YYYY}/{MM}
@@ -165,6 +169,11 @@ func (c *ChessComClient) FetchUserGames(username string, sinceYear, sinceMonth i
 			}
 		}
 
+		if progress != nil {
+			msg := fmt.Sprintf("Downloading from Chess.com archive %d/%d...", idx+1, len(targetArchives))
+			progress("downloading", idx+1, len(targetArchives), msg)
+		}
+
 		pgnText, err := c.FetchMonthlyPGN(archURL)
 		if err != nil {
 			return "", fmt.Errorf("fetching archive %s: %w", archURL, err)
@@ -173,7 +182,12 @@ func (c *ChessComClient) FetchUserGames(username string, sinceYear, sinceMonth i
 		if strings.TrimSpace(pgnText) != "" {
 			pgnBuilder.WriteString(pgnText)
 			pgnBuilder.WriteString("\n\n")
-			gameCount += strings.Count(pgnText, "[Event ")
+			added := strings.Count(pgnText, "[Event ")
+			gameCount += added
+			if progress != nil {
+				msg := fmt.Sprintf("Chess.com: %d games downloaded (%d/%d archives)", gameCount, idx+1, len(targetArchives))
+				progress("downloading", gameCount, maxGames, msg)
+			}
 			if maxGames > 0 && gameCount >= maxGames {
 				break
 			}

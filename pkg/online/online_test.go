@@ -95,9 +95,6 @@ func TestLichessClient(t *testing.T) {
 1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 1-0`
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "application/x-chess-pgn", r.Header.Get("Accept"))
-		assert.Equal(t, client.UserAgent, r.Header.Get("User-Agent"))
-
 		if strings.Contains(r.URL.Path, "notfound") {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -111,6 +108,16 @@ func TestLichessClient(t *testing.T) {
 			w.Write([]byte("internal error"))
 			return
 		}
+
+		if strings.HasPrefix(r.URL.Path, "/api/user/") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"count":{"all":14182,"rated":9977}}`))
+			return
+		}
+
+		assert.Equal(t, "application/x-chess-pgn", r.Header.Get("Accept"))
+		assert.Equal(t, client.UserAgent, r.Header.Get("User-Agent"))
 
 		// Verify query params
 		query := r.URL.Query()
@@ -136,22 +143,40 @@ func TestLichessClient(t *testing.T) {
 
 	client.BaseURL = server.URL
 
-	// 3. Successful fetch
-	pgn, err := client.FetchUserGames("QuenyenHighElf", 1000, "secret_token", true, 50)
+	// 3. User game count
+	assert.Equal(t, 0, client.GetUserGameCount("", false))
+	assert.Equal(t, 0, client.GetUserGameCount("notfound", false))
+	assert.Equal(t, 14182, client.GetUserGameCount("QuenyenHighElf", false))
+	assert.Equal(t, 9977, client.GetUserGameCount("QuenyenHighElf", true))
+
+	// 4. Successful fetch with progress (constrained)
+	var progressEvents []string
+	progressCallback := func(stage string, current, total int, message string) {
+		progressEvents = append(progressEvents, stage)
+		assert.NotEmpty(t, message)
+	}
+
+	pgn, err := client.FetchUserGames("QuenyenHighElf", 1000, "secret_token", true, 50, progressCallback)
 	require.NoError(t, err)
 	assert.Contains(t, pgn, "QuenyenHighElf")
+	assert.NotEmpty(t, progressEvents)
 
-	// 4. Not found
+	// 4b. Successful fetch with progress (unconstrained maxGames = 0)
+	pgnAll, err := client.FetchUserGames("QuenyenHighElf", 0, "", false, 0, progressCallback)
+	require.NoError(t, err)
+	assert.Contains(t, pgnAll, "QuenyenHighElf")
+
+	// 5. Not found
 	_, err = client.FetchUserGames("notfound", 0, "", false, 0)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 
-	// 5. Rate limit
+	// 6. Rate limit
 	_, err = client.FetchUserGames("ratelimited", 0, "", false, 0)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "rate limit")
 
-	// 6. Server error
+	// 7. Server error
 	_, err = client.FetchUserGames("servererror", 0, "", false, 0)
 	assert.Error(t, err)
 }
@@ -235,7 +260,17 @@ func TestChessComClient(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, limitedPGN, "west17")
 
-	// 6. User not found
+	// 6. FetchUserGamesWithProgress with callback
+	var chessProgressCalled bool
+	chessPGN, err := client.FetchUserGamesWithProgress("west17", 0, 0, 1, func(stage string, current, total int, message string) {
+		chessProgressCalled = true
+		assert.NotEmpty(t, message)
+	})
+	require.NoError(t, err)
+	assert.Contains(t, chessPGN, "west17")
+	assert.True(t, chessProgressCalled)
+
+	// 7. User not found
 	_, err = client.FetchArchives("notfound")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
@@ -525,17 +560,24 @@ func TestImportPlayerGamesAndBlendedSync(t *testing.T) {
 	require.NoError(t, err)
 	defer activeDB.Close()
 
+	var reportedImportStages []string
+	progressFunc := func(stage string, current, total int, message string) {
+		reportedImportStages = append(reportedImportStages, stage)
+	}
+
 	resActive, err := sm.ImportPlayerGames(ImportPlayerOptions{
 		PlayerName:       "Opponent GM",
 		LichessUsername:  "opponentgm",
 		ChessComUsername: "opponentgm",
 		TargetMode:       TargetActiveBase,
 		AutoDeduplicate:  true,
+		ProgressFn:       progressFunc,
 	}, activeDB)
 	require.NoError(t, err)
 	assert.Equal(t, 2, resActive.TotalDownloaded)
 	assert.Equal(t, 2, resActive.Imported)
 	assert.Equal(t, uint32(2), activeDB.Header.NumGames)
+	assert.NotEmpty(t, reportedImportStages)
 
 	// 2b. Error: TargetActiveBase with nil active database
 	_, err = sm.ImportPlayerGames(ImportPlayerOptions{

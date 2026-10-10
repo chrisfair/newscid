@@ -170,6 +170,7 @@ type ImportPlayerOptions struct {
 	MaxGames         int                `json:"maxGames"`
 	AutoDeduplicate  bool               `json:"autoDeduplicate"`
 	CreateProfile    bool               `json:"createProfile"`    // Save as persistent profile
+	ProgressFn       ProgressFn         `json:"-"`
 }
 
 // ImportPlayerGames downloads games for any player from Lichess or Chess.com and merges them
@@ -199,16 +200,23 @@ func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *sci
 
 	// 1. Fetch from Lichess
 	if strings.TrimSpace(opts.LichessUsername) != "" {
+		if opts.ProgressFn != nil {
+			opts.ProgressFn("connecting", 0, 0, fmt.Sprintf("Connecting to Lichess for %s...", opts.LichessUsername))
+		}
 		lichessPGN, err := sm.Lichess.FetchUserGames(
 			opts.LichessUsername,
 			0,
 			opts.LichessToken,
 			opts.RatedOnly,
 			opts.MaxGames,
+			opts.ProgressFn,
 		)
 		if err != nil {
 			res.Errors = append(res.Errors, fmt.Sprintf("Lichess error: %v", err))
 		} else if strings.TrimSpace(lichessPGN) != "" {
+			if opts.ProgressFn != nil {
+				opts.ProgressFn("parsing", 0, 0, "Parsing Lichess PGN games...")
+			}
 			games, err := chess.ParsePGNDatabase(strings.NewReader(lichessPGN))
 			if err != nil {
 				res.Errors = append(res.Errors, fmt.Sprintf("Parsing Lichess PGN: %v", err))
@@ -221,10 +229,22 @@ func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *sci
 
 	// 2. Fetch from Chess.com
 	if strings.TrimSpace(opts.ChessComUsername) != "" {
-		chessComPGN, err := sm.ChessCom.FetchUserGames(opts.ChessComUsername, 0, 0, opts.MaxGames)
+		if opts.ProgressFn != nil {
+			opts.ProgressFn("connecting", 0, 0, fmt.Sprintf("Connecting to Chess.com for %s...", opts.ChessComUsername))
+		}
+		chessComPGN, err := sm.ChessCom.FetchUserGamesWithProgress(
+			opts.ChessComUsername,
+			0,
+			0,
+			opts.MaxGames,
+			opts.ProgressFn,
+		)
 		if err != nil {
 			res.Errors = append(res.Errors, fmt.Sprintf("Chess.com error: %v", err))
 		} else if strings.TrimSpace(chessComPGN) != "" {
+			if opts.ProgressFn != nil {
+				opts.ProgressFn("parsing", 0, 0, "Parsing Chess.com PGN games...")
+			}
 			games, err := chess.ParsePGNDatabase(strings.NewReader(chessComPGN))
 			if err != nil {
 				res.Errors = append(res.Errors, fmt.Sprintf("Parsing Chess.com PGN: %v", err))
@@ -252,12 +272,18 @@ func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *sci
 
 	// Helper to import into a database
 	importIntoDB := func(db *scid.Database) error {
+		if opts.ProgressFn != nil {
+			opts.ProgressFn("importing", len(allGames), len(allGames), fmt.Sprintf("Encoding and importing %d games into database...", len(allGames)))
+		}
 		stats, err := db.ImportGames(allGames)
 		if err != nil {
 			return err
 		}
 		res.Imported += stats.Imported
 		if opts.AutoDeduplicate {
+			if opts.ProgressFn != nil {
+				opts.ProgressFn("deduplicating", 0, 0, "Scanning and removing duplicate games...")
+			}
 			dups, err := db.DeleteDuplicates(scid.DuplicateCriteria{ExactMoves: true})
 			if err == nil {
 				res.DuplicatesSkipped += dups

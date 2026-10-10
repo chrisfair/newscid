@@ -112,6 +112,12 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
+func (a *App) emitEvent(eventName string, optionalData ...interface{}) {
+	if a.ctx != nil && a.ctx.Value("events") != nil {
+		runtime.EventsEmit(a.ctx, eventName, optionalData...)
+	}
+}
+
 // ==========================================
 // Database Operations
 // ==========================================
@@ -587,9 +593,7 @@ func (a *App) startEngineLocked(idOrPath string) error {
 	}
 
 	eng.SetOnEval(func(info engine.EvalInfo) {
-		if a.ctx != nil && a.ctx.Value("events") != nil {
-			runtime.EventsEmit(a.ctx, "engine:eval", info)
-		}
+		a.emitEvent("engine:eval", info)
 	})
 
 	a.engine = eng
@@ -1248,6 +1252,15 @@ func (a *App) ImportPlayerGames(opts online.ImportPlayerOptions) (*online.SyncRe
 	activeDB := a.db
 	a.mu.Unlock()
 
+	opts.ProgressFn = func(stage string, current, total int, message string) {
+		a.emitEvent("online:fetch-progress", map[string]interface{}{
+			"stage":   stage,
+			"current": current,
+			"total":   total,
+			"message": message,
+		})
+	}
+
 	return a.syncMgr.ImportPlayerGames(opts, activeDB)
 }
 
@@ -1500,6 +1513,15 @@ func (a *App) FetchPersonaOnlineGames(personaID string, maxGames int) (*online.S
 		DedicatedPath:    basePath,
 		AutoDeduplicate:  true,
 		MaxGames:         maxGames,
+		ProgressFn: func(stage string, current, total int, message string) {
+			a.emitEvent("online:fetch-progress", map[string]interface{}{
+				"personaId": personaID,
+				"stage":     stage,
+				"current":   current,
+				"total":     total,
+				"message":   message,
+			})
+		},
 	}
 
 	a.mu.RLock()
