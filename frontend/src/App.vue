@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import MenuBar from './components/MenuBar.vue'
 import HeaderBar, { PieceSetOption, BoardThemeOption, DiscoveredDatabase } from './components/HeaderBar.vue'
 import Chessboard from './components/Chessboard.vue'
@@ -486,15 +486,101 @@ const botMoveStatus = ref<string | null>(null)
 
 
 
-// Resizable Panes State
-const leftColWidth = ref<number>(Number(localStorage.getItem('newscid:leftColWidth')) || 560)
-const bottomDrawerHeight = ref<number>(Number(localStorage.getItem('newscid:bottomDrawerHeight')) || 240)
+// Resizable Panes & Adaptive Sizing State
+function getInitialLeftColWidth(): number {
+  const saved = Number(localStorage.getItem('newscid:leftColWidth'))
+  const screenW = typeof window !== 'undefined' ? window.innerWidth : 1280
+  const maxW = Math.max(320, screenW - 360)
+  if (saved && saved >= 300 && saved <= maxW) {
+    return saved
+  }
+  // Adaptive default based on screen size
+  if (screenW < 1200) return Math.max(340, Math.floor(screenW * 0.44))
+  if (screenW < 1440) return Math.max(400, Math.floor(screenW * 0.42))
+  return 560
+}
+
+function getInitialBottomDrawerHeight(): number {
+  const saved = Number(localStorage.getItem('newscid:bottomDrawerHeight'))
+  const screenH = typeof window !== 'undefined' ? window.innerHeight : 800
+  const maxH = Math.max(120, Math.floor(screenH * 0.4))
+  if (saved && saved >= 100 && saved <= maxH) {
+    return saved
+  }
+  // Adaptive default based on screen size
+  if (screenH < 800) return 165
+  if (screenH < 960) return 200
+  return 240
+}
+
+const leftColWidth = ref<number>(getInitialLeftColWidth())
+const bottomDrawerHeight = ref<number>(getInitialBottomDrawerHeight())
 const isResizingH = ref(false)
 const isResizingV = ref(false)
-const isMdScreen = ref(window.innerWidth >= 768)
+const isMdScreen = ref(typeof window !== 'undefined' ? window.innerWidth >= 768 : true)
+
+// Responsive Board Sizing State
+const computedBoardSize = ref<number>(460)
+const leftColRef = ref<HTMLElement | null>(null)
+const workspaceRef = ref<HTMLElement | null>(null)
+let resizeObserver: ResizeObserver | null = null
+
+function updateResponsiveBoardSize() {
+  if (typeof window === 'undefined') return
+
+  const screenW = window.innerWidth
+  const screenH = window.innerHeight
+
+  // Clamp leftColWidth and bottomDrawerHeight to current screen limits
+  const maxLeftW = Math.max(320, screenW - 360)
+  if (leftColWidth.value > maxLeftW) {
+    leftColWidth.value = maxLeftW
+  }
+  const maxDrawerH = Math.max(120, Math.floor(screenH * 0.42))
+  if (bottomDrawerHeight.value > maxDrawerH) {
+    bottomDrawerHeight.value = maxDrawerH
+  }
+
+  // 1. Available height inside left column
+  let colH = leftColRef.value?.clientHeight || 0
+  let colW = leftColRef.value?.clientWidth || leftColWidth.value
+
+  if (!colH || colH < 100) {
+    const topBars = zenMode.value ? 0 : 105
+    const bottomDrawer = (!zenMode.value && bottomDrawerOpen.value) ? bottomDrawerHeight.value : 0
+    colH = Math.max(260, screenH - topBars - bottomDrawer - 24)
+  }
+
+  // 2. Measure non-board items in left-col (banners, imbalance bar, engine panel)
+  let nonBoardH = 0
+  if (activeSimulation.value) nonBoardH += 46
+  if (isTheoreticalNovelty.value) nonBoardH += 34
+  if (blunderRadarAlert.value) nonBoardH += 34
+
+  // ImbalanceBar height (compact / expanded)
+  if (imbalanceReport.value) {
+    nonBoardH += (screenH < 780 ? 36 : 84)
+  }
+
+  // EnginePanel height
+  nonBoardH += 115
+
+  // Margin, padding & flex gap buffers
+  nonBoardH += 22
+
+  const availH = Math.max(180, colH - nonBoardH)
+  const availW = Math.max(180, colW - (showEvalBar.value ? 30 : 12))
+
+  // The square board size is the minimum of available width and height
+  const idealSize = Math.floor(Math.min(availW, availH))
+
+  // Right-size board: allow up to 800px on 2K/4K displays, minimum 200px on compact screens
+  computedBoardSize.value = Math.max(200, Math.min(800, idealSize))
+}
 
 function handleWindowResize() {
   isMdScreen.value = window.innerWidth >= 768
+  nextTick(() => updateResponsiveBoardSize())
 }
 
 function startHorizontalResize(e: MouseEvent) {
@@ -507,9 +593,10 @@ function startHorizontalResize(e: MouseEvent) {
 
   function onMouseMove(moveEvent: MouseEvent) {
     const delta = moveEvent.clientX - startX
-    const minW = 360
+    const minW = 320
     const maxW = Math.max(minW, window.innerWidth - 300)
     leftColWidth.value = Math.max(minW, Math.min(maxW, startWidth + delta))
+    updateResponsiveBoardSize()
   }
 
   function onMouseUp() {
@@ -519,6 +606,7 @@ function startHorizontalResize(e: MouseEvent) {
     window.removeEventListener('mousemove', onMouseMove)
     window.removeEventListener('mouseup', onMouseUp)
     localStorage.setItem('newscid:leftColWidth', String(leftColWidth.value))
+    updateResponsiveBoardSize()
   }
 
   window.addEventListener('mousemove', onMouseMove)
@@ -526,8 +614,9 @@ function startHorizontalResize(e: MouseEvent) {
 }
 
 function resetHorizontalResize() {
-  leftColWidth.value = 560
-  localStorage.setItem('newscid:leftColWidth', '560')
+  leftColWidth.value = getInitialLeftColWidth()
+  localStorage.setItem('newscid:leftColWidth', String(leftColWidth.value))
+  nextTick(() => updateResponsiveBoardSize())
 }
 
 function startVerticalResize(e: MouseEvent) {
@@ -543,6 +632,7 @@ function startVerticalResize(e: MouseEvent) {
     const minH = 120
     const maxH = Math.max(minH, window.innerHeight - 250)
     bottomDrawerHeight.value = Math.max(minH, Math.min(maxH, startHeight + delta))
+    updateResponsiveBoardSize()
   }
 
   function onMouseUp() {
@@ -552,6 +642,7 @@ function startVerticalResize(e: MouseEvent) {
     window.removeEventListener('mousemove', onMouseMove)
     window.removeEventListener('mouseup', onMouseUp)
     localStorage.setItem('newscid:bottomDrawerHeight', String(bottomDrawerHeight.value))
+    updateResponsiveBoardSize()
   }
 
   window.addEventListener('mousemove', onMouseMove)
@@ -559,8 +650,9 @@ function startVerticalResize(e: MouseEvent) {
 }
 
 function resetVerticalResize() {
-  bottomDrawerHeight.value = 240
-  localStorage.setItem('newscid:bottomDrawerHeight', '240')
+  bottomDrawerHeight.value = getInitialBottomDrawerHeight()
+  localStorage.setItem('newscid:bottomDrawerHeight', String(bottomDrawerHeight.value))
+  nextTick(() => updateResponsiveBoardSize())
 }
 
 // Customization
@@ -641,7 +733,17 @@ onMounted(async () => {
     }
 
     // Update board state for start position
-    await updateBoardState(startingFEN)
+    // Setup ResizeObserver for adaptive right-sizing of the chessboard
+    nextTick(() => {
+      updateResponsiveBoardSize()
+      if (typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => {
+          updateResponsiveBoardSize()
+        })
+        if (leftColRef.value) resizeObserver.observe(leftColRef.value)
+        if (workspaceRef.value) resizeObserver.observe(workspaceRef.value)
+      }
+    })
   } catch (err) {
     console.error('Initialization error:', err)
   }
@@ -652,8 +754,16 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('resize', handleWindowResize)
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
   EventsOff('engine:eval')
   if (playInterval) clearInterval(playInterval)
+})
+
+watch([leftColWidth, bottomDrawerHeight, bottomDrawerOpen, zenMode, showEvalBar, imbalanceReport, activeSimulation, isTheoreticalNovelty, blunderRadarAlert], () => {
+  nextTick(() => updateResponsiveBoardSize())
 })
 
 watch(currentFEN, (newFen) => {
@@ -2264,10 +2374,14 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
     </div>
 
     <!-- Main Workspace (Split Grid) -->
-    <div class="workspace-grid flex-1 flex flex-col md:flex-row overflow-hidden p-2 gap-1 relative">
+    <div
+      ref="workspaceRef"
+      class="workspace-grid flex-1 flex flex-col md:flex-row overflow-hidden p-2 gap-1 relative"
+    >
       <!-- Left Column: Chessboard & Engine Control (Resizable) -->
       <div
-        class="left-col flex flex-col items-center justify-between gap-2 w-full md:w-auto shrink-0 overflow-y-auto"
+        ref="leftColRef"
+        class="left-col flex flex-col items-center justify-between gap-1.5 w-full md:w-auto shrink-0 h-full overflow-hidden"
         :style="{ width: isMdScreen ? `${leftColWidth}px` : '100%' }"
       >
         <!-- Player Simulation Sparring Match Status -->
@@ -2320,23 +2434,26 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         </div>
 
         <!-- Interactive Chessboard -->
-        <Chessboard
-          :fen="currentFEN"
-          :legal-moves="legalMoves"
-          :piece-set="currentPieceSet"
-          :board-theme="currentTheme"
-          :flipped="flipped"
-          :last-move="lastMove"
-          :in-check="inCheck"
-          :sound-enabled="soundEnabled"
-          :blindfold="blindfoldMode"
-          :show-eval-bar="showEvalBar"
-          :eval-score="evalScore"
-          :eval-mate="evalMate"
-          :threat-squares="threatSquares"
-          :arrows="engineArrows"
-          @move="handleMove"
-        />
+        <div class="chessboard-wrapper-host flex items-center justify-center w-full shrink-0">
+          <Chessboard
+            :fen="currentFEN"
+            :legal-moves="legalMoves"
+            :piece-set="currentPieceSet"
+            :board-theme="currentTheme"
+            :flipped="flipped"
+            :last-move="lastMove"
+            :in-check="inCheck"
+            :sound-enabled="soundEnabled"
+            :blindfold="blindfoldMode"
+            :show-eval-bar="showEvalBar"
+            :eval-score="evalScore"
+            :eval-mate="evalMate"
+            :threat-squares="threatSquares"
+            :arrows="engineArrows"
+            :board-size="computedBoardSize"
+            @move="handleMove"
+          />
+        </div>
 
         <!-- Interactive Material & Positional Imbalance Bar -->
         <div class="w-full">

@@ -82,4 +82,18 @@ describe('Chessboard.vue', () => {
     const threatSquares = wrapper.findAll('.threat-square')
     expect(threatSquares).toHaveLength(2)
   })
+
+  it('applies boardSize prop dynamically to chessboard-container and board-grid', () => {
+    const wrapper = mount(Chessboard, {
+      props: {
+        fen: startFEN,
+        boardSize: 340,
+      },
+    })
+
+    const grid = wrapper.find('.board-grid')
+    expect(grid.attributes('style')).toContain('340px')
+    const container = wrapper.find('.chessboard-container')
+    expect(container.attributes('style')).toContain('340px')
+  })
 })

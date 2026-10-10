@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { Shield, Sparkles, AlertTriangle, ArrowRight, Activity } from '@lucide/vue'
 import type { imbalance } from '../../wailsjs/go/models'
 
@@ -28,21 +28,27 @@ const blackKingColor = computed(() => {
   if (s >= 50) return 'bg-amber-500'
   return 'bg-red-500'
 })
+
+const isExpanded = ref(typeof window !== 'undefined' ? window.innerHeight >= 780 : true)
 </script>
 
 <template>
   <div
     v-if="report"
-    class="w-full bg-zinc-900/90 border border-zinc-800 rounded-xl p-2.5 flex flex-col gap-2 text-xs shadow-md select-none"
+    class="w-full bg-zinc-900/90 border border-zinc-800 rounded-xl p-2 flex flex-col gap-1.5 text-xs shadow-md select-none transition-all"
   >
-    <!-- Header: Material & Dynamic Summary -->
-    <div class="flex items-center justify-between text-[11px]">
-      <div class="flex items-center gap-2">
+    <!-- Header: Material & Dynamic Summary (Clickable to collapse/expand) -->
+    <div
+      class="flex items-center justify-between text-[11px] cursor-pointer hover:opacity-90"
+      @click="isExpanded = !isExpanded"
+      title="Click to toggle positional breakdown"
+    >
+      <div class="flex items-center gap-1.5">
         <span class="font-bold text-zinc-100 flex items-center gap-1">
-          <Activity class="w-3.5 h-3.5 text-cyan-400" /> Imbalances & Dynamics:
+          <Activity class="w-3.5 h-3.5 text-cyan-400" /> Imbalances:
         </span>
         <span
-          class="px-1.5 py-0.5 rounded font-mono font-bold text-[10px]"
+          class="px-1.5 py-0.2 rounded font-mono font-bold text-[10px]"
           :class="{
             'bg-zinc-800 text-zinc-300': matDelta === 0,
             'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30': matDelta > 0,
@@ -52,13 +58,18 @@ const blackKingColor = computed(() => {
           {{ matLabel }}
         </span>
       </div>
-      <p class="text-zinc-400 text-[11px] italic truncate max-w-[280px]">
-        {{ report.positionalSummary }}
-      </p>
+      <div class="flex items-center gap-2 overflow-hidden">
+        <p class="text-zinc-400 text-[10px] italic truncate max-w-[200px]">
+          {{ report.positionalSummary }}
+        </p>
+        <span class="text-zinc-500 hover:text-zinc-300 text-[10px] font-mono shrink-0">
+          {{ isExpanded ? '▲' : '▼' }}
+        </span>
+      </div>
     </div>
 
     <!-- Comparative Metrics Grid -->
-    <div class="grid grid-cols-2 gap-2 text-[11px]">
+    <div v-show="isExpanded" class="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-zinc-800/80">
       <!-- White Metrics -->
       <div class="bg-zinc-950/60 p-2 rounded-lg border border-zinc-800 flex flex-col gap-1.5">
         <div class="flex items-center justify-between font-semibold text-zinc-200">
