@@ -387,3 +387,35 @@ func TestPersonaDedicatedDatabaseAndAggregation(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, pmDefault)
 }
+
+func TestPersonaOnlineUsernamesAutoIncluded(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "online_test_personas.json")
+	pm, err := NewPersonaManager(configPath)
+	require.NoError(t, err)
+
+	// Save persona with ChessCom and Lichess usernames but empty Identifiers
+	p, err := pm.SavePersona(&Persona{
+		DisplayName:      "Hikaru Nakamura",
+		ChessComUsername: "Hikaru",
+		LichessUsername:  "HikaruNakamura",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, p.Identifiers, "Hikaru")
+	assert.Contains(t, p.Identifiers, "HikaruNakamura")
+
+	// Ensure FindPersonaForIdentifier works for both usernames
+	foundChessCom := pm.FindPersonaForIdentifier("hikaru")
+	require.NotNil(t, foundChessCom)
+	assert.Equal(t, p.ID, foundChessCom.ID)
+
+	foundLichess := pm.FindPersonaForIdentifier("hikarunakamura")
+	require.NotNil(t, foundLichess)
+	assert.Equal(t, p.ID, foundLichess.ID)
+
+	// Ensure updating persona doesn't duplicate usernames
+	p.DisplayName = "Hikaru Nakamura (GM)"
+	updated, err := pm.SavePersona(p)
+	require.NoError(t, err)
+	assert.Len(t, updated.Identifiers, 2)
+}

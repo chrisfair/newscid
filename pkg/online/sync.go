@@ -280,6 +280,18 @@ func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *sci
 		if strings.TrimSpace(opts.DedicatedPath) == "" {
 			return nil, fmt.Errorf("dedicated database path must be specified")
 		}
+		cleanPath := strings.TrimSpace(opts.DedicatedPath)
+		base := strings.TrimSuffix(cleanPath, ".si4")
+		base = strings.TrimSuffix(base, ".sn4")
+		base = strings.TrimSuffix(base, ".sg4")
+
+		if activeDB != nil && activeDB.IsOpen && strings.TrimSuffix(activeDB.BasePath, ".si4") == base {
+			if err := importIntoDB(activeDB); err != nil {
+				return nil, fmt.Errorf("importing to dedicated database: %w", err)
+			}
+			break
+		}
+
 		db, err := openOrCreateDatabase(opts.DedicatedPath, fmt.Sprintf("Dedicated database for %s", displayName))
 		if err != nil {
 			return nil, err

@@ -16,7 +16,8 @@ import {
   AlertCircle,
   X,
   RefreshCw,
-  FolderOpen
+  FolderOpen,
+  Globe
 } from '@lucide/vue'
 import {
   GetPersonas,
@@ -28,7 +29,8 @@ import {
   SuggestPersonaIdentifiers,
   GetPersonaStatistics,
   AggregatePersonaGames,
-  OpenPersonaDatabase
+  OpenPersonaDatabase,
+  FetchPersonaOnlineGames
 } from '../../wailsjs/go/main/App'
 import { persona } from '../../wailsjs/go/models'
 
@@ -65,6 +67,8 @@ const loadingSuggestions = ref(false)
 const personaStats = ref<persona.PersonaStatistics | null>(null)
 const loadingStats = ref(false)
 const isAggregating = ref(false)
+const isFetchingOnline = ref(false)
+const autoFetchOnline = ref(true)
 
 onMounted(async () => {
   await loadPersonas()
@@ -94,7 +98,7 @@ const filteredPersonas = computed(() => {
   )
 })
 
-function selectPersona(p: persona.Persona) {
+function selectPersona(p: persona.Persona, preserveStatus: boolean = false) {
   selectedPersona.value = p
   editDisplayName.value = p.displayName
   editTitle.value = p.title || ''
@@ -104,7 +108,9 @@ function selectPersona(p: persona.Persona) {
   editLichess.value = p.lichessUsername || ''
   editFideId.value = p.fideId || ''
   editDatabasePath.value = p.databasePath || ''
-  statusMessage.value = null
+  if (!preserveStatus) {
+    statusMessage.value = null
+  }
   fetchSuggestions()
   fetchStatistics()
 }
@@ -151,10 +157,14 @@ async function handleSave() {
     })
 
     const saved = await SavePersona(pToSave)
-    statusMessage.value = { type: 'success', text: `Persona "${saved.displayName}" saved successfully!` }
     await loadPersonas()
     const updated = personasList.value.find(p => p.id === saved.id)
-    if (updated) selectPersona(updated)
+    if (updated) selectPersona(updated, true)
+    statusMessage.value = { type: 'success', text: `Persona "${saved.displayName}" saved successfully!` }
+
+    if (autoFetchOnline.value && (editChessCom.value.trim() || editLichess.value.trim())) {
+      await handleFetchOnlineGames(saved.id)
+    }
   } catch (err: any) {
     statusMessage.value = { type: 'error', text: `Save failed: ${err?.message || err}` }
   }
@@ -255,17 +265,66 @@ async function handleAggregateGames() {
   statusMessage.value = null
   try {
     const res = await AggregatePersonaGames(selectedPersona.value.id)
+    await loadPersonas()
+    const updated = personasList.value.find(p => p.id === selectedPersona.value?.id)
+    if (updated) selectPersona(updated, true)
     statusMessage.value = {
       type: 'success',
       text: `Aggregated ${res.newlyAdded} new game(s) into dedicated database (${res.duplicatesSkipped} duplicates skipped). Total in persona base: ${res.totalPersonaGames} games.`
     }
-    await loadPersonas()
-    const updated = personasList.value.find(p => p.id === selectedPersona.value?.id)
-    if (updated) selectPersona(updated)
   } catch (err: any) {
     statusMessage.value = { type: 'error', text: `Aggregation failed: ${err?.message || err}` }
   } finally {
     isAggregating.value = false
+  }
+}
+
+async function handleFetchOnlineGames(targetPersonaId?: string) {
+  const pId = targetPersonaId || selectedPersona.value?.id
+  if (!pId) return
+  if (!editChessCom.value.trim() && !editLichess.value.trim()) {
+    statusMessage.value = {
+      type: 'error',
+      text: 'Please specify a Chess.com or Lichess username before fetching online games.'
+    }
+    return
+  }
+
+  isFetchingOnline.value = true
+  statusMessage.value = {
+    type: 'info',
+    text: 'Connecting to Chess.com & Lichess to download games...'
+  }
+
+  try {
+    const res = await FetchPersonaOnlineGames(pId, 0)
+    let summary = `Fetched ${res.imported} game(s) into persona database (${res.chessComGames} Chess.com, ${res.lichessGames} Lichess)`
+    if (res.duplicatesSkipped > 0) {
+      summary += `, ${res.duplicatesSkipped} duplicates skipped`
+    }
+    if (res.errors && res.errors.length > 0) {
+      summary += `. Note: ${res.errors.join('; ')}`
+    }
+
+    await loadPersonas()
+    const updated = personasList.value.find(p => p.id === pId)
+    if (updated) {
+      selectPersona(updated, true)
+    } else {
+      fetchStatistics()
+    }
+
+    statusMessage.value = {
+      type: res.imported > 0 || res.totalDownloaded > 0 ? 'success' : 'info',
+      text: summary
+    }
+  } catch (err: any) {
+    statusMessage.value = {
+      type: 'error',
+      text: `Online fetch failed: ${err?.message || err}`
+    }
+  } finally {
+    isFetchingOnline.value = false
   }
 }
 
@@ -462,6 +521,24 @@ function handleStartSparring() {
                 />
               </div>
             </div>
+
+            <!-- Online Auto-fetch Option -->
+            <div class="flex items-center justify-between pt-2 border-t border-zinc-800/80 text-xs">
+              <label class="flex items-center gap-2 text-zinc-300 cursor-pointer select-none">
+                <input
+                  v-model="autoFetchOnline"
+                  type="checkbox"
+                  class="rounded border-zinc-700 bg-zinc-900 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-zinc-900"
+                />
+                <span class="text-zinc-300 text-[11px] font-medium flex items-center gap-1.5">
+                  <Globe class="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Auto-fetch online games from Chess.com & Lichess on save</span>
+                </span>
+              </label>
+              <span v-if="editChessCom || editLichess" class="text-[10px] text-emerald-400 font-mono">
+                Handles auto-link to persona identifiers & dedicated base
+              </span>
+            </div>
           </div>
 
           <!-- Section 2: Unified Identifiers & Designators (Aliases) -->
@@ -572,6 +649,16 @@ function handleStartSparring() {
                 >
                   <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': isAggregating }" />
                   <span>{{ isAggregating ? 'Aggregating...' : 'Sync from Active Base' }}</span>
+                </button>
+
+                <button
+                  class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                  :disabled="isFetchingOnline || (!editChessCom && !editLichess)"
+                  title="Fetch games directly from Chess.com and Lichess into dedicated database"
+                  @click="handleFetchOnlineGames()"
+                >
+                  <Globe class="w-3.5 h-3.5" :class="{ 'animate-spin': isFetchingOnline }" />
+                  <span>{{ isFetchingOnline ? 'Fetching Online...' : 'Fetch Online Games' }}</span>
                 </button>
               </div>
             </div>

@@ -245,8 +245,18 @@ func (pm *PersonaManager) SavePersona(p *Persona) (*Persona, error) {
 		id = generateID()
 	}
 
-	// Clean and deduplicate identifiers
-	cleanIdentifiers := CleanIdentifiers(p.Identifiers)
+	cleanChessCom := strings.TrimSpace(p.ChessComUsername)
+	cleanLichess := strings.TrimSpace(p.LichessUsername)
+
+	// Clean and deduplicate identifiers, ensuring online usernames are included
+	ids := append([]string(nil), p.Identifiers...)
+	if cleanChessCom != "" {
+		ids = append(ids, cleanChessCom)
+	}
+	if cleanLichess != "" {
+		ids = append(ids, cleanLichess)
+	}
+	cleanIdentifiers := CleanIdentifiers(ids)
 
 	// Default avatar color if not provided
 	avatarColor := p.AvatarColor
@@ -271,8 +281,8 @@ func (pm *PersonaManager) SavePersona(p *Persona) (*Persona, error) {
 		Bio:              strings.TrimSpace(p.Bio),
 		AvatarColor:      avatarColor,
 		EstimatedElo:     p.EstimatedElo,
-		ChessComUsername: strings.TrimSpace(p.ChessComUsername),
-		LichessUsername:  strings.TrimSpace(p.LichessUsername),
+		ChessComUsername: cleanChessCom,
+		LichessUsername:  cleanLichess,
 		FideID:           strings.TrimSpace(p.FideID),
 		CreatedAt:        createdAt,
 		UpdatedAt:        now,

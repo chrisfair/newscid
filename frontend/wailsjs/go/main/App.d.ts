@@ -6,11 +6,11 @@ import {eco} from '../models';
 import {scid} from '../models';
 import {main} from '../models';
 import {chess} from '../models';
+import {online} from '../models';
 import {sets} from '../models';
 import {tree} from '../models';
 import {playerbot} from '../models';
 import {repertoire} from '../models';
-import {online} from '../models';
 import {tournament} from '../models';
 import {version} from '../models';
 import {puzzleminer} from '../models';
@@ -60,6 +60,8 @@ export function ExportPGN(arg1:chess.Game):Promise<string>;
 export function FetchChessComPreview(arg1:string):Promise<Array<string>>;
 
 export function FetchLichessPreview(arg1:string,arg2:number):Promise<string>;
+
+export function FetchPersonaOnlineGames(arg1:string,arg2:number):Promise<online.SyncResult>;
 
 export function FindDuplicateGames(arg1:scid.DuplicateCriteria):Promise<Array<scid.DuplicateGroup>>;
 

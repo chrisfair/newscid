@@ -1450,7 +1450,68 @@ func (a *App) GetPersonaStatistics(personaID string) (*persona.PersonaStatistics
 		}, nil
 	}
 
-	return persona.CalculatePersonaStatistics(db, p), nil
+	stats := persona.CalculatePersonaStatistics(db, p)
+	// If the active database has no games for this persona, check dedicated database
+	if stats.TotalGames == 0 && p.DatabasePath != "" {
+		dedicatedDB := &scid.Database{}
+		if err := dedicatedDB.Open(p.DatabasePath); err == nil {
+			defer dedicatedDB.Close()
+			dedStats := persona.CalculatePersonaStatistics(dedicatedDB, p)
+			if dedStats.TotalGames > 0 {
+				return dedStats, nil
+			}
+		}
+	}
+
+	return stats, nil
+}
+
+// FetchPersonaOnlineGames fetches games for a persona from Chess.com and/or Lichess directly into their dedicated database.
+func (a *App) FetchPersonaOnlineGames(personaID string, maxGames int) (*online.SyncResult, error) {
+	if a.personaMgr == nil {
+		return nil, fmt.Errorf("persona manager not initialized")
+	}
+	if a.syncMgr == nil {
+		return nil, fmt.Errorf("sync manager not initialized")
+	}
+
+	p, err := a.personaMgr.GetPersona(personaID)
+	if err != nil {
+		return nil, err
+	}
+
+	chessComUser := strings.TrimSpace(p.ChessComUsername)
+	lichessUser := strings.TrimSpace(p.LichessUsername)
+
+	if chessComUser == "" && lichessUser == "" {
+		return nil, fmt.Errorf("no Chess.com or Lichess username specified for persona %q", p.DisplayName)
+	}
+
+	basePath, err := a.personaMgr.EnsurePersonaDatabase(p)
+	if err != nil {
+		return nil, fmt.Errorf("ensuring persona database: %w", err)
+	}
+
+	opts := online.ImportPlayerOptions{
+		PlayerName:       p.DisplayName,
+		ChessComUsername: chessComUser,
+		LichessUsername:  lichessUser,
+		TargetMode:       online.TargetDedicatedBase,
+		DedicatedPath:    basePath,
+		AutoDeduplicate:  true,
+		MaxGames:         maxGames,
+	}
+
+	a.mu.RLock()
+	activeDB := a.db
+	a.mu.RUnlock()
+
+	res, err := a.syncMgr.ImportPlayerGames(opts, activeDB)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
 
 // AggregatePersonaGames extracts all matching games from the active database into the persona's dedicated database.
