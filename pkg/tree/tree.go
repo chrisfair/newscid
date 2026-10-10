@@ -112,7 +112,7 @@ func BuildTreeFromGames(fen string, games []*chess.Game) *TreeResult {
 
 // BuildTreeFromDatabase searches the database for games matching the position and aggregates move stats.
 func BuildTreeFromDatabase(db *scid.Database, fen string, maxGames int) (*TreeResult, error) {
-	if !db.IsOpen {
+	if db == nil || !db.IsOpen {
 		return &TreeResult{FEN: fen, Moves: []*MoveStat{}}, nil
 	}
 
@@ -175,7 +175,7 @@ func SearchPositionInGames(fen string, games []*chess.Game) []int {
 
 // coreFEN strips the halfmove clock, fullmove number, and ephemeral en-passant square for robust position matching.
 func coreFEN(fen string) string {
-	parts := strings.Split(strings.TrimSpace(fen), " ")
+	parts := strings.Fields(strings.TrimSpace(fen))
 	if len(parts) >= 3 {
 		return parts[0] + " " + parts[1] + " " + parts[2]
 	}

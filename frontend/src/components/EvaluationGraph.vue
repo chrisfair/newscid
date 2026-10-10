@@ -151,7 +151,7 @@ const timeTroubleMoves = computed(() => {
       <div class="flex items-center gap-2">
         <TrendingUp class="w-4 h-4 text-emerald-400" />
         <span class="font-bold text-zinc-200">Evaluation Curve</span>
-        <span v-if="analysis" class="text-[11px] text-zinc-400">
+        <span v-if="analysis && analysis.moveAnalyses && analysis.moveAnalyses.length > 0" class="text-[11px] text-zinc-400">
           White: <span class="font-bold text-emerald-400">{{ analysis.whiteAccuracy }}%</span> |
           Black: <span class="font-bold text-emerald-400">{{ analysis.blackAccuracy }}%</span>
         </span>
@@ -164,12 +164,12 @@ const timeTroubleMoves = computed(() => {
         @click="emit('annotate')"
       >
         <Sparkles class="w-3.5 h-3.5" />
-        <span>{{ isAnalyzingGame ? 'Analyzing Game...' : (analysis ? 'Re-Annotate' : 'Annotate Game') }}</span>
+        <span>{{ isAnalyzingGame ? 'Analyzing Game...' : (analysis && analysis.moveAnalyses && analysis.moveAnalyses.length > 0 ? 'Re-Annotate' : 'Annotate Game') }}</span>
       </button>
     </div>
 
     <!-- Blunder & Mistake Stats Bar -->
-    <div v-if="analysis" class="flex items-center justify-between text-[11px] px-2 py-1 bg-zinc-900/60 rounded-lg border border-zinc-800/80 font-mono">
+    <div v-if="analysis && analysis.moveAnalyses && analysis.moveAnalyses.length > 0" class="flex items-center justify-between text-[11px] px-2 py-1 bg-zinc-900/60 rounded-lg border border-zinc-800/80 font-mono">
       <div class="flex items-center gap-3">
         <span class="text-zinc-500">White:</span>
         <span class="text-rose-400 flex items-center gap-0.5" title="Blunders (??)">

@@ -517,6 +517,11 @@ def main():
     ok, tb_res = run_test("ProbeTablebase (KQK position)", "ProbeTablebase", fen_tb)
     check("ProbeTablebase", ok, tb_res is not None)
 
+    # Full Game Annotation (AnnotatePGN)
+    test_pgn = '[Event "Fool\'s Mate Test"]\n[White "White"]\n[Black "Black"]\n[Result "0-1"]\n\n1. f3 e5 2. g4 Qh4# 0-1\n'
+    ok, ann_res = run_test("AnnotatePGN (Fool's Mate)", "AnnotatePGN", test_pgn, 100)
+    check("AnnotatePGN", ok, ann_res and len(ann_res.get("moveAnalyses", [])) == 4)
+
     # -------------------------------------------------------------
     # 11. Export Formats (PGN, HTML, LaTeX)
     # -------------------------------------------------------------

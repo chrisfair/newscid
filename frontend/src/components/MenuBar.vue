@@ -130,6 +130,7 @@ const emit = defineEmits<{
   (e: 'opponentScout'): void
   (e: 'toggleZenMode'): void
   (e: 'explainMove'): void
+  (e: 'openTreeWindow'): void
 }>()
 
 
@@ -417,6 +418,16 @@ onUnmounted(() => {
           <span class="flex items-center gap-2.5 whitespace-nowrap"><Shuffle class="w-4 h-4 shrink-0 text-zinc-400" /> Random Game</span>
           <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+?</span>
         </button>
+
+        <div class="h-px bg-zinc-800 my-1 mx-2" />
+
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('openTreeWindow'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><BookOpen class="w-4 h-4 shrink-0 text-emerald-400" /> Opening Tree Window...</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">F3</span>
+        </button>
       </div>
     </div>
 
@@ -478,6 +489,13 @@ onUnmounted(() => {
         >
           <span class="flex items-center gap-2.5 whitespace-nowrap"><Cpu class="w-4 h-4 shrink-0 text-emerald-400" /> {{ isAnalyzing ? 'Stop Engine Analysis' : 'Start Live Analysis' }}</span>
           <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">F2</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('openTreeWindow'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><BookOpen class="w-4 h-4 shrink-0 text-emerald-400" /> Opening Tree Window...</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">F3</span>
         </button>
         <div class="h-px bg-zinc-800 my-1 mx-2" />
         <button

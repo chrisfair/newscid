@@ -38,9 +38,18 @@ func AnnotateGame(game *chess.Game, eng *Engine, movetimeMs int) (*GameAnalysis,
 	if eng == nil {
 		return nil, fmt.Errorf("engine not provided")
 	}
+	if game == nil {
+		return nil, fmt.Errorf("game not provided")
+	}
 
 	analysis := &GameAnalysis{
-		MoveAnalyses: make([]MoveAnalysis, 0),
+		MoveAnalyses:  make([]MoveAnalysis, 0),
+		WhiteAccuracy: 0.0,
+		BlackAccuracy: 0.0,
+	}
+
+	if game.RootMove == nil {
+		return analysis, nil
 	}
 
 	board := chess.NewBoard()
@@ -177,7 +186,7 @@ func AnnotateGame(game *chess.Game, eng *Engine, movetimeMs int) (*GameAnalysis,
 
 func calculateAccuracy(losses []float64) float64 {
 	if len(losses) == 0 {
-		return 100.0
+		return 0.0
 	}
 	var total float64
 	for _, l := range losses {
