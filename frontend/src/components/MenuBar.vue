@@ -38,7 +38,13 @@ import {
   ExternalLink,
   BarChart3,
   FileEdit,
-  Download
+  Download,
+  Eye,
+  EyeOff,
+  Volume2,
+  VolumeX,
+  Dices,
+  Target
 } from '@lucide/vue'
 import { PieceSetOption, BoardThemeOption } from './HeaderBar.vue'
 import { useNotation, type NotationStyle } from '../utils/notation'
@@ -53,6 +59,10 @@ const props = defineProps<{
   currentThemeId: string
   trialMode: boolean
   isAnalyzing: boolean
+  soundEnabled?: boolean
+  blindfold?: boolean
+  threatMode?: boolean
+  showEvalBar?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -105,6 +115,12 @@ const emit = defineEmits<{
   (e: 'engineMatch'): void
   (e: 'exportGame'): void
   (e: 'standardizeNames'): void
+  (e: 'toggleSound'): void
+  (e: 'toggleBlindfold'): void
+  (e: 'toggleThreatMode'): void
+  (e: 'toggleEvalBar'): void
+  (e: 'chess960'): void
+  (e: 'coordinateTrainer'): void
 }>()
 
 
@@ -582,6 +598,19 @@ onUnmounted(() => {
         >
           <span class="flex items-center gap-2.5 whitespace-nowrap"><BookOpen class="w-4 h-4 shrink-0 text-emerald-400" /> Opening Builder & Trainer...</span>
         </button>
+        <div class="h-px bg-zinc-800 my-1 mx-2" />
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('chess960'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Dices class="w-4 h-4 shrink-0 text-purple-400" /> Chess960 (Fischer Random)...</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('coordinateTrainer'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Target class="w-4 h-4 shrink-0 text-emerald-400" /> Coordinate & Vision Trainer...</span>
+        </button>
       </div>
     </div>
 
@@ -614,6 +643,55 @@ onUnmounted(() => {
         >
           <span class="flex items-center gap-2.5 whitespace-nowrap"><Palette class="w-4 h-4 shrink-0 text-emerald-400" /> Board Themes & Piece Sets...</span>
         </button>
+
+        <div class="h-px bg-zinc-800 my-1 mx-2" />
+        <div class="px-3.5 py-1 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Audio & Visuals</div>
+
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('toggleSound'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap">
+            <Volume2 v-if="soundEnabled" class="w-4 h-4 shrink-0 text-emerald-400" />
+            <VolumeX v-else class="w-4 h-4 shrink-0 text-zinc-500" />
+            <span>Sound Effects {{ soundEnabled ? '(Enabled)' : '(Muted)' }}</span>
+          </span>
+          <Check v-if="soundEnabled" class="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+        </button>
+
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('toggleEvalBar'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap">
+            <BarChart3 class="w-4 h-4 shrink-0" :class="showEvalBar ? 'text-cyan-400' : 'text-zinc-500'" />
+            <span>Evaluation Gauge {{ showEvalBar ? '(Visible)' : '(Hidden)' }}</span>
+          </span>
+          <Check v-if="showEvalBar" class="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+        </button>
+
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('toggleThreatMode'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap">
+            <Eye class="w-4 h-4 shrink-0" :class="threatMode ? 'text-amber-400' : 'text-zinc-500'" />
+            <span>Threat / Spy Highlights {{ threatMode ? '(Active)' : '(Off)' }}</span>
+          </span>
+          <Check v-if="threatMode" class="w-3.5 h-3.5 text-amber-400 shrink-0" />
+        </button>
+
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('toggleBlindfold'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap">
+            <EyeOff class="w-4 h-4 shrink-0" :class="blindfold ? 'text-purple-400' : 'text-zinc-500'" />
+            <span>Blindfold Mode {{ blindfold ? '(Active)' : '(Off)' }}</span>
+          </span>
+          <Check v-if="blindfold" class="w-3.5 h-3.5 text-purple-400 shrink-0" />
+        </button>
+
         <div class="h-px bg-zinc-800 my-1 mx-2" />
         <div class="px-3.5 py-1 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Notation Style</div>
         <button

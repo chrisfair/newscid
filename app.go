@@ -17,10 +17,12 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"newscid/pkg/chess"
+	"newscid/pkg/chess960"
 	"newscid/pkg/database/scid"
 	"newscid/pkg/database/sciddriver"
 	"newscid/pkg/eco"
 	"newscid/pkg/engine"
+	"newscid/pkg/epd"
 	"newscid/pkg/gameexport"
 	"newscid/pkg/online"
 	"newscid/pkg/persona"
@@ -2354,6 +2356,35 @@ func (a *App) SaveExportFile(filePath, content string) error {
 		return fmt.Errorf("file path cannot be empty")
 	}
 	return os.WriteFile(filePath, []byte(content), 0644)
+}
+
+// ==========================================
+// Chess960 (Fischer Random Chess)
+// ==========================================
+
+// GetChess960Position generates the Chess960 position for a given index (0-959).
+func (a *App) GetChess960Position(id int) (*chess960.Position, error) {
+	return chess960.GeneratePosition(id)
+}
+
+// GenerateRandomChess960 returns a randomly rolled Chess960 starting position.
+func (a *App) GenerateRandomChess960() (*chess960.Position, error) {
+	pos := chess960.RandomPosition()
+	return pos, nil
+}
+
+// ==========================================
+// EPD (Extended Position Description)
+// ==========================================
+
+// ParseEPD parses an EPD string into structured fields with opcodes.
+func (a *App) ParseEPD(epdString string) (*epd.Record, error) {
+	return epd.Parse(epdString)
+}
+
+// ExportEPD formats a position and opcodes into standard EPD format.
+func (a *App) ExportEPD(fen string, opcodes map[string]string) (string, error) {
+	return epd.Format(fen, opcodes), nil
 }
 
 
