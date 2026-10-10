@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -68,10 +70,14 @@ type RepertoireCheckResult struct {
 	Alternatives []repertoire.RepertoireMove `json:"alternatives"`
 }
 
+// EventListener receives events emitted by App when running in server or mobile mode.
+type EventListener = func(eventName string, optionalData ...interface{})
+
 // App struct
 type App struct {
 	ctx             context.Context
 	mu              sync.RWMutex
+	eventListener   EventListener
 	db              *scid.Database
 	eco             *eco.Classifier
 	driver          *sciddriver.Driver
@@ -122,16 +128,87 @@ func NewApp() *App {
 	}
 }
 
-
 // startup is called when the app starts.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+}
+
+// SetEventListener attaches a callback to receive runtime events (for SSE / WebSockets).
+func (a *App) SetEventListener(l EventListener) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.eventListener = l
 }
 
 func (a *App) emitEvent(eventName string, optionalData ...interface{}) {
 	if a.ctx != nil && a.ctx.Value("events") != nil {
 		runtime.EventsEmit(a.ctx, eventName, optionalData...)
 	}
+	a.mu.RLock()
+	listener := a.eventListener
+	a.mu.RUnlock()
+	if listener != nil {
+		listener(eventName, optionalData...)
+	}
+}
+
+// DispatchRPC invokes a method on App by name with JSON-encoded parameters.
+// This allows full RPC communication over HTTP/WebSocket for mobile/Android/browser clients.
+func (a *App) DispatchRPC(method string, params []json.RawMessage) (interface{}, error) {
+	val := reflect.ValueOf(a)
+	m := val.MethodByName(method)
+	if !m.IsValid() {
+		return nil, fmt.Errorf("method not found: %s", method)
+	}
+
+	mType := m.Type()
+	numIn := mType.NumIn()
+
+	if mType.IsVariadic() {
+		if len(params) < numIn-1 {
+			return nil, fmt.Errorf("insufficient parameters for variadic method %s: expected at least %d, got %d", method, numIn-1, len(params))
+		}
+	} else if len(params) != numIn {
+		return nil, fmt.Errorf("parameter count mismatch for %s: expected %d, got %d", method, numIn, len(params))
+	}
+
+	inArgs := make([]reflect.Value, numIn)
+	for i := 0; i < numIn; i++ {
+		targetType := mType.In(i)
+		elemVal := reflect.New(targetType)
+		if i < len(params) && len(params[i]) > 0 && string(params[i]) != "null" {
+			if err := json.Unmarshal(params[i], elemVal.Interface()); err != nil {
+				return nil, fmt.Errorf("invalid argument %d for %s: %w", i, method, err)
+			}
+		}
+		inArgs[i] = elemVal.Elem()
+	}
+
+	out := m.Call(inArgs)
+	if len(out) == 0 {
+		return nil, nil
+	}
+
+	// If last return value implements error, inspect it
+	lastOut := out[len(out)-1]
+	if lastOut.Type().Implements(reflect.TypeOf((*error)(nil)).Elem()) {
+		if !lastOut.IsNil() {
+			return nil, lastOut.Interface().(error)
+		}
+		out = out[:len(out)-1]
+	}
+
+	if len(out) == 1 {
+		return out[0].Interface(), nil
+	} else if len(out) > 1 {
+		results := make([]interface{}, len(out))
+		for i, v := range out {
+			results[i] = v.Interface()
+		}
+		return results, nil
+	}
+
+	return nil, nil
 }
 
 // ==========================================

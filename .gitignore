@@ -3,8 +3,14 @@ build/bin/
 build/dist/
 build/staging/
 build/.cache/
-newscid
+/newscid
 coverage.out
+
+# Android Build Artifacts
+packaging/android/.gradle/
+packaging/android/build/
+packaging/android/app/build/
+packaging/android/app/src/main/assets/newscid-server-arm64
 
 # Dependencies & Web Assets
 node_modules/
