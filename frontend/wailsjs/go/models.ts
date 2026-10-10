@@ -2505,3 +2505,239 @@ export namespace epd {
 	}
 }
 
+export namespace imbalance {
+	export class PawnStructureStats {
+		doubledPawns: number;
+		isolatedPawns: number;
+		passedPawns: number;
+		maxPassedRank: number;
+
+		static createFrom(source: any = {}) {
+			return new PawnStructureStats(source);
+		}
+		constructor(source: any = {}) {
+			if ('string' === typeof source) source = JSON.parse(source);
+			this.doubledPawns = source["doubledPawns"];
+			this.isolatedPawns = source["isolatedPawns"];
+			this.passedPawns = source["passedPawns"];
+			this.maxPassedRank = source["maxPassedRank"];
+		}
+	}
+
+	export class SideEvaluation {
+		materialPoints: number;
+		hasBishopPair: boolean;
+		pawnStructure: PawnStructureStats;
+		kingSafety: number;
+		controlledTerritory: number;
+		openFilesControlled: number;
+
+		static createFrom(source: any = {}) {
+			return new SideEvaluation(source);
+		}
+		constructor(source: any = {}) {
+			if ('string' === typeof source) source = JSON.parse(source);
+			this.materialPoints = source["materialPoints"];
+			this.hasBishopPair = source["hasBishopPair"];
+			this.pawnStructure = this.convertValues(source["pawnStructure"], PawnStructureStats);
+			this.kingSafety = source["kingSafety"];
+			this.controlledTerritory = source["controlledTerritory"];
+			this.openFilesControlled = source["openFilesControlled"];
+		}
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+			if (!a) return a;
+			if (asMap) {
+				let res: any = {};
+				Object.keys(a).forEach(k => { res[k] = new classs(a[k]); });
+				return res;
+			}
+			return new classs(a);
+		}
+	}
+
+	export class Report {
+		fen: string;
+		white: SideEvaluation;
+		black: SideEvaluation;
+		materialDelta: number;
+		positionalSummary: string;
+
+		static createFrom(source: any = {}) {
+			return new Report(source);
+		}
+		constructor(source: any = {}) {
+			if ('string' === typeof source) source = JSON.parse(source);
+			this.fen = source["fen"];
+			this.white = this.convertValues(source["white"], SideEvaluation);
+			this.black = this.convertValues(source["black"], SideEvaluation);
+			this.materialDelta = source["materialDelta"];
+			this.positionalSummary = source["positionalSummary"];
+		}
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+			if (!a) return a;
+			if (asMap) {
+				let res: any = {};
+				Object.keys(a).forEach(k => { res[k] = new classs(a[k]); });
+				return res;
+			}
+			return new classs(a);
+		}
+	}
+}
+
+export namespace explainer {
+	export class Explanation {
+		moveUci: string;
+		moveSan: string;
+		assessment: string;
+		summary: string;
+		tacticalMotifs: string[];
+		strategicConcepts: string[];
+		detailedText: string;
+		bestAlternative?: string;
+
+		static createFrom(source: any = {}) {
+			return new Explanation(source);
+		}
+		constructor(source: any = {}) {
+			if ('string' === typeof source) source = JSON.parse(source);
+			this.moveUci = source["moveUci"];
+			this.moveSan = source["moveSan"];
+			this.assessment = source["assessment"];
+			this.summary = source["summary"];
+			this.tacticalMotifs = source["tacticalMotifs"] || [];
+			this.strategicConcepts = source["strategicConcepts"] || [];
+			this.detailedText = source["detailedText"];
+			this.bestAlternative = source["bestAlternative"];
+		}
+	}
+}
+
+export namespace blundervault {
+	export class Puzzle {
+		id: string;
+		fen: string;
+		playerName: string;
+		userColor: string;
+		playedMove: string;
+		bestMove: string;
+		deltaCp: number;
+		event: string;
+		date: string;
+		explanation?: string;
+		repetitions: number;
+		intervalDays: number;
+		easeFactor: number;
+		nextReview: string;
+		lastReview: string;
+		status: string;
+
+		static createFrom(source: any = {}) {
+			return new Puzzle(source);
+		}
+		constructor(source: any = {}) {
+			if ('string' === typeof source) source = JSON.parse(source);
+			this.id = source["id"];
+			this.fen = source["fen"];
+			this.playerName = source["playerName"];
+			this.userColor = source["userColor"];
+			this.playedMove = source["playedMove"];
+			this.bestMove = source["bestMove"];
+			this.deltaCp = source["deltaCp"];
+			this.event = source["event"];
+			this.date = source["date"];
+			this.explanation = source["explanation"];
+			this.repetitions = source["repetitions"];
+			this.intervalDays = source["intervalDays"];
+			this.easeFactor = source["easeFactor"];
+			this.nextReview = source["nextReview"];
+			this.lastReview = source["lastReview"];
+			this.status = source["status"];
+		}
+	}
+}
+
+export namespace scout {
+	export class GameRecord {
+		total: number;
+		wins: number;
+		draws: number;
+		losses: number;
+		winRate: number;
+
+		static createFrom(source: any = {}) {
+			return new GameRecord(source);
+		}
+		constructor(source: any = {}) {
+			if ('string' === typeof source) source = JSON.parse(source);
+			this.total = source["total"];
+			this.wins = source["wins"];
+			this.draws = source["draws"];
+			this.losses = source["losses"];
+			this.winRate = source["winRate"];
+		}
+	}
+
+	export class LinePerformance {
+		eco: string;
+		name?: string;
+		games: number;
+		wins: number;
+		losses: number;
+		draws: number;
+		winRate: number;
+
+		static createFrom(source: any = {}) {
+			return new LinePerformance(source);
+		}
+		constructor(source: any = {}) {
+			if ('string' === typeof source) source = JSON.parse(source);
+			this.eco = source["eco"];
+			this.name = source["name"];
+			this.games = source["games"];
+			this.wins = source["wins"];
+			this.losses = source["losses"];
+			this.draws = source["draws"];
+			this.winRate = source["winRate"];
+		}
+	}
+
+	export class Report {
+		playerName: string;
+		totalGames: number;
+		whiteRecord: GameRecord;
+		blackRecord: GameRecord;
+		topOpeningsAsWhite: LinePerformance[];
+		topOpeningsAsBlack: LinePerformance[];
+		sharpestLines: LinePerformance[];
+		weakestLines: LinePerformance[];
+		repertoireRecommendations: string[];
+
+		static createFrom(source: any = {}) {
+			return new Report(source);
+		}
+		constructor(source: any = {}) {
+			if ('string' === typeof source) source = JSON.parse(source);
+			this.playerName = source["playerName"];
+			this.totalGames = source["totalGames"];
+			this.whiteRecord = this.convertValues(source["whiteRecord"], GameRecord);
+			this.blackRecord = this.convertValues(source["blackRecord"], GameRecord);
+			this.topOpeningsAsWhite = this.convertValues(source["topOpeningsAsWhite"], LinePerformance);
+			this.topOpeningsAsBlack = this.convertValues(source["topOpeningsAsBlack"], LinePerformance);
+			this.sharpestLines = this.convertValues(source["sharpestLines"], LinePerformance);
+			this.weakestLines = this.convertValues(source["weakestLines"], LinePerformance);
+			this.repertoireRecommendations = source["repertoireRecommendations"] || [];
+		}
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+			if (!a) return a;
+			if (asMap) {
+				let res: any = {};
+				Object.keys(a).forEach(k => { res[k] = new classs(a[k]); });
+				return res;
+			}
+			return new classs(a);
+		}
+	}
+}
+
+

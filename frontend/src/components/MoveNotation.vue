@@ -15,7 +15,10 @@ import {
   Tag,
   Check,
   X,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Sparkles,
+  Clock,
+  Zap
 } from '@lucide/vue'
 import { useNotation, formatMoveNotation, type NotationStyle } from '../utils/notation'
 
@@ -36,6 +39,9 @@ export interface FlatMove {
   nags?: number[]
   variationLevel: number
   variations?: VariationLine[]
+  clock?: string
+  emt?: string
+  classification?: 'brilliant' | 'great' | 'best' | 'excellent' | 'inaccuracy' | 'mistake' | 'blunder' | 'miss'
 }
 
 const props = withDefaults(defineProps<{
@@ -43,6 +49,8 @@ const props = withDefaults(defineProps<{
   currentPly: number
   isPlaying?: boolean
   result?: string
+  whiteAccuracy?: number
+  blackAccuracy?: number
 }>(), {
   moves: () => [],
   currentPly: 0,
@@ -63,6 +71,7 @@ const emit = defineEmits<{
   (e: 'setComment', ply: number, comment: string): void
   (e: 'promoteVariation', ply: number, varIdx: number): void
   (e: 'deleteVariation', ply: number, varIdx: number): void
+  (e: 'explainMove', ply: number): void
 }>()
 
 const { currentStyle, setNotationStyle, options: notationOptions } = useNotation()
@@ -204,6 +213,39 @@ function formatMove(m?: FlatMove): string {
   if (!m) return ''
   return formatMoveNotation(m.san, m.uci, m.isWhite, currentStyle.value)
 }
+
+function getClassificationBadge(m: FlatMove | undefined) {
+  if (!m) return null
+  if (m.classification) {
+    switch (m.classification) {
+      case 'brilliant':
+        return { symbol: '!!', label: 'Brilliant', class: 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' }
+      case 'great':
+        return { symbol: '!', label: 'Great', class: 'bg-teal-500/20 text-teal-300 border border-teal-500/40' }
+      case 'best':
+        return { symbol: '★', label: 'Best', class: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' }
+      case 'excellent':
+        return { symbol: '✓', label: 'Excellent', class: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' }
+      case 'inaccuracy':
+        return { symbol: '?!', label: 'Inaccuracy', class: 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40' }
+      case 'mistake':
+        return { symbol: '?', label: 'Mistake', class: 'bg-orange-500/20 text-orange-300 border border-orange-500/40' }
+      case 'blunder':
+        return { symbol: '??', label: 'Blunder', class: 'bg-red-500/20 text-red-300 border border-red-500/40' }
+      case 'miss':
+        return { symbol: '✕', label: 'Miss', class: 'bg-purple-500/20 text-purple-300 border border-purple-500/40' }
+    }
+  }
+  if (m.nags && m.nags.length > 0) {
+    if (m.nags.includes(3)) return { symbol: '!!', label: 'Brilliant', class: 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' }
+    if (m.nags.includes(1)) return { symbol: '!', label: 'Good move', class: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' }
+    if (m.nags.includes(4)) return { symbol: '??', label: 'Blunder', class: 'bg-red-500/20 text-red-300 border border-red-500/40' }
+    if (m.nags.includes(2)) return { symbol: '?', label: 'Mistake', class: 'bg-orange-500/20 text-orange-300 border border-orange-500/40' }
+    if (m.nags.includes(6)) return { symbol: '?!', label: 'Inaccuracy', class: 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40' }
+    if (m.nags.includes(5)) return { symbol: '!?', label: 'Interesting', class: 'bg-blue-500/20 text-blue-300 border border-blue-500/40' }
+  }
+  return null
+}
 </script>
 
 <template>
@@ -335,9 +377,19 @@ function formatMove(m?: FlatMove): string {
         <span>Clear</span>
       </button>
 
+      <!-- Explain Move with Natural Language Engine -->
+      <button
+        class="ml-auto px-2 py-1 rounded-lg text-xs font-medium bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-colors flex items-center gap-1"
+        title="Explain move concept and tactical ideas"
+        @click="emit('explainMove', currentPly)"
+      >
+        <Sparkles class="w-3.5 h-3.5 text-amber-400" />
+        <span>Explain Move</span>
+      </button>
+
       <!-- Add / Edit Comment Button -->
       <button
-        class="ml-auto px-2 py-1 rounded-lg text-xs font-medium bg-zinc-800/80 hover:bg-zinc-700/80 text-zinc-200 transition-colors flex items-center gap-1"
+        class="px-2 py-1 rounded-lg text-xs font-medium bg-zinc-800/80 hover:bg-zinc-700/80 text-zinc-200 transition-colors flex items-center gap-1"
         :class="currentMove?.comment ? 'text-sky-300 border border-sky-500/30' : ''"
         :title="currentMove?.comment ? 'Edit move comment' : 'Add comment to move'"
         @click="openCommentModal()"
@@ -345,6 +397,34 @@ function formatMove(m?: FlatMove): string {
         <MessageSquare class="w-3.5 h-3.5 text-sky-400" />
         <span>{{ currentMove?.comment ? 'Edit Comment' : 'Add Comment' }}</span>
       </button>
+    </div>
+
+    <!-- Accuracy Story Bar (if accuracy metrics present) -->
+    <div
+      v-if="whiteAccuracy !== undefined || blackAccuracy !== undefined"
+      class="accuracy-bar bg-zinc-950/90 border-b border-zinc-800/80 px-3 py-1.5 flex items-center justify-between text-xs"
+    >
+      <div class="flex items-center gap-2 flex-1">
+        <span class="w-2.5 h-2.5 rounded-full bg-white border border-zinc-500 shrink-0" />
+        <span class="text-zinc-300 font-bold font-mono">{{ whiteAccuracy ?? '--' }}%</span>
+        <div class="flex-1 bg-zinc-800 rounded-full h-1.5 overflow-hidden max-w-[80px]">
+          <div
+            class="bg-emerald-500 h-full rounded-full transition-all duration-300"
+            :style="{ width: `${whiteAccuracy ?? 50}%` }"
+          />
+        </div>
+      </div>
+      <div class="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider px-2">Accuracy</div>
+      <div class="flex items-center gap-2 flex-1 justify-end">
+        <div class="flex-1 bg-zinc-800 rounded-full h-1.5 overflow-hidden max-w-[80px]">
+          <div
+            class="bg-emerald-500 h-full rounded-full transition-all duration-300 ml-auto"
+            :style="{ width: `${blackAccuracy ?? 50}%` }"
+          />
+        </div>
+        <span class="text-zinc-300 font-bold font-mono">{{ blackAccuracy ?? '--' }}%</span>
+        <span class="w-2.5 h-2.5 rounded-full bg-zinc-900 border border-zinc-600 shrink-0" />
+      </div>
     </div>
 
     <!-- Moves Scrollable Container -->
@@ -378,11 +458,21 @@ function formatMove(m?: FlatMove): string {
               >
                 <span>{{ formatMove(pair.white) }}</span>
                 <span
+                  v-if="getClassificationBadge(pair.white)"
+                  :class="['px-1 py-0.2 rounded text-[10px] font-bold font-sans', getClassificationBadge(pair.white)!.class]"
+                  :title="getClassificationBadge(pair.white)!.label"
+                >
+                  {{ getClassificationBadge(pair.white)!.symbol }}
+                </span>
+                <span
                   v-for="nag in pair.white.nags"
                   :key="nag"
                   class="nag text-amber-400 font-bold ml-0.5 text-xs"
                 >
                   {{ formatNAG(nag) }}
+                </span>
+                <span v-if="pair.white.clock" class="text-[10px] text-zinc-400 font-mono ml-0.5 opacity-75" :title="`Clock: ${pair.white.clock}`">
+                  {{ pair.white.clock }}
                 </span>
                 <span v-if="pair.white.comment" class="w-1.5 h-1.5 rounded-full bg-sky-400 ml-1 inline-block" title="Has comment" />
               </button>
@@ -455,11 +545,21 @@ function formatMove(m?: FlatMove): string {
               >
                 <span>{{ formatMove(pair.black) }}</span>
                 <span
+                  v-if="getClassificationBadge(pair.black)"
+                  :class="['px-1 py-0.2 rounded text-[10px] font-bold font-sans', getClassificationBadge(pair.black)!.class]"
+                  :title="getClassificationBadge(pair.black)!.label"
+                >
+                  {{ getClassificationBadge(pair.black)!.symbol }}
+                </span>
+                <span
                   v-for="nag in pair.black.nags"
                   :key="nag"
                   class="nag text-amber-400 font-bold ml-0.5 text-xs"
                 >
                   {{ formatNAG(nag) }}
+                </span>
+                <span v-if="pair.black.clock" class="text-[10px] text-zinc-400 font-mono ml-0.5 opacity-75" :title="`Clock: ${pair.black.clock}`">
+                  {{ pair.black.clock }}
                 </span>
                 <span v-if="pair.black.comment" class="w-1.5 h-1.5 rounded-full bg-sky-400 ml-1 inline-block" title="Has comment" />
               </button>

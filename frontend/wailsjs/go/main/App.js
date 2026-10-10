@@ -510,3 +510,32 @@ export function ExportEPD(arg1) {
   return window['go']['main']['App']['ExportEPD'](arg1);
 }
 
+export function GetPositionalImbalance(arg1) {
+  return window['go']['main']['App']['GetPositionalImbalance'](arg1);
+}
+
+export function ExplainMove(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['ExplainMove'](arg1, arg2, arg3, arg4);
+}
+
+export function GetDueBlunderPuzzles() {
+  return window['go']['main']['App']['GetDueBlunderPuzzles']();
+}
+
+export function GetAllBlunderPuzzles() {
+  return window['go']['main']['App']['GetAllBlunderPuzzles']();
+}
+
+export function RecordBlunderReview(arg1, arg2) {
+  return window['go']['main']['App']['RecordBlunderReview'](arg1, arg2);
+}
+
+export function AddBlunderToVault(arg1) {
+  return window['go']['main']['App']['AddBlunderToVault'](arg1);
+}
+
+export function GenerateOpponentScoutingReport(arg1) {
+  return window['go']['main']['App']['GenerateOpponentScoutingReport'](arg1);
+}
+
+

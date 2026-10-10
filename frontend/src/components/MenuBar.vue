@@ -44,7 +44,10 @@ import {
   Volume2,
   VolumeX,
   Dices,
-  Target
+  Target,
+  Shield,
+  Maximize2,
+  Brain
 } from '@lucide/vue'
 import { PieceSetOption, BoardThemeOption } from './HeaderBar.vue'
 import { useNotation, type NotationStyle } from '../utils/notation'
@@ -63,6 +66,7 @@ const props = defineProps<{
   blindfold?: boolean
   threatMode?: boolean
   showEvalBar?: boolean
+  zenMode?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -121,6 +125,11 @@ const emit = defineEmits<{
   (e: 'toggleEvalBar'): void
   (e: 'chess960'): void
   (e: 'coordinateTrainer'): void
+  (e: 'commandPalette'): void
+  (e: 'blunderVault'): void
+  (e: 'opponentScout'): void
+  (e: 'toggleZenMode'): void
+  (e: 'explainMove'): void
 }>()
 
 
@@ -530,6 +539,25 @@ onUnmounted(() => {
           <span class="flex items-center gap-2.5 whitespace-nowrap"><BarChart3 class="w-4 h-4 shrink-0 text-emerald-400" /> Database Demographics & Rating Tracker...</span>
           <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+D</span>
         </button>
+        <div class="h-px bg-zinc-800 my-1 mx-2" />
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('explainMove'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Sparkles class="w-4 h-4 shrink-0 text-amber-400" /> Explain Current Move (Concept Engine)...</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('blunderVault'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Brain class="w-4 h-4 shrink-0 text-rose-400" /> Personal Blunder Vault (SM-2 Trainer)...</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('opponentScout'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Shield class="w-4 h-4 shrink-0 text-cyan-400" /> Opponent Scouting Card & Prep Matrix...</span>
+        </button>
       </div>
     </div>
 
@@ -693,6 +721,28 @@ onUnmounted(() => {
         </button>
 
         <div class="h-px bg-zinc-800 my-1 mx-2" />
+        <div class="px-3.5 py-1 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Productivity & Focus</div>
+
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('commandPalette'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Search class="w-4 h-4 shrink-0 text-emerald-400" /> Universal Command Palette...</span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+K</span>
+        </button>
+
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('toggleZenMode'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap">
+            <Maximize2 class="w-4 h-4 shrink-0" :class="zenMode ? 'text-emerald-400' : 'text-zinc-500'" />
+            <span>Zen / Study Mode {{ zenMode ? '(Active)' : '(Off)' }}</span>
+          </span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Z</span>
+        </button>
+
+        <div class="h-px bg-zinc-800 my-1 mx-2" />
         <div class="px-3.5 py-1 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Notation Style</div>
         <button
           v-for="opt in notationOptions"
@@ -753,6 +803,17 @@ onUnmounted(() => {
         </button>
       </div>
     </div>
+
+    <!-- Command Palette Quick Trigger -->
+    <button
+      class="ml-auto mr-2 px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-zinc-200 text-xs flex items-center gap-2 cursor-pointer transition-colors shadow-xs"
+      title="Universal Command Palette & Spotlight (Ctrl+K)"
+      @click="emit('commandPalette')"
+    >
+      <Search class="w-3.5 h-3.5 text-emerald-400" />
+      <span class="hidden sm:inline text-[11px]">Command Palette</span>
+      <kbd class="px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] font-mono text-zinc-400 border border-zinc-700">Ctrl+K</kbd>
+    </button>
 
     <!-- TRIAL MODE BADGE INDICATOR -->
     <div v-if="trialMode" class="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[11px] font-semibold animate-pulse">
