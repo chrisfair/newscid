@@ -3,6 +3,7 @@ package scid
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -51,9 +52,13 @@ type SearchCriteria struct {
 	BlackEloMax   int    `json:"blackEloMax,omitempty"`
 	MinMoves      int    `json:"minMoves,omitempty"`
 	MaxMoves      int    `json:"maxMoves,omitempty"`
-	HasVariations bool   `json:"hasVariations,omitempty"`
-	IgnoreDeleted bool   `json:"ignoreDeleted,omitempty"`
-	OnlyDeleted   bool   `json:"onlyDeleted,omitempty"`
+	HasVariations bool              `json:"hasVariations,omitempty"`
+	IgnoreDeleted bool              `json:"ignoreDeleted,omitempty"`
+	OnlyDeleted   bool              `json:"onlyDeleted,omitempty"`
+	Material      *MaterialCriteria `json:"material,omitempty"`
+	PawnStructure string            `json:"pawnStructure,omitempty"`
+	CommentText   string            `json:"commentText,omitempty"`
+	Annotator     string            `json:"annotator,omitempty"`
 }
 
 // Database represents an open SCID database.
@@ -244,7 +249,7 @@ func parseECO(s string) uint16 {
 }
 
 // matchesCriteria checks if an entry matches the given search criteria.
-func (db *Database) matchesCriteria(entry *IndexEntry, criteria *SearchCriteria) bool {
+func (db *Database) matchesCriteria(gameID int, entry *IndexEntry, criteria *SearchCriteria) bool {
 	// 1. Deleted check
 	isDeleted := (entry.Flags & FlagDelete) != 0
 	if criteria.OnlyDeleted && !isDeleted {
@@ -396,6 +401,72 @@ func (db *Database) matchesCriteria(entry *IndexEntry, criteria *SearchCriteria)
 		}
 	}
 
+	// 9. Advanced Filters (Material, Pawn Structure, Annotations)
+	if (criteria.Material != nil && criteria.Material.IsActive()) || criteria.PawnStructure != "" || criteria.CommentText != "" || criteria.Annotator != "" {
+		game, err := db.getGameLocked(gameID)
+		if err != nil || game == nil {
+			return false
+		}
+
+		// Text/Annotation check
+		if criteria.CommentText != "" || criteria.Annotator != "" {
+			if !MatchesGameAnnotation(game, criteria.CommentText, criteria.Annotator) {
+				return false
+			}
+		}
+
+		// Material and/or Pawn Structure check
+		hasMat := criteria.Material != nil && criteria.Material.IsActive()
+		hasPawn := strings.TrimSpace(criteria.PawnStructure) != ""
+
+		if hasMat || hasPawn {
+			b := chess.NewBoard()
+			if game.StartFEN != "" && game.StartFEN != chess.StartingFEN {
+				if parsed, err := chess.ParseFEN(game.StartFEN); err == nil {
+					b = parsed
+				}
+			}
+
+			matchedAnyPly := false
+			matchEndOnly := hasMat && criteria.Material.MatchEndOnly
+
+			// Check starting position
+			if !matchEndOnly {
+				matOk := !hasMat || criteria.Material.MatchesBoard(b)
+				pawnOk := !hasPawn || MatchesPawnStructure(b, criteria.PawnStructure)
+				if matOk && pawnOk {
+					matchedAnyPly = true
+				}
+			}
+
+			curr := game.RootMove
+			for !matchedAnyPly && curr != nil {
+				b.MakeMove(curr.Move)
+				if !matchEndOnly {
+					matOk := !hasMat || criteria.Material.MatchesBoard(b)
+					pawnOk := !hasPawn || MatchesPawnStructure(b, criteria.PawnStructure)
+					if matOk && pawnOk {
+						matchedAnyPly = true
+						break
+					}
+				}
+				curr = curr.Next
+			}
+
+			if matchEndOnly {
+				matOk := !hasMat || criteria.Material.MatchesBoard(b)
+				pawnOk := !hasPawn || MatchesPawnStructure(b, criteria.PawnStructure)
+				if matOk && pawnOk {
+					matchedAnyPly = true
+				}
+			}
+
+			if !matchedAnyPly {
+				return false
+			}
+		}
+	}
+
 	return true
 }
 
@@ -405,8 +476,8 @@ func (db *Database) CountMatches(criteria SearchCriteria) int {
 	defer db.mu.RUnlock()
 
 	count := 0
-	for _, entry := range db.Entries {
-		if db.matchesCriteria(entry, &criteria) {
+	for i, entry := range db.Entries {
+		if db.matchesCriteria(i+1, entry, &criteria) {
 			count++
 		}
 	}
@@ -420,7 +491,7 @@ func (db *Database) GetGameSummaries(offset, limit int, criteria SearchCriteria)
 
 	var matched []*GameSummary
 	for i, entry := range db.Entries {
-		if !db.matchesCriteria(entry, &criteria) {
+		if !db.matchesCriteria(i+1, entry, &criteria) {
 			continue
 		}
 
@@ -459,7 +530,10 @@ func (db *Database) GetGameSummaries(offset, limit int, criteria SearchCriteria)
 func (db *Database) GetGame(gameNum int) (*chess.Game, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
+	return db.getGameLocked(gameNum)
+}
 
+func (db *Database) getGameLocked(gameNum int) (*chess.Game, error) {
 	if gameNum < 1 || gameNum > len(db.Entries) {
 		return nil, fmt.Errorf("game %d out of range", gameNum)
 	}
@@ -614,6 +688,90 @@ func (db *Database) DeleteGame(gameNum int, deleted bool) error {
 	}
 	return WriteIndexEntry(fSi, entry)
 }
+
+// UpdateGameTags updates game metadata tags and writes the updated index entry and namebase to disk.
+func (db *Database) UpdateGameTags(gameNum int, tags map[string]string) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if !db.IsOpen {
+		return fmt.Errorf("database not open")
+	}
+
+	if gameNum < 1 || gameNum > len(db.Entries) {
+		return fmt.Errorf("game %d out of range (total %d)", gameNum, len(db.Entries))
+	}
+
+	entry := db.Entries[gameNum-1]
+	namebaseChanged := false
+
+	if white, ok := tags["White"]; ok && strings.TrimSpace(white) != "" {
+		entry.WhiteID = db.Names.AddName(NamePlayer, white)
+		namebaseChanged = true
+	}
+	if black, ok := tags["Black"]; ok && strings.TrimSpace(black) != "" {
+		entry.BlackID = db.Names.AddName(NamePlayer, black)
+		namebaseChanged = true
+	}
+	if event, ok := tags["Event"]; ok && strings.TrimSpace(event) != "" {
+		entry.EventID = db.Names.AddName(NameEvent, event)
+		namebaseChanged = true
+	}
+	if site, ok := tags["Site"]; ok && strings.TrimSpace(site) != "" {
+		entry.SiteID = db.Names.AddName(NameSite, site)
+		namebaseChanged = true
+	}
+	if round, ok := tags["Round"]; ok && strings.TrimSpace(round) != "" {
+		entry.RoundID = db.Names.AddName(NameRound, round)
+		namebaseChanged = true
+	}
+	if date, ok := tags["Date"]; ok {
+		entry.Date = date
+	}
+	if res, ok := tags["Result"]; ok && res != "" {
+		entry.Result = chess.Result(res)
+	}
+	if wEloStr, ok := tags["WhiteElo"]; ok {
+		if elo, err := strconv.Atoi(strings.TrimSpace(wEloStr)); err == nil && elo >= 0 {
+			entry.WhiteElo = uint16(elo)
+		}
+	}
+	if bEloStr, ok := tags["BlackElo"]; ok {
+		if elo, err := strconv.Atoi(strings.TrimSpace(bEloStr)); err == nil && elo >= 0 {
+			entry.BlackElo = uint16(elo)
+		}
+	}
+	if ecoStr, ok := tags["ECO"]; ok {
+		entry.EcoCode = parseECO(ecoStr)
+	}
+
+	// Persist updated NameBase if new names were added
+	if namebaseChanged && db.BasePath != "" {
+		sn4Path := db.BasePath + ".sn4"
+		if err := db.Names.WriteToFile(sn4Path); err != nil {
+			return fmt.Errorf("saving namebase: %w", err)
+		}
+	}
+
+	// Persist updated IndexEntry to .si4
+	if db.BasePath != "" {
+		si4Path := db.BasePath + ".si4"
+		fSi, err := os.OpenFile(si4Path, os.O_RDWR, 0644)
+		if err != nil {
+			return err
+		}
+		defer fSi.Close()
+
+		entryOffset := int64(IndexHeaderSize + (gameNum-1)*IndexEntrySize)
+		if _, err := fSi.Seek(entryOffset, os.SEEK_SET); err != nil {
+			return err
+		}
+		return WriteIndexEntry(fSi, entry)
+	}
+
+	return nil
+}
+
 
 func gameResult(game *chess.Game) chess.Result {
 	if game == nil {

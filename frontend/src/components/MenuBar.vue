@@ -32,7 +32,10 @@ import {
   Bot,
   Check,
   Users,
-  ExternalLink
+  ExternalLink,
+  BarChart3,
+  FileEdit,
+  Download
 } from '@lucide/vue'
 import { PieceSetOption, BoardThemeOption } from './HeaderBar.vue'
 import { useNotation, type NotationStyle } from '../utils/notation'
@@ -91,6 +94,14 @@ const emit = defineEmits<{
   (e: 'simulatePlayer'): void
   (e: 'playerPersonas'): void
   (e: 'showCrosstable'): void
+  (e: 'ecoBrowser'): void
+  (e: 'guessTheMove'): void
+  (e: 'databaseStats'): void
+  (e: 'editTags'): void
+  (e: 'twicDownloader'): void
+  (e: 'engineMatch'): void
+  (e: 'exportGame'): void
+  (e: 'standardizeNames'): void
 }>()
 
 
@@ -223,6 +234,13 @@ onUnmounted(() => {
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => emit('exportGame'))"
+        >
+          <span class="flex items-center gap-2"><Download class="w-3.5 h-3.5 text-emerald-400" /> Export Game (HTML / LaTeX)...</span>
+          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+Shift+E</span>
+        </button>
+        <button
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
           @click="selectItem(() => emit('copyFEN'))"
         >
           <span class="flex items-center gap-2"><Copy class="w-3.5 h-3.5 text-zinc-400" /> Copy FEN to Clipboard</span>
@@ -318,6 +336,13 @@ onUnmounted(() => {
         >
           <span class="flex items-center gap-2"><Save class="w-3.5 h-3.5 text-blue-400" /> Save Current Game</span>
           <span class="text-[10px] text-zinc-500 font-mono">Ctrl+S</span>
+        </button>
+        <button
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => emit('editTags'))"
+        >
+          <span class="flex items-center gap-2"><FileEdit class="w-3.5 h-3.5 text-emerald-400" /> Edit Game Headers...</span>
+          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+T</span>
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
@@ -441,10 +466,23 @@ onUnmounted(() => {
           <span class="flex items-center gap-2"><Wrench class="w-3.5 h-3.5 text-emerald-400" /> Database Maintenance & Tools...</span>
         </button>
         <button
+          v-if="dbName"
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => emit('standardizeNames'))"
+        >
+          <span class="flex items-center gap-2"><Sparkles class="w-3.5 h-3.5 text-purple-400" /> Standardize Player Names (Spellcheck)...</span>
+        </button>
+        <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
           @click="selectItem(() => emit('onlineSync'))"
         >
           <span class="flex items-center gap-2"><Globe class="w-3.5 h-3.5 text-cyan-400" /> Online Account Sync (Chess.com & Lichess)...</span>
+        </button>
+        <button
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => emit('twicDownloader'))"
+        >
+          <span class="flex items-center gap-2"><Download class="w-3.5 h-3.5 text-cyan-400" /> Download TWIC Bulletins...</span>
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
@@ -458,6 +496,20 @@ onUnmounted(() => {
         >
           <span class="flex items-center gap-2"><Trophy class="w-3.5 h-3.5 text-amber-400" /> Tournament Crosstables & Standings...</span>
           <span class="text-[10px] text-zinc-500 font-mono">F7</span>
+        </button>
+        <button
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => emit('ecoBrowser'))"
+        >
+          <span class="flex items-center gap-2"><BookOpen class="w-3.5 h-3.5 text-emerald-400" /> ECO Opening Classification Browser...</span>
+          <span class="text-[10px] text-zinc-500 font-mono">F6</span>
+        </button>
+        <button
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => emit('databaseStats'))"
+        >
+          <span class="flex items-center gap-2"><BarChart3 class="w-3.5 h-3.5 text-emerald-400" /> Database Demographics & Rating Tracker...</span>
+          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+D</span>
         </button>
       </div>
     </div>
@@ -485,6 +537,12 @@ onUnmounted(() => {
         </button>
         <button
           class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => emit('engineMatch'))"
+        >
+          <span class="flex items-center gap-2"><Swords class="w-3.5 h-3.5 text-cyan-400" /> Engine vs Engine Match...</span>
+        </button>
+        <button
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
           @click="selectItem(() => emit('simulatePlayer'))"
         >
           <span class="flex items-center gap-2"><Bot class="w-3.5 h-3.5 text-purple-400" /> Simulate Database Player (Sparring)...</span>
@@ -500,6 +558,13 @@ onUnmounted(() => {
           @click="selectItem(() => emit('tacticsTrainer'))"
         >
           <span class="flex items-center gap-2"><Award class="w-3.5 h-3.5 text-blue-400" /> Tactics Puzzle Trainer...</span>
+        </button>
+        <button
+          class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+          @click="selectItem(() => emit('guessTheMove'))"
+        >
+          <span class="flex items-center gap-2"><Award class="w-3.5 h-3.5 text-amber-400" /> Guess the Move (Solitaire Chess)...</span>
+          <span class="text-[10px] text-zinc-500 font-mono">Ctrl+G</span>
         </button>
         <div class="h-px bg-zinc-800 my-1" />
         <button

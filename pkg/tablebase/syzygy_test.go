@@ -1,0 +1,117 @@
+package tablebase
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestCountPieces(t *testing.T) {
+	// Starting position (32 pieces)
+	assert.Equal(t, 32, CountPieces("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"))
+
+	// Endgame KPK (3 pieces)
+	assert.Equal(t, 3, CountPieces("8/8/8/4k3/8/8/4P3/4K3 w - - 0 1"))
+
+	// Empty string
+	assert.Equal(t, 0, CountPieces(""))
+}
+
+func TestSyzygyProbeMock(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		fen := r.URL.Query().Get("fen")
+		if fen == "4k3/8/8/8/8/8/4P3/4K3 w - - 0 1" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{
+				"checkmate": false,
+				"stalemate": false,
+				"dtz": 14,
+				"dtm": 18,
+				"category": "win",
+				"moves": [
+					{"uci": "e2e4", "san": "e4", "dtz": -13, "dtm": -17, "category": "loss", "zeroing": true}
+				]
+			}`))
+			return
+		}
+
+		if fen == "draw_fen" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{
+				"checkmate": false,
+				"stalemate": false,
+				"dtz": 0,
+				"dtm": 0,
+				"category": "draw",
+				"moves": [
+					{"uci": "e1f1", "san": "Kf1", "dtz": 0, "dtm": 0, "category": "draw", "zeroing": false}
+				]
+			}`))
+			return
+		}
+
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	client := NewClient()
+	client.baseURL = server.URL
+
+	// 1. Probe winning position
+	fenWin := "4k3/8/8/8/8/8/4P3/4K3 w - - 0 1"
+	res, err := client.Probe(fenWin)
+	require.NoError(t, err)
+	assert.Equal(t, "win", res.Category)
+	assert.Equal(t, 14, res.DTZ)
+	assert.Equal(t, 18, res.DTM)
+	assert.Contains(t, res.SummaryText, "Win in 18")
+	assert.Contains(t, res.SummaryText, "Best: e4")
+	require.Len(t, res.Moves, 1)
+	assert.Equal(t, "e4", res.Moves[0].SAN)
+
+	// 2. Cache test (second probe should hit cache, callCount remains 1)
+	resCached, err := client.Probe(fenWin)
+	require.NoError(t, err)
+	assert.Equal(t, res, resCached)
+	assert.Equal(t, 1, callCount)
+
+	// 3. Draw position
+	resDraw, err := client.Probe("draw_fen")
+	require.NoError(t, err)
+	assert.Equal(t, "draw", resDraw.Category)
+	assert.Contains(t, resDraw.SummaryText, "Tablebase Draw")
+
+	// 4. Over piece limit (> 7 pieces)
+	_, err = client.Probe("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "tablebases support up to 7 pieces")
+
+	// 5. Empty FEN
+	_, err = client.Probe("")
+	assert.Error(t, err)
+}
+
+func TestFormatSummaryCheckmateAndStalemate(t *testing.T) {
+	cmRes := &TablebaseResult{
+		Checkmate: true,
+	}
+	assert.Equal(t, "Checkmate", formatSummary(cmRes))
+
+	smRes := &TablebaseResult{
+		Stalemate: true,
+	}
+	assert.Equal(t, "Stalemate (Draw)", formatSummary(smRes))
+
+	lossRes := &TablebaseResult{
+		Category: "loss",
+		DTZ:      -10,
+	}
+	assert.Contains(t, formatSummary(lossRes), "Loss in 10 moves (DTZ)")
+}

@@ -42,4 +42,51 @@ func TestLoadScidECOFile(t *testing.T) {
 	entry := c.Classify([]string{"e4", "e5", "Nf3", "Nc6", "Bb5"})
 	assert.NotEmpty(t, entry.Code)
 	assert.NotEmpty(t, entry.Name)
+
+	sections := c.GetSections()
+	assert.Len(t, sections, 5)
+	for _, s := range sections {
+		assert.Greater(t, s.Count, 0)
+	}
+
+	// Search by query
+	sicilians := c.Search("B", "Najdorf", 10)
+	assert.NotEmpty(t, sicilians)
+	assert.Equal(t, "B", string(sicilians[0].Code[0]))
+
+	all := c.GetAllEntries()
+	assert.Greater(t, len(all), 100)
+}
+
+func TestECOSearchAndSections(t *testing.T) {
+	c := eco.NewClassifier()
+
+	sections := c.GetSections()
+	assert.Len(t, sections, 5)
+	assert.Equal(t, "A", sections[0].Letter)
+	assert.Equal(t, "B", sections[1].Letter)
+	assert.Equal(t, "C", sections[2].Letter)
+	assert.Equal(t, "D", sections[3].Letter)
+	assert.Equal(t, "E", sections[4].Letter)
+
+	// Search in section B
+	bRes := c.Search("B", "Sicilian", 5)
+	require.NotEmpty(t, bRes)
+	assert.Contains(t, bRes[0].Name, "Sicilian")
+
+	// Search all sections
+	allSic := c.Search("ALL", "Sicilian", 0)
+	assert.GreaterOrEqual(t, len(allSic), 2)
+
+	// Search code prefix
+	cRes := c.Search("", "B90", 0)
+	require.Len(t, cRes, 1)
+	assert.Equal(t, "B90", cRes[0].Code)
+
+	allEntries := c.GetAllEntries()
+	assert.NotEmpty(t, allEntries)
+
+	// Unknown classification
+	unknown := c.Classify([]string{"a4", "h5", "a5", "h4"})
+	assert.Equal(t, "A00", unknown.Code)
 }

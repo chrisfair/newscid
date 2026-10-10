@@ -147,3 +147,76 @@ func normalizeMoves(movesStr string) string {
 	}
 	return strings.Join(sans, " ")
 }
+
+// SectionSummary defines an ECO category summary.
+type SectionSummary struct {
+	Letter      string `json:"letter"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Count       int    `json:"count"`
+}
+
+// GetSections returns the 5 primary ECO classifications with item counts.
+func (c *Classifier) GetSections() []SectionSummary {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	counts := make(map[string]int)
+	for _, e := range c.entries {
+		if len(e.Code) > 0 {
+			letter := string(e.Code[0])
+			counts[letter]++
+		}
+	}
+
+	return []SectionSummary{
+		{Letter: "A", Title: "Flank Openings & Irregular", Description: "English, Reti, Bird, Benoni, Dutch, King's Indian Attack", Count: counts["A"]},
+		{Letter: "B", Title: "Semi-Open Games (excl. French)", Description: "Sicilian, Caro-Kann, Pirc, Modern, Scandinavian, Alekhine", Count: counts["B"]},
+		{Letter: "C", Title: "Open Games & French Defense", Description: "1.e4 e5 (Ruy Lopez, Italian, Petrov, King's Gambit) and French Defense", Count: counts["C"]},
+		{Letter: "D", Title: "Closed & Semi-Closed Games", Description: "1.d4 d5 (Queen's Gambit, Slav), Gruenfeld Defense", Count: counts["D"]},
+		{Letter: "E", Title: "Indian Defenses", Description: "King's Indian, Nimzo-Indian, Queen's Indian, Catalan, Bogo-Indian", Count: counts["E"]},
+	}
+}
+
+// Search queries ECO entries by section letter, code prefix, and name/moves keywords.
+func (c *Classifier) Search(section string, query string, limit int) []*Entry {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	section = strings.ToUpper(strings.TrimSpace(section))
+	query = strings.ToLower(strings.TrimSpace(query))
+
+	var results []*Entry
+	for _, e := range c.entries {
+		if section != "" && section != "ALL" {
+			if len(e.Code) == 0 || string(e.Code[0]) != section {
+				continue
+			}
+		}
+
+		if query != "" {
+			codeLower := strings.ToLower(e.Code)
+			nameLower := strings.ToLower(e.Name)
+			movesLower := strings.ToLower(e.Moves)
+			if !strings.Contains(codeLower, query) && !strings.Contains(nameLower, query) && !strings.Contains(movesLower, query) {
+				continue
+			}
+		}
+
+		results = append(results, e)
+		if limit > 0 && len(results) >= limit {
+			break
+		}
+	}
+
+	return results
+}
+
+// GetAllEntries returns a copy of all loaded ECO entries.
+func (c *Classifier) GetAllEntries() []*Entry {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	res := make([]*Entry, len(c.entries))
+	copy(res, c.entries)
+	return res
+}

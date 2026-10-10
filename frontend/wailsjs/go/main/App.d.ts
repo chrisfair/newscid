@@ -5,15 +5,20 @@ import {engine} from '../models';
 import {eco} from '../models';
 import {scid} from '../models';
 import {main} from '../models';
-import {chess} from '../models';
 import {online} from '../models';
+import {gameexport} from '../models';
+import {chess} from '../models';
 import {sets} from '../models';
+import {stats} from '../models';
+import {training} from '../models';
 import {tree} from '../models';
 import {playerbot} from '../models';
+import {polyglot} from '../models';
 import {repertoire} from '../models';
 import {tournament} from '../models';
 import {version} from '../models';
 import {puzzleminer} from '../models';
+import {tablebase} from '../models';
 
 export function AddGameComment(arg1:number,arg2:string):Promise<void>;
 
@@ -28,6 +33,10 @@ export function AnalyzePosition(arg1:string,arg2:Array<string>,arg3:number):Prom
 export function AnnotateCurrentGame(arg1:number):Promise<engine.GameAnalysis>;
 
 export function AnnotatePGN(arg1:string,arg2:number):Promise<engine.GameAnalysis>;
+
+export function CheckTWICIssue(arg1:number):Promise<boolean>;
+
+export function ClassifyMoves(arg1:Array<string>):Promise<eco.Entry>;
 
 export function ClassifyOpening(arg1:Array<string>):Promise<eco.Entry>;
 
@@ -53,7 +62,19 @@ export function DeleteSyncProfile(arg1:string):Promise<void>;
 
 export function DeleteVariation(arg1:number,arg2:number):Promise<void>;
 
+export function DownloadTWICIssue(arg1:number):Promise<online.TWICIssueResult>;
+
+export function DownloadTWICRange(arg1:number,arg2:number):Promise<online.TWICBatchResult>;
+
 export function ExportCrosstableText(arg1:string,arg2:string,arg3:string):Promise<string>;
+
+export function ExportCurrentGameHTML(arg1:gameexport.HTMLExportOptions):Promise<string>;
+
+export function ExportCurrentGameLaTeX(arg1:gameexport.LaTeXExportOptions):Promise<string>;
+
+export function ExportGameHTML(arg1:number,arg2:gameexport.HTMLExportOptions):Promise<string>;
+
+export function ExportGameLaTeX(arg1:number,arg2:gameexport.LaTeXExportOptions):Promise<string>;
 
 export function ExportPGN(arg1:chess.Game):Promise<string>;
 
@@ -75,6 +96,8 @@ export function GetBestMove(arg1:string,arg2:Array<string>,arg3:number):Promise<
 
 export function GetBoardThemes():Promise<Array<sets.BoardThemeInfo>>;
 
+export function GetDatabaseDemographics():Promise<stats.DatabaseDemographics>;
+
 export function GetDatabaseInfo():Promise<main.DatabaseInfo>;
 
 export function GetDatabasePlayers():Promise<Array<string>>;
@@ -85,6 +108,8 @@ export function GetDiscoveredDatabases():Promise<Array<scid.DiscoveredDatabase>>
 
 export function GetDiscoveredEngines():Promise<Array<engine.EngineConfig>>;
 
+export function GetECOSections():Promise<Array<eco.SectionSummary>>;
+
 export function GetEngineEval():Promise<engine.EvalInfo>;
 
 export function GetEngineMultiPV():Promise<number>;
@@ -92,6 +117,12 @@ export function GetEngineMultiPV():Promise<number>;
 export function GetGame(arg1:number):Promise<chess.Game>;
 
 export function GetGames(arg1:number,arg2:number,arg3:scid.SearchCriteria):Promise<main.GamesPage>;
+
+export function GetGuessTheMoveHint():Promise<string>;
+
+export function GetGuessTheMoveState():Promise<training.SolitaireSession>;
+
+export function GetLatestTWICIssue():Promise<number>;
 
 export function GetLegalMoves(arg1:string):Promise<Array<string>>;
 
@@ -103,6 +134,8 @@ export function GetPersona(arg1:string):Promise<persona.Persona>;
 
 export function GetPersonaPersonality(arg1:string):Promise<playerbot.PlayerPersonality>;
 
+export function GetPersonaSimulatedMove(arg1:string,arg2:string,arg3:boolean):Promise<playerbot.SimulatedMove>;
+
 export function GetPersonaStatistics(arg1:string):Promise<persona.PersonaStatistics>;
 
 export function GetPersonas():Promise<Array<persona.Persona>>;
@@ -111,7 +144,13 @@ export function GetPieceSets():Promise<Array<sets.PieceSetInfo>>;
 
 export function GetPlayerPersonality(arg1:string):Promise<playerbot.PlayerPersonality>;
 
+export function GetPolyglotBookMove(arg1:string,arg2:string,arg3:boolean):Promise<polyglot.BookMove>;
+
+export function GetPolyglotBooks():Promise<Array<string>>;
+
 export function GetProgressivePuzzle(arg1:number):Promise<main.TacticsPuzzle>;
+
+export function GetRatingEvolution(arg1:string):Promise<stats.RatingTrackerResult>;
 
 export function GetRepertoire(arg1:string):Promise<repertoire.Repertoire>;
 
@@ -137,6 +176,8 @@ export function ImportPGNFileBatch(arg1:string):Promise<scid.ImportStats>;
 
 export function ImportPlayerGames(arg1:online.ImportPlayerOptions):Promise<online.SyncResult>;
 
+export function IsEngineMatchRunning():Promise<boolean>;
+
 export function IsScidDriverAvailable():Promise<boolean>;
 
 export function LoadTacticsPuzzle(arg1:string,arg2:number):Promise<main.TacticsPuzzle>;
@@ -157,11 +198,17 @@ export function ParseFEN(arg1:string):Promise<main.BoardState>;
 
 export function ParsePGN(arg1:string):Promise<chess.Game>;
 
+export function ProbeTablebase(arg1:string):Promise<tablebase.TablebaseResult>;
+
 export function PromoteVariation(arg1:number,arg2:number):Promise<void>;
+
+export function QueryPolyglotBook(arg1:string,arg2:string):Promise<Array<polyglot.BookMove>>;
 
 export function RecordRepertoirePractice(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<void>;
 
 export function RemovePersonaIdentifier(arg1:string,arg2:string):Promise<persona.Persona>;
+
+export function SaveExportFile(arg1:string,arg2:string):Promise<void>;
 
 export function SaveFileDialog(arg1:string):Promise<string>;
 
@@ -172,6 +219,8 @@ export function SavePersona(arg1:persona.Persona):Promise<persona.Persona>;
 export function SaveRepertoire(arg1:repertoire.Repertoire):Promise<void>;
 
 export function SaveSyncProfile(arg1:online.Profile):Promise<void>;
+
+export function SearchECO(arg1:string,arg2:string,arg3:number):Promise<Array<eco.Entry>>;
 
 export function SearchPosition(arg1:string):Promise<Array<scid.GameSummary>>;
 
@@ -185,15 +234,29 @@ export function SetGameNAG(arg1:number,arg2:number):Promise<void>;
 
 export function SetNotationStyle(arg1:string):Promise<void>;
 
+export function SkipGuessTheMove():Promise<training.GuessFeedback>;
+
 export function SortDatabase(arg1:scid.SortCriteria):Promise<void>;
+
+export function StandardizePlayerNames():Promise<scid.SpellCheckSummary>;
 
 export function StartEngine(arg1:string):Promise<void>;
 
+export function StartEngineMatch(arg1:tournament.EngineMatchConfig):Promise<tournament.EngineMatchSummary>;
+
+export function StartGuessTheMove(arg1:number,arg2:string):Promise<training.SolitaireSession>;
+
 export function StopEngine():Promise<void>;
+
+export function StopEngineMatch():Promise<boolean>;
+
+export function SubmitGuessTheMove(arg1:string):Promise<training.GuessFeedback>;
 
 export function SuggestPersonaIdentifiers(arg1:string,arg2:Array<string>):Promise<Array<string>>;
 
 export function SyncOnlineProfile(arg1:string):Promise<online.SyncResult>;
+
+export function UpdateGameHeaders(arg1:number,arg2:Record<string, string>):Promise<scid.GameSummary>;
 
 export function VerifyDatabase():Promise<scid.VerificationReport>;
 

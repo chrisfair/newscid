@@ -25,20 +25,24 @@ type BookMove struct {
 // PlayerPersonality models a player's real-world play style, historical opening repertoire,
 // and calibrated playing strength derived from their games.
 type PlayerPersonality struct {
-	Name         string              `json:"name"`
-	TotalGames   int                 `json:"totalGames"`
-	WhiteGames   int                 `json:"whiteGames"`
-	BlackGames   int                 `json:"blackGames"`
-	Wins         int                 `json:"wins"`
-	Draws        int                 `json:"draws"`
-	Losses       int                 `json:"losses"`
-	WinRate      float64             `json:"winRate"`
-	EstimatedElo int                 `json:"estimatedElo"`
-	PeakElo      int                 `json:"peakElo"`
-	TopWhiteECOs []string            `json:"topWhiteECOs"`
-	TopBlackECOs []string            `json:"topBlackECOs"`
-	WhiteBook    map[string][]BookMove `json:"whiteBook"`
-	BlackBook    map[string][]BookMove `json:"blackBook"`
+	Name             string                `json:"name"`
+	TotalGames       int                   `json:"totalGames"`
+	WhiteGames       int                   `json:"whiteGames"`
+	BlackGames       int                   `json:"blackGames"`
+	Wins             int                   `json:"wins"`
+	Draws            int                   `json:"draws"`
+	Losses           int                   `json:"losses"`
+	WinRate          float64               `json:"winRate"`
+	EstimatedElo     int                   `json:"estimatedElo"`
+	PeakElo          int                   `json:"peakElo"`
+	TopWhiteECOs     []string              `json:"topWhiteECOs"`
+	TopBlackECOs     []string              `json:"topBlackECOs"`
+	WhiteBook        map[string][]BookMove `json:"whiteBook"`
+	BlackBook        map[string][]BookMove `json:"blackBook"`
+	AvgGamePlies     float64               `json:"avgGamePlies"`
+	AggressionRating float64               `json:"aggressionRating"` // 0.0 (ultra-solid) to 100.0 (tactical firebrand)
+	ContemptValue    int                   `json:"contemptValue"`    // Calibrated UCI Contempt (-50 to +50)
+	PlayStyle        string                `json:"playStyle"`        // "Tactical Attacker", "Solid Positional", etc.
 }
 
 // SimulatedMove represents a decision made by the simulated player.
@@ -88,6 +92,8 @@ func BuildPersonalityFromIdentifiers(db *scid.Database, displayName string, iden
 
 	totalEloSum := 0
 	eloCount := 0
+	totalPlies := 0
+	gamesWithPlies := 0
 
 	whiteECOCounts := make(map[string]int)
 	blackECOCounts := make(map[string]int)
@@ -162,7 +168,7 @@ func BuildPersonalityFromIdentifiers(db *scid.Database, displayName string, iden
 			}
 		}
 
-		// Parse moves up to ply 30 to populate personal opening tree
+		// Parse full game moves (up to 250 plies) to populate personal move tree and calculate average game length
 		game, err := db.GetGame(i + 1)
 		if err != nil || game == nil || game.RootMove == nil {
 			continue
@@ -172,7 +178,7 @@ func BuildPersonalityFromIdentifiers(db *scid.Database, displayName string, iden
 		board := chess.NewBoard()
 		ply := 0
 
-		for curr != nil && ply < 30 {
+		for curr != nil && ply < 250 {
 			posKey := normalizeFEN(board.FEN())
 			moverIsWhite := (board.Turn == chess.White)
 
@@ -193,6 +199,11 @@ func BuildPersonalityFromIdentifiers(db *scid.Database, displayName string, iden
 			curr = curr.Next
 			ply++
 		}
+
+		if ply > 0 {
+			totalPlies += ply
+			gamesWithPlies++
+		}
 	}
 
 	if p.TotalGames == 0 {
@@ -206,6 +217,36 @@ func BuildPersonalityFromIdentifiers(db *scid.Database, displayName string, iden
 	}
 
 	p.WinRate = float64(p.Wins) / float64(p.TotalGames) * 100.0
+
+	if gamesWithPlies > 0 {
+		p.AvgGamePlies = float64(totalPlies) / float64(gamesWithPlies)
+	}
+
+	// Classify play style, aggression, and calibrated contempt
+	decisiveRate := float64(p.Wins+p.Losses) / float64(p.TotalGames) * 100.0
+	drawRate := float64(p.Draws) / float64(p.TotalGames) * 100.0
+
+	if p.AvgGamePlies > 0 && p.AvgGamePlies < 60 && decisiveRate > 80 {
+		p.PlayStyle = "Tactical Attacker"
+		p.AggressionRating = 85.0
+		p.ContemptValue = 40
+	} else if drawRate > 35 || (p.AvgGamePlies > 80 && decisiveRate < 70) {
+		p.PlayStyle = "Solid Positional"
+		p.AggressionRating = 30.0
+		p.ContemptValue = -10
+	} else if p.AvgGamePlies > 85 {
+		p.PlayStyle = "Grinding Endgame Specialist"
+		p.AggressionRating = 45.0
+		p.ContemptValue = 10
+	} else if decisiveRate > 75 {
+		p.PlayStyle = "Dynamic Fighter"
+		p.AggressionRating = 70.0
+		p.ContemptValue = 25
+	} else {
+		p.PlayStyle = "Balanced All-Rounder"
+		p.AggressionRating = 50.0
+		p.ContemptValue = 15
+	}
 
 	// Sort and aggregate top ECOs
 	p.TopWhiteECOs = topKeys(whiteECOCounts, 5)
@@ -261,8 +302,9 @@ func recordBookMove(book map[string][]BookMove, posKey, uci, san string, res che
 	book[posKey] = moves
 }
 
-// SelectSimulatedMove checks if the position is in the player's personal book.
-// If found, it samples a candidate move weighted by how often the player actually played it.
+// SelectSimulatedMove returns the move the player would choose from the given position.
+// Per persona design: if the exact position exists in their historical games, it plays their
+// most common response (or sole response), faithfully replicating their real play style.
 func (p *PlayerPersonality) SelectSimulatedMove(fen string, isWhite bool) (*SimulatedMove, bool) {
 	key := normalizeFEN(fen)
 	bookMap := p.WhiteBook
@@ -275,29 +317,33 @@ func (p *PlayerPersonality) SelectSimulatedMove(fen string, isWhite bool) (*Simu
 		return nil, false
 	}
 
-	// Calculate total weight
-	totalWeight := 0
-	for _, c := range candidates {
-		totalWeight += c.PlayedCount
-	}
-
-	if totalWeight <= 0 {
-		return nil, false
-	}
-
-	// Weighted random selection
-	r := rand.Intn(totalWeight)
-	current := 0
+	totalGamesAtPos := 0
 	var chosen BookMove
+	maxCount := -1
+
 	for _, c := range candidates {
-		current += c.PlayedCount
-		if r < current {
+		totalGamesAtPos += c.PlayedCount
+		if c.PlayedCount > maxCount || (c.PlayedCount == maxCount && c.WinRate > chosen.WinRate) {
+			maxCount = c.PlayedCount
 			chosen = c
-			break
 		}
 	}
+
 	if chosen.UCI == "" && len(candidates) > 0 {
 		chosen = candidates[0]
+	}
+
+	var comment string
+	if len(candidates) == 1 {
+		comment = fmt.Sprintf("📖 %s's sole historical response: %s (%d game, %.1f%% score)",
+			p.Name, chosen.SAN, chosen.PlayedCount, chosen.WinRate)
+	} else {
+		pct := 0.0
+		if totalGamesAtPos > 0 {
+			pct = float64(chosen.PlayedCount) * 100.0 / float64(totalGamesAtPos)
+		}
+		comment = fmt.Sprintf("📖 %s's most frequent response: %s (played in %d of %d games, %.0f%% freq, %.1f%% score)",
+			p.Name, chosen.SAN, chosen.PlayedCount, totalGamesAtPos, pct, chosen.WinRate)
 	}
 
 	return &SimulatedMove{
@@ -307,9 +353,16 @@ func (p *PlayerPersonality) SelectSimulatedMove(fen string, isWhite bool) (*Simu
 		PlayedCount: chosen.PlayedCount,
 		WinRate:     chosen.WinRate,
 		EloTarget:   p.EstimatedElo,
-		Commentary: fmt.Sprintf("📖 %s played %s in %d games (%.1f%% score)",
-			p.Name, chosen.SAN, chosen.PlayedCount, chosen.WinRate),
+		Commentary:  comment,
 	}, true
+}
+
+// CalibrateEngineSettingsForPersona configures UCI engine options tuned to the player's Elo,
+// style tendencies (contempt, skill level), and aggression rating.
+func (p *PlayerPersonality) CalibrateEngineSettingsForPersona() (limitStrength bool, uciElo int, skillLevel int, contempt int) {
+	limitStrength, uciElo, skillLevel = CalibrateEngineSettings(p.EstimatedElo)
+	contempt = p.ContemptValue
+	return
 }
 
 // CalibrateEngineSettings maps an estimated player Elo (e.g. 1000 - 2850)

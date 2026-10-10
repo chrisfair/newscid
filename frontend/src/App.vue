@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import MenuBar from './components/MenuBar.vue'
 import HeaderBar, { PieceSetOption, BoardThemeOption, DiscoveredDatabase } from './components/HeaderBar.vue'
 import Chessboard from './components/Chessboard.vue'
@@ -10,6 +10,7 @@ import GameBrowser, { GameSummary } from './components/GameBrowser.vue'
 import BoardSetupModal from './components/BoardSetupModal.vue'
 import PlayEngineModal from './components/PlayEngineModal.vue'
 import TacticsTrainerModal from './components/TacticsTrainerModal.vue'
+import GuessTheMoveModal from './components/GuessTheMoveModal.vue'
 import EvaluationGraph, { GameAnalysisData } from './components/EvaluationGraph.vue'
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal.vue'
 import OpeningTrainerModal from './components/OpeningTrainerModal.vue'
@@ -23,8 +24,14 @@ import OnlineSyncModal from './components/OnlineSyncModal.vue'
 import PlayerSimulationModal from './components/PlayerSimulationModal.vue'
 import PersonaModal from './components/PersonaModal.vue'
 import TournamentCrosstableModal from './components/TournamentCrosstableModal.vue'
+import ECOBrowserModal from './components/ECOBrowserModal.vue'
+import DatabaseStatsModal from './components/DatabaseStatsModal.vue'
+import EditTagsModal from './components/EditTagsModal.vue'
+import TWICDownloadModal from './components/TWICDownloadModal.vue'
+import EngineMatchModal from './components/EngineMatchModal.vue'
+import ExportGameModal from './components/ExportGameModal.vue'
 import { Bot } from '@lucide/vue'
-import { playerbot, persona } from '../wailsjs/go/models'
+import { playerbot, persona, scid, tournament } from '../wailsjs/go/models'
 
 // Import Wails backend bindings
 import {
@@ -32,6 +39,7 @@ import {
   CreateDatabase,
   CloseDatabase,
   GetDatabaseInfo,
+  StandardizePlayerNames,
   GetGames,
   GetGame,
   SaveGame,
@@ -57,6 +65,7 @@ import {
   AnnotateCurrentGame,
   AnnotatePGN,
   SearchPosition,
+  ProbeTablebase,
   LoadTacticsPuzzle,
   SetEngineMultiPV,
   GetEngineMultiPV,
@@ -69,6 +78,7 @@ import {
   PromoteVariation,
   DeleteVariation,
   GetSimulatedMove,
+  GetPersonaSimulatedMove,
 } from '../wailsjs/go/main/App'
 import { EventsOn, EventsOff, ClipboardSetText, ClipboardGetText, BrowserOpenURL } from '../wailsjs/runtime/runtime'
 
@@ -156,13 +166,47 @@ const showOnlineSyncModal = ref(false)
 const showPlayerSimulationModal = ref(false)
 const showPersonaModal = ref(false)
 const showTournamentCrosstableModal = ref(false)
+const showEcoBrowserModal = ref(false)
+const showGuessTheMoveModal = ref(false)
+const showDatabaseStatsModal = ref(false)
+const showEditTagsModal = ref(false)
+const showTwicModal = ref(false)
+const showEngineMatchModal = ref(false)
+const showExportGameModal = ref(false)
+const tablebaseResult = ref<any>(null)
 const selectedSimulationPersona = ref<persona.Persona | undefined>(undefined)
 const showImportModal = ref(false)
 const importPGNText = ref('')
 
+function countPiecesInFEN(fen: string): number {
+  if (!fen) return 32
+  const placement = fen.split(' ')[0] || ''
+  let count = 0
+  for (const ch of placement) {
+    if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')) {
+      count++
+    }
+  }
+  return count
+}
+
+async function updateTablebase(fen: string) {
+  if (countPiecesInFEN(fen) <= 7) {
+    try {
+      const res = await ProbeTablebase(fen)
+      tablebaseResult.value = res
+    } catch {
+      tablebaseResult.value = null
+    }
+  } else {
+    tablebaseResult.value = null
+  }
+}
+
 // Player Simulation Sparring State
 const activeSimulation = ref<{
   playerName: string
+  personaId?: string
   userColor: 'white' | 'black'
   personality: playerbot.PlayerPersonality
   timeControlMinutes: number
@@ -337,6 +381,10 @@ onUnmounted(() => {
   window.removeEventListener('resize', handleWindowResize)
   EventsOff('engine:eval')
   if (playInterval) clearInterval(playInterval)
+})
+
+watch(currentFEN, (newFen) => {
+  updateTablebase(newFen)
 })
 
 // ==========================================
@@ -527,6 +575,9 @@ function handleKeydown(e: KeyboardEvent) {
     } else if (e.key === 'i' || e.key === 'I') {
       e.preventDefault()
       handleImportPGN()
+    } else if (e.shiftKey && (e.key === 'e' || e.key === 'E')) {
+      e.preventDefault()
+      showExportGameModal.value = true
     } else if (e.key === 'e' || e.key === 'E') {
       e.preventDefault()
       handleExportPGN()
@@ -536,6 +587,15 @@ function handleKeydown(e: KeyboardEvent) {
     } else if (e.key === 'v' || e.key === 'V') {
       e.preventDefault()
       handlePasteFEN()
+    } else if (e.key === 'g' || e.key === 'G') {
+      e.preventDefault()
+      showGuessTheMoveModal.value = !showGuessTheMoveModal.value
+    } else if (e.key === 'd' || e.key === 'D') {
+      e.preventDefault()
+      showDatabaseStatsModal.value = !showDatabaseStatsModal.value
+    } else if (e.key === 't' || e.key === 'T') {
+      e.preventDefault()
+      handleOpenEditTags()
     }
     return
   }
@@ -547,6 +607,9 @@ function handleKeydown(e: KeyboardEvent) {
   } else if (e.key === 'F2') {
     e.preventDefault()
     toggleAnalysis()
+  } else if (e.key === 'F6') {
+    e.preventDefault()
+    showEcoBrowserModal.value = !showEcoBrowserModal.value
   } else if (e.key === 'F7') {
     e.preventDefault()
     showTournamentCrosstableModal.value = !showTournamentCrosstableModal.value
@@ -991,6 +1054,20 @@ async function handleImportGameFromMatch(pgn: string) {
   await confirmImportPGN()
 }
 
+async function handlePlayOpeningMoves(movesStr: string) {
+  if (!movesStr) return
+  const pgn = `[Event "ECO Opening Line"]\n[Result "*"]\n\n${movesStr} *`
+  importPGNText.value = pgn
+  await confirmImportPGN()
+}
+
+function handleSearchEcoInDb(ecoCode: string) {
+  if (!ecoCode) return
+  searchFilter.value = { ...searchFilter.value, eco: ecoCode }
+  currentPage.value = 1
+  refreshGames()
+}
+
 // ==========================================
 // PGN Import / Export
 // ==========================================
@@ -1206,6 +1283,7 @@ async function handleDeleteVariation(ply: number, varIdx: number) {
 
 async function handleStartSimulationMatch(payload: {
   playerName: string
+  personaId?: string
   userColor: 'white' | 'black'
   timeControlMinutes: number
   personality: playerbot.PlayerPersonality
@@ -1252,11 +1330,20 @@ async function triggerSimulatedOpponentMove() {
   try {
     const isBotWhite = activeSimulation.value.userColor === 'black'
     await new Promise(r => setTimeout(r, 400))
-    const simMove = await GetSimulatedMove(
-      activeSimulation.value.playerName,
-      currentFEN.value,
-      isBotWhite
-    )
+    let simMove: any
+    if (activeSimulation.value.personaId) {
+      simMove = await GetPersonaSimulatedMove(
+        activeSimulation.value.personaId,
+        currentFEN.value,
+        isBotWhite
+      )
+    } else {
+      simMove = await GetSimulatedMove(
+        activeSimulation.value.playerName,
+        currentFEN.value,
+        isBotWhite
+      )
+    }
     if (!simMove || !simMove.uci) {
       botMoveStatus.value = `${activeSimulation.value.playerName} has no moves.`
       return
@@ -1327,6 +1414,54 @@ function handleOpenWebDocs() {
     window.open('https://github.com/christopherpatrickfair/newscid#readme', '_blank')
   }
 }
+
+function handleOpenEditTags() {
+  if (!activeGameId.value && totalGames.value > 0) {
+    handleLoadGame(1)
+  }
+  showEditTagsModal.value = true
+}
+
+function handleTagsUpdated(summary: scid.GameSummary) {
+  gameTags.value = {
+    ...gameTags.value,
+    White: summary.white,
+    Black: summary.black,
+    WhiteElo: summary.whiteElo ? String(summary.whiteElo) : '',
+    BlackElo: summary.blackElo ? String(summary.blackElo) : '',
+    Event: summary.event,
+    Site: summary.site,
+    Date: summary.date,
+    Round: summary.round,
+    Result: summary.result,
+    ECO: summary.eco
+  }
+  refreshGames()
+}
+
+function handleTwicImported(count: number) {
+  refreshGames()
+}
+
+function handleMatchFinished(summary: tournament.EngineMatchSummary) {
+  refreshGames()
+}
+
+async function handleStandardizeNames() {
+  if (!dbInfo.value?.name) return
+  try {
+    const summary = await StandardizePlayerNames()
+    if (!summary) return
+    if (summary.correctionsMade === 0) {
+      alert(`✓ Player Name Standardization:\nAll ${summary.totalPlayersChecked} player names in ${dbInfo.value.name} are already standardized!`)
+    } else {
+      alert(`✓ Player Name Standardization Complete:\n• Checked: ${summary.totalPlayersChecked} players\n• Corrections: ${summary.correctionsMade} player names standardized\n• Games updated: ${summary.gamesUpdated}\n\nDatabase index and name records updated successfully.`)
+      refreshGames()
+    }
+  } catch (err: any) {
+    alert(`Failed to standardize player names: ${err?.message || err}`)
+  }
+}
 </script>
 
 <template>
@@ -1381,6 +1516,14 @@ function handleOpenWebDocs() {
       @simulate-player="showPlayerSimulationModal = true"
       @player-personas="showPersonaModal = true"
       @show-crosstable="showTournamentCrosstableModal = true"
+      @eco-browser="showEcoBrowserModal = true"
+      @guess-the-move="showGuessTheMoveModal = true"
+      @database-stats="showDatabaseStatsModal = true"
+      @edit-tags="handleOpenEditTags"
+      @twic-downloader="showTwicModal = true"
+      @engine-match="showEngineMatchModal = true"
+      @export-game="showExportGameModal = true"
+      @standardize-names="handleStandardizeNames"
     />
 
 
@@ -1462,6 +1605,7 @@ function handleOpenWebDocs() {
             :discovered-engines="discoveredEngines"
             :selected-engine="selectedEngine"
             :multi-pv="engineMultiPv"
+            :tablebase-result="tablebaseResult"
             @toggle-analysis="toggleAnalysis"
             @select-engine="handleSelectEngine"
             @change-multi-p-v="handleChangeMultiPV"
@@ -1791,6 +1935,73 @@ function handleOpenWebDocs() {
       :active-event="gameTags.Event"
       @load-game="handleLoadGame"
       @close="showTournamentCrosstableModal = false"
+    />
+
+    <!-- ECO Opening Classification Browser Modal (F6) -->
+    <ECOBrowserModal
+      v-if="showEcoBrowserModal"
+      @close="showEcoBrowserModal = false"
+      @play-opening="handlePlayOpeningMoves"
+      @search-eco-in-db="handleSearchEcoInDb"
+    />
+
+    <!-- Guess the Move (Solitaire Chess) Training Modal -->
+    <GuessTheMoveModal
+      v-if="showGuessTheMoveModal"
+      :active-game-id="activeGameId || 0"
+      :game-header="{
+        white: gameTags.White || 'White',
+        black: gameTags.Black || 'Black',
+        event: gameTags.Event || 'Game',
+        date: gameTags.Date || 'Unknown',
+        result: gameTags.Result || '*'
+      }"
+      :current-piece-set="currentPieceSet"
+      :board-theme="currentTheme"
+      @close="showGuessTheMoveModal = false"
+    />
+
+    <!-- Database Demographics & Rating Tracker Modal (Ctrl+D) -->
+    <DatabaseStatsModal
+      v-if="showDatabaseStatsModal"
+      :db-name="dbInfo?.name"
+      :initial-player="gameTags.White || ''"
+      @close="showDatabaseStatsModal = false"
+      @load-game="handleLoadGame"
+    />
+
+    <!-- Edit Game Headers & Tags Modal (Ctrl+T) -->
+    <EditTagsModal
+      v-if="showEditTagsModal"
+      :game-id="activeGameId || 1"
+      :initial-tags="gameTags"
+      @tags-updated="handleTagsUpdated"
+      @close="showEditTagsModal = false"
+    />
+
+    <!-- The Week In Chess (TWIC) Downloader Modal -->
+    <TWICDownloadModal
+      v-if="showTwicModal"
+      :db-name="dbInfo?.name"
+      @imported="handleTwicImported"
+      @close="showTwicModal = false"
+    />
+
+    <!-- Engine vs Engine Match / Tournament Modal -->
+    <EngineMatchModal
+      v-if="showEngineMatchModal"
+      :discovered-engines="discoveredEngines"
+      :available-engines="availableEngines"
+      :db-name="dbInfo?.name"
+      @match-finished="handleMatchFinished"
+      @close="showEngineMatchModal = false"
+    />
+
+    <!-- Export Game (HTML & LaTeX) Modal -->
+    <ExportGameModal
+      v-if="showExportGameModal"
+      :is-open="showExportGameModal"
+      @close="showExportGameModal = false"
     />
 
 

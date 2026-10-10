@@ -60,6 +60,19 @@ func createTestDatabaseWithGames(t *testing.T) (*scid.Database, string) {
 [ECO "C88"]
 
 1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 1/2-1/2`,
+
+		`[Event "Wijk aan Zee"]
+[Site "Wijk aan Zee"]
+[Date "1999.01.20"]
+[Round "4"]
+[White "Kasparov, Garry"]
+[Black "Topalov, Veselin"]
+[WhiteElo "2812"]
+[BlackElo "2700"]
+[Result "1-0"]
+[ECO "E97"]
+
+1. d4 Nf6 2. c4 g6 3. Nc3 Bg7 1-0`,
 	}
 
 	for _, pgn := range pgnGames {
@@ -80,10 +93,10 @@ func TestBuildPersonality(t *testing.T) {
 	personality, err := playerbot.BuildPersonality(db, "Kasparov")
 	require.NoError(t, err)
 	assert.Equal(t, "Kasparov", personality.Name)
-	assert.Equal(t, 3, personality.TotalGames)
-	assert.Equal(t, 2, personality.WhiteGames)
+	assert.Equal(t, 4, personality.TotalGames)
+	assert.Equal(t, 3, personality.WhiteGames)
 	assert.Equal(t, 1, personality.BlackGames)
-	assert.Equal(t, 2, personality.Wins)   // 1 as White, 1 as Black
+	assert.Equal(t, 3, personality.Wins)   // 2 as White, 1 as Black
 	assert.Equal(t, 1, personality.Draws)  // 1 as White
 	assert.Equal(t, 0, personality.Losses)
 	assert.Greater(t, personality.EstimatedElo, 2750)
@@ -171,7 +184,7 @@ func TestBuildPersonalityFromIdentifiers(t *testing.T) {
 	personality, err := playerbot.BuildPersonalityFromIdentifiers(db, "Soviet Champions", []string{"Kasparov", "Karpov"})
 	require.NoError(t, err)
 	assert.Equal(t, "Soviet Champions", personality.Name)
-	assert.Equal(t, 3, personality.TotalGames)
+	assert.Equal(t, 4, personality.TotalGames)
 
 	// Single alias fallback
 	pSingle, err := playerbot.BuildPersonalityFromIdentifiers(db, "Karpov", []string{"Karpov"})
@@ -181,9 +194,18 @@ func TestBuildPersonalityFromIdentifiers(t *testing.T) {
 	// Empty identifiers fallback to displayName
 	pEmpty, err := playerbot.BuildPersonalityFromIdentifiers(db, "Kasparov", []string{})
 	require.NoError(t, err)
-	assert.Equal(t, 3, pEmpty.TotalGames)
+	assert.Equal(t, 4, pEmpty.TotalGames)
 
 	// Empty display name error
 	_, err = playerbot.BuildPersonalityFromIdentifiers(db, "   ", []string{"Kasparov"})
 	assert.Error(t, err)
+
+	// Style modeling and calibration
+	assert.NotEmpty(t, personality.PlayStyle)
+	assert.True(t, personality.AggressionRating > 0)
+	limit, uciElo, skill, contempt := personality.CalibrateEngineSettingsForPersona()
+	assert.True(t, limit)
+	assert.True(t, uciElo >= 1320)
+	assert.True(t, skill >= 0)
+	assert.Equal(t, personality.ContemptValue, contempt)
 }
