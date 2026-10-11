@@ -38,6 +38,7 @@ import ImbalanceBar from './components/ImbalanceBar.vue'
 import ExplainMoveModal from './components/ExplainMoveModal.vue'
 import BlunderVaultModal from './components/BlunderVaultModal.vue'
 import OpponentScoutModal from './components/OpponentScoutModal.vue'
+import { initUITheme, applyUITheme, toggleDarkLight, currentUITheme, UI_THEMES } from './utils/theme'
 import { Bot, Sparkles, Brain, Shield, Maximize2, Minimize2, AlertTriangle } from '@lucide/vue'
 import { playerbot, persona, scid, tournament, imbalance, explainer, blundervault, scout } from '../wailsjs/go/models'
 
@@ -678,6 +679,7 @@ const treeLoading = ref(false)
 // Initialize
 onMounted(async () => {
   try {
+    initUITheme()
     window.addEventListener('resize', handleWindowResize)
 
     // 1. Load sets and themes
@@ -1025,6 +1027,9 @@ function handleKeydown(e: KeyboardEvent) {
   } else if (e.key === 'F7') {
     e.preventDefault()
     showTournamentCrosstableModal.value = !showTournamentCrosstableModal.value
+  } else if (e.key === 'F10') {
+    e.preventDefault()
+    toggleDarkLight()
   } else if (e.key === '?') {
     e.preventDefault()
     showShortcutsModal.value = true
@@ -1996,6 +2001,23 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
     action: toggleZenMode
   },
   {
+    id: 'theme-toggle-dark-light',
+    title: 'Toggle Dark / Light Mode',
+    subtitle: 'Switch application interface between dark and light appearance',
+    icon: 'sun',
+    category: 'Options',
+    shortcut: 'F10',
+    action: toggleDarkLight,
+  },
+  ...UI_THEMES.map((t) => ({
+    id: `ui-theme-${t.id}`,
+    title: `UI Theme: ${t.name}`,
+    subtitle: `${t.description} (${t.category.toUpperCase()})`,
+    icon: 'palette',
+    category: 'Options' as const,
+    action: () => applyUITheme(t.id),
+  })),
+  {
     id: 'explain-move',
     title: 'Explain This Move',
     subtitle: 'Natural language conceptual breakdown of tactical motifs & plans',
@@ -2311,6 +2333,9 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       @opponent-scout="showOpponentScoutModal = true"
       @toggle-zen-mode="toggleZenMode"
       @explain-move="handleExplainMove(currentPly)"
+      :current-u-i-theme="currentUITheme"
+      @change-u-i-theme="applyUITheme"
+      @toggle-dark-light="toggleDarkLight"
     />
 
 
@@ -2325,6 +2350,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       :board-themes="boardThemes"
       :current-piece-set="currentPieceSet"
       :current-theme-id="currentThemeId"
+      :current-u-i-theme="currentUITheme"
       :flipped="flipped"
       @open-d-b="handleOpenDB"
       @create-d-b="handleCreateDB"
@@ -2334,6 +2360,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       @export-p-g-n="handleExportPGN"
       @change-piece-set="currentPieceSet = $event"
       @change-theme="currentThemeId = $event"
+      @change-u-i-theme="applyUITheme"
+      @toggle-dark-light="toggleDarkLight"
       @toggle-flip="flipped = !flipped"
     />
 

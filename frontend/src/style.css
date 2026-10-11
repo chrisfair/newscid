@@ -3,8 +3,100 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  :root, [data-theme="dark"] {
     color-scheme: dark;
+    --color-zinc-50: 250 250 250;
+    --color-zinc-100: 244 244 245;
+    --color-zinc-200: 228 228 231;
+    --color-zinc-300: 212 212 216;
+    --color-zinc-400: 161 161 170;
+    --color-zinc-500: 113 113 122;
+    --color-zinc-600: 82 82 91;
+    --color-zinc-700: 63 63 70;
+    --color-zinc-800: 39 39 42;
+    --color-zinc-850: 30 30 34;
+    --color-zinc-900: 24 24 27;
+    --color-zinc-950: 9 9 11;
+  }
+
+  [data-theme="oled"] {
+    color-scheme: dark;
+    --color-zinc-50: 255 255 255;
+    --color-zinc-100: 250 250 250;
+    --color-zinc-200: 232 232 232;
+    --color-zinc-300: 204 204 204;
+    --color-zinc-400: 160 160 160;
+    --color-zinc-500: 115 115 115;
+    --color-zinc-600: 65 65 65;
+    --color-zinc-700: 42 42 42;
+    --color-zinc-800: 26 26 26;
+    --color-zinc-850: 18 18 18;
+    --color-zinc-900: 12 12 12;
+    --color-zinc-950: 0 0 0;
+  }
+
+  [data-theme="nord"] {
+    color-scheme: dark;
+    --color-zinc-50: 255 255 255;
+    --color-zinc-100: 248 250 252;
+    --color-zinc-200: 236 239 244;
+    --color-zinc-300: 216 222 233;
+    --color-zinc-400: 163 175 198;
+    --color-zinc-500: 129 140 165;
+    --color-zinc-600: 94 105 128;
+    --color-zinc-700: 67 76 96;
+    --color-zinc-800: 46 56 77;
+    --color-zinc-850: 36 44 62;
+    --color-zinc-900: 27 34 48;
+    --color-zinc-950: 16 20 29;
+  }
+
+  [data-theme="dracula"] {
+    color-scheme: dark;
+    --color-zinc-50: 255 255 255;
+    --color-zinc-100: 250 248 255;
+    --color-zinc-200: 238 235 248;
+    --color-zinc-300: 216 210 236;
+    --color-zinc-400: 175 167 205;
+    --color-zinc-500: 138 128 174;
+    --color-zinc-600: 101 92 135;
+    --color-zinc-700: 74 65 104;
+    --color-zinc-800: 51 43 77;
+    --color-zinc-850: 39 33 60;
+    --color-zinc-900: 27 23 44;
+    --color-zinc-950: 17 14 30;
+  }
+
+  [data-theme="light"] {
+    color-scheme: light;
+    --color-zinc-50: 0 0 0;
+    --color-zinc-100: 15 23 42;
+    --color-zinc-200: 30 41 59;
+    --color-zinc-300: 51 65 85;
+    --color-zinc-400: 100 116 139;
+    --color-zinc-500: 148 163 184;
+    --color-zinc-600: 203 213 225;
+    --color-zinc-700: 226 232 240;
+    --color-zinc-800: 241 245 249;
+    --color-zinc-850: 248 250 252;
+    --color-zinc-900: 255 255 255;
+    --color-zinc-950: 241 243 247;
+  }
+
+  [data-theme="retro"] {
+    color-scheme: light;
+    --color-zinc-50: 18 13 8;
+    --color-zinc-100: 28 22 14;
+    --color-zinc-200: 44 35 24;
+    --color-zinc-300: 68 56 40;
+    --color-zinc-400: 112 97 78;
+    --color-zinc-500: 153 138 117;
+    --color-zinc-600: 198 185 163;
+    --color-zinc-700: 217 206 186;
+    --color-zinc-800: 232 223 205;
+    --color-zinc-850: 238 231 216;
+    --color-zinc-900: 250 247 240;
+    --color-zinc-950: 236 229 213;
   }
 
   body {
@@ -27,9 +119,8 @@
   }
 
   select {
-    color-scheme: dark;
-    background-color: #27272a;
-    color: #f4f4f5;
+    background-color: rgb(var(--color-zinc-800));
+    color: rgb(var(--color-zinc-100));
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
@@ -41,9 +132,20 @@
   }
 
   select option {
-    background-color: #18181b;
-    color: #f4f4f5;
+    background-color: rgb(var(--color-zinc-900));
+    color: rgb(var(--color-zinc-100));
   }
+}
+
+/* Light Mode Overrides */
+[data-theme="light"] .hover\:text-white:hover,
+[data-theme="retro"] .hover\:text-white:hover {
+  color: rgb(var(--color-zinc-100)) !important;
+}
+
+[data-theme="light"] select,
+[data-theme="retro"] select {
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
 }
 
 /* Animations */

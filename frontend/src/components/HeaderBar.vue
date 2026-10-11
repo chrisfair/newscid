@@ -10,8 +10,12 @@ import {
   RotateCcw,
   BookOpen,
   Database,
-  ChevronDown
+  ChevronDown,
+  Sun,
+  Moon,
+  Check
 } from '@lucide/vue'
+import { UI_THEMES, type UITheme } from '../utils/theme'
 
 export interface PieceSetOption {
   id: string
@@ -47,6 +51,7 @@ const props = defineProps<{
   boardThemes: BoardThemeOption[]
   currentPieceSet: string
   currentThemeId: string
+  currentUITheme?: string
   flipped: boolean
 }>()
 
@@ -59,8 +64,12 @@ const emit = defineEmits<{
   (e: 'exportPGN'): void
   (e: 'changePieceSet', id: string): void
   (e: 'changeTheme', id: string): void
+  (e: 'changeUITheme', id: string): void
+  (e: 'toggleDarkLight'): void
   (e: 'toggleFlip'): void
 }>()
+
+const isCurrentLight = computed(() => props.currentUITheme === 'light' || props.currentUITheme === 'retro')
 
 const showSettingsModal = ref(false)
 const showBasesDropdown = ref(false)
@@ -237,9 +246,19 @@ defineExpose({
         <RotateCcw class="w-4 h-4" />
       </button>
 
+      <!-- Quick Dark / Light Toggle -->
       <button
         class="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 transition-colors"
-        title="Themes & Piece Sets"
+        :title="isCurrentLight ? 'Switch to Dark Mode' : 'Switch to Light Mode'"
+        @click="emit('toggleDarkLight')"
+      >
+        <Sun v-if="isCurrentLight" class="w-4 h-4 text-amber-400" />
+        <Moon v-else class="w-4 h-4 text-cyan-400" />
+      </button>
+
+      <button
+        class="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 transition-colors"
+        title="Themes & Appearance"
         @click="showSettingsModal = true"
       >
         <Palette class="w-4 h-4 text-emerald-400" />
@@ -257,7 +276,7 @@ defineExpose({
           <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
             <div class="flex items-center gap-2">
               <Palette class="w-5 h-5 text-emerald-400" />
-              <h2 class="text-base font-bold text-zinc-100">Piece Sets & Board Themes</h2>
+              <h2 class="text-base font-bold text-zinc-100">Appearance, Themes &amp; Piece Sets</h2>
             </div>
             <button
               class="text-zinc-400 hover:text-white text-sm"
@@ -265,6 +284,71 @@ defineExpose({
             >
               ✕
             </button>
+          </div>
+
+          <!-- Application UI Theme Section -->
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                Application UI Theme (Dark &amp; Light)
+              </h3>
+              <span class="text-[11px] text-zinc-500 font-mono">
+                Current: <span class="text-emerald-400 font-semibold">{{ UI_THEMES.find(t => t.id === currentUITheme)?.name || 'Modern Dark' }}</span>
+              </span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              <div
+                v-for="theme in UI_THEMES"
+                :key="theme.id"
+                class="p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between gap-2"
+                :class="currentUITheme === theme.id
+                  ? 'bg-emerald-950/40 border-emerald-500 shadow-md ring-1 ring-emerald-500'
+                  : 'bg-zinc-800/60 border-zinc-700/60 hover:bg-zinc-800 hover:border-zinc-600'"
+                @click="emit('changeUITheme', theme.id)"
+              >
+                <!-- Mini UI Theme Preview Swatch -->
+                <div
+                  class="h-10 rounded-lg p-1.5 flex flex-col justify-between overflow-hidden border shadow-inner"
+                  :style="{ backgroundColor: theme.preview.bg, borderColor: theme.preview.border }"
+                >
+                  <div class="flex items-center justify-between">
+                    <!-- Mini Window Bar -->
+                    <div class="flex items-center gap-1">
+                      <span class="w-1.5 h-1.5 rounded-full" :style="{ backgroundColor: theme.preview.accent }" />
+                      <span class="w-6 h-1 rounded-sm" :style="{ backgroundColor: theme.preview.card }" />
+                    </div>
+                    <span
+                      class="text-[9px] font-mono px-1 rounded font-bold uppercase tracking-wider"
+                      :style="{ color: theme.preview.text, backgroundColor: theme.preview.card }"
+                    >
+                      {{ theme.category }}
+                    </span>
+                  </div>
+                  <!-- Mini Text Line Preview -->
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-10 h-1.5 rounded-sm" :style="{ backgroundColor: theme.preview.accent }" />
+                    <span class="w-14 h-1.5 rounded-sm opacity-80" :style="{ backgroundColor: theme.preview.text }" />
+                  </div>
+                </div>
+
+                <div>
+                  <div class="flex items-center justify-between">
+                    <span class="font-bold text-xs text-zinc-100 flex items-center gap-1">
+                      {{ theme.name }}
+                    </span>
+                    <span
+                      v-if="currentUITheme === theme.id"
+                      class="flex items-center gap-0.5 text-[10px] text-emerald-400 font-semibold"
+                    >
+                      <Check class="w-3 h-3" /> Active
+                    </span>
+                  </div>
+                  <p class="text-[10px] text-zinc-400 mt-0.5 leading-snug line-clamp-1">
+                    {{ theme.description }}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Piece Sets Section -->
