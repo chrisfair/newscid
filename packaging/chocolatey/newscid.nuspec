@@ -3,15 +3,15 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
   <metadata>
     <id>newscid</id>
-    <version>1.0.0</version>
-    <packageSourceUrl>https://github.com/christopherpatrickfair/newscid</packageSourceUrl>
+    <version>1.1.0</version>
+    <packageSourceUrl>https://github.com/chrisfair/newscid</packageSourceUrl>
     <owners>Christopher Patrick Fair</owners>
     <title>NewScid</title>
     <authors>Christopher Patrick Fair</authors>
-    <projectUrl>https://github.com/christopherpatrickfair/newscid</projectUrl>
-    <iconUrl>https://raw.githubusercontent.com/christopherpatrickfair/newscid/main/build/appicon.png</iconUrl>
+    <projectUrl>https://github.com/chrisfair/newscid</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/chrisfair/newscid/main/build/appicon.png</iconUrl>
     <copyright>2026 Christopher Patrick Fair</copyright>
-    <licenseUrl>https://raw.githubusercontent.com/christopherpatrickfair/newscid/main/LICENSE</licenseUrl>
+    <licenseUrl>https://raw.githubusercontent.com/chrisfair/newscid/main/LICENSE</licenseUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <projectSourceUrl>https://github.com/christopherpatrickfair/newscid</projectSourceUrl>
     <docsUrl>https://github.com/christopherpatrickfair/newscid/blob/main/README.md</docsUrl>
