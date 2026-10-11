@@ -47,10 +47,13 @@ import {
   Target,
   Shield,
   Maximize2,
-  Brain
+  Brain,
+  Sun,
+  Moon
 } from '@lucide/vue'
 import { PieceSetOption, BoardThemeOption } from './HeaderBar.vue'
 import { useNotation, type NotationStyle } from '../utils/notation'
+import { UI_THEMES } from '../utils/theme'
 
 const { currentStyle, setNotationStyle, options: notationOptions } = useNotation()
 
@@ -60,6 +63,7 @@ const props = defineProps<{
   boardThemes: BoardThemeOption[]
   currentPieceSet: string
   currentThemeId: string
+  currentUITheme?: string
   trialMode: boolean
   isAnalyzing: boolean
   soundEnabled?: boolean
@@ -131,6 +135,8 @@ const emit = defineEmits<{
   (e: 'toggleZenMode'): void
   (e: 'explainMove'): void
   (e: 'openTreeWindow'): void
+  (e: 'changeUITheme', id: string): void
+  (e: 'toggleDarkLight'): void
 }>()
 
 
@@ -738,11 +744,44 @@ onUnmounted(() => {
           class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('openSettings'))"
         >
-          <span class="flex items-center gap-2.5 whitespace-nowrap"><Palette class="w-4 h-4 shrink-0 text-emerald-400" /> Board Themes & Piece Sets...</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Palette class="w-4 h-4 shrink-0 text-emerald-400" /> Themes &amp; Piece Sets...</span>
         </button>
 
         <div class="h-px bg-zinc-800 my-1 mx-2" />
-        <div class="px-3.5 py-1 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Audio & Visuals</div>
+        <div class="px-3.5 py-1 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">UI Theme (Dark / Light)</div>
+
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('toggleDarkLight'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap">
+            <Sun v-if="currentUITheme === 'light' || currentUITheme === 'retro'" class="w-4 h-4 shrink-0 text-amber-400" />
+            <Moon v-else class="w-4 h-4 shrink-0 text-cyan-400" />
+            <span>Toggle Dark / Light Mode</span>
+          </span>
+          <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">F10</span>
+        </button>
+
+        <div class="px-2 py-1 grid grid-cols-2 gap-1 bg-zinc-950/40 rounded-lg mx-2 border border-zinc-800/60 my-1">
+          <button
+            v-for="t in UI_THEMES"
+            :key="t.id"
+            class="px-2 py-1.5 rounded text-[11px] flex items-center justify-between transition-colors cursor-pointer"
+            :class="currentUITheme === t.id
+              ? 'bg-emerald-950/60 text-emerald-300 font-semibold border border-emerald-500/40'
+              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/80'"
+            @click="selectItem(() => emit('changeUITheme', t.id))"
+          >
+            <span class="flex items-center gap-1.5 truncate">
+              <span class="w-2 h-2 rounded-full shrink-0" :style="{ backgroundColor: t.preview.accent }" />
+              <span class="truncate">{{ t.name }}</span>
+            </span>
+            <Check v-if="currentUITheme === t.id" class="w-3 h-3 text-emerald-400 shrink-0" />
+          </button>
+        </div>
+
+        <div class="h-px bg-zinc-800 my-1 mx-2" />
+        <div class="px-3.5 py-1 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Audio &amp; Visuals</div>
 
         <button
           class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
