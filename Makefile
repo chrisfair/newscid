@@ -80,9 +80,9 @@ build: ## Build the standalone production binary (build/bin/newscid)
 	@printf "$(BOLD)$(BLUE)==> Building NewScid production desktop application (v$(APP_VERSION), commit $(GIT_COMMIT))...$(RESET)\n"
 	@mkdir -p $(BIN_DIR)
 	@if command -v wails >/dev/null 2>&1; then \
-		wails build -ldflags "$(LDFLAGS)"; \
+		wails build -tags "webkit2_41" -ldflags "$(LDFLAGS)"; \
 	else \
-		$(MAKE) build-frontend && go build -tags webkit2_41 -ldflags "$(LDFLAGS)" -o $(BINARY) .; \
+		$(MAKE) build-frontend && go build -tags "desktop,production,webkit2_41" -ldflags "$(LDFLAGS)" -o $(BINARY) .; \
 	fi
 	@printf "$(BOLD)$(GREEN)✔ Binary built at $(BINARY)$(RESET)\n"
 
