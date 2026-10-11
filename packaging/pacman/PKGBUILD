@@ -4,57 +4,35 @@ pkgver=1.0.0
 pkgrel=1
 pkgdesc="Modern Chess Information Database (Scid vs. PC Rewrite)"
 arch=('x86_64')
-url="https://github.com/christopherpatrickfair/newscid"
+url="https://gitlab.com/bughouse1/newscid"
 license=('GPL-3.0-or-later')
 depends=('gtk3' 'webkit2gtk-4.1' 'hicolor-icon-theme')
+makedepends=('go' 'nodejs' 'npm' 'git' 'python-pillow')
 optdepends=(
     'stockfish: strong default UCI chess engine'
     'fruit: legacy UCI chess engine'
     'scid: legacy database tools (tcscid)'
 )
-install=newscid.install
-source=(
-    'newscid'
-    'newscid.desktop'
-    'org.newscid.NewScid.metainfo.xml'
-    'newscid.mime.xml'
-    'newscid.1'
-)
-sha256sums=(
-    'SKIP'
-    'SKIP'
-    'SKIP'
-    'SKIP'
-    'SKIP'
-)
+source=("git+https://gitlab.com/bughouse1/newscid.git#tag=v${pkgver}")
+sha256sums=('SKIP')
+
+prepare() {
+    cd "${srcdir}/${pkgname}/frontend"
+    npm install
+}
+
+build() {
+    cd "${srcdir}/${pkgname}"
+    export CGO_CPPFLAGS="${CPPFLAGS}"
+    export CGO_CFLAGS="${CFLAGS}"
+    export CGO_CXXFLAGS="${CXXFLAGS}"
+    export CGO_LDFLAGS="${LDFLAGS}"
+    export GOFLAGS="-buildmode=pie -trimpath -modcacherw"
+
+    make build
+}
 
 package() {
-    # 1. Install binary
-    install -Dm755 "${srcdir}/newscid" "${pkgdir}/usr/bin/newscid"
-
-    # 2. Install desktop entry and MIME info
-    install -Dm644 "${srcdir}/newscid.desktop" "${pkgdir}/usr/share/applications/newscid.desktop"
-    install -Dm644 "${srcdir}/org.newscid.NewScid.metainfo.xml" "${pkgdir}/usr/share/metainfo/org.newscid.NewScid.metainfo.xml"
-    install -Dm644 "${srcdir}/newscid.mime.xml" "${pkgdir}/usr/share/mime/packages/newscid.xml"
-
-    # 3. Install man page
-    if [ -f "${srcdir}/newscid.1" ]; then
-        install -Dm644 "${srcdir}/newscid.1" "${pkgdir}/usr/share/man/man1/newscid.1"
-    elif [ -f "${startdir}/newscid.1" ]; then
-        install -Dm644 "${startdir}/newscid.1" "${pkgdir}/usr/share/man/man1/newscid.1"
-    fi
-
-    # 4. Install icons
-    for size in 16 32 48 64 128 256 512 1024; do
-        icon_path=""
-        if [ -f "${srcdir}/icons/${size}x${size}.png" ]; then
-            icon_path="${srcdir}/icons/${size}x${size}.png"
-        elif [ -f "${startdir}/icons/${size}x${size}.png" ]; then
-            icon_path="${startdir}/icons/${size}x${size}.png"
-        fi
-        if [ -n "${icon_path}" ]; then
-            install -Dm644 "${icon_path}" \
-                "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps/newscid.png"
-        fi
-    done
+    cd "${srcdir}/${pkgname}"
+    make install DESTDIR="${pkgdir}" PREFIX="/usr"
 }

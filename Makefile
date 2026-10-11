@@ -240,6 +240,9 @@ install: build ## Install NewScid to system (supports DESTDIR and PREFIX)
 	@install -Dm644 packaging/desktop/org.newscid.NewScid.metainfo.xml $(DESTDIR)$(PREFIX)/share/metainfo/org.newscid.NewScid.metainfo.xml
 	@install -Dm644 packaging/desktop/newscid.mime.xml $(DESTDIR)$(PREFIX)/share/mime/packages/newscid.xml
 	@install -Dm644 packaging/man/newscid.1 $(DESTDIR)$(PREFIX)/share/man/man1/newscid.1
+	@if [ -f LICENSE ]; then \
+		install -Dm644 LICENSE $(DESTDIR)$(PREFIX)/share/licenses/$(APP_NAME)/LICENSE; \
+	fi
 	@if [ -f build/appicon.svg ]; then \
 		install -Dm644 build/appicon.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/newscid.svg; \
 	fi
