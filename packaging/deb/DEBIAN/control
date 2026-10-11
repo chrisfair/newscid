@@ -1,12 +1,12 @@
 Package: newscid
-Version: 1.0.0-1
+Version: 1.1.0-1
 Section: games
 Priority: optional
 Architecture: amd64
 Maintainer: Christopher Patrick Fair <christopherpatrickfair@gmail.com>
 Depends: libc6 (>= 2.34), libgtk-3-0 (>= 3.24.0), libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37
 Recommends: stockfish | fruit
-Homepage: https://github.com/christopherpatrickfair/newscid
+Homepage: https://github.com/chrisfair/newscid
 Description: Modern Chess Information Database (Scid vs. PC Rewrite)
  NewScid is a fresh, database-compatible rewrite of Scid vs. PC featuring a modern,
  intuitive user interface built with Wails v2 (Go backend) and Vue 3 (TypeScript + Vite).
