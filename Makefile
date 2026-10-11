@@ -269,11 +269,14 @@ uninstall: ## Remove NewScid from user local environment (~/.local)
 	@rm -f $(HOME)/.local/share/metainfo/org.newscid.NewScid.metainfo.xml
 	@rm -f $(HOME)/.local/share/mime/packages/newscid.xml
 	@rm -f $(HOME)/.local/share/man/man1/newscid.1
+	@rm -f $(HOME)/.local/share/icons/hicolor/scalable/apps/newscid.svg
+	@rm -rf $(HOME)/.local/share/licenses/$(APP_NAME)
 	@for size in 16 32 48 64 128 256 512 1024; do \
 		rm -f $(HOME)/.local/share/icons/hicolor/$${size}x$${size}/apps/newscid.png; \
 	done
 	@update-desktop-database $(HOME)/.local/share/applications 2>/dev/null || true
 	@update-mime-database $(HOME)/.local/share/mime 2>/dev/null || true
+	@gtk-update-icon-cache -q -t -f $(HOME)/.local/share/icons/hicolor 2>/dev/null || true
 	@printf "$(BOLD)$(GREEN)✔ NewScid successfully uninstalled from $(HOME)/.local.$(RESET)\n"
 
 clean-dist: ## Remove all packaged distribution artifacts in build/dist/ and staging
