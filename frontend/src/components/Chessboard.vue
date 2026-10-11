@@ -365,8 +365,10 @@ watch(() => props.fen, (newFEN) => {
 
 <template>
   <div
-    class="chessboard-wrapper flex items-stretch gap-2.5 select-none justify-center shrink-0"
+    class="chessboard-wrapper flex items-stretch gap-2.5 select-none justify-center"
+    :class="{ 'shrink-0': !!boardSize, 'w-full h-full max-w-full max-h-full': !boardSize }"
     :style="{
+      width: boardSize ? `${boardSize + (showEvalBar ? 24 : 0)}px` : undefined,
       height: boardSize ? `${boardSize}px` : undefined,
     }"
     @contextmenu.prevent
@@ -375,7 +377,7 @@ watch(() => props.fen, (newFEN) => {
     <div
       v-if="showEvalBar"
       class="eval-bar w-3.5 flex flex-col justify-between bg-zinc-950 rounded-sm overflow-hidden border border-zinc-700/80 relative shadow-inner select-none transition-all duration-300"
-      :style="{ height: boardSize ? `${boardSize}px` : undefined }"
+      :style="{ height: boardSize ? `${boardSize}px` : '100%' }"
       :title="`Evaluation: ${evalLabel}`"
     >
       <div
@@ -398,7 +400,8 @@ watch(() => props.fen, (newFEN) => {
 
     <!-- Main Chessboard Container -->
     <div
-      class="chessboard-container relative select-none flex items-center justify-center shrink-0"
+      class="chessboard-container relative select-none flex items-center justify-center"
+      :class="{ 'shrink-0': !!boardSize, 'w-full h-full max-w-full max-h-full aspect-square': !boardSize }"
       :style="{
         width: boardSize ? `${boardSize}px` : undefined,
         height: boardSize ? `${boardSize}px` : undefined,
@@ -411,8 +414,8 @@ watch(() => props.fen, (newFEN) => {
           '--dark-color': boardTheme.dark,
           '--highlight-color': boardTheme.highlight,
           '--board-size': boardSize ? `${boardSize}px` : undefined,
-          width: boardSize ? `${boardSize}px` : undefined,
-          height: boardSize ? `${boardSize}px` : undefined,
+          width: boardSize ? `${boardSize}px` : '100%',
+          height: boardSize ? `${boardSize}px` : '100%',
         }"
       >
         <div
@@ -549,13 +552,24 @@ watch(() => props.fen, (newFEN) => {
 </template>
 
 <style scoped>
+.chessboard-wrapper {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.chessboard-container {
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 1 / 1;
+}
+
 .board-grid {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
   grid-template-rows: repeat(8, 1fr);
   aspect-ratio: 1 / 1;
-  width: var(--board-size, min(80vh, 80vw, 640px));
-  height: var(--board-size, min(80vh, 80vw, 640px));
+  width: 100%;
+  height: 100%;
   max-width: 100%;
   max-height: 100%;
   border-radius: 4px;

@@ -244,7 +244,7 @@ onMounted(async () => {
       <div class="flex-1 overflow-y-auto p-4 flex flex-col md:flex-row gap-5 items-center md:items-start justify-center">
         <!-- Left: Interactive Chessboard -->
         <div class="flex flex-col items-center gap-2 shrink-0">
-          <div class="rounded-lg overflow-hidden border border-zinc-700/60 shadow-lg">
+          <div class="rounded-lg overflow-hidden border border-zinc-700/60 shadow-lg w-80 h-80 sm:w-96 sm:h-96">
             <Chessboard
               :fen="currentFEN"
               :piece-set="currentPieceSet"
