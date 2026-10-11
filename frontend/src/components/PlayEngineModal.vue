@@ -281,7 +281,7 @@ function exportMatchToApp() {
       <!-- Main Body -->
       <div class="p-5 flex-1 overflow-y-auto flex flex-col md:flex-row gap-6">
         <!-- Left: Chessboard -->
-        <div class="flex flex-col items-center gap-3">
+        <div class="flex flex-col items-center gap-3 shrink-0 w-80 sm:w-96 mx-auto md:mx-0">
           <!-- Opponent Bar -->
           <div class="w-full flex items-center justify-between bg-zinc-950 px-4 py-2 rounded-xl border border-zinc-800 text-xs">
             <div class="flex items-center gap-2">
@@ -295,7 +295,7 @@ function exportMatchToApp() {
           </div>
 
           <!-- Board -->
-          <div class="w-80 h-80 sm:w-96 sm:h-96">
+          <div class="w-80 h-80 sm:w-96 sm:h-96 shrink-0 relative flex items-center justify-center">
             <Chessboard
               :fen="fen"
               :legal-moves="legalMoves"
@@ -322,7 +322,7 @@ function exportMatchToApp() {
         </div>
 
         <!-- Right: Settings & Match Control -->
-        <div class="flex-1 flex flex-col gap-4">
+        <div class="flex-1 min-w-0 flex flex-col gap-4">
           <!-- Game Over Alert -->
           <div v-if="gameOverMessage" class="bg-emerald-950/40 border border-emerald-500/50 p-3 rounded-xl flex items-center gap-3">
             <Award class="w-6 h-6 text-amber-400 shrink-0" />

@@ -171,7 +171,7 @@ onMounted(() => {
       <!-- Active Puzzle Workout -->
       <div v-else-if="currentPuzzle" class="flex flex-col md:flex-row items-center gap-5">
         <!-- Interactive Chessboard -->
-        <div class="shrink-0 flex items-center justify-center">
+        <div class="shrink-0 flex items-center justify-center w-80 h-80 sm:w-96 sm:h-96">
           <Chessboard
             :fen="currentBoardFEN"
             :board-theme="boardTheme"
