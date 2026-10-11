@@ -19,7 +19,11 @@ APP_ARCH     ?= amd64
 APP_DESC     ?= Modern Chess Information Database (Scid vs. PC Rewrite)
 APP_AUTHOR   ?= Christopher Patrick Fair
 APP_EMAIL    ?= christopherpatrickfair@gmail.com
-APP_URL      ?= https://github.com/christopherpatrickfair/newscid
+APP_URL      ?= https://gitlab.com/bughouse1/newscid
+
+# Standard installation paths
+PREFIX       ?= /usr/local
+DESTDIR      ?=
 
 # Build & Git Metadata
 GIT_COMMIT   ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "development")
@@ -74,8 +78,13 @@ dev: ## Run live development server with hot-reload (Wails Dev)
 
 build: ## Build the standalone production binary (build/bin/newscid)
 	@printf "$(BOLD)$(BLUE)==> Building NewScid production desktop application (v$(APP_VERSION), commit $(GIT_COMMIT))...$(RESET)\n"
-	@wails build -ldflags "$(LDFLAGS)"
-	@printf "$(BOLD)$(GREEN)✔ Binary built at build/bin/newscid$(RESET)\n"
+	@mkdir -p $(BIN_DIR)
+	@if command -v wails >/dev/null 2>&1; then \
+		wails build -ldflags "$(LDFLAGS)"; \
+	else \
+		$(MAKE) build-frontend && go build -tags webkit2_41 -ldflags "$(LDFLAGS)" -o $(BINARY) .; \
+	fi
+	@printf "$(BOLD)$(GREEN)✔ Binary built at $(BINARY)$(RESET)\n"
 
 
 build-frontend: ## Compile the Vue 3 + Vite frontend assets
@@ -223,27 +232,32 @@ package-checksums: ## Generate SHA-256 checksums for all packages in build/dist/
 # Installation Targets
 # ==============================================================================
 
-install: install-user ## Install NewScid to user local environment (~/.local)
-
-install-user: build ## Install binary, desktop entry, mime info, and icons to ~/.local
-	@printf "$(BOLD)$(BLUE)==> Installing NewScid to $(HOME)/.local...$(RESET)\n"
-	@mkdir -p $(HOME)/.local/bin $(HOME)/.local/share/applications $(HOME)/.local/share/metainfo $(HOME)/.local/share/mime/packages $(HOME)/.local/share/man/man1
-	@install -Dm755 $(BINARY) $(HOME)/.local/bin/$(APP_NAME)
-	@install -Dm644 packaging/desktop/newscid.desktop $(HOME)/.local/share/applications/newscid.desktop
-	@install -Dm644 packaging/desktop/org.newscid.NewScid.metainfo.xml $(HOME)/.local/share/metainfo/org.newscid.NewScid.metainfo.xml
-	@install -Dm644 packaging/desktop/newscid.mime.xml $(HOME)/.local/share/mime/packages/newscid.xml
-	@install -Dm644 packaging/man/newscid.1 $(HOME)/.local/share/man/man1/newscid.1
-	@python3 packaging/scripts/generate-appicon-svg.py 2>/dev/null || true
-	@python3 packaging/scripts/generate-icons.py build/appicon.png build/staging/icons
+install: build ## Install NewScid to system (supports DESTDIR and PREFIX)
+	@printf "$(BOLD)$(BLUE)==> Installing NewScid to $(DESTDIR)$(PREFIX)...$(RESET)\n"
+	@mkdir -p $(DESTDIR)$(PREFIX)/bin $(DESTDIR)$(PREFIX)/share/applications $(DESTDIR)$(PREFIX)/share/metainfo $(DESTDIR)$(PREFIX)/share/mime/packages $(DESTDIR)$(PREFIX)/share/man/man1 $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps
+	@install -Dm755 $(BINARY) $(DESTDIR)$(PREFIX)/bin/$(APP_NAME)
+	@install -Dm644 packaging/desktop/newscid.desktop $(DESTDIR)$(PREFIX)/share/applications/newscid.desktop
+	@install -Dm644 packaging/desktop/org.newscid.NewScid.metainfo.xml $(DESTDIR)$(PREFIX)/share/metainfo/org.newscid.NewScid.metainfo.xml
+	@install -Dm644 packaging/desktop/newscid.mime.xml $(DESTDIR)$(PREFIX)/share/mime/packages/newscid.xml
+	@install -Dm644 packaging/man/newscid.1 $(DESTDIR)$(PREFIX)/share/man/man1/newscid.1
+	@if [ -f build/appicon.svg ]; then \
+		install -Dm644 build/appicon.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/newscid.svg; \
+	fi
+	@python3 packaging/scripts/generate-icons.py build/appicon.png build/staging/icons 2>/dev/null || true
 	@for size in 16 32 48 64 128 256 512 1024; do \
 		if [ -f "build/staging/icons/$${size}x$${size}.png" ]; then \
-			install -Dm644 "build/staging/icons/$${size}x$${size}.png" "$(HOME)/.local/share/icons/hicolor/$${size}x$${size}/apps/newscid.png"; \
+			install -Dm644 "build/staging/icons/$${size}x$${size}.png" "$(DESTDIR)$(PREFIX)/share/icons/hicolor/$${size}x$${size}/apps/newscid.png"; \
 		fi \
 	done
-	@update-desktop-database $(HOME)/.local/share/applications 2>/dev/null || true
-	@update-mime-database $(HOME)/.local/share/mime 2>/dev/null || true
-	@gtk-update-icon-cache -q -t -f $(HOME)/.local/share/icons/hicolor 2>/dev/null || true
-	@printf "$(BOLD)$(GREEN)✔ NewScid v$(APP_VERSION) successfully installed to $(HOME)/.local/bin/$(APP_NAME)$(RESET)\n"
+	@if [ -z "$(DESTDIR)" ]; then \
+		update-desktop-database $(PREFIX)/share/applications 2>/dev/null || true; \
+		update-mime-database $(PREFIX)/share/mime 2>/dev/null || true; \
+		gtk-update-icon-cache -q -t -f $(PREFIX)/share/icons/hicolor 2>/dev/null || true; \
+	fi
+	@printf "$(BOLD)$(GREEN)✔ NewScid v$(APP_VERSION) successfully installed to $(DESTDIR)$(PREFIX)/bin/$(APP_NAME)$(RESET)\n"
+
+install-user: ## Install NewScid to user local environment (~/.local)
+	@$(MAKE) install PREFIX=$(HOME)/.local DESTDIR=
 
 uninstall: ## Remove NewScid from user local environment (~/.local)
 	@printf "$(BOLD)$(YELLOW)==> Uninstalling NewScid from $(HOME)/.local...$(RESET)\n"
