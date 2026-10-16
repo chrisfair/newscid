@@ -40,6 +40,7 @@ import BlunderVaultModal from './components/BlunderVaultModal.vue'
 import OpponentScoutModal from './components/OpponentScoutModal.vue'
 import AntiPersonaModal from './components/AntiPersonaModal.vue'
 import PieceSafetyModal from './components/PieceSafetyModal.vue'
+import IntuitionStormModal from './components/IntuitionStormModal.vue'
 import { initUITheme, applyUITheme, toggleDarkLight, currentUITheme, UI_THEMES } from './utils/theme'
 import { Bot, Sparkles, Brain, Shield, Maximize2, Minimize2, AlertTriangle, Crosshair } from '@lucide/vue'
 import { playerbot, persona, scid, tournament, imbalance, explainer, blundervault, scout } from '../wailsjs/go/models'
@@ -307,6 +308,7 @@ const showBlunderVaultModal = ref(false)
 const showOpponentScoutModal = ref(false)
 const showAntiPersonaModal = ref(false)
 const showPieceSafetyModal = ref(false)
+const showIntuitionStormModal = ref(false)
 const antiPersonaTargetId = ref<string>('')
 const antiPersonaTargetName = ref<string>('')
 const showOpeningTreeModal = ref(false)
@@ -2194,6 +2196,14 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
     action: () => { showPieceSafetyModal.value = true }
   },
   {
+    id: 'intuition-storm',
+    title: 'Intuition Storm (Speed Reflex Trainer)',
+    subtitle: 'Rapid instinctual evaluation reflex trainer under fast countdown',
+    icon: 'zap',
+    category: 'Training',
+    action: () => { showIntuitionStormModal.value = true }
+  },
+  {
     id: 'chess960',
     title: 'Chess960 (Fischer Random)',
     subtitle: 'Generate any of the 960 starting positions',
@@ -2395,6 +2405,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       @change-u-i-theme="applyUITheme"
       @toggle-dark-light="toggleDarkLight"
       @piece-safety="showPieceSafetyModal = true"
+      @intuition-storm="showIntuitionStormModal = true"
     />
 
 
@@ -3099,6 +3110,16 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       :piece-set="currentPieceSet"
       :board-theme="currentTheme"
       @close="showPieceSafetyModal = false"
+      @load-position="(fen) => handleSetupBoardApply(fen)"
+    />
+
+    <!-- Intuition Storm (Speed Reflex Trainer) Modal -->
+    <IntuitionStormModal
+      v-if="showIntuitionStormModal"
+      :initial-f-e-n="currentFEN"
+      :piece-set="currentPieceSet"
+      :board-theme="currentTheme"
+      @close="showIntuitionStormModal = false"
       @load-position="(fen) => handleSetupBoardApply(fen)"
     />
   </div>

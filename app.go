@@ -2856,6 +2856,29 @@ func (a *App) SubmitSafetyDrillAnswer(drill training.SafetyDrill, selectedSquare
 	return feedback, nil
 }
 
+// GetIntuitionDrillBatch returns a batch of curated rapid evaluation challenges.
+func (a *App) GetIntuitionDrillBatch(count int) ([]training.IntuitionChallenge, error) {
+	return training.GetIntuitionDrillBatch(count), nil
+}
+
+// GenerateIntuitionDrillsFromDatabase extracts positions from the active database for speed assessment.
+func (a *App) GenerateIntuitionDrillsFromDatabase(count int) ([]training.IntuitionChallenge, error) {
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+
+	if db == nil || !db.IsOpen {
+		return training.GetIntuitionDrillBatch(count), nil
+	}
+	return training.GenerateIntuitionDrillsFromDatabase(db, count)
+}
+
+// SubmitIntuitionAnswer evaluates the user's rapid judgment and returns score and speed bonus.
+func (a *App) SubmitIntuitionAnswer(challengeID string, userChoice string, elapsedMs int) (*training.IntuitionResult, error) {
+	return training.SubmitIntuitionAnswer(challengeID, userChoice, elapsedMs)
+}
+
+
 
 
 

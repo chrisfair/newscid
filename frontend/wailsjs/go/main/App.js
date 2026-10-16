@@ -178,6 +178,10 @@ export function FormatMoveSequence(arg1, arg2, arg3) {
   return window['go']['main']['App']['FormatMoveSequence'](arg1, arg2, arg3);
 }
 
+export function GenerateIntuitionDrillsFromDatabase(arg1) {
+  return window['go']['main']['App']['GenerateIntuitionDrillsFromDatabase'](arg1);
+}
+
 export function GenerateOpponentScoutingReport(arg1) {
   return window['go']['main']['App']['GenerateOpponentScoutingReport'](arg1);
 }
@@ -264,6 +268,10 @@ export function GetGuessTheMoveHint() {
 
 export function GetGuessTheMoveState() {
   return window['go']['main']['App']['GetGuessTheMoveState']();
+}
+
+export function GetIntuitionDrillBatch(arg1) {
+  return window['go']['main']['App']['GetIntuitionDrillBatch'](arg1);
 }
 
 export function GetLatestTWICIssue() {
@@ -552,6 +560,10 @@ export function StopEngineMatch() {
 
 export function SubmitGuessTheMove(arg1) {
   return window['go']['main']['App']['SubmitGuessTheMove'](arg1);
+}
+
+export function SubmitIntuitionAnswer(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SubmitIntuitionAnswer'](arg1, arg2, arg3);
 }
 
 export function SubmitSafetyDrillAnswer(arg1, arg2, arg3) {
