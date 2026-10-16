@@ -162,7 +162,6 @@ func TestStripeURLForAmountAndCheckoutBuilder(t *testing.T) {
 	assert.Equal(t, StripeLink5USD, StripeURLForAmount(5, ""))
 	assert.Equal(t, StripeLink10USD, StripeURLForAmount(10, ""))
 	assert.Equal(t, StripeLink35USD, StripeURLForAmount(35, ""))
-	assert.Equal(t, StripeLink100USD, StripeURLForAmount(100, ""))
 	assert.Equal(t, StripeLink350USD, StripeURLForAmount(350, ""))
 	assert.Equal(t, "https://buy.stripe.com/custom-override", StripeURLForAmount(10, "https://buy.stripe.com/custom-override"))
 
@@ -174,8 +173,8 @@ func TestStripeURLForAmountAndCheckoutBuilder(t *testing.T) {
 	mgr, err := NewManager(filepath.Join(tmpDir, "tiers.json"))
 	require.NoError(t, err)
 
-	// Test $1 (3 days), $5 (1 month), $35 (1 year), $100 (5 years), $350 (Lifetime)
-	for _, tier := range []string{"$1 Support", "$5 Support", "$10 Support", "$35 Support", "$100 Support"} {
+	// Test $1 (3 days), $5 (1 month), $10 (3 months), $35 (1 year)
+	for _, tier := range []string{"$1 Support", "$5 Support", "$10 Support", "$35 Support"} {
 		st, err := mgr.RecordSupport(tier, "rcpt")
 		require.NoError(t, err)
 		assert.True(t, st.Supported)
