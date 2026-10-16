@@ -842,6 +842,82 @@ export namespace online {
 	        this.createProfile = source["createProfile"];
 	    }
 	}
+	export class MegaDatabaseSource {
+	    id: string;
+	    name: string;
+	    provider: string;
+	    category: string;
+	    format: string;
+	    url: string;
+	    sizeEstimate: string;
+	    gamesEstimate: string;
+	    description: string;
+	    supportsLimit: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new MegaDatabaseSource(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.provider = source["provider"];
+	        this.category = source["category"];
+	        this.format = source["format"];
+	        this.url = source["url"];
+	        this.sizeEstimate = source["sizeEstimate"];
+	        this.gamesEstimate = source["gamesEstimate"];
+	        this.description = source["description"];
+	        this.supportsLimit = source["supportsLimit"];
+	    }
+	}
+	export class MegaImportOptions {
+	    sourceId: string;
+	    customUrl?: string;
+	    maxGames: number;
+	    minElo: number;
+	    createNewDatabase: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MegaImportOptions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sourceId = source["sourceId"];
+	        this.customUrl = source["customUrl"];
+	        this.maxGames = source["maxGames"];
+	        this.minElo = source["minElo"];
+	        this.createNewDatabase = source["createNewDatabase"];
+	    }
+	}
+	export class MegaImportResult {
+	    sourceId: string;
+	    sourceName: string;
+	    url: string;
+	    gamesScanned: number;
+	    gamesImported: number;
+	    bytesDownloaded: number;
+	    databasePath?: string;
+	    durationMs: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MegaImportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sourceId = source["sourceId"];
+	        this.sourceName = source["sourceName"];
+	        this.url = source["url"];
+	        this.gamesScanned = source["gamesScanned"];
+	        this.gamesImported = source["gamesImported"];
+	        this.bytesDownloaded = source["bytesDownloaded"];
+	        this.databasePath = source["databasePath"];
+	        this.durationMs = source["durationMs"];
+	    }
+	}
 	export class Profile {
 	    id: string;
 	    name: string;

@@ -45,6 +45,7 @@ import TimeManagementModal from './components/TimeManagementModal.vue'
 import RepertoireShortenerModal from './components/RepertoireShortenerModal.vue'
 import ProphylaxisModal from './components/ProphylaxisModal.vue'
 import SupportModal from './components/SupportModal.vue'
+import MegaDatabaseModal from './components/MegaDatabaseModal.vue'
 import { initUITheme, applyUITheme, toggleDarkLight, currentUITheme, UI_THEMES } from './utils/theme'
 import { Bot, Sparkles, Brain, Shield, Maximize2, Minimize2, AlertTriangle, Crosshair } from '@lucide/vue'
 import { playerbot, persona, scid, tournament, imbalance, explainer, blundervault, scout } from '../wailsjs/go/models'
@@ -318,6 +319,7 @@ const showTimeManagementModal = ref(false)
 const showRepertoireShortenerModal = ref(false)
 const showProphylaxisModal = ref(false)
 const showSupportModal = ref(false)
+const showMegaDatabaseModal = ref(false)
 const antiPersonaTargetId = ref<string>('')
 const antiPersonaTargetName = ref<string>('')
 const showOpeningTreeModal = ref(false)
@@ -2373,6 +2375,14 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
     icon: 'heart',
     category: 'Actions',
     action: () => { showSupportModal.value = true }
+  },
+  {
+    id: 'mega-database-downloader',
+    title: 'Download Master & Mega Databases (Lumbra / Lichess)',
+    subtitle: "One-click download & zstd streaming for Lumbra's GigaBase, Lichess Open, Broadcasts & Elite",
+    icon: 'download',
+    category: 'Actions',
+    action: () => { showMegaDatabaseModal.value = true }
   }
 ])
 </script>
@@ -2436,6 +2446,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       @database-stats="showDatabaseStatsModal = true"
       @edit-tags="handleOpenEditTags"
       @twic-downloader="showTwicModal = true"
+      @mega-downloader="showMegaDatabaseModal = true"
       @engine-match="showEngineMatchModal = true"
       @export-game="showExportGameModal = true"
       @standardize-names="handleStandardizeNames"
@@ -3049,6 +3060,15 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       :db-name="dbInfo?.name"
       @imported="handleTwicImported"
       @close="showTwicModal = false"
+    />
+
+    <!-- One-Click Master & Mega Database Downloader Modal (LumbrasGigaBase & Lichess Open/Elite) -->
+    <MegaDatabaseModal
+      v-if="showMegaDatabaseModal"
+      :db-open="!!dbInfo?.basePath"
+      :db-name="dbInfo?.name"
+      @imported="handleTwicImported"
+      @close="showMegaDatabaseModal = false"
     />
 
     <!-- Engine vs Engine Match / Tournament Modal -->

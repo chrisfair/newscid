@@ -148,6 +148,7 @@ const emit = defineEmits<{
   (e: 'repertoireShortener'): void
   (e: 'prophylaxis'): void
   (e: 'showSupport'): void
+  (e: 'megaDownloader'): void
 }>()
 
 
@@ -260,6 +261,13 @@ onUnmounted(() => {
         >
           <span class="flex items-center gap-2.5 whitespace-nowrap"><Globe class="w-4 h-4 shrink-0 text-cyan-400" /> Online Account Sync...</span>
           <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Chess.com / Lichess</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('megaDownloader'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Download class="w-4 h-4 shrink-0 text-emerald-400" /> Download Master &amp; Mega Databases...</span>
+          <span class="text-[11px] text-emerald-400 font-mono tracking-wider shrink-0">Lumbra / Lichess</span>
         </button>
 
         <div class="h-px bg-zinc-800 my-1 mx-2" />
@@ -546,6 +554,12 @@ onUnmounted(() => {
           @click="selectItem(() => emit('twicDownloader'))"
         >
           <span class="flex items-center gap-2.5 whitespace-nowrap"><Download class="w-4 h-4 shrink-0 text-cyan-400" /> Download TWIC Bulletins...</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('megaDownloader'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Download class="w-4 h-4 shrink-0 text-emerald-400" /> Download Master &amp; Mega Databases (Lumbra / Lichess)...</span>
         </button>
         <button
           class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"

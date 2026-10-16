@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -3037,5 +3038,80 @@ func (a *App) SetSupportStripeURL(url string) error {
 		a.supportMgr, _ = support.NewManager("")
 	}
 	return a.supportMgr.SetStripeURL(url)
+}
+
+// GetMegaDatabaseCatalog returns the curated catalog of big online chess databases
+// (Lumbra's GigaBase, Lichess Open, Lichess Broadcasts, and Lichess Elite).
+func (a *App) GetMegaDatabaseCatalog() []online.MegaDatabaseSource {
+	client := online.NewMegaDatabaseClient()
+	return client.GetCatalog()
+}
+
+// FetchLichessDatabaseFeed fetches the latest monthly .pgn.zst archive URLs from database.lichess.org.
+func (a *App) FetchLichessDatabaseFeed(feedType string, limit int) ([]string, error) {
+	client := online.NewMegaDatabaseClient()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	return client.FetchLichessFeed(ctx, feedType, limit)
+}
+
+// ImportMegaDatabase downloads or streams a big online database (LumbrasGigaBase, Lichess Open, Lichess Elite, etc.)
+// and imports the games into the active Scid database (or creates a new .si4 database if requested).
+func (a *App) ImportMegaDatabase(opts online.MegaImportOptions) (*online.MegaImportResult, error) {
+	client := online.NewMegaDatabaseClient()
+	home, _ := os.UserHomeDir()
+	userDBDir := filepath.Join(home, ".local", "share", "newscid", "databases")
+	_ = os.MkdirAll(userDBDir, 0o755)
+
+	// Determine whether we need to create/open a new database first
+	a.mu.Lock()
+	targetDB := a.db
+	isOpen := targetDB != nil && targetDB.IsOpen
+	a.mu.Unlock()
+
+	src, hasSrc := client.FindSource(opts.SourceID)
+	isNativeSI4 := hasSrc && src.Format == "7z-si4"
+
+	if !isNativeSI4 {
+		newDBName := strings.TrimSpace(opts.CreateNewDatabase)
+		if newDBName == "" && !isOpen {
+			if hasSrc {
+				newDBName = strings.ReplaceAll(strings.ToLower(src.ID), "-", "_")
+			} else {
+				newDBName = "mega_imported"
+			}
+		}
+		if newDBName != "" {
+			cleanBase := filepath.Base(newDBName)
+			cleanBase = strings.TrimSuffix(cleanBase, ".si4")
+			newDBPath := filepath.Join(userDBDir, cleanBase)
+			if _, err := os.Stat(newDBPath + ".si4"); err == nil {
+				_, _ = a.OpenDatabase(newDBPath)
+			} else {
+				_, _ = a.CreateDatabase(newDBPath, cleanBase)
+			}
+			a.mu.Lock()
+			targetDB = a.db
+			a.mu.Unlock()
+		}
+	}
+
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	res, err := client.DownloadAndImport(ctx, opts, targetDB, userDBDir, func(prog online.MegaImportProgress) {
+		a.emitEvent("megadb:progress", prog)
+	})
+	if err != nil {
+		return res, err
+	}
+
+	// If a native .si4 archive was extracted, open it automatically!
+	if res != nil && res.DatabasePath != "" {
+		_, _ = a.OpenDatabase(res.DatabasePath)
+	}
+	return res, nil
 }
 

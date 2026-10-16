@@ -170,6 +170,10 @@ export function FetchChessComPreview(arg1) {
   return window['go']['main']['App']['FetchChessComPreview'](arg1);
 }
 
+export function FetchLichessDatabaseFeed(arg1, arg2) {
+  return window['go']['main']['App']['FetchLichessDatabaseFeed'](arg1, arg2);
+}
+
 export function FetchLichessPreview(arg1, arg2) {
   return window['go']['main']['App']['FetchLichessPreview'](arg1, arg2);
 }
@@ -298,6 +302,10 @@ export function GetLegalMoves(arg1) {
   return window['go']['main']['App']['GetLegalMoves'](arg1);
 }
 
+export function GetMegaDatabaseCatalog() {
+  return window['go']['main']['App']['GetMegaDatabaseCatalog']();
+}
+
 export function GetNotationStyle() {
   return window['go']['main']['App']['GetNotationStyle']();
 }
@@ -400,6 +408,10 @@ export function GetTournamentEvents() {
 
 export function GetVersionInfo() {
   return window['go']['main']['App']['GetVersionInfo']();
+}
+
+export function ImportMegaDatabase(arg1) {
+  return window['go']['main']['App']['ImportMegaDatabase'](arg1);
 }
 
 export function ImportPGNBatch(arg1) {

@@ -112,6 +112,8 @@ export function ExportPGN(arg1:chess.Game):Promise<string>;
 
 export function FetchChessComPreview(arg1:string):Promise<Array<string>>;
 
+export function FetchLichessDatabaseFeed(arg1:string,arg2:number):Promise<Array<string>>;
+
 export function FetchLichessPreview(arg1:string,arg2:number):Promise<string>;
 
 export function FetchPersonaOnlineGames(arg1:string,arg2:number):Promise<online.SyncResult>;
@@ -176,6 +178,8 @@ export function GetLatestTWICIssue():Promise<number>;
 
 export function GetLegalMoves(arg1:string):Promise<Array<string>>;
 
+export function GetMegaDatabaseCatalog():Promise<Array<online.MegaDatabaseSource>>;
+
 export function GetNotationStyle():Promise<string>;
 
 export function GetOpeningTree(arg1:string):Promise<tree.TreeResult>;
@@ -227,6 +231,8 @@ export function GetTournamentCrosstable(arg1:string,arg2:string,arg3:string):Pro
 export function GetTournamentEvents():Promise<Array<tournament.EventSummary>>;
 
 export function GetVersionInfo():Promise<version.Info>;
+
+export function ImportMegaDatabase(arg1:online.MegaImportOptions):Promise<online.MegaImportResult>;
 
 export function ImportPGNBatch(arg1:string):Promise<scid.ImportStats>;
 
