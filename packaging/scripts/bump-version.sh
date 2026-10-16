@@ -73,4 +73,34 @@ if [ -f "${FRONTEND_PKG}" ]; then
     sed -i -E "s/\"version\": *\"[^\"]+\"/\"version\": \"${NEW_VERSION}\"/" "${FRONTEND_PKG}"
 fi
 
-echo "✔ Version synchronized across VERSION, wails.json, pkg/version, and frontend/package.json: v${NEW_VERSION}"
+# 5. Update packaging metadata files
+if [ -f packaging/chocolatey/newscid.nuspec ]; then
+    sed -i -E "s/<version>[^<]+<\/version>/<version>${NEW_VERSION}<\/version>/" packaging/chocolatey/newscid.nuspec
+fi
+
+if [ -f packaging/deb/DEBIAN/control ]; then
+    sed -i -E "s/^Version: .*/Version: ${NEW_VERSION}-1/" packaging/deb/DEBIAN/control
+fi
+
+if [ -f packaging/snap/snapcraft.yaml ]; then
+    sed -i -E "s/^version: .*/version: '${NEW_VERSION}'/" packaging/snap/snapcraft.yaml
+fi
+
+if [ -f packaging/rpm/newscid.spec ]; then
+    sed -i -E "s/^Version: .*/Version:        ${NEW_VERSION}/" packaging/rpm/newscid.spec
+fi
+
+if [ -f packaging/pacman/PKGBUILD ]; then
+    sed -i -E "s/^pkgver=.*/pkgver=${NEW_VERSION}/" packaging/pacman/PKGBUILD
+fi
+
+if [ -f packaging/pacman/.SRCINFO ]; then
+    sed -i -E "s/pkgver = .*/pkgver = ${NEW_VERSION}/" packaging/pacman/.SRCINFO
+    sed -i -E "s/tag=v[0-9.]+/tag=v${NEW_VERSION}/" packaging/pacman/.SRCINFO
+fi
+
+if [ -f packaging/man/newscid.1 ]; then
+    sed -i -E "s/NewScid [0-9.]+/NewScid ${NEW_VERSION}/" packaging/man/newscid.1
+fi
+
+echo "✔ Version synchronized across VERSION, wails.json, pkg/version, frontend, and packaging manifests: v${NEW_VERSION}"
