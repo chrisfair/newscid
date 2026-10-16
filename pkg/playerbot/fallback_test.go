@@ -42,3 +42,37 @@ func TestSelectTacticalMove_AvoidsHangingPiece(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, m.String())
 }
+
+func TestSelectTacticalMove_EdgeCases(t *testing.T) {
+	// 1. Nil board
+	_, err := SelectTacticalMove(nil, true)
+	assert.Error(t, err)
+
+	// 2. No legal moves (Checkmate / Stalemate)
+	mateBoard, err := chess.ParseFEN("rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3")
+	require.NoError(t, err)
+	_, err = SelectTacticalMove(mateBoard, true)
+	assert.Error(t, err)
+
+	// 3. Exactly 1 legal move (King must move out of check)
+	singleMoveBoard, err := chess.ParseFEN("8/8/8/8/8/8/1r6/K6k w - - 0 1")
+	require.NoError(t, err)
+	singleMove, err := SelectTacticalMove(singleMoveBoard, true)
+	require.NoError(t, err)
+	assert.NotEmpty(t, singleMove.String())
+
+	// 4. Promotion move
+	promoBoard, err := chess.ParseFEN("8/4P3/8/8/8/8/8/k6K w - - 0 1")
+	require.NoError(t, err)
+	promoMove, err := SelectTacticalMove(promoBoard, true)
+	require.NoError(t, err)
+	assert.Equal(t, chess.E8, promoMove.To)
+	assert.Equal(t, chess.Queen, promoMove.Promo)
+
+	// 5. Castling preference
+	castleBoard, err := chess.ParseFEN("r3k2r/pppq1ppp/2np1n2/2b1p3/2B1P3/2NP1N2/PPPQ1PPP/R3K2R w KQkq - 4 8")
+	require.NoError(t, err)
+	cMove, err := SelectTacticalMove(castleBoard, true)
+	require.NoError(t, err)
+	assert.NotEmpty(t, cMove.String())
+}

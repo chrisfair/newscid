@@ -265,7 +265,7 @@ func (pm *PersonaManager) SavePersona(p *Persona) (*Persona, error) {
 	}
 
 	existing, exists := pm.personas[id]
-	var createdAt int64 = now
+	createdAt := now
 	if exists && existing.CreatedAt > 0 {
 		createdAt = existing.CreatedAt
 	} else if p.CreatedAt > 0 {
@@ -800,7 +800,7 @@ func CalculatePersonaStatistics(db *scid.Database, p *Persona) *PersonaStatistic
 	for _, id := range p.Identifiers {
 		orig := strings.TrimSpace(id)
 		agg := idMap[orig]
-		var wr float64 = 0.0
+		wr := 0.0
 		if agg.games > 0 {
 			wr = float64(agg.wins) / float64(agg.games) * 100.0
 		}

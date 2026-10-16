@@ -1135,6 +1135,56 @@ func TestSaveGameAndImportErrors(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestDatabaseUpdateGameTagsAndSpellcheck(t *testing.T) {
+	db, _ := createTestDatabase(t, 3)
+	defer db.Close()
+
+	// 1. FormatECO
+	ecoStr := FormatECO(150)
+	assert.Equal(t, "B50", ecoStr)
+
+	// 2. RLock & RUnlock
+	db.RLock()
+	cnt := db.NumGames()
+	db.RUnlock()
+	assert.Equal(t, 3, cnt)
+
+	// 3. UpdateGameTags valid
+	tags := map[string]string{
+		"White":    "Fischer, Robert J.",
+		"Black":    "Spassky, Boris V.",
+		"Event":    "World Championship Match",
+		"Site":     "Reykjavik",
+		"Round":    "6",
+		"Date":     "1972.07.23",
+		"WhiteElo": "2785",
+		"BlackElo": "2660",
+		"Result":   "1-0",
+		"ECO":      "D59",
+	}
+	err := db.UpdateGameTags(1, tags)
+	require.NoError(t, err)
+
+	summary, err := db.GetGameSummary(1)
+	require.NoError(t, err)
+	assert.Equal(t, "Fischer, Robert J.", summary.White)
+	assert.Equal(t, "Spassky, Boris V.", summary.Black)
+	assert.Equal(t, "Reykjavik", summary.Site)
+	assert.Equal(t, 2785, summary.WhiteElo)
+
+	// 4. UpdateGameTags error cases
+	assert.Error(t, db.UpdateGameTags(0, tags))
+	assert.Error(t, db.UpdateGameTags(999, tags))
+
+	closedDB := NewDatabase()
+	assert.Error(t, closedDB.UpdateGameTags(1, tags))
+
+	// 5. StandardizePlayerNames on Database
+	spellSummary, err := db.StandardizePlayerNames()
+	require.NoError(t, err)
+	assert.NotNil(t, spellSummary)
+}
+
 
 
 

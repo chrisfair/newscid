@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -112,7 +111,6 @@ type App struct {
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	rand.Seed(time.Now().UnixNano())
 	classifier := eco.NewClassifier()
 	// Attempt to load system scid.eco if available
 	if _, err := os.Stat("/usr/share/scid/data/scid.eco"); err == nil {
@@ -312,6 +310,9 @@ func (a *App) CreateDatabase(path string, description string) (*DatabaseInfo, er
 func (a *App) CloseDatabase() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if a.db == nil {
+		return nil
+	}
 	return a.db.Close()
 }
 
@@ -319,7 +320,7 @@ func (a *App) GetDatabaseInfo() (*DatabaseInfo, error) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
-	if !a.db.IsOpen {
+	if a.db == nil || !a.db.IsOpen {
 		return nil, nil
 	}
 
@@ -340,7 +341,7 @@ func (a *App) GetGames(offset, limit int, criteria scid.SearchCriteria) (*GamesP
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
-	if !a.db.IsOpen {
+	if a.db == nil || !a.db.IsOpen {
 		return &GamesPage{Total: 0, Games: []*scid.GameSummary{}}, nil
 	}
 
@@ -357,7 +358,7 @@ func (a *App) CountSearchMatches(criteria scid.SearchCriteria) (int, error) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
-	if !a.db.IsOpen {
+	if a.db == nil || !a.db.IsOpen {
 		return 0, nil
 	}
 
@@ -368,7 +369,7 @@ func (a *App) GetGame(gameID int) (*chess.Game, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if !a.db.IsOpen {
+	if a.db == nil || !a.db.IsOpen {
 		return nil, fmt.Errorf("no database open")
 	}
 
@@ -384,7 +385,7 @@ func (a *App) SaveGame(game *chess.Game) (int, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if !a.db.IsOpen {
+	if a.db == nil || !a.db.IsOpen {
 		return 0, fmt.Errorf("no database open")
 	}
 
@@ -395,7 +396,7 @@ func (a *App) DeleteGame(gameID int, deleted bool) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if !a.db.IsOpen {
+	if a.db == nil || !a.db.IsOpen {
 		return fmt.Errorf("no database open")
 	}
 

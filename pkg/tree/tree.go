@@ -143,7 +143,6 @@ func SearchPositionInGames(fen string, games []*chess.Game) []int {
 	targetBoard, err := chess.ParseFEN(fen)
 	if err != nil {
 		targetBoard = chess.NewBoard()
-		fen = targetBoard.FEN()
 	}
 	targetCore := coreFEN(targetBoard.FEN())
 	var matched []int

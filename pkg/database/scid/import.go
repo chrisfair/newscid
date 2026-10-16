@@ -2,6 +2,7 @@ package scid
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -88,7 +89,7 @@ func (db *Database) ImportGames(games []*chess.Game) (*ImportStats, error) {
 	}
 	defer fSi.Close()
 
-	if _, err := fSi.Seek(0, os.SEEK_END); err != nil {
+	if _, err := fSi.Seek(0, io.SeekEnd); err != nil {
 		return nil, fmt.Errorf("seeking si4: %w", err)
 	}
 
@@ -152,7 +153,7 @@ func (db *Database) ImportGames(games []*chess.Game) (*ImportStats, error) {
 	}
 
 	// Update header in .si4
-	if _, err := fSi.Seek(0, os.SEEK_SET); err != nil {
+	if _, err := fSi.Seek(0, io.SeekStart); err != nil {
 		return nil, fmt.Errorf("seeking si4 to update header: %w", err)
 	}
 	db.Header.NumGames = uint32(len(db.Entries))

@@ -14,7 +14,6 @@ import (
 
 type rawPlayer struct {
 	name          string
-	title         string
 	elo           int
 	wins          int
 	draws         int

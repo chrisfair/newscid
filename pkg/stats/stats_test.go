@@ -111,6 +111,24 @@ func TestCalculateRatingTracker(t *testing.T) {
 	assert.Equal(t, 0, resEmpty.TotalGames)
 	assert.Equal(t, 0, resEmpty.RatedGames)
 
+	// 2b. Player with unrated games only
+	unratedDB := scid.NewDatabase()
+	unratedDB.IsOpen = true
+	unratedDB.Names = scid.NewNameBase()
+	uID := unratedDB.Names.AddName(scid.NamePlayer, "Unrated Player")
+	oppID := unratedDB.Names.AddName(scid.NamePlayer, "Other Player")
+	unratedDB.Entries = append(unratedDB.Entries, &scid.IndexEntry{
+		WhiteID:  uID,
+		BlackID:  oppID,
+		WhiteElo: 0,
+		BlackElo: 0,
+		Result:   chess.ResultWhiteWins,
+	})
+	resUnrated, err := CalculateRatingTracker(unratedDB, []string{"Unrated Player"})
+	require.NoError(t, err)
+	assert.Equal(t, 1, resUnrated.TotalGames)
+	assert.Equal(t, 0, resUnrated.RatedGames)
+
 	// 3. Kasparov progression
 	res, err := CalculateRatingTracker(db, []string{"Kasparov, Garry", "Garry Kasparov"})
 	require.NoError(t, err)
@@ -191,4 +209,57 @@ func TestCalculateDatabaseDemographics(t *testing.T) {
 	assert.NotEmpty(t, demo.TopECOs)
 	// Move lengths
 	assert.NotEmpty(t, demo.MoveLengthDist)
+
+	// Test all brackets with varied entries
+	richDB := scid.NewDatabase()
+	richDB.IsOpen = true
+	richDB.Names = scid.NewNameBase()
+	elos := []uint16{1400, 1650, 1850, 2050, 2250, 2450, 2650}
+	halfMoves := []uint16{30, 70, 110, 150, 190} // covers 1-20, 21-40, 41-60, 61-80, 81+
+
+	for idx, elo := range elos {
+		hm := halfMoves[idx%len(halfMoves)]
+		richDB.Entries = append(richDB.Entries, &scid.IndexEntry{
+			WhiteElo:     elo,
+			BlackElo:     0, // test single Elo branch
+			Date:         "1995.05.01",
+			EcoCode:      uint16(idx * 50),
+			NumHalfMoves: hm,
+			Result:       chess.ResultWhiteWins,
+		})
+	}
+	// Also test Black Elo only
+	richDB.Entries = append(richDB.Entries, &scid.IndexEntry{
+		WhiteElo:     0,
+		BlackElo:     1500,
+		Date:         "1890.01.01",
+		EcoCode:      20,
+		NumHalfMoves: 200,
+		Result:       chess.ResultBlackWins,
+	})
+
+	var richDemo *DatabaseDemographics
+	richDemo, err = CalculateDatabaseDemographics(richDB)
+	require.NoError(t, err)
+	assert.NotEmpty(t, richDemo.EloDist)
+	assert.NotEmpty(t, richDemo.MoveLengthDist)
+
+	// Test empty database (0 entries)
+	blankDB := scid.NewDatabase()
+	blankDB.IsOpen = true
+	var emptyDemo *DatabaseDemographics
+	emptyDemo, err = CalculateDatabaseDemographics(blankDB)
+	require.NoError(t, err)
+	assert.Equal(t, 0, emptyDemo.TotalGames)
+
+	// Test database where all entries are deleted
+	allDeletedDB := scid.NewDatabase()
+	allDeletedDB.IsOpen = true
+	allDeletedDB.Entries = append(allDeletedDB.Entries, &scid.IndexEntry{
+		Flags: scid.FlagDelete,
+	})
+	var delDemo *DatabaseDemographics
+	delDemo, err = CalculateDatabaseDemographics(allDeletedDB)
+	require.NoError(t, err)
+	assert.Equal(t, 0, delDemo.TotalGames)
 }

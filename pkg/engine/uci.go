@@ -563,7 +563,6 @@ func ParseInfoLine(line string, currentFEN string) (PVLine, bool) {
 				pvLine.SAN = candidateSAN
 				pvLine.PVFormatted = formattedPV
 			}
-			hasPV = true
 			return pvLine, true
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -147,7 +148,7 @@ func (db *Database) DeleteDuplicates(criteria DuplicateCriteria) (int, error) {
 
 				// Update on disk
 				entryOffset := int64(IndexHeaderSize + (gameNum-1)*IndexEntrySize)
-				if _, err := fSi.Seek(entryOffset, os.SEEK_SET); err == nil {
+				if _, err := fSi.Seek(entryOffset, io.SeekStart); err == nil {
 					_ = WriteIndexEntry(fSi, entry)
 				}
 			}

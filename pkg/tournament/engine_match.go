@@ -513,7 +513,7 @@ func positionRepKey(fen string) string {
 func (r *EngineMatchRunner) buildPGN(g *EngineGameResult) string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("[Event \"Engine Match: %s vs %s\"]\n", r.Player1.GetName(), r.Player2.GetName()))
-	sb.WriteString(fmt.Sprintf("[Site \"NewScid\"]\n"))
+	sb.WriteString("[Site \"NewScid\"]\n")
 	sb.WriteString(fmt.Sprintf("[Date \"%s\"]\n", time.Now().Format("2006.01.02")))
 	sb.WriteString(fmt.Sprintf("[Round \"%d\"]\n", g.Round))
 	sb.WriteString(fmt.Sprintf("[White \"%s\"]\n", g.WhiteEngine))
