@@ -13,9 +13,9 @@
     <copyright>2026 Christopher Patrick Fair</copyright>
     <licenseUrl>https://raw.githubusercontent.com/chrisfair/newscid/main/LICENSE</licenseUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
-    <projectSourceUrl>https://github.com/christopherpatrickfair/newscid</projectSourceUrl>
-    <docsUrl>https://github.com/christopherpatrickfair/newscid/blob/main/README.md</docsUrl>
-    <bugTrackerUrl>https://github.com/christopherpatrickfair/newscid/issues</bugTrackerUrl>
+    <projectSourceUrl>https://github.com/chrisfair/newscid</projectSourceUrl>
+    <docsUrl>https://github.com/chrisfair/newscid/blob/main/README.md</docsUrl>
+    <bugTrackerUrl>https://github.com/chrisfair/newscid/issues</bugTrackerUrl>
     <tags>chess database scid uci engine pgn fen repertoire tactics</tags>
     <summary>Modern Chess Information Database (Scid vs. PC Rewrite)</summary>
     <description><![CDATA[

@@ -1,7 +1,7 @@
 class Newscid < Formula
   desc "Modern Chess Information Database (Scid vs. PC Rewrite)"
-  homepage "https://github.com/christopherpatrickfair/newscid"
-  url "https://github.com/christopherpatrickfair/newscid/archive/refs/tags/v{{VERSION}}.tar.gz"
+  homepage "https://github.com/chrisfair/newscid"
+  url "https://github.com/chrisfair/newscid/archive/refs/tags/v{{VERSION}}.tar.gz"
   sha256 "{{SOURCE_SHA256}}"
   license "GPL-3.0-or-later"
 
