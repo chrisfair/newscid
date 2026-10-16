@@ -13,8 +13,9 @@ optdepends=(
     'fruit: legacy UCI chess engine'
     'scid: legacy database tools (tcscid)'
 )
-source=("git+https://github.com/chrisfair/newscid.git#tag=v${pkgver}")
-sha256sums=('SKIP')
+source=("${pkgname}-${pkgver}.tar.gz:https:://github.com/chrisfair/newscid/archive/refs/tags/v${pkgver}.tar.gz")
+sha256sums('61e7f5bfa560af7a5d79139541cd251de808e0f469393685aa33fe4a1bdb93d4')
+
 
 prepare() {
     cd "${srcdir}/${pkgname}/frontend"
