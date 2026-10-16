@@ -25,18 +25,25 @@ func TestSupportManager_DefaultAndDismiss(t *testing.T) {
 	assert.Equal(t, DefaultStripeSupportURL, st.StripeURL)
 	assert.Equal(t, 0, st.DismissCount)
 
-	// Dismissing nag increments dismiss count while keeping program non-obligatory
+	// Dismissing nag increments dismiss count and suppresses the prompt for 24 hours (one full day)
 	stDismiss, err := mgr.DismissNag()
 	require.NoError(t, err)
 	assert.Equal(t, 1, stDismiss.DismissCount)
 	assert.Greater(t, stDismiss.LastDismissedAt, int64(0))
-	assert.True(t, stDismiss.ShouldShowNag)
+	assert.False(t, stDismiss.ShouldShowNag, "prompt should stay dismissed for 24 hours")
 
-	// Reload from disk to verify persistence
+	// Reload from disk to verify persistence during the 24h window
 	mgr2, err := NewManager(cfgPath)
 	require.NoError(t, err)
 	st2 := mgr2.GetStatus(nil, nil)
 	assert.Equal(t, 1, st2.DismissCount)
+	assert.False(t, st2.ShouldShowNag)
+
+	// Simulate 25 hours having passed since dismissal -> should show once per day again
+	mgr2.config.LastDismissedAt -= (25 * 3600 * 1000)
+	require.NoError(t, mgr2.save())
+	stAfterDay := mgr2.GetStatus(nil, nil)
+	assert.True(t, stAfterDay.ShouldShowNag, "prompt should appear again after 24 hours if not supported")
 }
 
 func TestSupportManager_RecordSupportDisablesNag(t *testing.T) {
