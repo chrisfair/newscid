@@ -2,10 +2,10 @@ cask "newscid" do
   version "{{VERSION}}"
   sha256 "{{SHA256}}"
 
-  url "https://github.com/christopherpatrickfair/newscid/releases/download/v#{version}/NewScid-#{version}-darwin.zip"
+  url "https://github.com/chrisfair/newscid/releases/download/v#{version}/NewScid-#{version}-darwin.zip"
   name "NewScid"
   desc "Modern Chess Information Database (Scid vs. PC Rewrite)"
-  homepage "https://github.com/christopherpatrickfair/newscid"
+  homepage "https://github.com/chrisfair/newscid"
 
   livecheck do
     url :url

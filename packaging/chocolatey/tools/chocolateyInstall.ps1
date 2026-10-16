@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 $toolsDir   = "$(Split-Path -parent $MyInvocation.MyCommand.Definition)"
-$url64      = 'https://github.com/christopherpatrickfair/newscid/releases/download/v1.0.0/newscid-windows-amd64-installer.exe'
+$url64      = 'https://github.com/chrisfair/newscid/releases/download/v1.0.0/newscid-windows-amd64-installer.exe'
 $checksum64 = ''
 
 # Check for local installer first (offline installation or local packaging)
