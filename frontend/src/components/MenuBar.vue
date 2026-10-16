@@ -149,6 +149,7 @@ const emit = defineEmits<{
   (e: 'prophylaxis'): void
   (e: 'showSupport'): void
   (e: 'megaDownloader'): void
+  (e: 'fairPlayInspector'): void
 }>()
 
 
@@ -618,6 +619,12 @@ onUnmounted(() => {
           @click="selectItem(() => emit('timeManagement'))"
         >
           <span class="flex items-center gap-2.5 whitespace-nowrap"><Clock class="w-4 h-4 shrink-0 text-indigo-400" /> Time Management & Tanking Dossier...</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('fairPlayInspector'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Shield class="w-4 h-4 shrink-0 text-amber-400" /> Fair-Play &amp; Time-Control Consistency Inspector...</span>
         </button>
       </div>
     </div>

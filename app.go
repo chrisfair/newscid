@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,6 +26,7 @@ import (
 	"newscid/pkg/engine"
 	"newscid/pkg/epd"
 	"newscid/pkg/explainer"
+	"newscid/pkg/fairplay"
 	"newscid/pkg/gameexport"
 	"newscid/pkg/imbalance"
 	"newscid/pkg/online"
@@ -3114,4 +3116,73 @@ func (a *App) ImportMegaDatabase(opts online.MegaImportOptions) (*online.MegaImp
 	}
 	return res, nil
 }
+
+// AnalyzePlayerFairPlay runs the Longitudinal Fair-Play & Time-Control Consistency Inspector
+// across all games of playerName in the currently open database.
+func (a *App) AnalyzePlayerFairPlay(playerName string, maxGames int) (*fairplay.PlayerFairPlayDossier, error) {
+	a.mu.Lock()
+	db := a.db
+	a.mu.Unlock()
+	return fairplay.AnalyzePlayerFairPlay(db, playerName, maxGames)
+}
+
+// DownloadAndAnalyzePlayerFairPlay fetches a player's recent games across all time controls from
+// Lichess.org and/or Chess.com, imports them into the active (or dedicated) database, and returns
+// the complete Longitudinal Multi-Time-Control & Day-by-Day Fair-Play Dossier.
+func (a *App) DownloadAndAnalyzePlayerFairPlay(platform string, username string, maxGames int) (*fairplay.PlayerFairPlayDossier, error) {
+	user := strings.TrimSpace(username)
+	if user == "" {
+		return nil, fmt.Errorf("username is required")
+	}
+	if maxGames <= 0 {
+		maxGames = 200
+	}
+
+	// Ensure a database is open to store and inspect the downloaded games
+	a.mu.Lock()
+	db := a.db
+	isOpen := db != nil && db.IsOpen
+	a.mu.Unlock()
+
+	if !isOpen {
+		home, _ := os.UserHomeDir()
+		userDBDir := filepath.Join(home, ".local", "share", "newscid", "databases")
+		_ = os.MkdirAll(userDBDir, 0o755)
+		safeName := "fairplay_" + strings.ToLower(regexp.MustCompile(`[^a-zA-Z0-9_-]`).ReplaceAllString(user, "_"))
+		dbPath := filepath.Join(userDBDir, safeName)
+		if _, err := os.Stat(dbPath + ".si4"); err == nil {
+			_, _ = a.OpenDatabase(dbPath)
+		} else {
+			_, _ = a.CreateDatabase(dbPath, "Fair-Play Dossier: "+user)
+		}
+	}
+
+	plat := strings.ToLower(strings.TrimSpace(platform))
+	opts := online.ImportPlayerOptions{
+		PlayerName:      user,
+		TargetMode:      online.TargetActiveBase,
+		MaxGames:        maxGames,
+		AutoDeduplicate: true,
+	}
+	switch plat {
+	case "chesscom", "chess.com":
+		opts.ChessComUsername = user
+	case "both":
+		opts.LichessUsername = user
+		opts.ChessComUsername = user
+	default:
+		opts.LichessUsername = user
+	}
+
+	_, err := a.ImportPlayerGames(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	a.mu.Lock()
+	db = a.db
+	a.mu.Unlock()
+	return fairplay.AnalyzePlayerFairPlay(db, user, maxGames)
+}
+
 

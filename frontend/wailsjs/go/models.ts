@@ -511,6 +511,243 @@ export namespace explainer {
 
 }
 
+export namespace fairplay {
+	
+	export class CrossControlDivergence {
+	    hasMultipleControls: boolean;
+	    baselineControl: string;
+	    suspectControl: string;
+	    iprDelta: number;
+	    acplDelta: number;
+	    cadenceCvDelta: number;
+	    divergenceScore: number;
+	    explanation: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CrossControlDivergence(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hasMultipleControls = source["hasMultipleControls"];
+	        this.baselineControl = source["baselineControl"];
+	        this.suspectControl = source["suspectControl"];
+	        this.iprDelta = source["iprDelta"];
+	        this.acplDelta = source["acplDelta"];
+	        this.cadenceCvDelta = source["cadenceCvDelta"];
+	        this.divergenceScore = source["divergenceScore"];
+	        this.explanation = source["explanation"];
+	    }
+	}
+	export class DailyFairPlaySummary {
+	    date: string;
+	    gamesCount: number;
+	    timeControls: string[];
+	    primaryTimeControl: string;
+	    winRatePct: number;
+	    avgAcpl: number;
+	    top1AgreementPct: number;
+	    avgMoveTimeCV: number;
+	    intrinsicPerformance: number;
+	    dailyIssueScore: number;
+	    peakGameId: number;
+	    classification: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DailyFairPlaySummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.date = source["date"];
+	        this.gamesCount = source["gamesCount"];
+	        this.timeControls = source["timeControls"];
+	        this.primaryTimeControl = source["primaryTimeControl"];
+	        this.winRatePct = source["winRatePct"];
+	        this.avgAcpl = source["avgAcpl"];
+	        this.top1AgreementPct = source["top1AgreementPct"];
+	        this.avgMoveTimeCV = source["avgMoveTimeCV"];
+	        this.intrinsicPerformance = source["intrinsicPerformance"];
+	        this.dailyIssueScore = source["dailyIssueScore"];
+	        this.peakGameId = source["peakGameId"];
+	        this.classification = source["classification"];
+	    }
+	}
+	export class GameFairPlayRecord {
+	    gameId: number;
+	    date: string;
+	    event: string;
+	    site: string;
+	    timeControlRaw: string;
+	    timeControlCategory: string;
+	    playerColor: string;
+	    playerElo: number;
+	    opponentName: string;
+	    opponentElo: number;
+	    result: string;
+	    playerScore: number;
+	    totalPlies: number;
+	    nonBookMoves: number;
+	    hasClockData: boolean;
+	    hasEvalData: boolean;
+	    avgMoveTimeSec: number;
+	    moveTimeStdDevSec: number;
+	    moveTimeCV: number;
+	    roboticCadencePct: number;
+	    delayedRecaptureCount: number;
+	    acpl: number;
+	    top1AgreementPct: number;
+	    criticalAccuracyPct: number;
+	    blunderCount: number;
+	    intrinsicPerformanceElo: number;
+	    gameIssueScore: number;
+	    flags: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new GameFairPlayRecord(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.gameId = source["gameId"];
+	        this.date = source["date"];
+	        this.event = source["event"];
+	        this.site = source["site"];
+	        this.timeControlRaw = source["timeControlRaw"];
+	        this.timeControlCategory = source["timeControlCategory"];
+	        this.playerColor = source["playerColor"];
+	        this.playerElo = source["playerElo"];
+	        this.opponentName = source["opponentName"];
+	        this.opponentElo = source["opponentElo"];
+	        this.result = source["result"];
+	        this.playerScore = source["playerScore"];
+	        this.totalPlies = source["totalPlies"];
+	        this.nonBookMoves = source["nonBookMoves"];
+	        this.hasClockData = source["hasClockData"];
+	        this.hasEvalData = source["hasEvalData"];
+	        this.avgMoveTimeSec = source["avgMoveTimeSec"];
+	        this.moveTimeStdDevSec = source["moveTimeStdDevSec"];
+	        this.moveTimeCV = source["moveTimeCV"];
+	        this.roboticCadencePct = source["roboticCadencePct"];
+	        this.delayedRecaptureCount = source["delayedRecaptureCount"];
+	        this.acpl = source["acpl"];
+	        this.top1AgreementPct = source["top1AgreementPct"];
+	        this.criticalAccuracyPct = source["criticalAccuracyPct"];
+	        this.blunderCount = source["blunderCount"];
+	        this.intrinsicPerformanceElo = source["intrinsicPerformanceElo"];
+	        this.gameIssueScore = source["gameIssueScore"];
+	        this.flags = source["flags"];
+	    }
+	}
+	export class TimeControlIssueProfile {
+	    category: string;
+	    gamesAnalyzed: number;
+	    daysActive: number;
+	    daysWithElevatedIssue: number;
+	    dailyConsistencyPct: number;
+	    winRatePct: number;
+	    avgOfficialElo: number;
+	    intrinsicPerformanceElo: number;
+	    eloOverperformanceDelta: number;
+	    avgAcpl: number;
+	    top1AgreementPct: number;
+	    criticalAccuracyPct: number;
+	    blunderFreeGamePct: number;
+	    avgMoveTimeSec: number;
+	    avgMoveTimeCV: number;
+	    roboticCadenceGamePct: number;
+	    consistentIssueScore: number;
+	    zScore: number;
+	    consistencyClassification: string;
+	    summary: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TimeControlIssueProfile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.category = source["category"];
+	        this.gamesAnalyzed = source["gamesAnalyzed"];
+	        this.daysActive = source["daysActive"];
+	        this.daysWithElevatedIssue = source["daysWithElevatedIssue"];
+	        this.dailyConsistencyPct = source["dailyConsistencyPct"];
+	        this.winRatePct = source["winRatePct"];
+	        this.avgOfficialElo = source["avgOfficialElo"];
+	        this.intrinsicPerformanceElo = source["intrinsicPerformanceElo"];
+	        this.eloOverperformanceDelta = source["eloOverperformanceDelta"];
+	        this.avgAcpl = source["avgAcpl"];
+	        this.top1AgreementPct = source["top1AgreementPct"];
+	        this.criticalAccuracyPct = source["criticalAccuracyPct"];
+	        this.blunderFreeGamePct = source["blunderFreeGamePct"];
+	        this.avgMoveTimeSec = source["avgMoveTimeSec"];
+	        this.avgMoveTimeCV = source["avgMoveTimeCV"];
+	        this.roboticCadenceGamePct = source["roboticCadenceGamePct"];
+	        this.consistentIssueScore = source["consistentIssueScore"];
+	        this.zScore = source["zScore"];
+	        this.consistencyClassification = source["consistencyClassification"];
+	        this.summary = source["summary"];
+	    }
+	}
+	export class PlayerFairPlayDossier {
+	    playerName: string;
+	    totalGamesAnalyzed: number;
+	    totalDaysActive: number;
+	    overallIssueScore: number;
+	    highestRiskTimeControl: string;
+	    highestControlIssueScore: number;
+	    overallClassification: string;
+	    timeControlProfiles: TimeControlIssueProfile[];
+	    dailyTimeline: DailyFairPlaySummary[];
+	    crossDivergence: CrossControlDivergence;
+	    flaggedGames: GameFairPlayRecord[];
+	    allGames: GameFairPlayRecord[];
+	    keyFindings: string[];
+	    reportMarkdown: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PlayerFairPlayDossier(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.playerName = source["playerName"];
+	        this.totalGamesAnalyzed = source["totalGamesAnalyzed"];
+	        this.totalDaysActive = source["totalDaysActive"];
+	        this.overallIssueScore = source["overallIssueScore"];
+	        this.highestRiskTimeControl = source["highestRiskTimeControl"];
+	        this.highestControlIssueScore = source["highestControlIssueScore"];
+	        this.overallClassification = source["overallClassification"];
+	        this.timeControlProfiles = this.convertValues(source["timeControlProfiles"], TimeControlIssueProfile);
+	        this.dailyTimeline = this.convertValues(source["dailyTimeline"], DailyFairPlaySummary);
+	        this.crossDivergence = this.convertValues(source["crossDivergence"], CrossControlDivergence);
+	        this.flaggedGames = this.convertValues(source["flaggedGames"], GameFairPlayRecord);
+	        this.allGames = this.convertValues(source["allGames"], GameFairPlayRecord);
+	        this.keyFindings = source["keyFindings"];
+	        this.reportMarkdown = source["reportMarkdown"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace gameexport {
 	
 	export class HTMLExportOptions {
