@@ -2663,11 +2663,13 @@ export namespace support {
 	
 	export class SupportStatus {
 	    supported: boolean;
+	    isLifetime: boolean;
 	    isAuthor: boolean;
 	    authorId?: string;
 	    deviceSignature?: string;
 	    supporterTier?: string;
 	    supportedAt?: number;
+	    supportedUntil?: number;
 	    dismissCount: number;
 	    lastDismissedAt?: number;
 	    stripeUrl: string;
@@ -2682,11 +2684,13 @@ export namespace support {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.supported = source["supported"];
+	        this.isLifetime = source["isLifetime"];
 	        this.isAuthor = source["isAuthor"];
 	        this.authorId = source["authorId"];
 	        this.deviceSignature = source["deviceSignature"];
 	        this.supporterTier = source["supporterTier"];
 	        this.supportedAt = source["supportedAt"];
+	        this.supportedUntil = source["supportedUntil"];
 	        this.dismissCount = source["dismissCount"];
 	        this.lastDismissedAt = source["lastDismissedAt"];
 	        this.stripeUrl = source["stripeUrl"];
