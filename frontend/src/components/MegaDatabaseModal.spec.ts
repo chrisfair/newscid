@@ -1,0 +1,95 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
+import MegaDatabaseModal from './MegaDatabaseModal.vue'
+import * as AppBindings from '../../wailsjs/go/main/App'
+
+vi.mock('../../wailsjs/go/main/App', () => ({
+  GetMegaDatabaseCatalog: vi.fn(),
+  FetchLichessDatabaseFeed: vi.fn(),
+  ImportMegaDatabase: vi.fn(),
+}))
+
+vi.mock('../../wailsjs/runtime/runtime', () => ({
+  EventsOn: vi.fn(),
+  EventsOff: vi.fn(),
+}))
+
+const mockCatalog = [
+  {
+    id: 'lumbras-otb-2026',
+    name: "Lumbra's GigaBase — OTB 2026 Release",
+    provider: 'LumbrasGigaBase',
+    category: 'OTB Master',
+    format: '7z-pgn',
+    url: 'https://huggingface.co/datasets/Lumbra74/LumbrasGigabaseCCBYNC40/resolve/main/LumbrasGigabase_OTB_2026_partial_release.7z',
+    sizeEstimate: '127 MB (.7z)',
+    gamesEstimate: '~350,000 OTB games',
+    description: 'Latest 2026 Over-The-Board tournament games.',
+    supportsLimit: true,
+  },
+  {
+    id: 'lichess-open-2026-09',
+    name: 'Lichess Open Rated Database Stream — Sep 2026',
+    provider: 'Lichess Open',
+    category: 'Lichess Monthly Stream',
+    format: 'pgn.zst',
+    url: 'https://database.lichess.org/standard/lichess_db_standard_rated_2026-09.pgn.zst',
+    sizeEstimate: 'Live HTTP Zstd Stream',
+    gamesEstimate: '90M+ games',
+    description: 'Streams directly from database.lichess.org using on-the-fly zstd decompression.',
+    supportsLimit: true,
+  },
+]
+
+describe('MegaDatabaseModal.vue', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(AppBindings.GetMegaDatabaseCatalog).mockResolvedValue(mockCatalog as any)
+    vi.mocked(AppBindings.FetchLichessDatabaseFeed).mockResolvedValue([
+      'https://database.lichess.org/broadcast/lichess_db_broadcast_2026-09.pgn.zst',
+    ])
+    vi.mocked(AppBindings.ImportMegaDatabase).mockResolvedValue({
+      sourceId: 'lumbras-otb-2026',
+      sourceName: "Lumbra's GigaBase — OTB 2026 Release",
+      gamesScanned: 5000,
+      gamesImported: 5000,
+    } as any)
+  })
+
+  it('renders catalog of LumbrasGigaBase and Lichess databases and filters by provider', async () => {
+    const wrapper = mount(MegaDatabaseModal, {
+      props: { dbOpen: true, dbName: 'MyPrepBase' },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain("Lumbra's GigaBase — OTB 2026 Release")
+    expect(wrapper.text()).toContain('Lichess Open Rated Database Stream — Sep 2026')
+
+    // Filter to Lichess only
+    await wrapper.get('[data-testid="tab-lichess"]').trigger('click')
+    expect(wrapper.find('[data-testid="source-lumbras-otb-2026"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="source-lichess-open-2026-09"]').exists()).toBe(true)
+  })
+
+  it('triggers ImportMegaDatabase with selected source, maxGames, and minElo', async () => {
+    const wrapper = mount(MegaDatabaseModal, {
+      props: { dbOpen: true, dbName: 'MyPrepBase' },
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-testid="source-lichess-open-2026-09"]').trigger('click')
+    await wrapper.get('[data-testid="min-elo-select"]').setValue('2400')
+    await wrapper.get('[data-testid="start-mega-import-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(AppBindings.ImportMegaDatabase).toHaveBeenCalledWith({
+      sourceId: 'lichess-open-2026-09',
+      customUrl: '',
+      maxGames: 25000,
+      minElo: 2400,
+      createNewDatabase: '',
+    })
+    expect(wrapper.find('[data-testid="megadb-success-msg"]').exists()).toBe(true)
+    expect(wrapper.emitted('imported')).toBeTruthy()
+  })
+})
