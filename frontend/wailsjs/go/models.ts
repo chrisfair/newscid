@@ -2688,6 +2688,84 @@ export namespace tournament {
 
 export namespace training {
 	
+	export class PieceSafety {
+	    square: string;
+	    piece: string;
+	    color: string;
+	    pieceValue: number;
+	    attackers: string[];
+	    defenders: string[];
+	    status: string;
+	    netLoss: number;
+	    explanation: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PieceSafety(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.square = source["square"];
+	        this.piece = source["piece"];
+	        this.color = source["color"];
+	        this.pieceValue = source["pieceValue"];
+	        this.attackers = source["attackers"];
+	        this.defenders = source["defenders"];
+	        this.status = source["status"];
+	        this.netLoss = source["netLoss"];
+	        this.explanation = source["explanation"];
+	    }
+	}
+	export class BoardSafetyReport {
+	    fen: string;
+	    turn: string;
+	    pieces: PieceSafety[];
+	    hangingPieces: PieceSafety[];
+	    underdefendedPieces: PieceSafety[];
+	    loosePieces: PieceSafety[];
+	    hangingSquares: string[];
+	    totalHangingWhite: number;
+	    totalHangingBlack: number;
+	    criticalThreat?: PieceSafety;
+	    blunderCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new BoardSafetyReport(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.fen = source["fen"];
+	        this.turn = source["turn"];
+	        this.pieces = this.convertValues(source["pieces"], PieceSafety);
+	        this.hangingPieces = this.convertValues(source["hangingPieces"], PieceSafety);
+	        this.underdefendedPieces = this.convertValues(source["underdefendedPieces"], PieceSafety);
+	        this.loosePieces = this.convertValues(source["loosePieces"], PieceSafety);
+	        this.hangingSquares = source["hangingSquares"];
+	        this.totalHangingWhite = source["totalHangingWhite"];
+	        this.totalHangingBlack = source["totalHangingBlack"];
+	        this.criticalThreat = this.convertValues(source["criticalThreat"], PieceSafety);
+	        this.blunderCount = source["blunderCount"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class PerformanceSummary {
 	    score: number;
 	    maxScore: number;
@@ -2787,6 +2865,69 @@ export namespace training {
 	    }
 	}
 	
+	
+	export class SafetyDrill {
+	    id: string;
+	    title: string;
+	    fen: string;
+	    turn: string;
+	    mode: string;
+	    prompt: string;
+	    targetColor: string;
+	    correctSquares: string[];
+	    winningMoveUCI?: string;
+	    winningMoveSAN?: string;
+	    explanation: string;
+	    difficulty: string;
+	    source: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SafetyDrill(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.fen = source["fen"];
+	        this.turn = source["turn"];
+	        this.mode = source["mode"];
+	        this.prompt = source["prompt"];
+	        this.targetColor = source["targetColor"];
+	        this.correctSquares = source["correctSquares"];
+	        this.winningMoveUCI = source["winningMoveUCI"];
+	        this.winningMoveSAN = source["winningMoveSAN"];
+	        this.explanation = source["explanation"];
+	        this.difficulty = source["difficulty"];
+	        this.source = source["source"];
+	    }
+	}
+	export class SafetyDrillFeedback {
+	    isCorrect: boolean;
+	    score: number;
+	    correctSquares: string[];
+	    missedSquares: string[];
+	    wrongSquares: string[];
+	    explanation: string;
+	    bestMoveUCI?: string;
+	    bestMoveSAN?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SafetyDrillFeedback(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.isCorrect = source["isCorrect"];
+	        this.score = source["score"];
+	        this.correctSquares = source["correctSquares"];
+	        this.missedSquares = source["missedSquares"];
+	        this.wrongSquares = source["wrongSquares"];
+	        this.explanation = source["explanation"];
+	        this.bestMoveUCI = source["bestMoveUCI"];
+	        this.bestMoveSAN = source["bestMoveSAN"];
+	    }
+	}
 	export class SolitaireSession {
 	    white: string;
 	    black: string;

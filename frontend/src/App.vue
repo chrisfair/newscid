@@ -39,6 +39,7 @@ import ExplainMoveModal from './components/ExplainMoveModal.vue'
 import BlunderVaultModal from './components/BlunderVaultModal.vue'
 import OpponentScoutModal from './components/OpponentScoutModal.vue'
 import AntiPersonaModal from './components/AntiPersonaModal.vue'
+import PieceSafetyModal from './components/PieceSafetyModal.vue'
 import { initUITheme, applyUITheme, toggleDarkLight, currentUITheme, UI_THEMES } from './utils/theme'
 import { Bot, Sparkles, Brain, Shield, Maximize2, Minimize2, AlertTriangle, Crosshair } from '@lucide/vue'
 import { playerbot, persona, scid, tournament, imbalance, explainer, blundervault, scout } from '../wailsjs/go/models'
@@ -305,6 +306,7 @@ const showExplainMoveModal = ref(false)
 const showBlunderVaultModal = ref(false)
 const showOpponentScoutModal = ref(false)
 const showAntiPersonaModal = ref(false)
+const showPieceSafetyModal = ref(false)
 const antiPersonaTargetId = ref<string>('')
 const antiPersonaTargetName = ref<string>('')
 const showOpeningTreeModal = ref(false)
@@ -2184,6 +2186,14 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
     action: () => { showCoordinateTrainerModal.value = true }
   },
   {
+    id: 'piece-safety',
+    title: "Piece Safety Scanner (Don't Hang Pieces)",
+    subtitle: 'Rapid tactical blunder detection and piece safety audit',
+    icon: 'shield',
+    category: 'Training',
+    action: () => { showPieceSafetyModal.value = true }
+  },
+  {
     id: 'chess960',
     title: 'Chess960 (Fischer Random)',
     subtitle: 'Generate any of the 960 starting positions',
@@ -2384,6 +2394,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       :current-u-i-theme="currentUITheme"
       @change-u-i-theme="applyUITheme"
       @toggle-dark-light="toggleDarkLight"
+      @piece-safety="showPieceSafetyModal = true"
     />
 
 
@@ -3079,6 +3090,16 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       @close="showAntiPersonaModal = false"
       @spar-bot="handleSparBotFromAnti"
       @train-repertoire="handleTrainAntiRepertoire"
+    />
+
+    <!-- Piece Safety Scanner & Blunder Prevention Modal -->
+    <PieceSafetyModal
+      v-if="showPieceSafetyModal"
+      :initial-f-e-n="currentFEN"
+      :piece-set="currentPieceSet"
+      :board-theme="currentTheme"
+      @close="showPieceSafetyModal = false"
+      @load-position="(fen) => handleSetupBoardApply(fen)"
     />
   </div>
 </template>
