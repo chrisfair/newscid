@@ -194,6 +194,10 @@ export function GenerateOpponentScoutingReport(arg1) {
   return window['go']['main']['App']['GenerateOpponentScoutingReport'](arg1);
 }
 
+export function GenerateProphylaxisDrillsFromDatabase(arg1) {
+  return window['go']['main']['App']['GenerateProphylaxisDrillsFromDatabase'](arg1);
+}
+
 export function GenerateRandomChess960() {
   return window['go']['main']['App']['GenerateRandomChess960']();
 }
@@ -340,6 +344,10 @@ export function GetPositionalImbalance(arg1) {
 
 export function GetProgressivePuzzle(arg1) {
   return window['go']['main']['App']['GetProgressivePuzzle'](arg1);
+}
+
+export function GetProphylaxisDrillBatch(arg1, arg2) {
+  return window['go']['main']['App']['GetProphylaxisDrillBatch'](arg1, arg2);
 }
 
 export function GetRatingEvolution(arg1) {
@@ -576,6 +584,10 @@ export function SubmitGuessTheMove(arg1) {
 
 export function SubmitIntuitionAnswer(arg1, arg2, arg3) {
   return window['go']['main']['App']['SubmitIntuitionAnswer'](arg1, arg2, arg3);
+}
+
+export function SubmitProphylaxisAnswer(arg1, arg2) {
+  return window['go']['main']['App']['SubmitProphylaxisAnswer'](arg1, arg2);
 }
 
 export function SubmitSafetyDrillAnswer(arg1, arg2, arg3) {

@@ -1,12 +1,14 @@
 package training
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"newscid/pkg/chess"
+	"newscid/pkg/database/scid"
 )
 
 func TestFindAttackersAndDefenders(t *testing.T) {
@@ -117,4 +119,53 @@ func TestGetSafetyDrillBatch(t *testing.T) {
 		assert.NotEmpty(t, d.FEN)
 		assert.NotEmpty(t, d.CorrectSquares)
 	}
+
+	all := GetBuiltinSafetyChallenges()
+	assert.NotEmpty(t, all)
+
+	batchAll := GetSafetyDrillBatch(0, "all")
+	assert.NotEmpty(t, batchAll)
+
+	batchUnknown := GetSafetyDrillBatch(2, "nonexistent_diff")
+	assert.NotEmpty(t, batchUnknown)
+}
+
+func TestExtractSafetyDrillsFromDatabase(t *testing.T) {
+	// Nil or empty DB returns fallback batch
+	fb1 := ExtractSafetyDrillsFromDatabase(nil, 3)
+	assert.Len(t, fb1, 3)
+
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "safety_test_db")
+	db := scid.NewDatabase()
+	err := db.Create(dbPath, "Safety Test DB")
+	require.NoError(t, err)
+
+	fb2 := ExtractSafetyDrillsFromDatabase(db, 2)
+	assert.Len(t, fb2, 2)
+
+	// Add game with hanging blunder
+	g := chess.NewGame()
+	g.SetTag("White", "Player A")
+	g.SetTag("Black", "Player B")
+	b := chess.NewBoard()
+	moves := []string{"e4", "e5", "Nf3", "Nc6", "Bc4", "Nf6", "d3", "d5", "exd5", "Nxd5", "O-O", "Be7"}
+	var prev *chess.MoveNode
+	for _, san := range moves {
+		m, err := b.ParseSAN(san)
+		require.NoError(t, err)
+		node := &chess.MoveNode{Move: m, SAN: san, UCI: m.String()}
+		b.MakeMove(m)
+		if g.RootMove == nil {
+			g.RootMove = node
+		} else {
+			prev.Next = node
+		}
+		prev = node
+	}
+	_, err = db.SaveGame(g)
+	require.NoError(t, err)
+
+	drills := ExtractSafetyDrillsFromDatabase(db, 5)
+	assert.NotEmpty(t, drills)
 }

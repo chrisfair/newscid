@@ -17,7 +17,7 @@ import {
   Trash2
 } from '@lucide/vue'
 import {
-  ListRepertoires,
+  GetRepertoires,
   ShortenRepertoire
 } from '../../wailsjs/go/main/App'
 import { repertoire } from '../../wailsjs/go/models'
@@ -54,7 +54,7 @@ async function loadRepertoires() {
   isLoadingRepertoires.value = true
   errorMsg.value = ''
   try {
-    const list = await ListRepertoires()
+    const list = await GetRepertoires()
     repertoires.value = list
     if (list.length > 0 && !selectedRepId.value) {
       selectedRepId.value = list[0].id

@@ -28,7 +28,7 @@ export interface CommandItem {
   id: string
   title: string
   subtitle?: string
-  category: 'Actions' | 'Openings' | 'Analysis' | 'Training' | 'Options'
+  category: 'Actions' | 'Openings' | 'Analysis' | 'Training' | 'Options' | 'Tools'
   icon: any
   shortcut?: string
   action: () => void

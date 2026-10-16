@@ -2923,6 +2923,29 @@ func (a *App) AnalyzePlayerTimeManagement(playerName string, maxGames int) (*sta
 	return stats.AnalyzePlayerTimeManagement(db, playerName, maxGames)
 }
 
+// GetProphylaxisDrillBatch returns curated quiet move / prophylaxis drill challenges.
+func (a *App) GetProphylaxisDrillBatch(count int, category string) ([]training.ProphylaxisDrill, error) {
+	return training.GetProphylaxisDrillBatch(count, category), nil
+}
+
+// GenerateProphylaxisDrillsFromDatabase mines quiet prophylactic moves from the active database.
+func (a *App) GenerateProphylaxisDrillsFromDatabase(count int) ([]training.ProphylaxisDrill, error) {
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+
+	if db == nil || !db.IsOpen {
+		return training.GetProphylaxisDrillBatch(count, "all"), nil
+	}
+	return training.GenerateProphylaxisDrillsFromDatabase(db, count)
+}
+
+// SubmitProphylaxisAnswer checks the user's quiet prophylactic move.
+func (a *App) SubmitProphylaxisAnswer(drillID string, moveUCI string) (*training.ProphylaxisFeedback, error) {
+	return training.SubmitProphylaxisAnswer(drillID, moveUCI)
+}
+
+
 
 
 
