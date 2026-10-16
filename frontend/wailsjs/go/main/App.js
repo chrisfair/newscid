@@ -102,8 +102,24 @@ export function DownloadTWICRange(arg1, arg2) {
   return window['go']['main']['App']['DownloadTWICRange'](arg1, arg2);
 }
 
+export function EvaluateOpponentWeaknesses(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['EvaluateOpponentWeaknesses'](arg1, arg2, arg3, arg4);
+}
+
+export function EvaluatePersonaWeaknesses(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['EvaluatePersonaWeaknesses'](arg1, arg2, arg3, arg4);
+}
+
 export function ExplainMove(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['ExplainMove'](arg1, arg2, arg3, arg4);
+}
+
+export function ExportAntiPersonaPGN(arg1, arg2) {
+  return window['go']['main']['App']['ExportAntiPersonaPGN'](arg1, arg2);
+}
+
+export function ExportAntiPersonaPolyglotBook(arg1, arg2) {
+  return window['go']['main']['App']['ExportAntiPersonaPolyglotBook'](arg1, arg2);
 }
 
 export function ExportCrosstableText(arg1, arg2, arg3) {
@@ -426,6 +442,10 @@ export function RemovePersonaIdentifier(arg1, arg2) {
   return window['go']['main']['App']['RemovePersonaIdentifier'](arg1, arg2);
 }
 
+export function SaveBookFileDialog(arg1) {
+  return window['go']['main']['App']['SaveBookFileDialog'](arg1);
+}
+
 export function SaveExportFile(arg1, arg2) {
   return window['go']['main']['App']['SaveExportFile'](arg1, arg2);
 }
@@ -436,6 +456,10 @@ export function SaveFileDialog(arg1) {
 
 export function SaveGame(arg1) {
   return window['go']['main']['App']['SaveGame'](arg1);
+}
+
+export function SavePGNFileDialog(arg1) {
+  return window['go']['main']['App']['SavePGNFileDialog'](arg1);
 }
 
 export function SavePersona(arg1) {
@@ -536,28 +560,4 @@ export function VerifyDatabase() {
 
 export function VerifyRepertoireMove(arg1, arg2, arg3) {
   return window['go']['main']['App']['VerifyRepertoireMove'](arg1, arg2, arg3);
-}
-
-export function EvaluateOpponentWeaknesses(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['EvaluateOpponentWeaknesses'](arg1, arg2, arg3, arg4);
-}
-
-export function EvaluatePersonaWeaknesses(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['EvaluatePersonaWeaknesses'](arg1, arg2, arg3, arg4);
-}
-
-export function ExportAntiPersonaPolyglotBook(arg1, arg2) {
-  return window['go']['main']['App']['ExportAntiPersonaPolyglotBook'](arg1, arg2);
-}
-
-export function ExportAntiPersonaPGN(arg1, arg2) {
-  return window['go']['main']['App']['ExportAntiPersonaPGN'](arg1, arg2);
-}
-
-export function SaveBookFileDialog(arg1) {
-  return window['go']['main']['App']['SaveBookFileDialog'](arg1);
-}
-
-export function SavePGNFileDialog(arg1) {
-  return window['go']['main']['App']['SavePGNFileDialog'](arg1);
 }

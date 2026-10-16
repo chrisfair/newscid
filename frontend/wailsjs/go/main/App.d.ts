@@ -77,7 +77,15 @@ export function DownloadTWICIssue(arg1:number):Promise<online.TWICIssueResult>;
 
 export function DownloadTWICRange(arg1:number,arg2:number):Promise<online.TWICBatchResult>;
 
+export function EvaluateOpponentWeaknesses(arg1:string,arg2:string,arg3:number,arg4:number):Promise<persona.AntiPersonaReport>;
+
+export function EvaluatePersonaWeaknesses(arg1:string,arg2:string,arg3:number,arg4:number):Promise<persona.AntiPersonaReport>;
+
 export function ExplainMove(arg1:string,arg2:string,arg3:number,arg4:string):Promise<explainer.Explanation>;
+
+export function ExportAntiPersonaPGN(arg1:persona.AntiPersonaReport,arg2:string):Promise<string>;
+
+export function ExportAntiPersonaPolyglotBook(arg1:persona.AntiPersonaReport,arg2:string):Promise<string>;
 
 export function ExportCrosstableText(arg1:string,arg2:string,arg3:string):Promise<string>;
 
@@ -239,11 +247,15 @@ export function RecordRepertoirePractice(arg1:string,arg2:string,arg3:string,arg
 
 export function RemovePersonaIdentifier(arg1:string,arg2:string):Promise<persona.Persona>;
 
+export function SaveBookFileDialog(arg1:string):Promise<string>;
+
 export function SaveExportFile(arg1:string,arg2:string):Promise<void>;
 
 export function SaveFileDialog(arg1:string):Promise<string>;
 
 export function SaveGame(arg1:chess.Game):Promise<number>;
+
+export function SavePGNFileDialog(arg1:string):Promise<string>;
 
 export function SavePersona(arg1:persona.Persona):Promise<persona.Persona>;
 
@@ -294,15 +306,3 @@ export function UpdateGameHeaders(arg1:number,arg2:Record<string, string>):Promi
 export function VerifyDatabase():Promise<scid.VerificationReport>;
 
 export function VerifyRepertoireMove(arg1:string,arg2:string,arg3:string):Promise<main.RepertoireCheckResult>;
-
-export function EvaluateOpponentWeaknesses(arg1:string,arg2:string,arg3:number,arg4:number):Promise<persona.AntiPersonaReport>;
-
-export function EvaluatePersonaWeaknesses(arg1:string,arg2:string,arg3:number,arg4:number):Promise<persona.AntiPersonaReport>;
-
-export function ExportAntiPersonaPolyglotBook(arg1:persona.AntiPersonaReport,arg2:string):Promise<string>;
-
-export function ExportAntiPersonaPGN(arg1:persona.AntiPersonaReport,arg2:string):Promise<string>;
-
-export function SaveBookFileDialog(arg1:string):Promise<string>;
-
-export function SavePGNFileDialog(arg1:string):Promise<string>;
