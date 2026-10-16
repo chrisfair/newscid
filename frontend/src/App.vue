@@ -766,15 +766,19 @@ onMounted(async () => {
       await handleOpenDiscoveredBase(autoBase)
     }
 
-    // 6. Check voluntary support status (exempts author machine via Chess.com & Lichess IDs)
-    try {
-      const supStatus = await GetSupportStatus()
-      if (supStatus && supStatus.shouldShowNag) {
-        showSupportModal.value = true
+    // 6. Check voluntary support status (exempts author machine via Chess.com & Lichess IDs; 24h cooldown on dismiss)
+    const checkSupportNag = async () => {
+      try {
+        const supStatus = await GetSupportStatus()
+        if (supStatus && supStatus.shouldShowNag) {
+          showSupportModal.value = true
+        }
+      } catch {
+        // Ignore support status errors
       }
-    } catch {
-      // Ignore support status errors on startup
     }
+    await checkSupportNag()
+    setInterval(checkSupportNag, 30 * 60 * 1000)
 
     // Update board state for start position
     // Setup ResizeObserver for adaptive right-sizing of the chessboard

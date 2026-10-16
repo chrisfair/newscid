@@ -27,6 +27,9 @@ const (
 // DefaultMinSupportUSD is the minimum suggested support contribution in USD ($5).
 const DefaultMinSupportUSD = 5
 
+// NagCooldownDuration is the 24-hour period that a dismissed support prompt stays hidden before showing again once per day.
+const NagCooldownDuration = 24 * time.Hour
+
 // Canonical author online chess handles used to form the author computer exemption ID.
 const (
 	AuthorChessComPrimary = "christopherfair"
@@ -291,6 +294,14 @@ func (m *Manager) buildStatusLocked(sig string) SupportStatus {
 
 	exemptOrSupported := m.config.Supported || m.config.IsAuthor
 
+	inDailyCooldown := false
+	if !exemptOrSupported && m.config.LastDismissedAt > 0 {
+		elapsed := time.Since(time.UnixMilli(m.config.LastDismissedAt))
+		if elapsed >= 0 && elapsed < NagCooldownDuration {
+			inDailyCooldown = true
+		}
+	}
+
 	return SupportStatus{
 		Supported:       exemptOrSupported,
 		IsAuthor:        m.config.IsAuthor,
@@ -309,6 +320,6 @@ func (m *Manager) buildStatusLocked(sig string) SupportStatus {
 			350: StripeLink350USD,
 		},
 		MinAmountUSD:  DefaultMinSupportUSD,
-		ShouldShowNag: !exemptOrSupported,
+		ShouldShowNag: !exemptOrSupported && !inDailyCooldown,
 	}
 }
