@@ -13,17 +13,16 @@ optdepends=(
     'fruit: legacy UCI chess engine'
     'scid: legacy database tools (tcscid)'
 )
-source=("${pkgname}-${pkgver}.tar.gz:https:://github.com/chrisfair/newscid/archive/refs/tags/v${pkgver}.tar.gz")
-sha256sums('61e7f5bfa560af7a5d79139541cd251de808e0f469393685aa33fe4a1bdb93d4')
-
+source=("${pkgname}-${pkgver}.tar.gz::https://github.com/chrisfair/newscid/archive/refs/tags/v${pkgver}.tar.gz")
+sha256sums=('9400150436bd69bca8b709f84c8ff2c0d5d3b14124f0c0f56c34d4356ee10912')
 
 prepare() {
-    cd "${srcdir}/${pkgname}/frontend"
+    cd "${srcdir}/${pkgname}-${pkgver}/frontend"
     npm install
 }
 
 build() {
-    cd "${srcdir}/${pkgname}"
+    cd "${srcdir}/${pkgname}-${pkgver}"
     export CGO_CPPFLAGS="${CPPFLAGS}"
     export CGO_CFLAGS="${CFLAGS}"
     export CGO_CXXFLAGS="${CXXFLAGS}"
@@ -34,6 +33,6 @@ build() {
 }
 
 package() {
-    cd "${srcdir}/${pkgname}"
+    cd "${srcdir}/${pkgname}-${pkgver}"
     make install DESTDIR="${pkgdir}" PREFIX="/usr"
 }
