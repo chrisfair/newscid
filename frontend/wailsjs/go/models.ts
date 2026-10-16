@@ -2659,6 +2659,43 @@ export namespace stats {
 
 }
 
+export namespace support {
+	
+	export class SupportStatus {
+	    supported: boolean;
+	    isAuthor: boolean;
+	    authorId?: string;
+	    deviceSignature?: string;
+	    supporterTier?: string;
+	    supportedAt?: number;
+	    dismissCount: number;
+	    lastDismissedAt?: number;
+	    stripeUrl: string;
+	    minAmountUsd: number;
+	    shouldShowNag: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new SupportStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.supported = source["supported"];
+	        this.isAuthor = source["isAuthor"];
+	        this.authorId = source["authorId"];
+	        this.deviceSignature = source["deviceSignature"];
+	        this.supporterTier = source["supporterTier"];
+	        this.supportedAt = source["supportedAt"];
+	        this.dismissCount = source["dismissCount"];
+	        this.lastDismissedAt = source["lastDismissedAt"];
+	        this.stripeUrl = source["stripeUrl"];
+	        this.minAmountUsd = source["minAmountUsd"];
+	        this.shouldShowNag = source["shouldShowNag"];
+	    }
+	}
+
+}
+
 export namespace tablebase {
 	
 	export class TablebaseMove {

@@ -44,6 +44,7 @@ import IntuitionStormModal from './components/IntuitionStormModal.vue'
 import TimeManagementModal from './components/TimeManagementModal.vue'
 import RepertoireShortenerModal from './components/RepertoireShortenerModal.vue'
 import ProphylaxisModal from './components/ProphylaxisModal.vue'
+import SupportModal from './components/SupportModal.vue'
 import { initUITheme, applyUITheme, toggleDarkLight, currentUITheme, UI_THEMES } from './utils/theme'
 import { Bot, Sparkles, Brain, Shield, Maximize2, Minimize2, AlertTriangle, Crosshair } from '@lucide/vue'
 import { playerbot, persona, scid, tournament, imbalance, explainer, blundervault, scout } from '../wailsjs/go/models'
@@ -102,6 +103,7 @@ import {
   AddBlunderToVault,
   GenerateOpponentScoutingReport,
   GetPersona,
+  GetSupportStatus,
 } from '../wailsjs/go/main/App'
 import { EventsOn, EventsOff, ClipboardSetText, ClipboardGetText, BrowserOpenURL } from '../wailsjs/runtime/runtime'
 
@@ -315,6 +317,7 @@ const showIntuitionStormModal = ref(false)
 const showTimeManagementModal = ref(false)
 const showRepertoireShortenerModal = ref(false)
 const showProphylaxisModal = ref(false)
+const showSupportModal = ref(false)
 const antiPersonaTargetId = ref<string>('')
 const antiPersonaTargetName = ref<string>('')
 const showOpeningTreeModal = ref(false)
@@ -761,6 +764,16 @@ onMounted(async () => {
 
     if (autoBase) {
       await handleOpenDiscoveredBase(autoBase)
+    }
+
+    // 6. Check voluntary support status (exempts author machine via Chess.com & Lichess IDs)
+    try {
+      const supStatus = await GetSupportStatus()
+      if (supStatus && supStatus.shouldShowNag) {
+        showSupportModal.value = true
+      }
+    } catch {
+      // Ignore support status errors on startup
     }
 
     // Update board state for start position
@@ -2348,6 +2361,14 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
     icon: 'plus',
     category: 'Actions',
     action: openNewGameTab
+  },
+  {
+    id: 'support-newscid',
+    title: 'Support NewScid ($5+)',
+    subtitle: 'Voluntary author support via Stripe & disable startup reminder',
+    icon: 'heart',
+    category: 'Actions',
+    action: () => { showSupportModal.value = true }
   }
 ])
 </script>
@@ -2439,6 +2460,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       @time-management="showTimeManagementModal = true"
       @repertoire-shortener="showRepertoireShortenerModal = true"
       @prophylaxis="showProphylaxisModal = true"
+      @show-support="showSupportModal = true"
     />
 
 
@@ -2902,6 +2924,13 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
     <AboutModal
       v-if="showAboutModal"
       @close="showAboutModal = false"
+      @support="showAboutModal = false; showSupportModal = true"
+    />
+
+    <!-- Voluntary Author Support ($5+ Stripe) Modal -->
+    <SupportModal
+      v-if="showSupportModal"
+      @close="showSupportModal = false"
     />
 
     <!-- Online Help & User Documentation Modal (F1) -->

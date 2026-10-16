@@ -8,6 +8,7 @@ import {engine} from '../models';
 import {eco} from '../models';
 import {scid} from '../models';
 import {main} from '../models';
+import {support} from '../models';
 import {json} from '../models';
 import {online} from '../models';
 import {explainer} from '../models';
@@ -76,6 +77,8 @@ export function DeleteRepertoire(arg1:string):Promise<void>;
 export function DeleteSyncProfile(arg1:string):Promise<void>;
 
 export function DeleteVariation(arg1:number,arg2:number):Promise<void>;
+
+export function DismissSupportNag():Promise<support.SupportStatus>;
 
 export function DispatchRPC(arg1:string,arg2:Array<json.RawMessage>):Promise<any>;
 
@@ -213,6 +216,8 @@ export function GetScidSystemBases():Promise<Array<string>>;
 
 export function GetSimulatedMove(arg1:string,arg2:string,arg3:boolean):Promise<playerbot.SimulatedMove>;
 
+export function GetSupportStatus():Promise<support.SupportStatus>;
+
 export function GetSyncProfile(arg1:string):Promise<online.Profile>;
 
 export function GetSyncProfiles():Promise<Array<online.Profile>>;
@@ -247,6 +252,8 @@ export function OpenPGNFileDialog():Promise<string>;
 
 export function OpenPersonaDatabase(arg1:string):Promise<main.DatabaseInfo>;
 
+export function OpenSupportLink(arg1:number):Promise<string>;
+
 export function ParseEPD(arg1:string):Promise<epd.EPDRecord>;
 
 export function ParseFEN(arg1:string):Promise<main.BoardState>;
@@ -262,6 +269,8 @@ export function QueryPolyglotBook(arg1:string,arg2:string):Promise<Array<polyglo
 export function RecordBlunderReview(arg1:string,arg2:number):Promise<blundervault.Puzzle>;
 
 export function RecordRepertoirePractice(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<void>;
+
+export function RecordUserSupport(arg1:string,arg2:string):Promise<support.SupportStatus>;
 
 export function RemovePersonaIdentifier(arg1:string,arg2:string):Promise<persona.Persona>;
 
@@ -296,6 +305,8 @@ export function SetEventListener(arg1:any):Promise<void>;
 export function SetGameNAG(arg1:number,arg2:number):Promise<void>;
 
 export function SetNotationStyle(arg1:string):Promise<void>;
+
+export function SetSupportStripeURL(arg1:string):Promise<void>;
 
 export function ShortenRepertoire(arg1:repertoire.ShortenerOptions):Promise<repertoire.ShortenerResult>;
 
