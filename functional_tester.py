@@ -554,9 +554,43 @@ def main():
         os.remove(tmp_export_file)
 
     # -------------------------------------------------------------
-    # 12. Cleanup & Database Close
+    # 12. Novel Training & Analytical Tools
     # -------------------------------------------------------------
-    print("\n--- 12. Cleanup ---")
+    print("\n--- 12. Novel Training & Analytical Tools ---")
+    # Intuition Storm
+    ok, intuition_batch = run_test("GetIntuitionDrillBatch", "GetIntuitionDrillBatch", 3)
+    check("GetIntuitionDrillBatch", ok, isinstance(intuition_batch, list) and len(intuition_batch) > 0)
+
+    ok, intuition_sub = run_test("SubmitIntuitionAnswer", "SubmitIntuitionAnswer", "int-1", "equal", 1200)
+    check("SubmitIntuitionAnswer", ok, intuition_sub and "isCorrect" in intuition_sub)
+
+    # Prophylaxis Drills
+    ok, pro_batch = run_test("GetProphylaxisDrillBatch", "GetProphylaxisDrillBatch", 3, "all")
+    check("GetProphylaxisDrillBatch", ok, isinstance(pro_batch, list) and len(pro_batch) > 0)
+
+    ok, pro_sub = run_test("SubmitProphylaxisAnswer", "SubmitProphylaxisAnswer", "pro-01-karpov-kh1", "g1h1")
+    check("SubmitProphylaxisAnswer", ok, pro_sub and "isCorrect" in pro_sub)
+
+    # Time Management Analysis (Game 1)
+    ok, tm_res = run_test("AnalyzeGameTimeManagement (Game 1)", "AnalyzeGameTimeManagement", 1)
+    check("AnalyzeGameTimeManagement", ok, tm_res is not None)
+
+    # Repertoire Shortener
+    short_opts = {
+        "repertoireId": "white-openings-italian",
+        "targetCoveragePct": 80.0,
+        "minFrequencyPct": 5.0,
+        "maxDepth": 6,
+        "preserveAnnotated": True,
+        "saveAsNew": False
+    }
+    ok, short_res = run_test("ShortenRepertoire", "ShortenRepertoire", short_opts)
+    check("ShortenRepertoire", ok, short_res and "originalMoveCount" in short_res)
+
+    # -------------------------------------------------------------
+    # 13. Cleanup & Database Close
+    # -------------------------------------------------------------
+    print("\n--- 13. Cleanup ---")
     ok, _ = run_test("CloseDatabase", "CloseDatabase")
     for ext in [".si4", ".sn4", ".sg4"]:
         fpath = tmp_db_base + ext

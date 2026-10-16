@@ -2,10 +2,8 @@ package playerbot
 
 import (
 	"fmt"
-	"math/rand"
 	"sort"
 	"strings"
-	"time"
 
 	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
@@ -417,8 +415,4 @@ func topKeys(counts map[string]int, limit int) []string {
 		res = append(res, pairs[i].k)
 	}
 	return res
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
 }

@@ -225,7 +225,7 @@ func (b *Board) MoveToDescriptive(m Move) string {
 	} else {
 		// Non-capture move
 		if pt == Pawn {
-			sb.WriteString(fmt.Sprintf("P-%s%d", targetFileDesc, targetRank))
+			fmt.Fprintf(&sb, "P-%s%d", targetFileDesc, targetRank)
 		} else {
 			candPieces := 0
 			for _, lm := range b.GenerateLegalMoves() {
@@ -249,7 +249,7 @@ func (b *Board) MoveToDescriptive(m Move) string {
 
 	// Promotion suffix
 	if m.Promo != None {
-		sb.WriteString(fmt.Sprintf("(%s)", m.Promo.String()))
+		fmt.Fprintf(&sb, "(%s)", m.Promo.String())
 	}
 
 	return b.appendCheckSuffix(m, sb.String())
@@ -299,9 +299,9 @@ func FormatPVWithStyle(startFEN string, pvMoves []string, style NotationStyle) s
 		}
 
 		if isWhite {
-			sb.WriteString(fmt.Sprintf("%d. ", moveNum))
+			fmt.Fprintf(&sb, "%d. ", moveNum)
 		} else if i == 0 {
-			sb.WriteString(fmt.Sprintf("%d... ", moveNum))
+			fmt.Fprintf(&sb, "%d... ", moveNum)
 		}
 
 		notated := b.MoveToNotation(m, style)

@@ -427,7 +427,7 @@ func TestAppOnlineSyncOperations(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			// Return one archive URL pointing back to this mock server
 			archiveURL := fmt.Sprintf("http://%s/pub/player/testplayer/games/2026/10", r.Host)
-			_, _ = w.Write([]byte(fmt.Sprintf(`{"archives":["%s"]}`, archiveURL)))
+			_, _ = fmt.Fprintf(w, `{"archives":["%s"]}`, archiveURL)
 		case strings.HasSuffix(path, "/pgn"):
 			w.Header().Set("Content-Type", "application/x-chess-pgn")
 			_, _ = w.Write([]byte(`[Event "ChessCom Game"]
@@ -874,6 +874,41 @@ func TestAppPersonaOperations(t *testing.T) {
 	_, err = app.FetchPersonaOnlineGames("invalid-id", 10)
 	assert.Error(t, err)
 }
+
+func TestBenGradskySparringLive(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+
+	personas, err := app.GetPersonas()
+	require.NoError(t, err)
+
+	var benID string
+	for _, p := range personas {
+		if strings.Contains(p.DisplayName, "Ben Gradsky") {
+			benID = p.ID
+			break
+		}
+	}
+
+	if benID == "" {
+		t.Skip("Ben Gradsky persona not configured on system, skipping")
+	}
+
+	// 1. Move 1 as Black vs 1.e4 (should be in book: c5)
+	move1, err := app.GetPersonaSimulatedMove(benID, "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1", false)
+	require.NoError(t, err)
+	assert.True(t, move1.IsBook)
+	assert.Equal(t, "c5", move1.SAN)
+	t.Logf("Ben played: %s (%s) | %s", move1.SAN, move1.UCI, move1.Commentary)
+
+	// 2. Move out of book (should calculate using engine or smart tactical heuristics)
+	outOfBookFEN := "rnbqk2r/pp2ppbp/3p1np1/8/3NP3/2N1B3/PPPK1PPP/R2Q1B1R b kq - 3 7"
+	calcMove, err := app.GetPersonaSimulatedMove(benID, outOfBookFEN, false)
+	require.NoError(t, err)
+	assert.NotEmpty(t, calcMove.UCI)
+	t.Logf("Ben calculated move: %s (%s) | %s", calcMove.SAN, calcMove.UCI, calcMove.Commentary)
+}
+
 
 func TestAppPolyglotAndECO(t *testing.T) {
 	app := NewApp()
@@ -1474,6 +1509,74 @@ func TestAppNovelTrainingAndStatsFeatures(t *testing.T) {
 
 	_, err = app.AnalyzePlayerTimeManagement("Carlsen", 20)
 	assert.Error(t, err) // No DB open
+}
+
+func TestAppCoreMethodsDirect(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+	defer app.shutdown(context.Background())
+
+	app.SetEventListener(func(eventName string, optionalData ...interface{}) {})
+
+	// Board methods
+	st, err := app.MakeMove(chess.StartingFEN, "e2e4")
+	require.NoError(t, err)
+	assert.Equal(t, "e4", st.MoveSAN)
+
+	stSan, err := app.MakeMove(chess.StartingFEN, "e4")
+	require.NoError(t, err)
+	assert.Equal(t, "e4", stSan.MoveSAN)
+
+	_, err = app.MakeMove("invalid-fen", "e4")
+	assert.Error(t, err)
+
+	_, err = app.MakeMove(chess.StartingFEN, "invalid-move")
+	assert.Error(t, err)
+
+	legal, err := app.GetLegalMoves(chess.StartingFEN)
+	require.NoError(t, err)
+	assert.Len(t, legal, 20)
+
+	_, err = app.GetLegalMoves("invalid-fen")
+	assert.Error(t, err)
+
+	// Database operations
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "direct_test.si4")
+	_, err = app.CreateDatabase(dbPath, "Direct Test")
+	require.NoError(t, err)
+
+	info, err := app.GetDatabaseInfo()
+	require.NoError(t, err)
+	assert.Equal(t, 0, info.NumGames)
+
+	g := chess.NewGame()
+	g.SetTag("White", "Player 1")
+	g.SetTag("Black", "Player 2")
+	id, err := app.SaveGame(g)
+	require.NoError(t, err)
+	assert.Equal(t, 1, id)
+
+	pgnStr, err := app.ExportPGN(g)
+	require.NoError(t, err)
+	assert.Contains(t, pgnStr, "Player 1")
+
+	_, err = app.ExportPGN(nil)
+	assert.Error(t, err)
+
+	err = app.DeleteGame(1, true)
+	require.NoError(t, err)
+
+	app.CloseDatabase()
+
+	// When DB is closed
+	infoClosed, err := app.GetDatabaseInfo()
+	require.NoError(t, err)
+	assert.Nil(t, infoClosed)
+	_, err = app.SaveGame(g)
+	assert.Error(t, err)
+	err = app.DeleteGame(1, true)
+	assert.Error(t, err)
 }
 
 

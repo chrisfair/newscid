@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"newscid/pkg/chess"
+	"newscid/pkg/database/scid"
 	"newscid/pkg/tree"
 )
 
@@ -76,4 +77,33 @@ func TestSearchPositionInGames(t *testing.T) {
 	matches := tree.SearchPositionInGames(b.FEN(), games)
 	assert.Equal(t, []int{0, 2}, matches)
 }
+
+func TestBuildTreeFromDatabaseAndCoreFEN(t *testing.T) {
+	// 1. Closed database
+	resClosed, err := tree.BuildTreeFromDatabase(nil, chess.StartingFEN, 50)
+	require.NoError(t, err)
+	assert.Empty(t, resClosed.Moves)
+
+	// 2. Open empty database
+	db := scid.NewDatabase()
+	db.IsOpen = true
+	resOpen, err := tree.BuildTreeFromDatabase(db, chess.StartingFEN, 50)
+	require.NoError(t, err)
+	assert.Empty(t, resOpen.Moves)
+
+	// 3. Invalid FEN passed
+	resInvalid := tree.BuildTreeFromGames("invalid fen string", nil)
+	assert.NotNil(t, resInvalid)
+	assert.Empty(t, resInvalid.Moves)
+
+	matchesInvalid := tree.SearchPositionInGames("invalid fen string", nil)
+	assert.Empty(t, matchesInvalid)
+
+	// 4. CoreFEN helper
+	core := tree.CoreFEN(chess.StartingFEN)
+	assert.Equal(t, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq", core)
+	shortFEN := "rnbqkbnr/pppppppp"
+	assert.Equal(t, shortFEN, tree.CoreFEN(shortFEN))
+}
+
 

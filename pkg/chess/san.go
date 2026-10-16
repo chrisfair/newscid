@@ -157,7 +157,7 @@ func (b *Board) ParseSAN(san string) (Move, error) {
 	}
 
 	prefix := clean[:len(clean)-2]
-	var movingPieceType PieceType = Pawn
+	var movingPieceType = Pawn
 	var disFile = -1
 	var disRank = -1
 

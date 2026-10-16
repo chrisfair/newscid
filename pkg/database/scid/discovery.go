@@ -90,7 +90,7 @@ func InspectDatabase(basePath string, category string) DiscoveredDatabase {
 	}
 
 	db.Exists = true
-	var totalSize int64 = si4Info.Size()
+	totalSize := si4Info.Size()
 	if sg4Info, err := os.Stat(cleanPath + ".sg4"); err == nil {
 		totalSize += sg4Info.Size()
 	}

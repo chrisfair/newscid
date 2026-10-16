@@ -236,5 +236,167 @@ func TestAnalyzePlayerTimeManagement(t *testing.T) {
 	assert.Equal(t, 1, dossier.GamesWithClock)
 	assert.True(t, dossier.TotalTanks >= 1)
 	assert.NotEmpty(t, dossier.CoachingDossier)
+
+	// Analyze Black player
+	blackDossier, err := AnalyzePlayerTimeManagement(db, "Nakamura", 0)
+	require.NoError(t, err)
+	assert.Equal(t, "Nakamura", blackDossier.PlayerName)
+	assert.Equal(t, 1, blackDossier.GamesWithClock)
+}
+
+func TestFormatSeconds(t *testing.T) {
+	assert.Equal(t, "45.0s", formatSeconds(45))
+	assert.Equal(t, "5m 30s", formatSeconds(330))
+	assert.Equal(t, "75m 00s", formatSeconds(4500))
+}
+
+func TestGenerateRecommendationsAndScrambleAlerts(t *testing.T) {
+	rep := &GameTimeManagementReport{
+		WhiteStats: SideTimeStats{
+			TankBlunderCount: 2,
+			PanicMoveCount:   1,
+		},
+		BlackStats: SideTimeStats{
+			TankBlunderCount: 1,
+			PanicMoveCount:   2,
+		},
+		ScrambleSummary: ScrambleSummary{
+			WhiteEnteredScramblePly: 35,
+			WhiteScrambleMoves:      10,
+			WhiteScrambleBlunders:   2,
+			BlackEnteredScramblePly: 36,
+			BlackScrambleMoves:      8,
+			BlackScrambleBlunders:   1,
+		},
+	}
+	generateRecommendations(rep)
+	assert.NotEmpty(t, rep.Recommendations)
+	assert.Len(t, rep.Recommendations, 6)
+
+	// Empty clean report
+	cleanRep := &GameTimeManagementReport{}
+	generateRecommendations(cleanRep)
+	assert.Len(t, cleanRep.Recommendations, 1)
+	assert.Contains(t, cleanRep.Recommendations[0], "Clean clock discipline")
+}
+
+func TestPanicAndScrambleDetection(t *testing.T) {
+	g := chess.NewGame()
+	b := chess.NewBoard()
+	var root, prev *chess.MoveNode
+
+	// Generate 20 plies so ply > 16
+	for i := 1; i <= 20; i++ {
+		legal := b.GenerateLegalMoves()
+		require.NotEmpty(t, legal)
+		m := legal[0]
+		b.MakeMove(m)
+		clk := "0:05:00"
+		comment := ""
+		if i == 18 { // Panic move: blitzed in 2s with severe blunder (?? NAG 4)
+			clk = "0:04:58"
+			comment = "[%eval -4.50]"
+		} else if i == 19 { // Scramble move: clock <= 30s with blunder
+			clk = "0:00:20"
+			comment = "[%eval -5.00]"
+		}
+		node := &chess.MoveNode{
+			Move:    m,
+			UCI:     m.String(),
+			SAN:     b.MoveToSAN(m),
+			Clock:   clk,
+			Comment: comment,
+		}
+		if i == 18 {
+			node.NAGs = []int{4} // Blunder ??
+		}
+		if root == nil {
+			root = node
+		} else {
+			prev.Next = node
+		}
+		prev = node
+	}
+	g.RootMove = root
+	g.PlyCount = 20
+
+	rep, err := AnalyzeGameTimeManagement(g)
+	require.NoError(t, err)
+	assert.NotNil(t, rep)
+}
+
+func TestPlayerBehavioralHabits(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "habitbase")
+	db := scid.NewDatabase()
+	err := db.Create(dbPath, "Habit Base")
+	require.NoError(t, err)
+
+	g := chess.NewGame()
+	g.SetTag("White", "HabitPlayer")
+	g.SetTag("Black", "Opponent")
+
+	b := chess.NewBoard()
+	var root, prev *chess.MoveNode
+
+	// Generate 30 plies with:
+	// - Opening moves taking 30s (OpeningAvgSec > 25)
+	// - 3 Tanks with blunders (TotalTanks >= 3, TankSuccessRate < 60)
+	// - 3 Panic moves (PanicMoveCount >= 3)
+	// - Scramble clock < 30s
+	for i := 1; i <= 30; i++ {
+		legal := b.GenerateLegalMoves()
+		require.NotEmpty(t, legal)
+		m := legal[0]
+		b.MakeMove(m)
+
+		clk := "0:05:00"
+		comment := ""
+		if i == 1 {
+			clk = "0:04:30" // 30s think in opening
+		} else if i == 3 {
+			clk = "0:02:10" // 140s tank
+			comment = "[%eval -3.00]"
+		} else if i == 5 {
+			clk = "0:00:25" // 105s tank into scramble!
+			comment = "[%eval -4.00]"
+		} else if i == 17 {
+			clk = "0:00:24" // 1s move in scramble with blunder (panic)
+			comment = "[%eval -5.00]"
+		} else if i == 19 {
+			clk = "0:00:22" // 2s move with blunder (panic)
+			comment = "[%eval -6.00]"
+		} else if i == 21 {
+			clk = "0:00:20" // 2s move with blunder (panic)
+			comment = "[%eval -7.00]"
+		}
+
+		node := &chess.MoveNode{
+			Move:    m,
+			UCI:     m.String(),
+			SAN:     b.MoveToSAN(m),
+			Clock:   clk,
+			Comment: comment,
+		}
+		if i == 3 || i == 5 || i == 17 || i == 19 || i == 21 {
+			node.NAGs = []int{4} // ??
+		}
+		if root == nil {
+			root = node
+		} else {
+			prev.Next = node
+		}
+		prev = node
+	}
+	g.RootMove = root
+	g.PlyCount = 30
+
+	_, err = db.SaveGame(g)
+	require.NoError(t, err)
+
+	dossier, err := AnalyzePlayerTimeManagement(db, "HabitPlayer", 10)
+	require.NoError(t, err)
+	assert.NotEmpty(t, dossier.HabitFlags)
+	assert.NotEmpty(t, dossier.CoachingDossier)
 }
 

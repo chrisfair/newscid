@@ -2,6 +2,7 @@ package scid
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -648,7 +649,7 @@ func (db *Database) SaveGame(game *chess.Game) (int, error) {
 	}
 
 	// Seek to end of file to append entry
-	if _, err := fSi.Seek(0, os.SEEK_END); err != nil {
+	if _, err := fSi.Seek(0, io.SeekEnd); err != nil {
 		return 0, err
 	}
 	if err := WriteIndexEntry(fSi, entry); err != nil {
@@ -683,7 +684,7 @@ func (db *Database) DeleteGame(gameNum int, deleted bool) error {
 	defer fSi.Close()
 
 	entryOffset := int64(IndexHeaderSize + (gameNum-1)*IndexEntrySize)
-	if _, err := fSi.Seek(entryOffset, os.SEEK_SET); err != nil {
+	if _, err := fSi.Seek(entryOffset, io.SeekStart); err != nil {
 		return err
 	}
 	return WriteIndexEntry(fSi, entry)
@@ -763,7 +764,7 @@ func (db *Database) UpdateGameTags(gameNum int, tags map[string]string) error {
 		defer fSi.Close()
 
 		entryOffset := int64(IndexHeaderSize + (gameNum-1)*IndexEntrySize)
-		if _, err := fSi.Seek(entryOffset, os.SEEK_SET); err != nil {
+		if _, err := fSi.Seek(entryOffset, io.SeekStart); err != nil {
 			return err
 		}
 		return WriteIndexEntry(fSi, entry)

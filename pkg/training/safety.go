@@ -5,7 +5,6 @@ import (
 	"math/rand"
 	"sort"
 	"strings"
-	"time"
 
 	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
@@ -324,13 +323,13 @@ func AnalyzeBoardSafety(fen string) (*BoardSafetyReport, error) {
 		status := StatusDefended
 		netLoss := 0
 		explanation := fmt.Sprintf("%s %s on %s is safely defended (%d attackers, %d defenders).",
-			strings.Title(colorStr), pieceType.String(), sqStr, len(attackers), len(defenders))
+			titleCase(colorStr), pieceType.String(), sqStr, len(attackers), len(defenders))
 
 		if len(attackers) == 0 {
 			if len(defenders) == 0 && pieceType != chess.Pawn {
 				status = StatusLoose
 				explanation = fmt.Sprintf("%s %s on %s is loose (0 defenders) — Loose Piece Drops Off (LPDO).",
-					strings.Title(colorStr), pieceType.String(), sqStr)
+					titleCase(colorStr), pieceType.String(), sqStr)
 			}
 		} else {
 			// Find lowest-value attacker
@@ -350,13 +349,13 @@ func AnalyzeBoardSafety(fen string) (*BoardSafetyReport, error) {
 				status = StatusHanging
 				netLoss = val
 				explanation = fmt.Sprintf("%s %s on %s is completely hanging with 0 defenders! Attacked by %s.",
-					strings.Title(colorStr), pieceType.String(), sqStr, bestAttackerSq.String())
+					titleCase(colorStr), pieceType.String(), sqStr, bestAttackerSq.String())
 			} else if minAttackerVal < val {
 				// Condition 2: Attacked by a piece of strictly lower value (e.g. Queen by Knight/Bishop, Rook by Minor)
 				status = StatusHanging
 				netLoss = val - minAttackerVal
 				explanation = fmt.Sprintf("%s %s on %s is attacked by lower-value %s on %s; capture wins material despite %d defender(s).",
-					strings.Title(colorStr), pieceType.String(), sqStr,
+					titleCase(colorStr), pieceType.String(), sqStr,
 					b.Squares[bestAttackerSq].Type().String(), bestAttackerSq.String(), len(defenders))
 			} else if len(attackers) > len(defenders) {
 				// Condition 3: Deficit in defenders vs attackers
@@ -365,11 +364,11 @@ func AnalyzeBoardSafety(fen string) (*BoardSafetyReport, error) {
 					status = StatusHanging
 					netLoss = see
 					explanation = fmt.Sprintf("%s %s on %s has more attackers (%d) than defenders (%d); tactical liquidation wins material.",
-						strings.Title(colorStr), pieceType.String(), sqStr, len(attackers), len(defenders))
+						titleCase(colorStr), pieceType.String(), sqStr, len(attackers), len(defenders))
 				} else {
 					status = StatusUnderdefended
 					explanation = fmt.Sprintf("%s %s on %s is underdefended (%d attackers vs %d defenders).",
-						strings.Title(colorStr), pieceType.String(), sqStr, len(attackers), len(defenders))
+						titleCase(colorStr), pieceType.String(), sqStr, len(attackers), len(defenders))
 				}
 			}
 		}
@@ -548,7 +547,6 @@ func GetSafetyDrillBatch(count int, difficulty string) []SafetyDrill {
 		pool = builtinChallenges
 	}
 
-	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(pool), func(i, j int) {
 		pool[i], pool[j] = pool[j], pool[i]
 	})
@@ -703,4 +701,11 @@ func EvaluateSafetySubmission(drill *SafetyDrill, selectedSquares []string, move
 		BestMoveUCI:    drill.WinningMoveUCI,
 		BestMoveSAN:    drill.WinningMoveSAN,
 	}
+}
+
+func titleCase(s string) string {
+	if len(s) == 0 {
+		return ""
+	}
+	return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
 }

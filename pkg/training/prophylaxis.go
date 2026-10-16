@@ -5,7 +5,6 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
-	"time"
 
 	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
@@ -196,7 +195,6 @@ func GetProphylaxisDrillBatch(count int, category string) []ProphylaxisDrill {
 		}
 	}
 
-	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(matched), func(i, j int) {
 		matched[i], matched[j] = matched[j], matched[i]
 	})
@@ -254,7 +252,6 @@ func GenerateProphylaxisDrillsFromDatabase(db *scid.Database, count int) ([]Prop
 	}
 
 	var drills []ProphylaxisDrill
-	rand.Seed(time.Now().UnixNano())
 
 	sampleIndices := rand.Perm(totalGames)
 	if len(sampleIndices) > 60 {
@@ -299,7 +296,7 @@ func GenerateProphylaxisDrillsFromDatabase(db *scid.Database, count int) ([]Prop
 			if (isQuietKing || isPawnRestraint) && ply >= 14 {
 				cat := CategoryPieceRestraint
 				catLabel := "Pawn Restraint"
-				prompt := fmt.Sprintf("White to move. Calmly restrict enemy counterplay.")
+				prompt := "White to move. Calmly restrict enemy counterplay."
 				if isQuietKing {
 					cat = CategoryKingSafety
 					catLabel = "King Safety Unpin"

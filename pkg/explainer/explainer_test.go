@@ -55,3 +55,66 @@ func TestExplainMove_FavorableCapture(t *testing.T) {
 		t.Errorf("expected Favorable Exchange motif, got %v", exp.TacticalMotifs)
 	}
 }
+
+func TestExplainMove_ForkPromotionAndOpenFiles(t *testing.T) {
+	// 1. Pawn Promotion
+	fenPromo := "8/4P1k1/8/8/8/8/8/4K3 w - - 0 1"
+	expPromo, err := ExplainMove(fenPromo, "e7e8q", 900, "e7e8q")
+	if err != nil {
+		t.Fatalf("promotion error: %v", err)
+	}
+	if !contains(expPromo.TacticalMotifs, "Pawn Promotion") {
+		t.Errorf("expected Pawn Promotion motif, got %v", expPromo.TacticalMotifs)
+	}
+
+	// 2. Knight on Outpost & Central Control
+	fenOutpost := "r1bqk2r/pp1p1ppp/2n1pn2/8/1bPN4/2N5/PP2PPPP/R1BQKB1R w KQkq - 1 6"
+	expOutpost, err := ExplainMove(fenOutpost, "d4b5", 50, "d4b5")
+	if err != nil {
+		t.Fatalf("outpost error: %v", err)
+	}
+	if expOutpost.Assessment == "" {
+		t.Errorf("expected assessment")
+	}
+
+	// 3. Rook on open file
+	fenRook := "4k3/8/8/8/8/8/8/R3K3 w - - 0 1"
+	expRook, err := ExplainMove(fenRook, "a1d1", 100, "a1d1")
+	if err != nil {
+		t.Fatalf("rook open file error: %v", err)
+	}
+	if !contains(expRook.StrategicConcepts, "Open File Control") {
+		t.Errorf("expected Open File Control, got %v", expRook.StrategicConcepts)
+	}
+
+	// 4. Inaccuracy / Mistake detection
+	fenMistake := "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+	expMistake, err := ExplainMove(fenMistake, "h2h4", -200, "e2e4")
+	if err != nil {
+		t.Fatalf("mistake error: %v", err)
+	}
+	if expMistake.Assessment != "Inaccuracy / Mistake" {
+		t.Errorf("expected Inaccuracy / Mistake, got %s", expMistake.Assessment)
+	}
+
+	// 5. Black queenside castle
+	fenBlackCastle := "r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R b KQkq - 0 1"
+	expBlackCastle, err := ExplainMove(fenBlackCastle, "e8c8", 0, "e8c8")
+	if err != nil {
+		t.Fatalf("black castle error: %v", err)
+	}
+	if !contains(expBlackCastle.TacticalMotifs, "Castling") {
+		t.Errorf("expected Castling motif for black queenside")
+	}
+
+	// 6. Error handling
+	_, err = ExplainMove("invalid-fen", "e2e4", 0, "")
+	if err == nil {
+		t.Errorf("expected error for invalid FEN")
+	}
+	_, err = ExplainMove("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "invalid-move", 0, "")
+	if err == nil {
+		t.Errorf("expected error for invalid move")
+	}
+}
+

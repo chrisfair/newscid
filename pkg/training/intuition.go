@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
-	"time"
 
 	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
@@ -198,7 +197,6 @@ func GetIntuitionDrillBatch(count int) []IntuitionChallenge {
 		all = append(all, ch)
 	}
 
-	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(all), func(i, j int) {
 		all[i], all[j] = all[j], all[i]
 	})
@@ -280,7 +278,6 @@ func GenerateIntuitionDrillsFromDatabase(db *scid.Database, count int) ([]Intuit
 	}
 
 	var challenges []IntuitionChallenge
-	rand.Seed(time.Now().UnixNano())
 
 	// Sample up to 60 games
 	sampleIndices := rand.Perm(totalGames)

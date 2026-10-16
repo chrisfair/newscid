@@ -164,16 +164,16 @@ func formatSummary(res *TablebaseResult) string {
 	case "win":
 		sb.WriteString("Win")
 		if res.DTM != 0 {
-			sb.WriteString(fmt.Sprintf(" in %d (DTM)", abs(res.DTM)))
+			fmt.Fprintf(&sb, " in %d (DTM)", abs(res.DTM))
 		} else if res.DTZ != 0 {
-			sb.WriteString(fmt.Sprintf(" in %d moves (DTZ)", abs(res.DTZ)))
+			fmt.Fprintf(&sb, " in %d moves (DTZ)", abs(res.DTZ))
 		}
 	case "loss":
 		sb.WriteString("Loss")
 		if res.DTM != 0 {
-			sb.WriteString(fmt.Sprintf(" in %d (DTM)", abs(res.DTM)))
+			fmt.Fprintf(&sb, " in %d (DTM)", abs(res.DTM))
 		} else if res.DTZ != 0 {
-			sb.WriteString(fmt.Sprintf(" in %d moves (DTZ)", abs(res.DTZ)))
+			fmt.Fprintf(&sb, " in %d moves (DTZ)", abs(res.DTZ))
 		}
 	case "draw":
 		sb.WriteString("Tablebase Draw")
