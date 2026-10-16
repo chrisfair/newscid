@@ -2671,6 +2671,7 @@ export namespace support {
 	    dismissCount: number;
 	    lastDismissedAt?: number;
 	    stripeUrl: string;
+	    tierLinks: Record<number, string>;
 	    minAmountUsd: number;
 	    shouldShowNag: boolean;
 	
@@ -2689,6 +2690,7 @@ export namespace support {
 	        this.dismissCount = source["dismissCount"];
 	        this.lastDismissedAt = source["lastDismissedAt"];
 	        this.stripeUrl = source["stripeUrl"];
+	        this.tierLinks = source["tierLinks"];
 	        this.minAmountUsd = source["minAmountUsd"];
 	        this.shouldShowNag = source["shouldShowNag"];
 	    }

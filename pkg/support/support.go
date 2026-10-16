@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,9 +12,17 @@ import (
 	"time"
 )
 
-// DefaultStripeSupportURL is the default Stripe payment link for $5+ voluntary support.
-// It can be overridden via the NEWSCID_STRIPE_URL environment variable or support.json config.
-const DefaultStripeSupportURL = "https://donate.stripe.com/newscid-support"
+// Live Stripe Payment Link URLs (shared with bughouse-online) for $5+ supporter tiers.
+const (
+	StripeLink5USD   = "https://buy.stripe.com/cNidR2e262cEeiOdpCefC01" // $5 Knight Supporter
+	StripeLink10USD  = "https://buy.stripe.com/bJe3cogae5oQdeKgBOefC02" // $10 Rook Supporter
+	StripeLink35USD  = "https://buy.stripe.com/aFa7sE2joeZqdeK99mefC03" // $35 Queen Supporter
+	StripeLink100USD = "https://buy.stripe.com/00w28ke265oQdeK2KYefC04" // $100 Princess Supporter
+	StripeLink350USD = "https://buy.stripe.com/6oUbIUf6a04w3Ea71eefC05" // $350 King Lifetime Supporter
+
+	// DefaultStripeSupportURL is the default $5+ Stripe payment link.
+	DefaultStripeSupportURL = StripeLink5USD
+)
 
 // DefaultMinSupportUSD is the minimum suggested support contribution in USD ($5).
 const DefaultMinSupportUSD = 5
@@ -25,6 +34,41 @@ const (
 	AuthorLichessPrimary  = "quenyenhighelf"
 	AuthorLichessAlt      = "quenyen"
 )
+
+// StripeURLForAmount returns the live Stripe checkout link for the selected tier ($5 or higher).
+func StripeURLForAmount(amountUSD int, customOverride string) string {
+	if clean := strings.TrimSpace(customOverride); clean != "" && clean != DefaultStripeSupportURL {
+		return clean
+	}
+	if envURL := strings.TrimSpace(os.Getenv("NEWSCID_STRIPE_URL")); envURL != "" {
+		return envURL
+	}
+	switch {
+	case amountUSD >= 350:
+		return StripeLink350USD
+	case amountUSD >= 100:
+		return StripeLink100USD
+	case amountUSD >= 35:
+		return StripeLink35USD
+	case amountUSD >= 10:
+		return StripeLink10USD
+	default:
+		return StripeLink5USD
+	}
+}
+
+// BuildCheckoutURL appends an optional client_reference_id if present.
+func BuildCheckoutURL(baseURL string, clientRef string) string {
+	cleanRef := strings.TrimSpace(clientRef)
+	if cleanRef == "" {
+		return baseURL
+	}
+	sep := "?"
+	if strings.Contains(baseURL, "?") {
+		sep = "&"
+	}
+	return baseURL + sep + "client_reference_id=" + url.QueryEscape(cleanRef)
+}
 
 // SupportConfig is persisted to ~/.config/newscid/support.json.
 type SupportConfig struct {
@@ -41,17 +85,18 @@ type SupportConfig struct {
 
 // SupportStatus is returned to the frontend UI to determine whether to show the support form.
 type SupportStatus struct {
-	Supported       bool   `json:"supported"`
-	IsAuthor        bool   `json:"isAuthor"`
-	AuthorID        string `json:"authorId,omitempty"`
-	DeviceSignature string `json:"deviceSignature,omitempty"`
-	SupporterTier   string `json:"supporterTier,omitempty"`
-	SupportedAt     int64  `json:"supportedAt,omitempty"`
-	DismissCount    int    `json:"dismissCount"`
-	LastDismissedAt int64  `json:"lastDismissedAt,omitempty"`
-	StripeURL       string `json:"stripeUrl"`
-	MinAmountUSD    int    `json:"minAmountUsd"`
-	ShouldShowNag   bool   `json:"shouldShowNag"`
+	Supported       bool           `json:"supported"`
+	IsAuthor        bool           `json:"isAuthor"`
+	AuthorID        string         `json:"authorId,omitempty"`
+	DeviceSignature string         `json:"deviceSignature,omitempty"`
+	SupporterTier   string         `json:"supporterTier,omitempty"`
+	SupportedAt     int64          `json:"supportedAt,omitempty"`
+	DismissCount    int            `json:"dismissCount"`
+	LastDismissedAt int64          `json:"lastDismissedAt,omitempty"`
+	StripeURL       string         `json:"stripeUrl"`
+	TierLinks       map[int]string `json:"tierLinks"`
+	MinAmountUSD    int            `json:"minAmountUsd"`
+	ShouldShowNag   bool           `json:"shouldShowNag"`
 }
 
 // Manager manages support/donation status, Stripe link configuration, and author ID exemption.
@@ -119,7 +164,7 @@ func (m *Manager) save() error {
 }
 
 // BuildAuthorCompositeID constructs a deterministic author identifier from Chess.com and Lichess.org IDs.
-// It returns (isAuthor, compositeID, signatureHash).
+// Regular users do NOT need Lichess or Chess.com accounts; this is used solely to recognize the author's computer.
 func BuildAuthorCompositeID(chessComIDs []string, lichessIDs []string) (bool, string, string) {
 	matchedChessCom := ""
 	matchedLichess := ""
@@ -180,8 +225,7 @@ func (m *Manager) GetStatus(chessComIDs []string, lichessIDs []string) SupportSt
 	return m.buildStatusLocked(sig)
 }
 
-// RecordSupport marks the user as having supported NewScid (or verified an author/supporter ID),
-// permanently disabling the startup nag screen.
+// RecordSupport marks the user as having supported NewScid, permanently disabling the startup nag screen.
 func (m *Manager) RecordSupport(tier string, reference string) (SupportStatus, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -192,7 +236,7 @@ func (m *Manager) RecordSupport(tier string, reference string) (SupportStatus, e
 	}
 	cleanRef := strings.TrimSpace(reference)
 
-	// Check if the reference entered is one of the author's Chess.com or Lichess IDs
+	// Check if the optional reference entered matches one of the author's handles
 	isAuthor, compositeID, sig := BuildAuthorCompositeID([]string{cleanRef}, []string{cleanRef})
 	if isAuthor {
 		m.config.IsAuthor = true
@@ -257,7 +301,14 @@ func (m *Manager) buildStatusLocked(sig string) SupportStatus {
 		DismissCount:    m.config.DismissCount,
 		LastDismissedAt: m.config.LastDismissedAt,
 		StripeURL:       stripeURL,
-		MinAmountUSD:    DefaultMinSupportUSD,
-		ShouldShowNag:   !exemptOrSupported,
+		TierLinks: map[int]string{
+			5:   StripeLink5USD,
+			10:  StripeLink10USD,
+			35:  StripeLink35USD,
+			100: StripeLink100USD,
+			350: StripeLink350USD,
+		},
+		MinAmountUSD:  DefaultMinSupportUSD,
+		ShouldShowNag: !exemptOrSupported,
 	}
 }

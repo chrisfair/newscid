@@ -148,3 +148,18 @@ func TestSupportManager_CustomStripeURLAndEnv(t *testing.T) {
 	assert.Equal(t, "chess.com:ChristopherFair|lichess.org:QuenyenHighElf", comp)
 	assert.NotEmpty(t, sig)
 }
+
+func TestStripeURLForAmountAndCheckoutBuilder(t *testing.T) {
+	t.Setenv("NEWSCID_STRIPE_URL", "")
+	assert.Equal(t, StripeLink5USD, StripeURLForAmount(5, ""))
+	assert.Equal(t, StripeLink10USD, StripeURLForAmount(10, ""))
+	assert.Equal(t, StripeLink35USD, StripeURLForAmount(35, ""))
+	assert.Equal(t, StripeLink100USD, StripeURLForAmount(100, ""))
+	assert.Equal(t, StripeLink350USD, StripeURLForAmount(350, ""))
+	assert.Equal(t, "https://buy.stripe.com/custom-override", StripeURLForAmount(10, "https://buy.stripe.com/custom-override"))
+
+	assert.Equal(t, StripeLink5USD, BuildCheckoutURL(StripeLink5USD, ""))
+	assert.Equal(t, StripeLink5USD+"?client_reference_id=user123", BuildCheckoutURL(StripeLink5USD, "user123"))
+	assert.Equal(t, StripeLink5USD+"?prefilled_promo=1&client_reference_id=user123", BuildCheckoutURL(StripeLink5USD+"?prefilled_promo=1", "user123"))
+}
+
