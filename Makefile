@@ -4,7 +4,7 @@
 .DEFAULT_GOAL := help
 .PHONY: help deps setup dev build build-frontend generate test functional-test test-coverage lint clean clean-dist run serve \
         install install-user uninstall \
-        appimage package-appimage snap package-snap deb package-deb pacman package-pacman rpm package-rpm \
+        appimage package-appimage snap package-snap deb package-deb pacman package-pacman aur rpm package-rpm \
         chocolatey choco package-chocolatey package-choco brew homebrew package-brew \
         flatpak package-flatpak android android-apk packages package package-all package-checksums release-local \
         version bump-patch bump-minor bump-major tag-release
@@ -190,6 +190,9 @@ pacman: build ## Build Arch Linux pacman package (.pkg.tar.*)
 	@APP_VERSION=$(APP_VERSION) APP_RELEASE=$(APP_RELEASE) ./packaging/scripts/build-pacman.sh $(BINARY) $(DIST_DIR)
 
 package-pacman: pacman ## Alias for pacman
+
+aur: ## Push latest PKGBUILD and .SRCINFO directly to Arch User Repository (AUR)
+	@./packaging/scripts/push-aur.sh
 
 rpm: build ## Build Red Hat / Fedora / openSUSE RPM package (.rpm)
 	@APP_VERSION=$(APP_VERSION) APP_RELEASE=$(APP_RELEASE) ./packaging/scripts/build-rpm.sh $(BINARY) $(DIST_DIR)
