@@ -662,42 +662,63 @@ function handleExploitPersona() {
               <span class="text-[11px] text-zinc-500">Autonomous repository for all games featuring this persona</span>
             </div>
 
-            <div class="p-3 bg-zinc-900/80 border border-zinc-800 rounded-lg flex items-center justify-between text-xs">
-              <div class="space-y-0.5 min-w-0 pr-3">
-                <span class="text-[11px] text-zinc-400 font-semibold block">Dedicated Database Path:</span>
-                <span class="font-mono text-zinc-200 truncate block text-[11px]">
-                  {{ selectedPersona.databasePath || 'Will be auto-created upon aggregation' }}
-                </span>
+            <div class="p-3.5 bg-zinc-900/80 border border-zinc-800 rounded-lg space-y-3 text-xs">
+              <!-- Storage Location Display -->
+              <div>
+                <div class="flex items-center justify-between mb-1.5">
+                  <span class="text-[11px] text-zinc-400 font-semibold flex items-center gap-1">
+                    <span>Database File Location:</span>
+                  </span>
+                  <span
+                    v-if="selectedPersona.databasePath"
+                    class="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-950/70 text-blue-300 border border-blue-800/60"
+                  >
+                    SCID .si4 Format
+                  </span>
+                  <span
+                    v-else
+                    class="px-2 py-0.5 rounded text-[10px] font-mono bg-zinc-800 text-zinc-400 border border-zinc-700"
+                  >
+                    Auto-created on sync
+                  </span>
+                </div>
+                <div
+                  class="bg-zinc-950/90 border border-zinc-800 rounded-lg px-3 py-2 font-mono text-xs text-zinc-200 select-all truncate"
+                  :title="selectedPersona.databasePath || ''"
+                >
+                  {{ selectedPersona.databasePath || 'Will be automatically created upon aggregation or online fetch' }}
+                </div>
               </div>
 
-              <div class="flex items-center gap-2 shrink-0">
+              <!-- Action Buttons Grid -->
+              <div class="grid grid-cols-3 gap-2.5 pt-1 border-t border-zinc-800/70">
                 <button
-                  class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  class="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
                   title="Open this persona's dedicated database into NewScid"
                   @click="handleOpenDatabase"
                 >
-                  <FolderOpen class="w-3.5 h-3.5 text-blue-400" />
-                  <span>Open Database</span>
+                  <FolderOpen class="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                  <span class="truncate">Open Database</span>
                 </button>
 
                 <button
-                  class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                  class="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
                   :disabled="isAggregating"
                   title="Extract all games matching any of the persona's aliases from active database into dedicated base"
                   @click="handleAggregateGames"
                 >
-                  <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': isAggregating }" />
-                  <span>{{ isAggregating ? 'Aggregating...' : 'Sync from Active Base' }}</span>
+                  <RefreshCw class="w-3.5 h-3.5 shrink-0" :class="{ 'animate-spin': isAggregating }" />
+                  <span class="truncate">{{ isAggregating ? 'Syncing...' : 'Sync from Active Base' }}</span>
                 </button>
 
                 <button
-                  class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                  class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
                   :disabled="isFetchingOnline || (!editChessCom && !editLichess)"
                   title="Fetch games directly from Chess.com and Lichess into dedicated database"
                   @click="handleFetchOnlineGames()"
                 >
-                  <Globe class="w-3.5 h-3.5" :class="{ 'animate-spin': isFetchingOnline }" />
-                  <span>{{ isFetchingOnline ? 'Fetching Online...' : 'Fetch Online Games' }}</span>
+                  <Globe class="w-3.5 h-3.5 shrink-0" :class="{ 'animate-spin': isFetchingOnline }" />
+                  <span class="truncate">{{ isFetchingOnline ? 'Fetching...' : 'Fetch Online Games' }}</span>
                 </button>
               </div>
             </div>
@@ -762,10 +783,10 @@ function handleExploitPersona() {
           </div>
 
           <!-- Section 5: Modal Actions (Save, Spar, Delete) -->
-          <div class="flex items-center justify-between pt-2 border-t border-zinc-800">
+          <div class="flex items-center justify-between pt-3 border-t border-zinc-800 gap-2 flex-wrap">
             <button
               v-if="selectedPersona.id"
-              class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-rose-950/80 text-zinc-400 hover:text-rose-300 text-xs font-medium border border-zinc-700 hover:border-rose-800 transition-colors flex items-center gap-1.5 cursor-pointer"
+              class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-rose-950/80 text-zinc-400 hover:text-rose-300 text-xs font-medium border border-zinc-700 hover:border-rose-800 transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
               @click="handleDelete"
             >
               <Trash2 class="w-3.5 h-3.5" />
@@ -773,7 +794,7 @@ function handleExploitPersona() {
             </button>
             <div v-else />
 
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <button
                 v-if="selectedPersona.id"
                 class="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
