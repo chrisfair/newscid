@@ -6,7 +6,7 @@
         install install-user uninstall \
         appimage package-appimage snap package-snap deb package-deb pacman package-pacman rpm package-rpm \
         chocolatey choco package-chocolatey package-choco brew homebrew package-brew \
-        flatpak package-flatpak android android-apk packages package package-all package-checksums \
+        flatpak package-flatpak android android-apk packages package package-all package-checksums release-local \
         version bump-patch bump-minor bump-major tag-release
 
 # Application Metadata & Versioning (Single source of truth: VERSION)
@@ -43,6 +43,7 @@ CYAN   := \033[36m
 GREEN  := \033[32m
 YELLOW := \033[33m
 BLUE   := \033[34m
+RED    := \033[31m
 BOLD   := \033[1m
 RESET  := \033[0m
 
@@ -232,6 +233,23 @@ package-checksums: ## Generate SHA-256 checksums for all packages in build/dist/
 	@mkdir -p $(DIST_DIR)
 	@cd $(DIST_DIR) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS 2>/dev/null || true
 	@printf "$(BOLD)$(GREEN)✔ SHA256SUMS generated.$(RESET)\n"
+
+release-local: packages ## Build all packages locally and publish/upload release to GitHub via gh CLI
+	@printf "$(BOLD)$(BLUE)==> Publishing release v$(APP_VERSION) locally via gh CLI...$(RESET)\n"
+	@if command -v gh >/dev/null 2>&1; then \
+		if gh release view "v$(APP_VERSION)" >/dev/null 2>&1; then \
+			printf "$(BOLD)$(YELLOW)Release v$(APP_VERSION) already exists. Uploading/clobbering assets...$(RESET)\n"; \
+			gh release upload "v$(APP_VERSION)" $(DIST_DIR)/* --clobber; \
+		else \
+			printf "$(BOLD)$(GREEN)Creating new GitHub release v$(APP_VERSION)...$(RESET)\n"; \
+			gh release create "v$(APP_VERSION)" $(DIST_DIR)/* --title "NewScid v$(APP_VERSION)" --notes "Release v$(APP_VERSION) generated locally."; \
+		fi; \
+		printf "$(BOLD)$(GREEN)✔ Local release v$(APP_VERSION) published successfully.$(RESET)\n"; \
+	else \
+		printf "$(BOLD)$(RED)gh CLI not found. Please install gh or upload files in $(DIST_DIR) manually.$(RESET)\n"; \
+		exit 1; \
+	fi
+
 
 # ==============================================================================
 # Installation Targets

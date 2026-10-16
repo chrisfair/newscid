@@ -2790,6 +2790,58 @@ func (a *App) SavePGNFileDialog(defaultFilename string) (string, error) {
 	})
 }
 
+// ==========================================
+// Piece Safety Scanner & Drill Module
+// ==========================================
+
+// AnalyzeBoardSafety calculates square safety, attackers, defenders, and hanging pieces for the given FEN.
+func (a *App) AnalyzeBoardSafety(fen string) (*training.BoardSafetyReport, error) {
+	if strings.TrimSpace(fen) == "" {
+		a.mu.RLock()
+		if a.activeGame != nil {
+			b := chess.NewBoard()
+			if a.activeGame.StartFEN != "" {
+				if parsed, err := chess.ParseFEN(a.activeGame.StartFEN); err == nil {
+					b = parsed
+				}
+			}
+			for curr := a.activeGame.RootMove; curr != nil; curr = curr.Next {
+				b.MakeMove(curr.Move)
+			}
+			fen = b.FEN()
+		}
+		a.mu.RUnlock()
+	}
+	if fen == "" {
+		fen = chess.StartingFEN
+	}
+	return training.AnalyzeBoardSafety(fen)
+}
+
+// GetSafetyDrillBatch retrieves a set of curated safety challenges.
+func (a *App) GetSafetyDrillBatch(count int, difficulty string) ([]training.SafetyDrill, error) {
+	drills := training.GetSafetyDrillBatch(count, difficulty)
+	return drills, nil
+}
+
+// GenerateSafetyDrillsFromDatabase mines blunder positions from the active database.
+func (a *App) GenerateSafetyDrillsFromDatabase(count int) ([]training.SafetyDrill, error) {
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+
+	if db == nil || !db.IsOpen {
+		return training.GetSafetyDrillBatch(count, "all"), nil
+	}
+	return training.ExtractSafetyDrillsFromDatabase(db, count), nil
+}
+
+// SubmitSafetyDrillAnswer evaluates the user's selected squares or move against a safety drill.
+func (a *App) SubmitSafetyDrillAnswer(drill training.SafetyDrill, selectedSquares []string, moveUCI string) (*training.SafetyDrillFeedback, error) {
+	feedback := training.EvaluateSafetySubmission(&drill, selectedSquares, moveUCI)
+	return feedback, nil
+}
+
 
 
 

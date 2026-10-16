@@ -22,6 +22,10 @@ export function AggregatePersonaGames(arg1) {
   return window['go']['main']['App']['AggregatePersonaGames'](arg1);
 }
 
+export function AnalyzeBoardSafety(arg1) {
+  return window['go']['main']['App']['AnalyzeBoardSafety'](arg1);
+}
+
 export function AnalyzePosition(arg1, arg2, arg3) {
   return window['go']['main']['App']['AnalyzePosition'](arg1, arg2, arg3);
 }
@@ -182,6 +186,10 @@ export function GenerateRandomChess960() {
   return window['go']['main']['App']['GenerateRandomChess960']();
 }
 
+export function GenerateSafetyDrillsFromDatabase(arg1) {
+  return window['go']['main']['App']['GenerateSafetyDrillsFromDatabase'](arg1);
+}
+
 export function GetAllBlunderPuzzles() {
   return window['go']['main']['App']['GetAllBlunderPuzzles']();
 }
@@ -328,6 +336,10 @@ export function GetRepertoire(arg1) {
 
 export function GetRepertoires() {
   return window['go']['main']['App']['GetRepertoires']();
+}
+
+export function GetSafetyDrillBatch(arg1, arg2) {
+  return window['go']['main']['App']['GetSafetyDrillBatch'](arg1, arg2);
 }
 
 export function GetScidSystemBases() {
@@ -540,6 +552,10 @@ export function StopEngineMatch() {
 
 export function SubmitGuessTheMove(arg1) {
   return window['go']['main']['App']['SubmitGuessTheMove'](arg1);
+}
+
+export function SubmitSafetyDrillAnswer(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SubmitSafetyDrillAnswer'](arg1, arg2, arg3);
 }
 
 export function SuggestPersonaIdentifiers(arg1, arg2) {
