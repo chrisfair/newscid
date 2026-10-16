@@ -584,7 +584,7 @@ watch(mode, () => {
     <!-- Create New Repertoire Modal -->
     <div
       v-if="newRepModal"
-      class="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center z-60 p-4"
+      class="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-70 p-4"
       @click.self="newRepModal = false"
     >
       <div class="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-md p-5 flex flex-col gap-4 shadow-2xl">
