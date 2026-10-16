@@ -26,6 +26,14 @@ export function AnalyzeBoardSafety(arg1) {
   return window['go']['main']['App']['AnalyzeBoardSafety'](arg1);
 }
 
+export function AnalyzeGameTimeManagement(arg1) {
+  return window['go']['main']['App']['AnalyzeGameTimeManagement'](arg1);
+}
+
+export function AnalyzePlayerTimeManagement(arg1, arg2) {
+  return window['go']['main']['App']['AnalyzePlayerTimeManagement'](arg1, arg2);
+}
+
 export function AnalyzePosition(arg1, arg2, arg3) {
   return window['go']['main']['App']['AnalyzePosition'](arg1, arg2, arg3);
 }

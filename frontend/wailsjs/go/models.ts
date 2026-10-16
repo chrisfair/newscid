@@ -2205,7 +2205,271 @@ export namespace stats {
 		    return a;
 		}
 	}
+	export class ScrambleSummary {
+	    whiteEnteredScramblePly: number;
+	    blackEnteredScramblePly: number;
+	    whiteScrambleMoves: number;
+	    blackScrambleMoves: number;
+	    whiteScrambleBlunders: number;
+	    blackScrambleBlunders: number;
 	
+	    static createFrom(source: any = {}) {
+	        return new ScrambleSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.whiteEnteredScramblePly = source["whiteEnteredScramblePly"];
+	        this.blackEnteredScramblePly = source["blackEnteredScramblePly"];
+	        this.whiteScrambleMoves = source["whiteScrambleMoves"];
+	        this.blackScrambleMoves = source["blackScrambleMoves"];
+	        this.whiteScrambleBlunders = source["whiteScrambleBlunders"];
+	        this.blackScrambleBlunders = source["blackScrambleBlunders"];
+	    }
+	}
+	export class PanicIncident {
+	    ply: number;
+	    moveNumber: number;
+	    player: string;
+	    color: string;
+	    san: string;
+	    timeSpentSec: number;
+	    clockRemainingSec: number;
+	    evalDropCp: number;
+	    description: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PanicIncident(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ply = source["ply"];
+	        this.moveNumber = source["moveNumber"];
+	        this.player = source["player"];
+	        this.color = source["color"];
+	        this.san = source["san"];
+	        this.timeSpentSec = source["timeSpentSec"];
+	        this.clockRemainingSec = source["clockRemainingSec"];
+	        this.evalDropCp = source["evalDropCp"];
+	        this.description = source["description"];
+	    }
+	}
+	export class TankIncident {
+	    ply: number;
+	    moveNumber: number;
+	    player: string;
+	    color: string;
+	    san: string;
+	    timeSpentSec: number;
+	    clockBeforeSec: number;
+	    clockAfterSec: number;
+	    evalDropCp: number;
+	    outcome: string;
+	    description: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TankIncident(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ply = source["ply"];
+	        this.moveNumber = source["moveNumber"];
+	        this.player = source["player"];
+	        this.color = source["color"];
+	        this.san = source["san"];
+	        this.timeSpentSec = source["timeSpentSec"];
+	        this.clockBeforeSec = source["clockBeforeSec"];
+	        this.clockAfterSec = source["clockAfterSec"];
+	        this.evalDropCp = source["evalDropCp"];
+	        this.outcome = source["outcome"];
+	        this.description = source["description"];
+	    }
+	}
+	export class SideTimeStats {
+	    totalMoves: number;
+	    totalTimeSpentSec: number;
+	    avgMoveTimeSec: number;
+	    medianMoveTimeSec: number;
+	    openingAvgTimeSec: number;
+	    middlegameAvgTimeSec: number;
+	    endgameAvgTimeSec: number;
+	    longestTankSec: number;
+	    longestTankPly: number;
+	    tankCount: number;
+	    tankBlunderCount: number;
+	    panicMoveCount: number;
+	    timeTroubleMoves: number;
+	    timeTroubleBlunders: number;
+	    correlationTimeVsLoss: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SideTimeStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.totalMoves = source["totalMoves"];
+	        this.totalTimeSpentSec = source["totalTimeSpentSec"];
+	        this.avgMoveTimeSec = source["avgMoveTimeSec"];
+	        this.medianMoveTimeSec = source["medianMoveTimeSec"];
+	        this.openingAvgTimeSec = source["openingAvgTimeSec"];
+	        this.middlegameAvgTimeSec = source["middlegameAvgTimeSec"];
+	        this.endgameAvgTimeSec = source["endgameAvgTimeSec"];
+	        this.longestTankSec = source["longestTankSec"];
+	        this.longestTankPly = source["longestTankPly"];
+	        this.tankCount = source["tankCount"];
+	        this.tankBlunderCount = source["tankBlunderCount"];
+	        this.panicMoveCount = source["panicMoveCount"];
+	        this.timeTroubleMoves = source["timeTroubleMoves"];
+	        this.timeTroubleBlunders = source["timeTroubleBlunders"];
+	        this.correlationTimeVsLoss = source["correlationTimeVsLoss"];
+	    }
+	}
+	export class MoveTimeRecord {
+	    ply: number;
+	    moveNumber: number;
+	    turn: string;
+	    san: string;
+	    uci: string;
+	    clockRemainingSec: number;
+	    timeSpentSec: number;
+	    clockStr: string;
+	    phase: string;
+	    isTank: boolean;
+	    isPanic: boolean;
+	    isScramble: boolean;
+	    evalCp: number;
+	    evalDropCp: number;
+	    evaluationClassification: string;
+	    flag: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MoveTimeRecord(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ply = source["ply"];
+	        this.moveNumber = source["moveNumber"];
+	        this.turn = source["turn"];
+	        this.san = source["san"];
+	        this.uci = source["uci"];
+	        this.clockRemainingSec = source["clockRemainingSec"];
+	        this.timeSpentSec = source["timeSpentSec"];
+	        this.clockStr = source["clockStr"];
+	        this.phase = source["phase"];
+	        this.isTank = source["isTank"];
+	        this.isPanic = source["isPanic"];
+	        this.isScramble = source["isScramble"];
+	        this.evalCp = source["evalCp"];
+	        this.evalDropCp = source["evalDropCp"];
+	        this.evaluationClassification = source["evaluationClassification"];
+	        this.flag = source["flag"];
+	    }
+	}
+	export class GameTimeManagementReport {
+	    gameId: number;
+	    whitePlayer: string;
+	    blackPlayer: string;
+	    event: string;
+	    date: string;
+	    timeControl: string;
+	    whiteHasClock: boolean;
+	    blackHasClock: boolean;
+	    moves: MoveTimeRecord[];
+	    whiteStats: SideTimeStats;
+	    blackStats: SideTimeStats;
+	    tankDossier: TankIncident[];
+	    panicIncidents: PanicIncident[];
+	    scrambleSummary: ScrambleSummary;
+	    recommendations: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new GameTimeManagementReport(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.gameId = source["gameId"];
+	        this.whitePlayer = source["whitePlayer"];
+	        this.blackPlayer = source["blackPlayer"];
+	        this.event = source["event"];
+	        this.date = source["date"];
+	        this.timeControl = source["timeControl"];
+	        this.whiteHasClock = source["whiteHasClock"];
+	        this.blackHasClock = source["blackHasClock"];
+	        this.moves = this.convertValues(source["moves"], MoveTimeRecord);
+	        this.whiteStats = this.convertValues(source["whiteStats"], SideTimeStats);
+	        this.blackStats = this.convertValues(source["blackStats"], SideTimeStats);
+	        this.tankDossier = this.convertValues(source["tankDossier"], TankIncident);
+	        this.panicIncidents = this.convertValues(source["panicIncidents"], PanicIncident);
+	        this.scrambleSummary = this.convertValues(source["scrambleSummary"], ScrambleSummary);
+	        this.recommendations = source["recommendations"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
+	
+	export class PlayerTimeManagementDossier {
+	    playerName: string;
+	    gamesAnalyzed: number;
+	    gamesWithClock: number;
+	    averageMoveTimeSec: number;
+	    openingAvgSec: number;
+	    middlegameAvgSec: number;
+	    endgameAvgSec: number;
+	    totalTanks: number;
+	    tankSuccessRate: number;
+	    panicMoveCount: number;
+	    panicErrorRate: number;
+	    scrambleFrequencyPct: number;
+	    scrambleBlunderCount: number;
+	    habitFlags: string[];
+	    coachingDossier: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new PlayerTimeManagementDossier(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.playerName = source["playerName"];
+	        this.gamesAnalyzed = source["gamesAnalyzed"];
+	        this.gamesWithClock = source["gamesWithClock"];
+	        this.averageMoveTimeSec = source["averageMoveTimeSec"];
+	        this.openingAvgSec = source["openingAvgSec"];
+	        this.middlegameAvgSec = source["middlegameAvgSec"];
+	        this.endgameAvgSec = source["endgameAvgSec"];
+	        this.totalTanks = source["totalTanks"];
+	        this.tankSuccessRate = source["tankSuccessRate"];
+	        this.panicMoveCount = source["panicMoveCount"];
+	        this.panicErrorRate = source["panicErrorRate"];
+	        this.scrambleFrequencyPct = source["scrambleFrequencyPct"];
+	        this.scrambleBlunderCount = source["scrambleBlunderCount"];
+	        this.habitFlags = source["habitFlags"];
+	        this.coachingDossier = source["coachingDossier"];
+	    }
+	}
 	export class RatingPoint {
 	    date: string;
 	    year: number;
@@ -2282,6 +2546,8 @@ export namespace stats {
 		    return a;
 		}
 	}
+	
+	
 
 }
 

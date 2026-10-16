@@ -50,7 +50,8 @@ import {
   Brain,
   Sun,
   Moon,
-  Crosshair
+  Crosshair,
+  Clock
 } from '@lucide/vue'
 import { PieceSetOption, BoardThemeOption } from './HeaderBar.vue'
 import { useNotation, type NotationStyle } from '../utils/notation'
@@ -141,6 +142,7 @@ const emit = defineEmits<{
   (e: 'toggleDarkLight'): void
   (e: 'pieceSafety'): void
   (e: 'intuitionStorm'): void
+  (e: 'timeManagement'): void
 }>()
 
 
@@ -591,6 +593,12 @@ onUnmounted(() => {
           @click="selectItem(() => emit('antiPersona'))"
         >
           <span class="flex items-center gap-2.5 whitespace-nowrap"><Crosshair class="w-4 h-4 shrink-0 text-rose-400" /> Opponent Opening Exploiter & Custom Book...</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('timeManagement'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Clock class="w-4 h-4 shrink-0 text-indigo-400" /> Time Management & Tanking Dossier...</span>
         </button>
       </div>
     </div>

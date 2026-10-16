@@ -3,6 +3,7 @@
 import {blundervault} from '../models';
 import {persona} from '../models';
 import {training} from '../models';
+import {stats} from '../models';
 import {engine} from '../models';
 import {eco} from '../models';
 import {scid} from '../models';
@@ -15,7 +16,6 @@ import {chess} from '../models';
 import {scout} from '../models';
 import {chess960} from '../models';
 import {sets} from '../models';
-import {stats} from '../models';
 import {tree} from '../models';
 import {playerbot} from '../models';
 import {polyglot} from '../models';
@@ -38,6 +38,10 @@ export function AddRepertoireMove(arg1:string,arg2:string,arg3:string,arg4:strin
 export function AggregatePersonaGames(arg1:string):Promise<persona.AggregateResult>;
 
 export function AnalyzeBoardSafety(arg1:string):Promise<training.BoardSafetyReport>;
+
+export function AnalyzeGameTimeManagement(arg1:number):Promise<stats.GameTimeManagementReport>;
+
+export function AnalyzePlayerTimeManagement(arg1:string,arg2:number):Promise<stats.PlayerTimeManagementDossier>;
 
 export function AnalyzePosition(arg1:string,arg2:Array<string>,arg3:number):Promise<void>;
 
