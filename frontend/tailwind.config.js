@@ -22,6 +22,16 @@ export default {
           950: 'rgb(var(--color-zinc-950) / <alpha-value>)',
         },
       },
+      backdropBlur: {
+        xs: '2px',
+      },
+      zIndex: {
+        '60': '60',
+        '70': '70',
+        '80': '80',
+        '90': '90',
+        '100': '100',
+      },
     },
   },
   plugins: [],

@@ -365,7 +365,7 @@ watch(() => props.fen, (newFEN) => {
 
 <template>
   <div
-    class="chessboard-wrapper flex items-stretch gap-2.5 select-none justify-center"
+    class="chessboard-wrapper isolate flex items-stretch gap-2.5 select-none justify-center"
     :class="{ 'shrink-0': !!boardSize, 'w-full h-full max-w-full max-h-full': !boardSize }"
     :style="{
       width: boardSize ? `${boardSize + (showEvalBar ? 24 : 0)}px` : undefined,
