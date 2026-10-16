@@ -3015,13 +3015,15 @@ func (a *App) DismissSupportNag() (support.SupportStatus, error) {
 	return a.supportMgr.DismissNag()
 }
 
-// OpenSupportLink opens the Stripe support checkout URL in the user's default system browser.
+// OpenSupportLink opens the Stripe support checkout URL in the user's default system browser
+// and marks the user as supported so the startup nag screen does not appear again.
 func (a *App) OpenSupportLink(amountUSD int) string {
 	st := a.GetSupportStatus()
-	targetURL := st.StripeURL
 	if amountUSD < support.DefaultMinSupportUSD {
 		amountUSD = support.DefaultMinSupportUSD
 	}
+	targetURL := support.StripeURLForAmount(amountUSD, st.StripeURL)
+	_, _ = a.RecordUserSupport(fmt.Sprintf("$%d Support", amountUSD), "stripe_checkout")
 	if a.ctx != nil {
 		runtime.BrowserOpenURL(a.ctx, targetURL)
 	}

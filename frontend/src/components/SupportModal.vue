@@ -36,7 +36,7 @@ const status = ref<SupportState>({
   supportedAt: 0,
   dismissCount: 0,
   lastDismissedAt: 0,
-  stripeUrl: 'https://donate.stripe.com/newscid-support',
+  stripeUrl: 'https://buy.stripe.com/cNidR2e262cEeiOdpCefC01',
   minAmountUsd: 5,
   shouldShowNag: true,
 })
@@ -49,9 +49,11 @@ const stripeOpened = ref<boolean>(false)
 const confirmMessage = ref<string>('')
 
 const presetAmounts = [
-  { amount: 5, label: '$5', desc: 'Supporter' },
-  { amount: 10, label: '$10', desc: 'Club Supporter' },
-  { amount: 25, label: '$25', desc: 'Grandmaster' },
+  { amount: 5, label: '$5', desc: 'Knight' },
+  { amount: 10, label: '$10', desc: 'Rook' },
+  { amount: 35, label: '$35', desc: 'Queen' },
+  { amount: 100, label: '$100', desc: 'Princess' },
+  { amount: 350, label: '$350', desc: 'King' },
 ]
 
 const effectiveAmount = computed(() => {
@@ -87,7 +89,17 @@ onMounted(async () => {
 async function handleOpenStripe() {
   stripeOpened.value = true
   try {
-    await OpenSupportLink(effectiveAmount.value)
+    const targetUrl = await OpenSupportLink(effectiveAmount.value)
+    const refreshed = await GetSupportStatus()
+    if (refreshed) {
+      status.value = refreshed
+    } else {
+      status.value.supported = true
+      status.value.shouldShowNag = false
+    }
+    confirmMessage.value = 'Thank you for supporting NewScid! The startup prompt is now permanently disabled.'
+    emit('updated', true)
+    return targetUrl
   } catch {
     if (typeof window !== 'undefined' && status.value.stripeUrl) {
       window.open(status.value.stripeUrl, '_blank', 'noopener,noreferrer')
@@ -199,7 +211,7 @@ async function handleDismiss() {
           <label class="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
             Choose Support Amount ($5 Minimum)
           </label>
-          <div class="grid grid-cols-4 gap-2">
+          <div class="grid grid-cols-3 gap-2">
             <button
               v-for="preset in presetAmounts"
               :key="preset.amount"
@@ -273,7 +285,7 @@ async function handleDismiss() {
               v-model="referenceInput"
               data-testid="support-reference-input"
               type="text"
-              placeholder="Optional: Stripe receipt email or Chess.com / Lichess ID"
+              placeholder="Optional: Stripe receipt email or note (no account needed)"
               class="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-hidden focus:border-emerald-500"
             />
             <button
