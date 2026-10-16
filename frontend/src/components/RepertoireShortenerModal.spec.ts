@@ -3,7 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import RepertoireShortenerModal from './RepertoireShortenerModal.vue'
 
 vi.mock('../../wailsjs/go/main/App', () => ({
-  ListRepertoires: vi.fn().mockResolvedValue([
+  GetRepertoires: vi.fn().mockResolvedValue([
     {
       id: 'white-openings-italian',
       name: 'White: Italian Game & Open Repertoire',

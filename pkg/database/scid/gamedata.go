@@ -5,8 +5,15 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
+	"strings"
 
 	"newscid/pkg/chess"
+)
+
+var (
+	scidClkRegex = regexp.MustCompile(`\[%clk\s+([^\]]+)\]`)
+	scidEmtRegex = regexp.MustCompile(`\[%emt\s+([^\]]+)\]`)
 )
 
 // Special tokens in SCID move stream
@@ -160,10 +167,21 @@ func DecodeGameData(raw []byte, entry *IndexEntry, nb *NameBase) (*chess.Game, e
 			commentBytes = append(commentBytes, cb)
 		}
 		if len(commentBytes) > 0 {
+			cStr := string(commentBytes)
 			if node.Comment != "" {
-				node.Comment += " " + string(commentBytes)
+				node.Comment += " " + cStr
 			} else {
-				node.Comment = string(commentBytes)
+				node.Comment = cStr
+			}
+			if node.Clock == "" {
+				if m := scidClkRegex.FindStringSubmatch(cStr); len(m) > 1 {
+					node.Clock = strings.TrimSpace(m[1])
+				}
+			}
+			if node.EMT == "" {
+				if m := scidEmtRegex.FindStringSubmatch(cStr); len(m) > 1 {
+					node.EMT = strings.TrimSpace(m[1])
+				}
 			}
 		}
 	}
@@ -406,10 +424,23 @@ func encodeNodeTree(buf *bytes.Buffer, b *chess.Board, node *chess.MoveNode, com
 			buf.WriteByte(byte(nag))
 		}
 
-		// Comment
-		if curr.Comment != "" {
+		// Comment & Clock metadata
+		fullComment := curr.Comment
+		if curr.Clock != "" && !strings.Contains(fullComment, "%clk") {
+			if fullComment != "" {
+				fullComment += " "
+			}
+			fullComment += fmt.Sprintf("[%%clk %s]", curr.Clock)
+		}
+		if curr.EMT != "" && !strings.Contains(fullComment, "%emt") {
+			if fullComment != "" {
+				fullComment += " "
+			}
+			fullComment += fmt.Sprintf("[%%emt %s]", curr.EMT)
+		}
+		if fullComment != "" {
 			buf.WriteByte(EncodeComment)
-			*comments = append(*comments, curr.Comment)
+			*comments = append(*comments, fullComment)
 		}
 
 		// Variations

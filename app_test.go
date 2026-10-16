@@ -21,6 +21,7 @@ import (
 	"newscid/pkg/gameexport"
 	"newscid/pkg/online"
 	"newscid/pkg/persona"
+	"newscid/pkg/repertoire"
 	"newscid/pkg/tournament"
 )
 
@@ -1419,6 +1420,60 @@ func TestAppImbalanceExplainerVaultScout(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, scoutReport.TotalGames)
 	assert.Equal(t, 1, scoutReport.WhiteRecord.Wins)
+}
+
+func TestAppNovelTrainingAndStatsFeatures(t *testing.T) {
+	app := NewApp()
+	app.startup(context.Background())
+
+	// 1. Intuition Storm methods
+	iBatch, err := app.GetIntuitionDrillBatch(3)
+	require.NoError(t, err)
+	assert.NotEmpty(t, iBatch)
+
+	iAns, err := app.SubmitIntuitionAnswer("int-1", "equal", 1200)
+	require.NoError(t, err)
+	assert.True(t, iAns.IsCorrect)
+
+	// Database intuition extraction (without db falls back to builtin batch)
+	idrills, err := app.GenerateIntuitionDrillsFromDatabase(3)
+	require.NoError(t, err)
+	assert.NotEmpty(t, idrills)
+
+	// 2. Prophylaxis Drill methods
+	pBatch, err := app.GetProphylaxisDrillBatch(3, "all")
+	require.NoError(t, err)
+	assert.NotEmpty(t, pBatch)
+
+	pAns, err := app.SubmitProphylaxisAnswer("pro-01-karpov-kh1", "g1h1")
+	require.NoError(t, err)
+	assert.True(t, pAns.IsCorrect)
+
+	pdrills, err := app.GenerateProphylaxisDrillsFromDatabase(3)
+	require.NoError(t, err)
+	assert.NotEmpty(t, pdrills)
+
+	// 3. Repertoire Shortener method
+	shortRes, err := app.ShortenRepertoire(repertoire.ShortenerOptions{
+		RepertoireID:      "white-openings-italian",
+		TargetCoveragePct: 80,
+		MinFrequencyPct:   5,
+		MaxDepth:          6,
+		PreserveAnnotated: true,
+		SaveAsNew:         false,
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, shortRes)
+	assert.Equal(t, "white-openings-italian", shortRes.OriginalID)
+
+	// 4. Time Management methods
+	app.activeGame = chess.NewGame()
+	tmRes, err := app.AnalyzeGameTimeManagement(0)
+	require.NoError(t, err)
+	assert.NotNil(t, tmRes)
+
+	_, err = app.AnalyzePlayerTimeManagement("Carlsen", 20)
+	assert.Error(t, err) // No DB open
 }
 
 

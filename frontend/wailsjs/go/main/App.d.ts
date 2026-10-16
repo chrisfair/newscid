@@ -123,6 +123,8 @@ export function GenerateIntuitionDrillsFromDatabase(arg1:number):Promise<Array<t
 
 export function GenerateOpponentScoutingReport(arg1:string):Promise<scout.Report>;
 
+export function GenerateProphylaxisDrillsFromDatabase(arg1:number):Promise<Array<training.ProphylaxisDrill>>;
+
 export function GenerateRandomChess960():Promise<chess960.Position>;
 
 export function GenerateSafetyDrillsFromDatabase(arg1:number):Promise<Array<training.SafetyDrill>>;
@@ -196,6 +198,8 @@ export function GetPolyglotBooks():Promise<Array<string>>;
 export function GetPositionalImbalance(arg1:string):Promise<imbalance.Report>;
 
 export function GetProgressivePuzzle(arg1:number):Promise<main.TacticsPuzzle>;
+
+export function GetProphylaxisDrillBatch(arg1:number,arg2:string):Promise<Array<training.ProphylaxisDrill>>;
 
 export function GetRatingEvolution(arg1:string):Promise<stats.RatingTrackerResult>;
 
@@ -314,6 +318,8 @@ export function StopEngineMatch():Promise<boolean>;
 export function SubmitGuessTheMove(arg1:string):Promise<training.GuessFeedback>;
 
 export function SubmitIntuitionAnswer(arg1:string,arg2:string,arg3:number):Promise<training.IntuitionResult>;
+
+export function SubmitProphylaxisAnswer(arg1:string,arg2:string):Promise<training.ProphylaxisFeedback>;
 
 export function SubmitSafetyDrillAnswer(arg1:training.SafetyDrill,arg2:Array<string>,arg3:string):Promise<training.SafetyDrillFeedback>;
 

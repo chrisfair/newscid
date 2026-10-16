@@ -3298,6 +3298,70 @@ export namespace training {
 	}
 	
 	
+	export class ProphylaxisDrill {
+	    id: string;
+	    title: string;
+	    fen: string;
+	    turn: string;
+	    category: string;
+	    categoryLabel: string;
+	    prompt: string;
+	    winningMoveUCI: string;
+	    winningMoveSAN: string;
+	    alternativeUCIs: string[];
+	    opponentThreat: string;
+	    threatArrowFrom: string;
+	    threatArrowTo: string;
+	    explanation: string;
+	    source: string;
+	    difficulty: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProphylaxisDrill(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.fen = source["fen"];
+	        this.turn = source["turn"];
+	        this.category = source["category"];
+	        this.categoryLabel = source["categoryLabel"];
+	        this.prompt = source["prompt"];
+	        this.winningMoveUCI = source["winningMoveUCI"];
+	        this.winningMoveSAN = source["winningMoveSAN"];
+	        this.alternativeUCIs = source["alternativeUCIs"];
+	        this.opponentThreat = source["opponentThreat"];
+	        this.threatArrowFrom = source["threatArrowFrom"];
+	        this.threatArrowTo = source["threatArrowTo"];
+	        this.explanation = source["explanation"];
+	        this.source = source["source"];
+	        this.difficulty = source["difficulty"];
+	    }
+	}
+	export class ProphylaxisFeedback {
+	    isCorrect: boolean;
+	    pointsAwarded: number;
+	    bestMoveUCI: string;
+	    bestMoveSAN: string;
+	    explanation: string;
+	    opponentThreat: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProphylaxisFeedback(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.isCorrect = source["isCorrect"];
+	        this.pointsAwarded = source["pointsAwarded"];
+	        this.bestMoveUCI = source["bestMoveUCI"];
+	        this.bestMoveSAN = source["bestMoveSAN"];
+	        this.explanation = source["explanation"];
+	        this.opponentThreat = source["opponentThreat"];
+	    }
+	}
 	export class SafetyDrill {
 	    id: string;
 	    title: string;

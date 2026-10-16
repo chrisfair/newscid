@@ -66,3 +66,41 @@ func TestShortenRepertoire_MaxDepth(t *testing.T) {
 
 	assert.True(t, len(result.PrunedBranches) > 0)
 }
+
+func TestShortenRepertoire_BlackRepertoire(t *testing.T) {
+	tempDir := t.TempDir()
+	mgr := NewManager(tempDir)
+
+	opts := ShortenerOptions{
+		RepertoireID:      "black-openings-sicilian-kid",
+		TargetCoveragePct: 70.0,
+		MinFrequencyPct:   4.0,
+		MaxDepth:          8,
+		PreserveAnnotated: true,
+		SaveAsNew:         false,
+	}
+
+	result, err := mgr.ShortenRepertoire(opts, nil)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, "black-openings-sicilian-kid", result.OriginalID)
+	assert.LessOrEqual(t, result.PrunedMoveCount, result.OriginalMoveCount)
+}
+
+func TestShortenRepertoire_ErrorsAndEdgeCases(t *testing.T) {
+	tempDir := t.TempDir()
+	mgr := NewManager(tempDir)
+
+	// Non-existent ID
+	_, err := mgr.ShortenRepertoire(ShortenerOptions{RepertoireID: "non-existent"}, nil)
+	assert.Error(t, err)
+
+	// Invalid target coverage (<= 0 or > 100) and min freq (<= 0) should use defaults
+	res, err := mgr.ShortenRepertoire(ShortenerOptions{
+		RepertoireID:      "white-openings-italian",
+		TargetCoveragePct: -10,
+		MinFrequencyPct:   -5,
+	}, nil)
+	require.NoError(t, err)
+	assert.NotNil(t, res)
+}

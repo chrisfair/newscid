@@ -1,12 +1,15 @@
 package stats
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"newscid/pkg/chess"
+	"newscid/pkg/database/scid"
 )
 
 func TestParseClockToSeconds(t *testing.T) {
@@ -187,3 +190,51 @@ func TestCalculatePearson(t *testing.T) {
 	rFlat := calculatePearson(pairsFlat)
 	assert.Equal(t, 0.0, rFlat)
 }
+
+func TestAnalyzePlayerTimeManagement(t *testing.T) {
+	// 1. Closed or nil DB
+	_, err := AnalyzePlayerTimeManagement(nil, "Carlsen", 50)
+	assert.Error(t, err)
+
+	// 2. Open DB with clock games
+	tmpDir, err := os.MkdirTemp("", "scid_time_test_*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "timebase")
+	db := scid.NewDatabase()
+	err = db.Create(dbPath, "Time Base")
+	require.NoError(t, err)
+
+	g := chess.NewGame()
+	g.SetTag("White", "Carlsen, Magnus")
+	g.SetTag("Black", "Nakamura, Hikaru")
+	g.SetTag("Event", "World Blitz")
+
+	b := chess.NewBoard()
+	m1, _ := b.ParseSAN("e4"); b.MakeMove(m1)
+	m2, _ := b.ParseSAN("e5"); b.MakeMove(m2)
+	m3, _ := b.ParseSAN("Nf3"); b.MakeMove(m3)
+	m4, _ := b.ParseSAN("Nc6"); b.MakeMove(m4)
+
+	n1 := &chess.MoveNode{Move: m1, SAN: "e4", UCI: m1.String(), Clock: "0:05:00"}
+	n2 := &chess.MoveNode{Move: m2, SAN: "e5", UCI: m2.String(), Clock: "0:04:58"}
+	n3 := &chess.MoveNode{Move: m3, SAN: "Nf3", UCI: m3.String(), Clock: "0:02:45"} // 135s tank
+	n4 := &chess.MoveNode{Move: m4, SAN: "Nc6", UCI: m4.String(), Clock: "0:04:50"}
+	n1.Next = n2
+	n2.Next = n3
+	n3.Next = n4
+	g.RootMove = n1
+	g.PlyCount = 4
+
+	_, err = db.SaveGame(g)
+	require.NoError(t, err)
+
+	dossier, err := AnalyzePlayerTimeManagement(db, "Carlsen", 50)
+	require.NoError(t, err)
+	assert.Equal(t, "Carlsen", dossier.PlayerName)
+	assert.Equal(t, 1, dossier.GamesWithClock)
+	assert.True(t, dossier.TotalTanks >= 1)
+	assert.NotEmpty(t, dossier.CoachingDossier)
+}
+
