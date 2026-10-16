@@ -2842,6 +2842,64 @@ export namespace training {
 		    return a;
 		}
 	}
+	export class IntuitionChallenge {
+	    id: string;
+	    fen: string;
+	    whitePlayer: string;
+	    blackPlayer: string;
+	    event: string;
+	    evaluationCp: number;
+	    category: string;
+	    keyFeature: string;
+	    materialDelta: number;
+	    timeLimitSec: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new IntuitionChallenge(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.fen = source["fen"];
+	        this.whitePlayer = source["whitePlayer"];
+	        this.blackPlayer = source["blackPlayer"];
+	        this.event = source["event"];
+	        this.evaluationCp = source["evaluationCp"];
+	        this.category = source["category"];
+	        this.keyFeature = source["keyFeature"];
+	        this.materialDelta = source["materialDelta"];
+	        this.timeLimitSec = source["timeLimitSec"];
+	    }
+	}
+	export class IntuitionResult {
+	    isCorrect: boolean;
+	    userChoice: string;
+	    actualCategory: string;
+	    evaluationCp: number;
+	    scoreFormatted: string;
+	    pointsAwarded: number;
+	    speedBonus: number;
+	    explanation: string;
+	    keyFeature: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new IntuitionResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.isCorrect = source["isCorrect"];
+	        this.userChoice = source["userChoice"];
+	        this.actualCategory = source["actualCategory"];
+	        this.evaluationCp = source["evaluationCp"];
+	        this.scoreFormatted = source["scoreFormatted"];
+	        this.pointsAwarded = source["pointsAwarded"];
+	        this.speedBonus = source["speedBonus"];
+	        this.explanation = source["explanation"];
+	        this.keyFeature = source["keyFeature"];
+	    }
+	}
 	export class MoveRecord {
 	    ply: number;
 	    turn: string;

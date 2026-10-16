@@ -140,6 +140,7 @@ const emit = defineEmits<{
   (e: 'changeUITheme', id: string): void
   (e: 'toggleDarkLight'): void
   (e: 'pieceSafety'): void
+  (e: 'intuitionStorm'): void
 }>()
 
 
@@ -677,6 +678,12 @@ onUnmounted(() => {
           @click="selectItem(() => emit('pieceSafety'))"
         >
           <span class="flex items-center gap-2.5 whitespace-nowrap"><Shield class="w-4 h-4 shrink-0 text-emerald-400" /> Piece Safety Scanner (Don't Hang Pieces)...</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('intuitionStorm'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Zap class="w-4 h-4 shrink-0 text-amber-400" /> Intuition Storm (Speed Reflex Trainer)...</span>
         </button>
       </div>
     </div>

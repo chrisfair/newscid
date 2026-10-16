@@ -115,6 +115,8 @@ export function FormatMove(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function FormatMoveSequence(arg1:string,arg2:Array<string>,arg3:string):Promise<string>;
 
+export function GenerateIntuitionDrillsFromDatabase(arg1:number):Promise<Array<training.IntuitionChallenge>>;
+
 export function GenerateOpponentScoutingReport(arg1:string):Promise<scout.Report>;
 
 export function GenerateRandomChess960():Promise<chess960.Position>;
@@ -158,6 +160,8 @@ export function GetGames(arg1:number,arg2:number,arg3:scid.SearchCriteria):Promi
 export function GetGuessTheMoveHint():Promise<string>;
 
 export function GetGuessTheMoveState():Promise<training.SolitaireSession>;
+
+export function GetIntuitionDrillBatch(arg1:number):Promise<Array<training.IntuitionChallenge>>;
 
 export function GetLatestTWICIssue():Promise<number>;
 
@@ -302,6 +306,8 @@ export function StopEngine():Promise<void>;
 export function StopEngineMatch():Promise<boolean>;
 
 export function SubmitGuessTheMove(arg1:string):Promise<training.GuessFeedback>;
+
+export function SubmitIntuitionAnswer(arg1:string,arg2:string,arg3:number):Promise<training.IntuitionResult>;
 
 export function SubmitSafetyDrillAnswer(arg1:training.SafetyDrill,arg2:Array<string>,arg3:string):Promise<training.SafetyDrillFeedback>;
 
