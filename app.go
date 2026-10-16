@@ -3016,13 +3016,14 @@ func (a *App) DismissSupportNag() (support.SupportStatus, error) {
 }
 
 // OpenSupportLink opens the Stripe support checkout URL in the user's default system browser
-// and marks the user as supported so the startup nag screen does not appear again.
+// with client_reference_id=newscid_<amount>usd so payments from NewScid are distinguishable from Bughouse Online in Stripe.
 func (a *App) OpenSupportLink(amountUSD int) string {
 	st := a.GetSupportStatus()
 	if amountUSD < support.DefaultMinSupportUSD {
 		amountUSD = support.DefaultMinSupportUSD
 	}
-	targetURL := support.StripeURLForAmount(amountUSD, st.StripeURL)
+	baseURL := support.StripeURLForAmount(amountUSD, st.StripeURL)
+	targetURL := support.BuildCheckoutURL(baseURL, fmt.Sprintf("newscid_%dusd", amountUSD))
 	_, _ = a.RecordUserSupport(fmt.Sprintf("$%d Support", amountUSD), "stripe_checkout")
 	if a.ctx != nil {
 		runtime.BrowserOpenURL(a.ctx, targetURL)
