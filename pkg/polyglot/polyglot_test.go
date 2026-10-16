@@ -240,3 +240,81 @@ func TestPolyglotErrorsAndEdgeCases(t *testing.T) {
 	// 7. polyglotPieceIndex for invalid piece type
 	assert.Equal(t, -1, polyglotPieceIndex(chess.None, chess.White))
 }
+
+func TestEncodeRawMoveAndWriteBook(t *testing.T) {
+	b := chess.NewBoard()
+
+	// 1. Regular moves: e2e4
+	mE4, err := b.ParseSAN("e4")
+	require.NoError(t, err)
+	rawE4 := EncodeRawMove(b, mE4)
+	assert.Equal(t, "e2e4", decodeRawMove(b, rawE4))
+
+	// 2. Castling: e1g1 (White O-O)
+	bCastle, err := chess.ParseFEN("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1")
+	require.NoError(t, err)
+	mCastleWhite, err := bCastle.ParseSAN("O-O")
+	require.NoError(t, err)
+	rawWhiteCastle := EncodeRawMove(bCastle, mCastleWhite)
+	assert.Equal(t, "e1g1", decodeRawMove(bCastle, rawWhiteCastle))
+
+	// White O-O-O
+	mCastleWhiteQ, err := bCastle.ParseSAN("O-O-O")
+	require.NoError(t, err)
+	rawWhiteCastleQ := EncodeRawMove(bCastle, mCastleWhiteQ)
+	assert.Equal(t, "e1c1", decodeRawMove(bCastle, rawWhiteCastleQ))
+
+	// Black O-O
+	bCastleBlack, err := chess.ParseFEN("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R b KQkq - 0 1")
+	require.NoError(t, err)
+	mCastleBlack, err := bCastleBlack.ParseSAN("O-O")
+	require.NoError(t, err)
+	rawBlackCastle := EncodeRawMove(bCastleBlack, mCastleBlack)
+	assert.Equal(t, "e8g8", decodeRawMove(bCastleBlack, rawBlackCastle))
+
+	// Black O-O-O
+	mCastleBlackQ, err := bCastleBlack.ParseSAN("O-O-O")
+	require.NoError(t, err)
+	rawBlackCastleQ := EncodeRawMove(bCastleBlack, mCastleBlackQ)
+	assert.Equal(t, "e8c8", decodeRawMove(bCastleBlack, rawBlackCastleQ))
+
+	// 3. Promotion: e7e8q
+	bPromo, err := chess.ParseFEN("8/4P3/8/8/8/8/8/4K2k w - - 0 1")
+	require.NoError(t, err)
+	mPromoQ, err := bPromo.ParseSAN("e8=Q")
+	require.NoError(t, err)
+	rawPromoQ := EncodeRawMove(bPromo, mPromoQ)
+	assert.Equal(t, "e7e8q", decodeRawMove(bPromo, rawPromoQ))
+
+	mPromoN, err := bPromo.ParseSAN("e8=N")
+	require.NoError(t, err)
+	rawPromoN := EncodeRawMove(bPromo, mPromoN)
+	assert.Equal(t, "e7e8n", decodeRawMove(bPromo, rawPromoN))
+
+	// 4. Test WriteBook and OpenBook round-trip
+	tmpDir := t.TempDir()
+	outBookPath := filepath.Join(tmpDir, "written_book.bin")
+
+	entries := []BookEntry{
+		{
+			Key:     HashBoard(b),
+			RawMove: rawE4,
+			Weight:  500,
+			Learn:   0,
+		},
+	}
+
+	err = WriteBook(outBookPath, entries)
+	require.NoError(t, err)
+
+	loadedBook, err := OpenBook(outBookPath)
+	require.NoError(t, err)
+	assert.Equal(t, 1, loadedBook.entries)
+
+	foundMoves, err := loadedBook.FindMoves(b)
+	require.NoError(t, err)
+	require.Len(t, foundMoves, 1)
+	assert.Equal(t, "e2e4", foundMoves[0].UCI)
+	assert.Equal(t, 500, foundMoves[0].Weight)
+}
+

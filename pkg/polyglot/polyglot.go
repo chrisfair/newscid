@@ -144,6 +144,14 @@ func OpenBook(path string) (*Book, error) {
 	}, nil
 }
 
+// NumEntries returns the total number of 16-byte entries in the book.
+func (b *Book) NumEntries() int {
+	if b == nil {
+		return 0
+	}
+	return b.entries
+}
+
 // FindMoves returns all book moves for the given board position.
 func (b *Book) FindMoves(board *chess.Board) ([]BookMove, error) {
 	if b.entries == 0 {
@@ -320,6 +328,86 @@ func decodeRawMove(board *chess.Board, raw uint16) string {
 	}
 
 	return fromName + toName + promoStr
+}
+
+// EncodeRawMove encodes a chess.Move into the standard 16-bit Polyglot move format.
+func EncodeRawMove(board *chess.Board, m chess.Move) uint16 {
+	fromSq := int(m.From)
+	toSq := int(m.To)
+
+	// Castling conversion (King moves to Rook square in Polyglot)
+	if m.Promo == chess.None {
+		if (fromSq == int(chess.E1) && (board == nil || board.Squares[chess.E1] == chess.WK)) {
+			if toSq == int(chess.G1) {
+				toSq = int(chess.H1)
+			} else if toSq == int(chess.C1) {
+				toSq = int(chess.A1)
+			}
+		} else if (fromSq == int(chess.E8) && (board == nil || board.Squares[chess.E8] == chess.BK)) {
+			if toSq == int(chess.G8) {
+				toSq = int(chess.H8)
+			} else if toSq == int(chess.C8) {
+				toSq = int(chess.A8)
+			}
+		}
+	}
+
+	fromFile := fromSq % 8
+	fromRank := fromSq / 8
+	toFile := toSq % 8
+	toRank := toSq / 8
+
+	promo := 0
+	switch m.Promo {
+	case chess.Knight:
+		promo = 1
+	case chess.Bishop:
+		promo = 2
+	case chess.Rook:
+		promo = 3
+	case chess.Queen:
+		promo = 4
+	}
+
+	return uint16(toFile | (toRank << 3) | (fromFile << 6) | (fromRank << 9) | (promo << 12))
+}
+
+// EncodeBook sorts entries ascending by Key and encodes them into standard Polyglot binary bytes.
+func EncodeBook(entries []BookEntry) []byte {
+	// Polyglot specification requires entries to be sorted primarily by Key ascending.
+	// Secondarily, sort by Weight descending.
+	sorted := make([]BookEntry, len(entries))
+	copy(sorted, entries)
+
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].Key != sorted[j].Key {
+			return sorted[i].Key < sorted[j].Key
+		}
+		if sorted[i].Weight != sorted[j].Weight {
+			return sorted[i].Weight > sorted[j].Weight
+		}
+		return sorted[i].RawMove < sorted[j].RawMove
+	})
+
+	buf := make([]byte, len(sorted)*16)
+	for i, e := range sorted {
+		offset := i * 16
+		binary.BigEndian.PutUint64(buf[offset:offset+8], e.Key)
+		binary.BigEndian.PutUint16(buf[offset+8:offset+10], e.RawMove)
+		binary.BigEndian.PutUint16(buf[offset+10:offset+12], e.Weight)
+		binary.BigEndian.PutUint32(buf[offset+12:offset+16], e.Learn)
+	}
+	return buf
+}
+
+// WriteBook encodes entries and writes them to a file at path.
+func WriteBook(path string, entries []BookEntry) error {
+	data := EncodeBook(entries)
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
 }
 
 // DiscoverBooks looks for opening books (.bin) across standard Scid vs PC and user directories.

@@ -2580,6 +2580,217 @@ func (a *App) GenerateOpponentScoutingReport(playerName string) (*scout.Report, 
 	return scout.GenerateReport(playerName, games), nil
 }
 
+// ==========================================
+// Opponent Opening Exploiter & Custom Book Generator
+// ==========================================
+
+// EvaluateOpponentWeaknesses performs opening tree evaluation for any player in the active database.
+func (a *App) EvaluateOpponentWeaknesses(playerName string, targetColor string, maxDepth int, minGames int) (*persona.AntiPersonaReport, error) {
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+
+	if db == nil || !db.IsOpen {
+		return nil, fmt.Errorf("no database is currently open")
+	}
+
+	cleanName := strings.TrimSpace(playerName)
+	if cleanName == "" {
+		return nil, fmt.Errorf("player name cannot be empty")
+	}
+
+	cfg := persona.AntiPersonaConfig{
+		DisplayName:          cleanName,
+		Identifiers:          []string{cleanName},
+		TargetColor:          targetColor,
+		MaxDepth:             maxDepth,
+		MinGames:             minGames,
+		MinVulnerabilityRate: 45.0,
+	}
+
+	return persona.EvaluatePersonaDatabase(db, cfg)
+}
+
+// EvaluatePersonaWeaknesses performs deep opening tree evaluation for a persona across active and dedicated databases.
+func (a *App) EvaluatePersonaWeaknesses(personaID string, targetColor string, maxDepth int, minGames int) (*persona.AntiPersonaReport, error) {
+	if a.personaMgr == nil {
+		return nil, fmt.Errorf("persona manager not initialized")
+	}
+
+	p, err := a.personaMgr.GetPersona(personaID)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg := persona.AntiPersonaConfig{
+		PersonaID:            p.ID,
+		DisplayName:          p.DisplayName,
+		Identifiers:          p.Identifiers,
+		TargetColor:          targetColor,
+		MaxDepth:             maxDepth,
+		MinGames:             minGames,
+		MinVulnerabilityRate: 45.0,
+	}
+
+	a.mu.RLock()
+	activeDB := a.db
+	a.mu.RUnlock()
+
+	var allGames []*chess.Game
+	seenSigs := make(map[string]bool)
+
+	addGamesFromDB := func(db *scid.Database) {
+		if db == nil || !db.IsOpen {
+			return
+		}
+		nameLookup := make(map[string]bool)
+		for _, id := range p.Identifiers {
+			t := strings.ToLower(strings.TrimSpace(id))
+			if t != "" {
+				nameLookup[t] = true
+			}
+		}
+		if p.DisplayName != "" {
+			nameLookup[strings.ToLower(strings.TrimSpace(p.DisplayName))] = true
+		}
+
+		for i := 0; i < len(db.Entries); i++ {
+			entry := db.Entries[i]
+			if (entry.Flags & scid.FlagDelete) != 0 {
+				continue
+			}
+
+			w := strings.ToLower(db.Names.GetName(scid.NamePlayer, entry.WhiteID))
+			b := strings.ToLower(db.Names.GetName(scid.NamePlayer, entry.BlackID))
+
+			isW := matchPlayerLookup(w, nameLookup)
+			isB := matchPlayerLookup(b, nameLookup)
+			if !isW && !isB {
+				continue
+			}
+
+			sig := fmt.Sprintf("%s|%s|%s|%s|%d", entry.Date, w, b, entry.Result, entry.NumHalfMoves)
+			if seenSigs[sig] {
+				continue
+			}
+			seenSigs[sig] = true
+
+			g, err := db.GetGame(i + 1)
+			if err == nil && g != nil {
+				allGames = append(allGames, g)
+			}
+		}
+	}
+
+	if activeDB != nil && activeDB.IsOpen {
+		addGamesFromDB(activeDB)
+	}
+
+	if p.DatabasePath != "" {
+		dedicatedDB := &scid.Database{}
+		if err := dedicatedDB.Open(p.DatabasePath); err == nil {
+			defer dedicatedDB.Close()
+			addGamesFromDB(dedicatedDB)
+		}
+	}
+
+	return persona.EvaluateGames(allGames, cfg)
+}
+
+func matchPlayerLookup(name string, lookup map[string]bool) bool {
+	if lookup[name] {
+		return true
+	}
+	for id := range lookup {
+		if strings.Contains(name, id) || strings.Contains(id, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// ExportAntiPersonaPolyglotBook writes the generated Polyglot opening book to disk.
+func (a *App) ExportAntiPersonaPolyglotBook(report *persona.AntiPersonaReport, filePath string) (string, error) {
+	if report == nil {
+		return "", fmt.Errorf("nil report")
+	}
+
+	target := strings.TrimSpace(filePath)
+	if target == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			homeDir = os.TempDir()
+		}
+		booksDir := filepath.Join(homeDir, ".local", "share", "newscid", "books")
+		_ = os.MkdirAll(booksDir, 0755)
+
+		slug := strings.ReplaceAll(report.DisplayName, " ", "_")
+		slug = strings.ReplaceAll(slug, ",", "")
+		target = filepath.Join(booksDir, fmt.Sprintf("Anti_%s.bin", slug))
+	}
+
+	if err := persona.SaveAntiPersonaBook(report, target); err != nil {
+		return "", err
+	}
+
+	return target, nil
+}
+
+// ExportAntiPersonaPGN writes the generated PGN repertoire to disk.
+func (a *App) ExportAntiPersonaPGN(report *persona.AntiPersonaReport, filePath string) (string, error) {
+	if report == nil {
+		return "", fmt.Errorf("nil report")
+	}
+
+	target := strings.TrimSpace(filePath)
+	if target == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			homeDir = os.TempDir()
+		}
+		repDir := filepath.Join(homeDir, ".local", "share", "newscid", "repertoires")
+		_ = os.MkdirAll(repDir, 0755)
+
+		slug := strings.ReplaceAll(report.DisplayName, " ", "_")
+		slug = strings.ReplaceAll(slug, ",", "")
+		target = filepath.Join(repDir, fmt.Sprintf("Anti_%s.pgn", slug))
+	}
+
+	dir := filepath.Dir(target)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+
+	if err := os.WriteFile(target, []byte(report.PGNRepertoire), 0644); err != nil {
+		return "", err
+	}
+
+	return target, nil
+}
+
+// SaveBookFileDialog prompts user to choose a destination for opening book (.bin).
+func (a *App) SaveBookFileDialog(defaultFilename string) (string, error) {
+	return runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "Save Polyglot Opening Book",
+		DefaultFilename: defaultFilename,
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Polyglot Opening Book (*.bin)", Pattern: "*.bin"},
+		},
+	})
+}
+
+// SavePGNFileDialog prompts user to choose a destination for PGN repertoire.
+func (a *App) SavePGNFileDialog(defaultFilename string) (string, error) {
+	return runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "Save Repertoire PGN",
+		DefaultFilename: defaultFilename,
+		Filters: []runtime.FileFilter{
+			{DisplayName: "PGN Chess Repertoire (*.pgn)", Pattern: "*.pgn"},
+		},
+	})
+}
+
+
 
 
 

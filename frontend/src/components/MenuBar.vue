@@ -49,7 +49,8 @@ import {
   Maximize2,
   Brain,
   Sun,
-  Moon
+  Moon,
+  Crosshair
 } from '@lucide/vue'
 import { PieceSetOption, BoardThemeOption } from './HeaderBar.vue'
 import { useNotation, type NotationStyle } from '../utils/notation'
@@ -132,6 +133,7 @@ const emit = defineEmits<{
   (e: 'commandPalette'): void
   (e: 'blunderVault'): void
   (e: 'opponentScout'): void
+  (e: 'antiPersona'): void
   (e: 'toggleZenMode'): void
   (e: 'explainMove'): void
   (e: 'openTreeWindow'): void
@@ -581,6 +583,12 @@ onUnmounted(() => {
           @click="selectItem(() => emit('opponentScout'))"
         >
           <span class="flex items-center gap-2.5 whitespace-nowrap"><Shield class="w-4 h-4 shrink-0 text-cyan-400" /> Opponent Scouting Card & Prep Matrix...</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('antiPersona'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Crosshair class="w-4 h-4 shrink-0 text-rose-400" /> Opponent Opening Exploiter & Custom Book...</span>
         </button>
       </div>
     </div>

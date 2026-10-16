@@ -38,8 +38,9 @@ import ImbalanceBar from './components/ImbalanceBar.vue'
 import ExplainMoveModal from './components/ExplainMoveModal.vue'
 import BlunderVaultModal from './components/BlunderVaultModal.vue'
 import OpponentScoutModal from './components/OpponentScoutModal.vue'
+import AntiPersonaModal from './components/AntiPersonaModal.vue'
 import { initUITheme, applyUITheme, toggleDarkLight, currentUITheme, UI_THEMES } from './utils/theme'
-import { Bot, Sparkles, Brain, Shield, Maximize2, Minimize2, AlertTriangle } from '@lucide/vue'
+import { Bot, Sparkles, Brain, Shield, Maximize2, Minimize2, AlertTriangle, Crosshair } from '@lucide/vue'
 import { playerbot, persona, scid, tournament, imbalance, explainer, blundervault, scout } from '../wailsjs/go/models'
 
 // Import Wails backend bindings
@@ -95,6 +96,7 @@ import {
   RecordBlunderReview,
   AddBlunderToVault,
   GenerateOpponentScoutingReport,
+  GetPersona,
 } from '../wailsjs/go/main/App'
 import { EventsOn, EventsOff, ClipboardSetText, ClipboardGetText, BrowserOpenURL } from '../wailsjs/runtime/runtime'
 
@@ -302,7 +304,24 @@ const showCommandPalette = ref(false)
 const showExplainMoveModal = ref(false)
 const showBlunderVaultModal = ref(false)
 const showOpponentScoutModal = ref(false)
+const showAntiPersonaModal = ref(false)
+const antiPersonaTargetId = ref<string>('')
+const antiPersonaTargetName = ref<string>('')
 const showOpeningTreeModal = ref(false)
+
+function openAntiPersonaModal(target?: persona.Persona | { id: string; displayName?: string } | string) {
+  if (typeof target === 'string') {
+    antiPersonaTargetId.value = ''
+    antiPersonaTargetName.value = target
+  } else if (target) {
+    antiPersonaTargetId.value = target.id || ''
+    antiPersonaTargetName.value = target.displayName || ''
+  } else {
+    antiPersonaTargetId.value = ''
+    antiPersonaTargetName.value = ''
+  }
+  showAntiPersonaModal.value = true
+}
 
 function handleOpenTreeWindow() {
   showOpeningTreeModal.value = true
@@ -1924,6 +1943,26 @@ async function handleOpenPersonaDb(p: persona.Persona) {
   }
 }
 
+async function handleSparBotFromAnti(personaId: string, playerName: string) {
+  showAntiPersonaModal.value = false
+  if (personaId) {
+    try {
+      const p = await GetPersona(personaId)
+      if (p) {
+        selectedSimulationPersona.value = p
+        showPlayerSimulationModal.value = true
+        return
+      }
+    } catch {}
+  }
+  showPlayerSimulationModal.value = true
+}
+
+function handleTrainAntiRepertoire() {
+  showAntiPersonaModal.value = false
+  showOpeningTrainerModal.value = true
+}
+
 function handleOpenWebDocs() {
   try {
     BrowserOpenURL('https://github.com/christopherpatrickfair/newscid#readme')
@@ -2040,6 +2079,14 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
     icon: 'shield',
     category: 'Training',
     action: () => { showOpponentScoutModal.value = true }
+  },
+  {
+    id: 'anti-persona-exploiter',
+    title: 'Opponent Opening Exploiter & Custom Book',
+    subtitle: 'Evaluate opponent vulnerabilities and compile weaponized Polyglot opening book',
+    icon: 'crosshair',
+    category: 'Training',
+    action: () => { openAntiPersonaModal() }
   },
   {
     id: 'new-game',
@@ -2331,6 +2378,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       @command-palette="showCommandPalette = true"
       @blunder-vault="showBlunderVaultModal = true"
       @opponent-scout="showOpponentScoutModal = true"
+      @anti-persona="openAntiPersonaModal()"
       @toggle-zen-mode="toggleZenMode"
       @explain-move="handleExplainMove(currentPly)"
       :current-u-i-theme="currentUITheme"
@@ -2852,6 +2900,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       :active-db-name="dbInfo?.name"
       @spar-persona="handleSparPersona"
       @open-persona-db="handleOpenPersonaDb"
+      @exploit-persona="openAntiPersonaModal($event)"
       @close="showPersonaModal = false"
     />
 
@@ -3016,7 +3065,20 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       v-if="showOpponentScoutModal"
       :active-db-name="dbInfo?.name"
       @load-game="handleLoadGame"
+      @exploit-player="openAntiPersonaModal($event)"
       @close="showOpponentScoutModal = false"
+    />
+
+    <!-- Opponent Opening Exploiter & Custom Weaponized Book Generator Modal -->
+    <AntiPersonaModal
+      v-if="showAntiPersonaModal"
+      :initial-persona-id="antiPersonaTargetId"
+      :initial-player-name="antiPersonaTargetName"
+      :board-theme="currentTheme"
+      :piece-set="currentPieceSet"
+      @close="showAntiPersonaModal = false"
+      @spar-bot="handleSparBotFromAnti"
+      @train-repertoire="handleTrainAntiRepertoire"
     />
   </div>
 </template>

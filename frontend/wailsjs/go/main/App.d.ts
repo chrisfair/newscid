@@ -294,3 +294,15 @@ export function UpdateGameHeaders(arg1:number,arg2:Record<string, string>):Promi
 export function VerifyDatabase():Promise<scid.VerificationReport>;
 
 export function VerifyRepertoireMove(arg1:string,arg2:string,arg3:string):Promise<main.RepertoireCheckResult>;
+
+export function EvaluateOpponentWeaknesses(arg1:string,arg2:string,arg3:number,arg4:number):Promise<persona.AntiPersonaReport>;
+
+export function EvaluatePersonaWeaknesses(arg1:string,arg2:string,arg3:number,arg4:number):Promise<persona.AntiPersonaReport>;
+
+export function ExportAntiPersonaPolyglotBook(arg1:persona.AntiPersonaReport,arg2:string):Promise<string>;
+
+export function ExportAntiPersonaPGN(arg1:persona.AntiPersonaReport,arg2:string):Promise<string>;
+
+export function SaveBookFileDialog(arg1:string):Promise<string>;
+
+export function SavePGNFileDialog(arg1:string):Promise<string>;

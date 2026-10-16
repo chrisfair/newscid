@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { X, Search, ShieldAlert, Crosshair, Trophy, Lightbulb, TrendingDown, TrendingUp } from '@lucide/vue'
+import { X, Search, ShieldAlert, Crosshair, Trophy, Lightbulb, TrendingDown, TrendingUp, Sword } from '@lucide/vue'
 import { GenerateOpponentScoutingReport, GetDatabasePlayers } from '../../wailsjs/go/main/App'
 import type { scout } from '../../wailsjs/go/models'
 
@@ -10,6 +10,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void
+  (e: 'exploitPlayer', playerName: string): void
 }>()
 
 const playerName = ref(props.initialPlayer || '')
@@ -109,6 +110,23 @@ onMounted(() => {
 
       <!-- Report Content -->
       <div v-else-if="report" class="flex flex-col gap-4">
+        <!-- Opening Exploiter Banner -->
+        <div class="flex items-center justify-between bg-rose-950/20 border border-rose-500/30 p-2.5 rounded-xl">
+          <div class="flex items-center gap-2">
+            <span class="text-rose-400 font-semibold text-xs flex items-center gap-1.5">
+              <Crosshair class="w-4 h-4" /> Opening Exploiter:
+            </span>
+            <span class="text-[11px] text-zinc-300">Compile tailored Polyglot counter-book</span>
+          </div>
+          <button
+            class="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+            @click="emit('exploitPlayer', playerName)"
+          >
+            <Sword class="w-3.5 h-3.5" />
+            Generate Weaponized Anti-Book
+          </button>
+        </div>
+
         <!-- Overview Stats Cards -->
         <div class="grid grid-cols-2 gap-3">
           <!-- As White Card -->
