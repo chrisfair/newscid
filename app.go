@@ -2878,6 +2878,43 @@ func (a *App) SubmitIntuitionAnswer(challengeID string, userChoice string, elaps
 	return training.SubmitIntuitionAnswer(challengeID, userChoice, elapsedMs)
 }
 
+// AnalyzeGameTimeManagement analyzes clock progression, tanks, panics, and scrambles for a game.
+func (a *App) AnalyzeGameTimeManagement(gameID int) (*stats.GameTimeManagementReport, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	var targetGame *chess.Game
+	if gameID <= 0 || a.db == nil || !a.db.IsOpen {
+		targetGame = a.activeGame
+	} else {
+		g, err := a.db.GetGame(gameID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch game %d: %w", gameID, err)
+		}
+		targetGame = g
+	}
+
+	if targetGame == nil {
+		return nil, fmt.Errorf("no game loaded or found to analyze")
+	}
+
+	return stats.AnalyzeGameTimeManagement(targetGame)
+}
+
+// AnalyzePlayerTimeManagement generates an aggregate time management and tanking profile for a player.
+func (a *App) AnalyzePlayerTimeManagement(playerName string, maxGames int) (*stats.PlayerTimeManagementDossier, error) {
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+
+	if db == nil || !db.IsOpen {
+		return nil, fmt.Errorf("database is not open")
+	}
+
+	return stats.AnalyzePlayerTimeManagement(db, playerName, maxGames)
+}
+
+
 
 
 
