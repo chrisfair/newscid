@@ -12,13 +12,12 @@ import (
 	"time"
 )
 
-// Live Stripe Payment Link URLs (shared with bughouse-online) for all 6 supporter tiers.
+// Live Stripe Payment Link URLs (shared with bughouse-online) for the 5 classic chess piece tiers.
 const (
 	StripeLink1USD   = "https://buy.stripe.com/14A7sEgae18A5Mi3P2efC00" // $1 Pawn (3 Days)
 	StripeLink5USD   = "https://buy.stripe.com/cNidR2e262cEeiOdpCefC01" // $5 Knight (1 Month)
 	StripeLink10USD  = "https://buy.stripe.com/bJe3cogae5oQdeKgBOefC02" // $10 Rook (3 Months)
 	StripeLink35USD  = "https://buy.stripe.com/aFa7sE2joeZqdeK99mefC03" // $35 Queen (1 Year)
-	StripeLink100USD = "https://buy.stripe.com/00w28ke265oQdeK2KYefC04" // $100 Princess (5 Years)
 	StripeLink350USD = "https://buy.stripe.com/6oUbIUf6a04w3Ea71eefC05" // $350 King (Lifetime)
 
 	// DefaultStripeSupportURL is the default $5 Knight Stripe payment link.
@@ -39,7 +38,7 @@ const (
 	AuthorLichessAlt      = "quenyen"
 )
 
-// StripeURLForAmount returns the live Stripe checkout link for the selected tier ($1, $5, $10, $35, $100, $350).
+// StripeURLForAmount returns the live Stripe checkout link for the selected tier ($1, $5, $10, $35, $350).
 func StripeURLForAmount(amountUSD int, customOverride string) string {
 	if clean := strings.TrimSpace(customOverride); clean != "" && clean != DefaultStripeSupportURL {
 		return clean
@@ -50,8 +49,6 @@ func StripeURLForAmount(amountUSD int, customOverride string) string {
 	switch {
 	case amountUSD >= 350:
 		return StripeLink350USD
-	case amountUSD >= 100:
-		return StripeLink100USD
 	case amountUSD >= 35:
 		return StripeLink35USD
 	case amountUSD >= 10:
@@ -69,8 +66,6 @@ func CooldownForAmount(amountUSD int) (time.Duration, string, bool) {
 	switch {
 	case amountUSD >= 350:
 		return 0, "$350 King (Lifetime)", true
-	case amountUSD >= 100:
-		return 5 * 365 * 24 * time.Hour, "$100 Princess (5 Years)", false
 	case amountUSD >= 35:
 		return 365 * 24 * time.Hour, "$35 Queen (1 Year)", false
 	case amountUSD >= 10:
@@ -259,8 +254,6 @@ func parseTierAmount(tier string) int {
 	switch {
 	case strings.Contains(tier, "350") || strings.Contains(strings.ToLower(tier), "lifetime") || strings.Contains(strings.ToLower(tier), "king"):
 		return 350
-	case strings.Contains(tier, "100") || strings.Contains(strings.ToLower(tier), "princess"):
-		return 100
 	case strings.Contains(tier, "35") || strings.Contains(strings.ToLower(tier), "queen"):
 		return 35
 	case strings.Contains(tier, "10") || strings.Contains(strings.ToLower(tier), "rook"):
@@ -384,7 +377,6 @@ func (m *Manager) buildStatusLocked(sig string) SupportStatus {
 			5:   StripeLink5USD,
 			10:  StripeLink10USD,
 			35:  StripeLink35USD,
-			100: StripeLink100USD,
 			350: StripeLink350USD,
 		},
 		MinAmountUSD:  DefaultMinSupportUSD,

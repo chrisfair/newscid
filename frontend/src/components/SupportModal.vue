@@ -53,7 +53,6 @@ const presetAmounts = [
   { amount: 5, label: '$5', desc: 'Knight • 1 Month' },
   { amount: 10, label: '$10', desc: 'Rook • 3 Months' },
   { amount: 35, label: '$35', desc: 'Queen • 1 Year' },
-  { amount: 100, label: '$100', desc: 'Princess • 5 Years' },
   { amount: 350, label: '$350', desc: 'King • Lifetime' },
 ]
 
@@ -207,21 +206,11 @@ async function handleDismiss() {
           </p>
         </div>
 
-        <!-- Amount Selector (6 live tiers + optional custom) -->
+        <!-- Amount Selector (5 classic chess piece tiers + custom in 3x2 grid) -->
         <div class="space-y-2">
-          <div class="flex items-center justify-between">
-            <label class="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-              Choose Support Tier &amp; Reminder Cooldown
-            </label>
-            <button
-              type="button"
-              data-testid="tier-custom"
-              class="text-[11px] text-emerald-400 hover:text-emerald-300 font-medium cursor-pointer"
-              @click="enableCustom"
-            >
-              Custom Amount
-            </button>
-          </div>
+          <label class="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+            Choose Support Tier &amp; Reminder Cooldown
+          </label>
           <div class="grid grid-cols-3 gap-2">
             <button
               v-for="preset in presetAmounts"
@@ -236,6 +225,19 @@ async function handleDismiss() {
             >
               <span class="text-sm font-bold text-zinc-100">{{ preset.label }}</span>
               <span class="text-[10px] text-zinc-400">{{ preset.desc }}</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="tier-custom"
+              class="py-2.5 px-2 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5"
+              :class="useCustomAmount
+                ? 'bg-emerald-600/20 border-emerald-500 text-white shadow-sm'
+                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'"
+              @click="enableCustom"
+            >
+              <span class="text-sm font-bold text-zinc-100">Custom</span>
+              <span class="text-[10px] text-zinc-400">$5 or more</span>
             </button>
           </div>
 
