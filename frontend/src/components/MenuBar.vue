@@ -51,7 +51,8 @@ import {
   Sun,
   Moon,
   Crosshair,
-  Clock
+  Clock,
+  Scissors
 } from '@lucide/vue'
 import { PieceSetOption, BoardThemeOption } from './HeaderBar.vue'
 import { useNotation, type NotationStyle } from '../utils/notation'
@@ -143,6 +144,7 @@ const emit = defineEmits<{
   (e: 'pieceSafety'): void
   (e: 'intuitionStorm'): void
   (e: 'timeManagement'): void
+  (e: 'repertoireShortener'): void
 }>()
 
 
@@ -667,6 +669,12 @@ onUnmounted(() => {
           @click="selectItem(() => emit('openingTrainer'))"
         >
           <span class="flex items-center gap-2.5 whitespace-nowrap"><BookOpen class="w-4 h-4 shrink-0 text-emerald-400" /> Opening Builder & Trainer...</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('repertoireShortener'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Scissors class="w-4 h-4 shrink-0 text-rose-400" /> Repertoire Shortener (Pareto 80/20)...</span>
         </button>
         <div class="h-px bg-zinc-800 my-1 mx-2" />
         <button

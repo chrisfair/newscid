@@ -42,6 +42,7 @@ import AntiPersonaModal from './components/AntiPersonaModal.vue'
 import PieceSafetyModal from './components/PieceSafetyModal.vue'
 import IntuitionStormModal from './components/IntuitionStormModal.vue'
 import TimeManagementModal from './components/TimeManagementModal.vue'
+import RepertoireShortenerModal from './components/RepertoireShortenerModal.vue'
 import { initUITheme, applyUITheme, toggleDarkLight, currentUITheme, UI_THEMES } from './utils/theme'
 import { Bot, Sparkles, Brain, Shield, Maximize2, Minimize2, AlertTriangle, Crosshair } from '@lucide/vue'
 import { playerbot, persona, scid, tournament, imbalance, explainer, blundervault, scout } from '../wailsjs/go/models'
@@ -311,6 +312,7 @@ const showAntiPersonaModal = ref(false)
 const showPieceSafetyModal = ref(false)
 const showIntuitionStormModal = ref(false)
 const showTimeManagementModal = ref(false)
+const showRepertoireShortenerModal = ref(false)
 const antiPersonaTargetId = ref<string>('')
 const antiPersonaTargetName = ref<string>('')
 const showOpeningTreeModal = ref(false)
@@ -2214,6 +2216,14 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
     action: () => { showTimeManagementModal.value = true }
   },
   {
+    id: 'repertoire-shortener',
+    title: 'Repertoire Shortener (Pareto 80/20 Pruner)',
+    subtitle: 'Prune low-frequency opening sidelines to master the 80% core lines',
+    icon: 'scissors',
+    category: 'Training',
+    action: () => { showRepertoireShortenerModal.value = true }
+  },
+  {
     id: 'chess960',
     title: 'Chess960 (Fischer Random)',
     subtitle: 'Generate any of the 960 starting positions',
@@ -2417,6 +2427,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       @piece-safety="showPieceSafetyModal = true"
       @intuition-storm="showIntuitionStormModal = true"
       @time-management="showTimeManagementModal = true"
+      @repertoire-shortener="showRepertoireShortenerModal = true"
     />
 
 
@@ -3140,6 +3151,13 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       :game-id="activeGameId || 0"
       @close="showTimeManagementModal = false"
       @jump-to-ply="(ply) => { jumpToPly(ply); showTimeManagementModal = false; }"
+    />
+
+    <!-- Repertoire Shortener (Pareto 80/20 Pruner) Modal -->
+    <RepertoireShortenerModal
+      v-if="showRepertoireShortenerModal"
+      @close="showRepertoireShortenerModal = false"
+      @repertoire-saved="(repId) => { showRepertoireShortenerModal = false; showOpeningTrainerModal = true; }"
     />
   </div>
 </template>

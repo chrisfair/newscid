@@ -293,6 +293,8 @@ export function SetGameNAG(arg1:number,arg2:number):Promise<void>;
 
 export function SetNotationStyle(arg1:string):Promise<void>;
 
+export function ShortenRepertoire(arg1:repertoire.ShortenerOptions):Promise<repertoire.ShortenerResult>;
+
 export function SkipGuessTheMove():Promise<training.GuessFeedback>;
 
 export function SortDatabase(arg1:scid.SortCriteria):Promise<void>;

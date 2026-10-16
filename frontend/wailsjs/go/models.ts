@@ -1434,6 +1434,44 @@ export namespace puzzleminer {
 
 export namespace repertoire {
 	
+	export class HighYieldLineSummary {
+	    sanLine: string;
+	    coveragePct: number;
+	    movesCount: number;
+	    keyIdea?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new HighYieldLineSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sanLine = source["sanLine"];
+	        this.coveragePct = source["coveragePct"];
+	        this.movesCount = source["movesCount"];
+	        this.keyIdea = source["keyIdea"];
+	    }
+	}
+	export class PrunedBranchSummary {
+	    sanLine: string;
+	    depth: number;
+	    frequencyPct: number;
+	    totalGames: number;
+	    reason: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PrunedBranchSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sanLine = source["sanLine"];
+	        this.depth = source["depth"];
+	        this.frequencyPct = source["frequencyPct"];
+	        this.totalGames = source["totalGames"];
+	        this.reason = source["reason"];
+	    }
+	}
 	export class Repertoire {
 	    id: string;
 	    name: string;
@@ -1513,6 +1551,76 @@ export namespace repertoire {
 	        this.description = source["description"];
 	        this.numMoves = source["numMoves"];
 	    }
+	}
+	export class ShortenerOptions {
+	    repertoireId: string;
+	    targetCoveragePct: number;
+	    maxDepth: number;
+	    minFrequencyPct: number;
+	    preserveAnnotated: boolean;
+	    saveAsNew: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShortenerOptions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.repertoireId = source["repertoireId"];
+	        this.targetCoveragePct = source["targetCoveragePct"];
+	        this.maxDepth = source["maxDepth"];
+	        this.minFrequencyPct = source["minFrequencyPct"];
+	        this.preserveAnnotated = source["preserveAnnotated"];
+	        this.saveAsNew = source["saveAsNew"];
+	    }
+	}
+	export class ShortenerResult {
+	    originalId: string;
+	    prunedRepertoireId: string;
+	    originalMoveCount: number;
+	    prunedMoveCount: number;
+	    movesRemoved: number;
+	    reductionPct: number;
+	    coverageRetainedPct: number;
+	    prunedBranches: PrunedBranchSummary[];
+	    highYieldLines: HighYieldLineSummary[];
+	    prunedRepertoire?: Repertoire;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShortenerResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.originalId = source["originalId"];
+	        this.prunedRepertoireId = source["prunedRepertoireId"];
+	        this.originalMoveCount = source["originalMoveCount"];
+	        this.prunedMoveCount = source["prunedMoveCount"];
+	        this.movesRemoved = source["movesRemoved"];
+	        this.reductionPct = source["reductionPct"];
+	        this.coverageRetainedPct = source["coverageRetainedPct"];
+	        this.prunedBranches = this.convertValues(source["prunedBranches"], PrunedBranchSummary);
+	        this.highYieldLines = this.convertValues(source["highYieldLines"], HighYieldLineSummary);
+	        this.prunedRepertoire = this.convertValues(source["prunedRepertoire"], Repertoire);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }

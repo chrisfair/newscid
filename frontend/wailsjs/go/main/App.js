@@ -534,6 +534,10 @@ export function SetNotationStyle(arg1) {
   return window['go']['main']['App']['SetNotationStyle'](arg1);
 }
 
+export function ShortenRepertoire(arg1) {
+  return window['go']['main']['App']['ShortenRepertoire'](arg1);
+}
+
 export function SkipGuessTheMove() {
   return window['go']['main']['App']['SkipGuessTheMove']();
 }
