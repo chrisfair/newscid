@@ -8,7 +8,7 @@ defineEmits<{
 }>()
 
 const versionData = ref({
-  version: '1.1.1',
+  version: '1.2.0',
   gitCommit: 'unknown',
   buildDate: 'unknown',
   channel: 'stable',
