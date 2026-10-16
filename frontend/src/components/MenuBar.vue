@@ -52,7 +52,8 @@ import {
   Moon,
   Crosshair,
   Clock,
-  Scissors
+  Scissors,
+  Heart
 } from '@lucide/vue'
 import { PieceSetOption, BoardThemeOption } from './HeaderBar.vue'
 import { useNotation, type NotationStyle } from '../utils/notation'
@@ -146,6 +147,7 @@ const emit = defineEmits<{
   (e: 'timeManagement'): void
   (e: 'repertoireShortener'): void
   (e: 'prophylaxis'): void
+  (e: 'showSupport'): void
 }>()
 
 
@@ -950,6 +952,12 @@ onUnmounted(() => {
         <div class="h-px bg-zinc-800 my-1 mx-2" />
         <button
           class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('showSupport'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Heart class="w-4 h-4 shrink-0 text-rose-400" /> Support NewScid ($5+)...</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('showAbout'))"
         >
           <span class="flex items-center gap-2.5 whitespace-nowrap"><Info class="w-4 h-4 shrink-0 text-zinc-400" /> About NewScid</span>
@@ -957,16 +965,27 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Command Palette Quick Trigger -->
-    <button
-      class="ml-auto mr-2 px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-zinc-200 text-xs flex items-center gap-2 cursor-pointer transition-colors shadow-xs"
-      title="Universal Command Palette & Spotlight (Ctrl+K)"
-      @click="emit('commandPalette')"
-    >
-      <Search class="w-3.5 h-3.5 text-emerald-400" />
-      <span class="hidden sm:inline text-[11px]">Command Palette</span>
-      <kbd class="px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] font-mono text-zinc-400 border border-zinc-700">Ctrl+K</kbd>
-    </button>
+    <!-- Command Palette & Support Quick Triggers -->
+    <div class="ml-auto mr-2 flex items-center gap-1.5">
+      <button
+        class="px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-rose-500/50 text-zinc-300 hover:text-rose-300 text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+        title="Support the Author ($5+)"
+        @click="emit('showSupport')"
+      >
+        <Heart class="w-3.5 h-3.5 text-rose-400 fill-rose-400/20" />
+        <span class="hidden md:inline text-[11px] font-medium">Support</span>
+      </button>
+
+      <button
+        class="px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-zinc-200 text-xs flex items-center gap-2 cursor-pointer transition-colors shadow-xs"
+        title="Universal Command Palette & Spotlight (Ctrl+K)"
+        @click="emit('commandPalette')"
+      >
+        <Search class="w-3.5 h-3.5 text-emerald-400" />
+        <span class="hidden sm:inline text-[11px]">Command Palette</span>
+        <kbd class="px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] font-mono text-zinc-400 border border-zinc-700">Ctrl+K</kbd>
+      </button>
+    </div>
 
     <!-- TRIAL MODE BADGE INDICATOR -->
     <div v-if="trialMode" class="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[11px] font-semibold animate-pulse">

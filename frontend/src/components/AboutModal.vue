@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Info, X, ExternalLink, GitCommit, Calendar, Cpu, CheckCircle } from '@lucide/vue'
+import { Info, X, ExternalLink, GitCommit, Calendar, Cpu, CheckCircle, Heart } from '@lucide/vue'
 import { GetVersionInfo } from '../../wailsjs/go/main/App'
 
 defineEmits<{
   (e: 'close'): void
+  (e: 'support'): void
 }>()
 
 const versionData = ref({
-  version: '1.2.0',
+  version: '1.3.2',
   gitCommit: 'unknown',
   buildDate: 'unknown',
   channel: 'stable',
@@ -89,12 +90,21 @@ onMounted(async () => {
           <p>Licensed under GNU General Public License v3.0 (GPL-3.0)</p>
         </div>
 
-        <button
-          class="w-full py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors cursor-pointer"
-          @click="$emit('close')"
-        >
-          Close
-        </button>
+        <div class="w-full flex gap-2">
+          <button
+            class="flex-1 py-2 px-4 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 text-xs font-semibold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+            @click="$emit('support')"
+          >
+            <Heart class="w-3.5 h-3.5 text-rose-400 fill-rose-400/30" />
+            <span>Support ($5+)</span>
+          </button>
+          <button
+            class="flex-1 py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors cursor-pointer"
+            @click="$emit('close')"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   </div>

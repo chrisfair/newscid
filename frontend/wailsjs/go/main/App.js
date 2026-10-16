@@ -102,6 +102,10 @@ export function DeleteVariation(arg1, arg2) {
   return window['go']['main']['App']['DeleteVariation'](arg1, arg2);
 }
 
+export function DismissSupportNag() {
+  return window['go']['main']['App']['DismissSupportNag']();
+}
+
 export function DispatchRPC(arg1, arg2) {
   return window['go']['main']['App']['DispatchRPC'](arg1, arg2);
 }
@@ -374,6 +378,10 @@ export function GetSimulatedMove(arg1, arg2, arg3) {
   return window['go']['main']['App']['GetSimulatedMove'](arg1, arg2, arg3);
 }
 
+export function GetSupportStatus() {
+  return window['go']['main']['App']['GetSupportStatus']();
+}
+
 export function GetSyncProfile(arg1) {
   return window['go']['main']['App']['GetSyncProfile'](arg1);
 }
@@ -442,6 +450,10 @@ export function OpenPersonaDatabase(arg1) {
   return window['go']['main']['App']['OpenPersonaDatabase'](arg1);
 }
 
+export function OpenSupportLink(arg1) {
+  return window['go']['main']['App']['OpenSupportLink'](arg1);
+}
+
 export function ParseEPD(arg1) {
   return window['go']['main']['App']['ParseEPD'](arg1);
 }
@@ -472,6 +484,10 @@ export function RecordBlunderReview(arg1, arg2) {
 
 export function RecordRepertoirePractice(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['RecordRepertoirePractice'](arg1, arg2, arg3, arg4);
+}
+
+export function RecordUserSupport(arg1, arg2) {
+  return window['go']['main']['App']['RecordUserSupport'](arg1, arg2);
 }
 
 export function RemovePersonaIdentifier(arg1, arg2) {
@@ -540,6 +556,10 @@ export function SetGameNAG(arg1, arg2) {
 
 export function SetNotationStyle(arg1) {
   return window['go']['main']['App']['SetNotationStyle'](arg1);
+}
+
+export function SetSupportStripeURL(arg1) {
+  return window['go']['main']['App']['SetSupportStripeURL'](arg1);
 }
 
 export function ShortenRepertoire(arg1) {

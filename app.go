@@ -35,6 +35,7 @@ import (
 	"newscid/pkg/scout"
 	"newscid/pkg/sets"
 	"newscid/pkg/stats"
+	"newscid/pkg/support"
 	"newscid/pkg/tablebase"
 	"newscid/pkg/tournament"
 	"newscid/pkg/training"
@@ -82,31 +83,32 @@ type EventListener = func(eventName string, optionalData ...interface{})
 
 // App struct
 type App struct {
-	ctx             context.Context
-	mu              sync.RWMutex
-	listenerMu      sync.RWMutex
-	eventListener   EventListener
-	db              *scid.Database
-	eco             *eco.Classifier
-	driver          *sciddriver.Driver
-	engine          *engine.Engine
-	activeGame      *chess.Game
-	repMgr          *repertoire.Manager
-	profileMgr      *online.ProfileManager
-	syncMgr         *online.SyncManager
-	personaMgr      *persona.PersonaManager
-	personaBotCache map[string]*playerbot.PlayerPersonality
-	polyglotBooks   map[string]*polyglot.Book
-	tablebaseClient *tablebase.Client
+	ctx              context.Context
+	mu               sync.RWMutex
+	listenerMu       sync.RWMutex
+	eventListener    EventListener
+	db               *scid.Database
+	eco              *eco.Classifier
+	driver           *sciddriver.Driver
+	engine           *engine.Engine
+	activeGame       *chess.Game
+	repMgr           *repertoire.Manager
+	profileMgr       *online.ProfileManager
+	syncMgr          *online.SyncManager
+	personaMgr       *persona.PersonaManager
+	personaBotCache  map[string]*playerbot.PlayerPersonality
+	polyglotBooks    map[string]*polyglot.Book
+	tablebaseClient  *tablebase.Client
 	solitaireSession *training.SolitaireSession
-	twicClient      *online.TWICClient
-	matchCancel     context.CancelFunc
-	matchRunning    bool
-	engineMultiPV   int
-	engineThreads   int
-	engineHashMB    int
-	notationStyle   chess.NotationStyle
-	blunderVault    *blundervault.Vault
+	twicClient       *online.TWICClient
+	matchCancel      context.CancelFunc
+	matchRunning     bool
+	engineMultiPV    int
+	engineThreads    int
+	engineHashMB     int
+	notationStyle    chess.NotationStyle
+	blunderVault     *blundervault.Vault
+	supportMgr       *support.Manager
 }
 
 // NewApp creates a new App application struct
@@ -123,6 +125,8 @@ func NewApp() *App {
 	configDir, _ := os.UserConfigDir()
 	vaultPath := filepath.Join(configDir, "newscid", "blunder_vault.json")
 	bVault, _ := blundervault.NewVault(vaultPath)
+	supportPath := filepath.Join(configDir, "newscid", "support.json")
+	supMgr, _ := support.NewManager(supportPath)
 
 	return &App{
 		db:              scid.NewDatabase(),
@@ -138,6 +142,7 @@ func NewApp() *App {
 		tablebaseClient: tablebase.NewClient(),
 		engineMultiPV:   1,
 		blunderVault:    bVault,
+		supportMgr:      supMgr,
 	}
 }
 
@@ -2946,10 +2951,88 @@ func (a *App) SubmitProphylaxisAnswer(drillID string, moveUCI string) (*training
 	return training.SubmitProphylaxisAnswer(drillID, moveUCI)
 }
 
+func (a *App) collectLinkedChessAndLichessIDs() ([]string, []string) {
+	var chessComIDs []string
+	var lichessIDs []string
 
+	if a.profileMgr != nil {
+		for _, p := range a.profileMgr.GetProfiles() {
+			if strings.TrimSpace(p.ChessComUsername) != "" {
+				chessComIDs = append(chessComIDs, p.ChessComUsername)
+			}
+			if strings.TrimSpace(p.LichessUsername) != "" {
+				lichessIDs = append(lichessIDs, p.LichessUsername)
+			}
+			if strings.TrimSpace(p.Name) != "" {
+				chessComIDs = append(chessComIDs, p.Name)
+				lichessIDs = append(lichessIDs, p.Name)
+			}
+		}
+	}
 
+	if a.personaMgr != nil {
+		for _, p := range a.personaMgr.GetPersonas() {
+			if strings.TrimSpace(p.ChessComUsername) != "" {
+				chessComIDs = append(chessComIDs, p.ChessComUsername)
+			}
+			if strings.TrimSpace(p.LichessUsername) != "" {
+				lichessIDs = append(lichessIDs, p.LichessUsername)
+			}
+			for _, id := range p.Identifiers {
+				chessComIDs = append(chessComIDs, id)
+				lichessIDs = append(lichessIDs, id)
+			}
+		}
+	}
 
+	return chessComIDs, lichessIDs
+}
 
+// GetSupportStatus returns the current voluntary support status, Stripe URL, and whether the startup prompt should display.
+// It automatically exempts the author's computer using the linked Chess.com and Lichess.org IDs.
+func (a *App) GetSupportStatus() support.SupportStatus {
+	if a.supportMgr == nil {
+		a.supportMgr, _ = support.NewManager("")
+	}
+	chessComIDs, lichessIDs := a.collectLinkedChessAndLichessIDs()
+	return a.supportMgr.GetStatus(chessComIDs, lichessIDs)
+}
 
+// RecordUserSupport records that the user has supported NewScid (or verified an author/supporter ID),
+// permanently disabling the startup nag dialog.
+func (a *App) RecordUserSupport(tier string, reference string) (support.SupportStatus, error) {
+	if a.supportMgr == nil {
+		a.supportMgr, _ = support.NewManager("")
+	}
+	return a.supportMgr.RecordSupport(tier, reference)
+}
 
+// DismissSupportNag dismisses the non-obligatory support prompt for the current session.
+func (a *App) DismissSupportNag() (support.SupportStatus, error) {
+	if a.supportMgr == nil {
+		a.supportMgr, _ = support.NewManager("")
+	}
+	return a.supportMgr.DismissNag()
+}
+
+// OpenSupportLink opens the Stripe support checkout URL in the user's default system browser.
+func (a *App) OpenSupportLink(amountUSD int) string {
+	st := a.GetSupportStatus()
+	targetURL := st.StripeURL
+	if amountUSD < support.DefaultMinSupportUSD {
+		amountUSD = support.DefaultMinSupportUSD
+	}
+	if a.ctx != nil {
+		runtime.BrowserOpenURL(a.ctx, targetURL)
+	}
+	return targetURL
+}
+
+// SetSupportStripeURL updates the Stripe payment link URL used by the Support form.
+func (a *App) SetSupportStripeURL(url string) error {
+	if a.supportMgr == nil {
+		a.supportMgr, _ = support.NewManager("")
+	}
+	return a.supportMgr.SetStripeURL(url)
+}
 
