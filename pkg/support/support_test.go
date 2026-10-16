@@ -158,6 +158,7 @@ func TestSupportManager_CustomStripeURLAndEnv(t *testing.T) {
 
 func TestStripeURLForAmountAndCheckoutBuilder(t *testing.T) {
 	t.Setenv("NEWSCID_STRIPE_URL", "")
+	assert.Equal(t, StripeLink1USD, StripeURLForAmount(1, ""))
 	assert.Equal(t, StripeLink5USD, StripeURLForAmount(5, ""))
 	assert.Equal(t, StripeLink10USD, StripeURLForAmount(10, ""))
 	assert.Equal(t, StripeLink35USD, StripeURLForAmount(35, ""))
@@ -168,5 +169,33 @@ func TestStripeURLForAmountAndCheckoutBuilder(t *testing.T) {
 	assert.Equal(t, StripeLink5USD, BuildCheckoutURL(StripeLink5USD, ""))
 	assert.Equal(t, StripeLink5USD+"?client_reference_id=user123", BuildCheckoutURL(StripeLink5USD, "user123"))
 	assert.Equal(t, StripeLink5USD+"?prefilled_promo=1&client_reference_id=user123", BuildCheckoutURL(StripeLink5USD+"?prefilled_promo=1", "user123"))
+
+	tmpDir := t.TempDir()
+	mgr, err := NewManager(filepath.Join(tmpDir, "tiers.json"))
+	require.NoError(t, err)
+
+	// Test $1 (3 days), $5 (1 month), $35 (1 year), $100 (5 years), $350 (Lifetime)
+	for _, tier := range []string{"$1 Support", "$5 Support", "$10 Support", "$35 Support", "$100 Support"} {
+		st, err := mgr.RecordSupport(tier, "rcpt")
+		require.NoError(t, err)
+		assert.True(t, st.Supported)
+		assert.False(t, st.IsLifetime)
+		assert.Greater(t, st.SupportedUntil, st.SupportedAt)
+	}
+
+	// Simulate $1 tier cooldown expiring -> ShouldShowNag becomes true again
+	mgr.config.SupportedUntil = mgr.config.SupportedAt - 1000
+	require.NoError(t, mgr.save())
+	stExpired := mgr.GetStatus(nil, nil)
+	assert.False(t, stExpired.Supported)
+	assert.True(t, stExpired.ShouldShowNag)
+
+	// Test $350 King Lifetime never expires
+	stLife, err := mgr.RecordSupport("$350 Support", "rcpt_king")
+	require.NoError(t, err)
+	assert.True(t, stLife.Supported)
+	assert.True(t, stLife.IsLifetime)
+	assert.False(t, stLife.ShouldShowNag)
 }
+
 

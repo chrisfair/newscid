@@ -12,20 +12,21 @@ import (
 	"time"
 )
 
-// Live Stripe Payment Link URLs (shared with bughouse-online) for $5+ supporter tiers.
+// Live Stripe Payment Link URLs (shared with bughouse-online) for all 6 supporter tiers.
 const (
-	StripeLink5USD   = "https://buy.stripe.com/cNidR2e262cEeiOdpCefC01" // $5 Knight Supporter
-	StripeLink10USD  = "https://buy.stripe.com/bJe3cogae5oQdeKgBOefC02" // $10 Rook Supporter
-	StripeLink35USD  = "https://buy.stripe.com/aFa7sE2joeZqdeK99mefC03" // $35 Queen Supporter
-	StripeLink100USD = "https://buy.stripe.com/00w28ke265oQdeK2KYefC04" // $100 Princess Supporter
-	StripeLink350USD = "https://buy.stripe.com/6oUbIUf6a04w3Ea71eefC05" // $350 King Lifetime Supporter
+	StripeLink1USD   = "https://buy.stripe.com/14A7sEgae18A5Mi3P2efC00" // $1 Pawn (3 Days)
+	StripeLink5USD   = "https://buy.stripe.com/cNidR2e262cEeiOdpCefC01" // $5 Knight (1 Month)
+	StripeLink10USD  = "https://buy.stripe.com/bJe3cogae5oQdeKgBOefC02" // $10 Rook (3 Months)
+	StripeLink35USD  = "https://buy.stripe.com/aFa7sE2joeZqdeK99mefC03" // $35 Queen (1 Year)
+	StripeLink100USD = "https://buy.stripe.com/00w28ke265oQdeK2KYefC04" // $100 Princess (5 Years)
+	StripeLink350USD = "https://buy.stripe.com/6oUbIUf6a04w3Ea71eefC05" // $350 King (Lifetime)
 
-	// DefaultStripeSupportURL is the default $5+ Stripe payment link.
+	// DefaultStripeSupportURL is the default $5 Knight Stripe payment link.
 	DefaultStripeSupportURL = StripeLink5USD
 )
 
-// DefaultMinSupportUSD is the minimum suggested support contribution in USD ($5).
-const DefaultMinSupportUSD = 5
+// DefaultMinSupportUSD is the minimum support contribution in USD ($1).
+const DefaultMinSupportUSD = 1
 
 // NagCooldownDuration is the 24-hour period that a dismissed support prompt stays hidden before showing again once per day.
 const NagCooldownDuration = 24 * time.Hour
@@ -38,7 +39,7 @@ const (
 	AuthorLichessAlt      = "quenyen"
 )
 
-// StripeURLForAmount returns the live Stripe checkout link for the selected tier ($5 or higher).
+// StripeURLForAmount returns the live Stripe checkout link for the selected tier ($1, $5, $10, $35, $100, $350).
 func StripeURLForAmount(amountUSD int, customOverride string) string {
 	if clean := strings.TrimSpace(customOverride); clean != "" && clean != DefaultStripeSupportURL {
 		return clean
@@ -55,8 +56,29 @@ func StripeURLForAmount(amountUSD int, customOverride string) string {
 		return StripeLink35USD
 	case amountUSD >= 10:
 		return StripeLink10USD
-	default:
+	case amountUSD >= 5:
 		return StripeLink5USD
+	default:
+		return StripeLink1USD
+	}
+}
+
+// CooldownForAmount returns the nag-free duration for a given support amount in USD,
+// plus a human-readable tier label. A duration of 0 with lifetime=true means permanent.
+func CooldownForAmount(amountUSD int) (time.Duration, string, bool) {
+	switch {
+	case amountUSD >= 350:
+		return 0, "$350 King (Lifetime)", true
+	case amountUSD >= 100:
+		return 5 * 365 * 24 * time.Hour, "$100 Princess (5 Years)", false
+	case amountUSD >= 35:
+		return 365 * 24 * time.Hour, "$35 Queen (1 Year)", false
+	case amountUSD >= 10:
+		return 90 * 24 * time.Hour, "$10 Rook (3 Months)", false
+	case amountUSD >= 5:
+		return 30 * 24 * time.Hour, "$5 Knight (1 Month)", false
+	default:
+		return 3 * 24 * time.Hour, "$1 Pawn (3 Days)", false
 	}
 }
 
@@ -76,11 +98,13 @@ func BuildCheckoutURL(baseURL string, clientRef string) string {
 // SupportConfig is persisted to ~/.config/newscid/support.json.
 type SupportConfig struct {
 	Supported       bool   `json:"supported"`
+	IsLifetime      bool   `json:"isLifetime,omitempty"`
 	IsAuthor        bool   `json:"isAuthor"`
 	AuthorID        string `json:"authorId,omitempty"`
 	SupporterTier   string `json:"supporterTier,omitempty"`
 	Reference       string `json:"reference,omitempty"`
 	SupportedAt     int64  `json:"supportedAt,omitempty"`
+	SupportedUntil  int64  `json:"supportedUntil,omitempty"`
 	DismissCount    int    `json:"dismissCount"`
 	LastDismissedAt int64  `json:"lastDismissedAt,omitempty"`
 	StripeURL       string `json:"stripeUrl,omitempty"`
@@ -89,11 +113,13 @@ type SupportConfig struct {
 // SupportStatus is returned to the frontend UI to determine whether to show the support form.
 type SupportStatus struct {
 	Supported       bool           `json:"supported"`
+	IsLifetime      bool           `json:"isLifetime"`
 	IsAuthor        bool           `json:"isAuthor"`
 	AuthorID        string         `json:"authorId,omitempty"`
 	DeviceSignature string         `json:"deviceSignature,omitempty"`
 	SupporterTier   string         `json:"supporterTier,omitempty"`
 	SupportedAt     int64          `json:"supportedAt,omitempty"`
+	SupportedUntil  int64          `json:"supportedUntil,omitempty"`
 	DismissCount    int            `json:"dismissCount"`
 	LastDismissedAt int64          `json:"lastDismissedAt,omitempty"`
 	StripeURL       string         `json:"stripeUrl"`
@@ -228,35 +254,64 @@ func (m *Manager) GetStatus(chessComIDs []string, lichessIDs []string) SupportSt
 	return m.buildStatusLocked(sig)
 }
 
-// RecordSupport marks the user as having supported NewScid, permanently disabling the startup nag screen.
+// parseTierAmount extracts the USD integer from a tier string like "$10 Support" or "$35 Queen".
+func parseTierAmount(tier string) int {
+	switch {
+	case strings.Contains(tier, "350") || strings.Contains(strings.ToLower(tier), "lifetime") || strings.Contains(strings.ToLower(tier), "king"):
+		return 350
+	case strings.Contains(tier, "100") || strings.Contains(strings.ToLower(tier), "princess"):
+		return 100
+	case strings.Contains(tier, "35") || strings.Contains(strings.ToLower(tier), "queen"):
+		return 35
+	case strings.Contains(tier, "10") || strings.Contains(strings.ToLower(tier), "rook"):
+		return 10
+	case strings.Contains(tier, "1") && !strings.Contains(tier, "10") && !strings.Contains(tier, "15") || strings.Contains(strings.ToLower(tier), "pawn"):
+		return 1
+	default:
+		return 5
+	}
+}
+
+// RecordSupport marks the user as having supported NewScid for the duration corresponding to their tier.
 func (m *Manager) RecordSupport(tier string, reference string) (SupportStatus, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	cleanTier := strings.TrimSpace(tier)
+	amt := parseTierAmount(cleanTier)
+	dur, canonicalLabel, isLifetime := CooldownForAmount(amt)
 	if cleanTier == "" {
-		cleanTier = "$5+ Supporter"
+		cleanTier = canonicalLabel
 	}
 	cleanRef := strings.TrimSpace(reference)
 
+	now := time.Now()
 	// Check if the optional reference entered matches one of the author's handles
 	isAuthor, compositeID, sig := BuildAuthorCompositeID([]string{cleanRef}, []string{cleanRef})
 	if isAuthor {
 		m.config.IsAuthor = true
+		m.config.IsLifetime = true
 		m.config.AuthorID = compositeID
 		cleanTier = "Author"
+		m.config.SupportedUntil = 0
+	} else if isLifetime {
+		m.config.IsLifetime = true
+		m.config.SupportedUntil = 0
+	} else {
+		m.config.IsLifetime = false
+		m.config.SupportedUntil = now.Add(dur).UnixMilli()
 	}
 
 	m.config.Supported = true
 	m.config.SupporterTier = cleanTier
 	m.config.Reference = cleanRef
-	m.config.SupportedAt = time.Now().UnixMilli()
+	m.config.SupportedAt = now.UnixMilli()
 
 	err := m.save()
 	return m.buildStatusLocked(sig), err
 }
 
-// DismissNag records that the user dismissed the support prompt without donating.
+// DismissNag records that the user dismissed the support prompt without donating (24-hour cooldown).
 // The program remains 100% functional (non-obligatory).
 func (m *Manager) DismissNag() (SupportStatus, error) {
 	m.mu.Lock()
@@ -292,10 +347,20 @@ func (m *Manager) buildStatusLocked(sig string) SupportStatus {
 		stripeURL = resolveDefaultStripeURL()
 	}
 
-	exemptOrSupported := m.config.Supported || m.config.IsAuthor
+	nowMs := time.Now().UnixMilli()
+	activeSupport := false
+	if m.config.IsAuthor || m.config.IsLifetime {
+		activeSupport = true
+	} else if m.config.Supported {
+		if m.config.SupportedUntil > 0 {
+			activeSupport = nowMs < m.config.SupportedUntil
+		} else {
+			activeSupport = true
+		}
+	}
 
 	inDailyCooldown := false
-	if !exemptOrSupported && m.config.LastDismissedAt > 0 {
+	if !activeSupport && m.config.LastDismissedAt > 0 {
 		elapsed := time.Since(time.UnixMilli(m.config.LastDismissedAt))
 		if elapsed >= 0 && elapsed < NagCooldownDuration {
 			inDailyCooldown = true
@@ -303,16 +368,19 @@ func (m *Manager) buildStatusLocked(sig string) SupportStatus {
 	}
 
 	return SupportStatus{
-		Supported:       exemptOrSupported,
+		Supported:       activeSupport,
+		IsLifetime:      m.config.IsLifetime || m.config.IsAuthor,
 		IsAuthor:        m.config.IsAuthor,
 		AuthorID:        m.config.AuthorID,
 		DeviceSignature: sig,
 		SupporterTier:   m.config.SupporterTier,
 		SupportedAt:     m.config.SupportedAt,
+		SupportedUntil:  m.config.SupportedUntil,
 		DismissCount:    m.config.DismissCount,
 		LastDismissedAt: m.config.LastDismissedAt,
 		StripeURL:       stripeURL,
 		TierLinks: map[int]string{
+			1:   StripeLink1USD,
 			5:   StripeLink5USD,
 			10:  StripeLink10USD,
 			35:  StripeLink35USD,
@@ -320,6 +388,7 @@ func (m *Manager) buildStatusLocked(sig string) SupportStatus {
 			350: StripeLink350USD,
 		},
 		MinAmountUSD:  DefaultMinSupportUSD,
-		ShouldShowNag: !exemptOrSupported && !inDailyCooldown,
+		ShouldShowNag: !activeSupport && !inDailyCooldown,
 	}
 }
+

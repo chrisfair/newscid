@@ -49,18 +49,19 @@ const stripeOpened = ref<boolean>(false)
 const confirmMessage = ref<string>('')
 
 const presetAmounts = [
-  { amount: 5, label: '$5', desc: 'Knight' },
-  { amount: 10, label: '$10', desc: 'Rook' },
-  { amount: 35, label: '$35', desc: 'Queen' },
-  { amount: 100, label: '$100', desc: 'Princess' },
-  { amount: 350, label: '$350', desc: 'King' },
+  { amount: 1, label: '$1', desc: 'Pawn • 3 Days' },
+  { amount: 5, label: '$5', desc: 'Knight • 1 Month' },
+  { amount: 10, label: '$10', desc: 'Rook • 3 Months' },
+  { amount: 35, label: '$35', desc: 'Queen • 1 Year' },
+  { amount: 100, label: '$100', desc: 'Princess • 5 Years' },
+  { amount: 350, label: '$350', desc: 'King • Lifetime' },
 ]
 
 const effectiveAmount = computed(() => {
   if (useCustomAmount.value) {
-    return Math.max(status.value.minAmountUsd || 5, Number(customAmount.value) || 5)
+    return Math.max(5, Number(customAmount.value) || 5)
   }
-  return Math.max(status.value.minAmountUsd || 5, selectedAmount.value)
+  return Math.max(status.value.minAmountUsd || 1, selectedAmount.value)
 })
 
 function selectPreset(amt: number) {
@@ -97,7 +98,7 @@ async function handleOpenStripe() {
       status.value.supported = true
       status.value.shouldShowNag = false
     }
-    confirmMessage.value = 'Thank you for supporting NewScid! The startup prompt is now permanently disabled.'
+    confirmMessage.value = 'Thank you for supporting NewScid! Your supporter cooldown is now active.'
     emit('updated', true)
     return targetUrl
   } catch {
@@ -117,7 +118,7 @@ async function handleConfirmSupport() {
       status.value.supported = true
       status.value.shouldShowNag = false
     }
-    confirmMessage.value = 'Thank you for supporting NewScid! The startup prompt is now permanently disabled.'
+    confirmMessage.value = 'Thank you for supporting NewScid! Your supporter cooldown is now active.'
     emit('updated', true)
   } catch (err) {
     console.error('Failed to record support:', err)
@@ -157,7 +158,7 @@ async function handleDismiss() {
         <button
           data-testid="support-close-btn"
           class="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer"
-          title="Dismiss"
+          title="Dismiss (24h Cooldown)"
           @click="handleDismiss"
         >
           <X class="w-5 h-5" />
@@ -191,7 +192,7 @@ async function handleDismiss() {
           <div class="space-y-1">
             <div class="font-bold text-emerald-300">Thank You for Supporting NewScid!</div>
             <p class="text-[11px] text-emerald-200/80">
-              Supporter status active ({{ status.supporterTier || '$5+ Support' }}). The startup reminder is permanently disabled on this computer.
+              Supporter status active ({{ status.supporterTier || '$5+ Support' }}). Reminder cooldown is active on this computer.
             </p>
           </div>
         </div>
@@ -199,18 +200,28 @@ async function handleDismiss() {
         <!-- Pitch / Explanation -->
         <div class="bg-zinc-950 border border-zinc-800 rounded-xl p-3.5 space-y-2 leading-relaxed">
           <p class="text-zinc-200 font-medium">
-            Enjoying NewScid? Consider supporting the author with a voluntary contribution of <span class="text-emerald-400 font-bold">$5 or higher</span>.
+            Enjoying NewScid? Consider supporting the author with a voluntary contribution (<span class="text-emerald-400 font-bold">$5 or higher</span> recommended).
           </p>
           <p class="text-zinc-400 text-[11px]">
-            Your support directly funds continued development, database tools, and training features. Supporting is completely optional—you can dismiss this window at any time and use all features without restriction. Supporters never see the startup reminder again.
+            Your support directly funds continued open-source development, database tools, and training features. Supporting is completely optional—dismissing hides this reminder for 24 hours with all features unlocked, or choose a tier below for a longer reminder-free pass!
           </p>
         </div>
 
-        <!-- Amount Selector ($5 or higher) -->
+        <!-- Amount Selector (6 live tiers + optional custom) -->
         <div class="space-y-2">
-          <label class="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-            Choose Support Amount ($5 Minimum)
-          </label>
+          <div class="flex items-center justify-between">
+            <label class="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+              Choose Support Tier &amp; Reminder Cooldown
+            </label>
+            <button
+              type="button"
+              data-testid="tier-custom"
+              class="text-[11px] text-emerald-400 hover:text-emerald-300 font-medium cursor-pointer"
+              @click="enableCustom"
+            >
+              Custom Amount
+            </button>
+          </div>
           <div class="grid grid-cols-3 gap-2">
             <button
               v-for="preset in presetAmounts"
@@ -225,19 +236,6 @@ async function handleDismiss() {
             >
               <span class="text-sm font-bold text-zinc-100">{{ preset.label }}</span>
               <span class="text-[10px] text-zinc-400">{{ preset.desc }}</span>
-            </button>
-
-            <button
-              type="button"
-              data-testid="tier-custom"
-              class="py-2.5 px-2 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5"
-              :class="useCustomAmount
-                ? 'bg-emerald-600/20 border-emerald-500 text-white shadow-sm'
-                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'"
-              @click="enableCustom"
-            >
-              <span class="text-sm font-bold text-zinc-100">Custom</span>
-              <span class="text-[10px] text-zinc-400">$5 or more</span>
             </button>
           </div>
 
