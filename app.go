@@ -1205,6 +1205,15 @@ func (a *App) AddRepertoireMove(repID, fen, uci, san, nextFen, comment string) e
 	return a.repMgr.SaveRepertoire(rep)
 }
 
+// ShortenRepertoire applies the Pareto 80/20 pruning algorithm to condense opening repertoires.
+func (a *App) ShortenRepertoire(opts repertoire.ShortenerOptions) (*repertoire.ShortenerResult, error) {
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+
+	return a.repMgr.ShortenRepertoire(opts, db)
+}
+
 // ==========================================
 // Database Puzzle Miner Operations
 // ==========================================
