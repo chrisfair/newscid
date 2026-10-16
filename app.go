@@ -1688,12 +1688,20 @@ func (a *App) GetSimulatedMove(playerName string, fen string, isWhite bool) (*pl
 		return simMove, nil
 	}
 
-	// 2. Out of book: calibrate engine with player's estimated Elo and style
+	// 2. Out of book: ensure engine is started and calibrate engine with player's estimated Elo and style
 	limit, uciElo, skill, contempt := personality.CalibrateEngineSettingsForPersona()
 
 	a.mu.Lock()
+	_ = a.ensureEngineLocked()
 	eng := a.engine
 	a.mu.Unlock()
+
+	movetimeMs := 800
+	if personality.EstimatedElo >= 2000 {
+		movetimeMs = 1200
+	} else if personality.EstimatedElo >= 1600 {
+		movetimeMs = 1000
+	}
 
 	if eng != nil {
 		if limit {
@@ -1705,7 +1713,7 @@ func (a *App) GetSimulatedMove(playerName string, fen string, isWhite bool) (*pl
 			_ = eng.SetOption("Contempt", strconv.Itoa(contempt))
 		}
 
-		bestUCI, _, err := eng.SearchBestMove(fen, nil, 800)
+		bestUCI, _, err := eng.SearchBestMove(fen, nil, movetimeMs)
 		if err == nil && bestUCI != "" {
 			board, _ := chess.ParseFEN(fen)
 			san := bestUCI
@@ -1719,27 +1727,26 @@ func (a *App) GetSimulatedMove(playerName string, fen string, isWhite bool) (*pl
 				SAN:        san,
 				IsBook:     false,
 				EloTarget:  personality.EstimatedElo,
-				Commentary: fmt.Sprintf("🧠 %s (%s, %d Elo) calculated out-of-book move", personality.Name, personality.PlayStyle, personality.EstimatedElo),
+				Commentary: fmt.Sprintf("🧠 %s (%s, %d Elo) calculated move", personality.Name, personality.PlayStyle, personality.EstimatedElo),
 			}, nil
 		}
 	}
 
-	// Fallback if engine is not running: pick a legal move
+	// Smart tactical fallback if engine is unavailable: evaluates checks, captures, defenses, and center control
 	b, err := chess.ParseFEN(fen)
 	if err != nil {
 		return nil, err
 	}
-	moves := b.GenerateLegalMoves()
-	if len(moves) == 0 {
-		return nil, fmt.Errorf("no legal moves available")
+	tacticalMove, err := playerbot.SelectTacticalMove(b, isWhite)
+	if err != nil {
+		return nil, err
 	}
-	m := moves[rand.Intn(len(moves))]
 	return &playerbot.SimulatedMove{
-		UCI:        m.String(),
-		SAN:        b.MoveToSAN(m),
+		UCI:        tacticalMove.String(),
+		SAN:        b.MoveToSAN(tacticalMove),
 		IsBook:     false,
 		EloTarget:  personality.EstimatedElo,
-		Commentary: fmt.Sprintf("🎲 %s played fallback move", personality.Name),
+		Commentary: fmt.Sprintf("🛡️ %s (%d Elo) played tactical heuristic move", personality.Name, personality.EstimatedElo),
 	}, nil
 }
 
@@ -1770,12 +1777,20 @@ func (a *App) GetPersonaSimulatedMove(personaID string, fen string, isWhite bool
 		return simMove, nil
 	}
 
-	// 2. Out of personal game tree: calibrate engine settings with style, contempt, and Elo
+	// 2. Out of personal game tree: ensure engine is started and calibrate settings with style, contempt, and Elo
 	limit, uciElo, skill, contempt := personality.CalibrateEngineSettingsForPersona()
 
 	a.mu.Lock()
+	_ = a.ensureEngineLocked()
 	eng := a.engine
 	a.mu.Unlock()
+
+	movetimeMs := 800
+	if personality.EstimatedElo >= 2000 {
+		movetimeMs = 1200
+	} else if personality.EstimatedElo >= 1600 {
+		movetimeMs = 1000
+	}
 
 	if eng != nil {
 		if limit {
@@ -1787,7 +1802,7 @@ func (a *App) GetPersonaSimulatedMove(personaID string, fen string, isWhite bool
 			_ = eng.SetOption("Contempt", strconv.Itoa(contempt))
 		}
 
-		bestUCI, _, err := eng.SearchBestMove(fen, nil, 800)
+		bestUCI, _, err := eng.SearchBestMove(fen, nil, movetimeMs)
 		if err == nil && bestUCI != "" {
 			board, _ := chess.ParseFEN(fen)
 			san := bestUCI
@@ -1801,27 +1816,26 @@ func (a *App) GetPersonaSimulatedMove(personaID string, fen string, isWhite bool
 				SAN:        san,
 				IsBook:     false,
 				EloTarget:  personality.EstimatedElo,
-				Commentary: fmt.Sprintf("🧠 %s (%s, %d Elo) calculated out-of-book move", personality.Name, personality.PlayStyle, personality.EstimatedElo),
+				Commentary: fmt.Sprintf("🧠 %s (%s, %d Elo) calculated move", personality.Name, personality.PlayStyle, personality.EstimatedElo),
 			}, nil
 		}
 	}
 
-	// Fallback if engine is not running: pick a legal move
+	// Smart tactical fallback if engine is unavailable: evaluates checks, captures, defenses, and center control
 	b, err := chess.ParseFEN(fen)
 	if err != nil {
 		return nil, err
 	}
-	moves := b.GenerateLegalMoves()
-	if len(moves) == 0 {
-		return nil, fmt.Errorf("no legal moves available")
+	tacticalMove, err := playerbot.SelectTacticalMove(b, isWhite)
+	if err != nil {
+		return nil, err
 	}
-	m := moves[rand.Intn(len(moves))]
 	return &playerbot.SimulatedMove{
-		UCI:        m.String(),
-		SAN:        b.MoveToSAN(m),
+		UCI:        tacticalMove.String(),
+		SAN:        b.MoveToSAN(tacticalMove),
 		IsBook:     false,
 		EloTarget:  personality.EstimatedElo,
-		Commentary: fmt.Sprintf("🎲 %s played fallback move", personality.Name),
+		Commentary: fmt.Sprintf("🛡️ %s (%d Elo) played tactical heuristic move", personality.Name, personality.EstimatedElo),
 	}, nil
 }
 
