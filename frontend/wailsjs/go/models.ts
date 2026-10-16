@@ -1003,6 +1003,127 @@ export namespace persona {
 	        this.totalPersonaGames = source["totalPersonaGames"];
 	    }
 	}
+	export class VulnerabilityNode {
+	    ply: number;
+	    eco: string;
+	    openingName: string;
+	    moveSan: string;
+	    moveUci: string;
+	    moveHistorySan: string[];
+	    moveHistoryUci?: string[];
+	    fen: string;
+	    personaRecord: GameRecord;
+	    exploitationScore: number;
+	    tacticalInsight: string;
+	    suggestedReplies: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new VulnerabilityNode(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ply = source["ply"];
+	        this.eco = source["eco"];
+	        this.openingName = source["openingName"];
+	        this.moveSan = source["moveSan"];
+	        this.moveUci = source["moveUci"];
+	        this.moveHistorySan = source["moveHistorySan"];
+	        this.moveHistoryUci = source["moveHistoryUci"];
+	        this.fen = source["fen"];
+	        this.personaRecord = this.convertValues(source["personaRecord"], GameRecord);
+	        this.exploitationScore = source["exploitationScore"];
+	        this.tacticalInsight = source["tacticalInsight"];
+	        this.suggestedReplies = source["suggestedReplies"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class GameRecord {
+	    total: number;
+	    wins: number;
+	    draws: number;
+	    losses: number;
+	    winRate: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new GameRecord(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total = source["total"];
+	        this.wins = source["wins"];
+	        this.draws = source["draws"];
+	        this.losses = source["losses"];
+	        this.winRate = source["winRate"];
+	    }
+	}
+	export class AntiPersonaReport {
+	    personaId: string;
+	    displayName: string;
+	    targetColor: string;
+	    totalGamesAnalyzed: number;
+	    personaRecord: GameRecord;
+	    vulnerabilities: VulnerabilityNode[];
+	    topRefutationLines: string[];
+	    pgnRepertoire: string;
+	    polyglotEntryCount: number;
+	    generatedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new AntiPersonaReport(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.personaId = source["personaId"];
+	        this.displayName = source["displayName"];
+	        this.targetColor = source["targetColor"];
+	        this.totalGamesAnalyzed = source["totalGamesAnalyzed"];
+	        this.personaRecord = this.convertValues(source["personaRecord"], GameRecord);
+	        this.vulnerabilities = this.convertValues(source["vulnerabilities"], VulnerabilityNode);
+	        this.topRefutationLines = source["topRefutationLines"];
+	        this.pgnRepertoire = source["pgnRepertoire"];
+	        this.polyglotEntryCount = source["polyglotEntryCount"];
+	        this.generatedAt = source["generatedAt"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class IdentifierStat {
 	    identifier: string;
 	    gameCount: number;
@@ -1120,93 +1241,6 @@ export namespace persona {
 		    }
 		    return a;
 		}
-	}
-
-	export class GameRecord {
-	    total: number;
-	    wins: number;
-	    draws: number;
-	    losses: number;
-	    winRate: number;
-
-	    static createFrom(source: any = {}) {
-	        return new GameRecord(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.total = source["total"];
-	        this.wins = source["wins"];
-	        this.draws = source["draws"];
-	        this.losses = source["losses"];
-	        this.winRate = source["winRate"];
-	    }
-	}
-
-	export class VulnerabilityNode {
-	    ply: number;
-	    eco: string;
-	    openingName: string;
-	    moveSan: string;
-	    moveUci: string;
-	    moveHistorySan: string[];
-	    moveHistoryUci?: string[];
-	    fen: string;
-	    personaRecord: GameRecord;
-	    exploitationScore: number;
-	    tacticalInsight: string;
-	    suggestedReplies: string[];
-
-	    static createFrom(source: any = {}) {
-	        return new VulnerabilityNode(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.ply = source["ply"];
-	        this.eco = source["eco"];
-	        this.openingName = source["openingName"];
-	        this.moveSan = source["moveSan"];
-	        this.moveUci = source["moveUci"];
-	        this.moveHistorySan = source["moveHistorySan"];
-	        this.moveHistoryUci = source["moveHistoryUci"];
-	        this.fen = source["fen"];
-	        this.personaRecord = source["personaRecord"];
-	        this.exploitationScore = source["exploitationScore"];
-	        this.tacticalInsight = source["tacticalInsight"];
-	        this.suggestedReplies = source["suggestedReplies"];
-	    }
-	}
-
-	export class AntiPersonaReport {
-	    personaId: string;
-	    displayName: string;
-	    targetColor: string;
-	    totalGamesAnalyzed: number;
-	    personaRecord: GameRecord;
-	    vulnerabilities: VulnerabilityNode[];
-	    topRefutationLines: string[];
-	    pgnRepertoire: string;
-	    polyglotEntryCount: number;
-	    generatedAt: number;
-
-	    static createFrom(source: any = {}) {
-	        return new AntiPersonaReport(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.personaId = source["personaId"];
-	        this.displayName = source["displayName"];
-	        this.targetColor = source["targetColor"];
-	        this.totalGamesAnalyzed = source["totalGamesAnalyzed"];
-	        this.personaRecord = source["personaRecord"];
-	        this.vulnerabilities = source["vulnerabilities"];
-	        this.topRefutationLines = source["topRefutationLines"];
-	        this.pgnRepertoire = source["pgnRepertoire"];
-	        this.polyglotEntryCount = source["polyglotEntryCount"];
-	        this.generatedAt = source["generatedAt"];
-	    }
 	}
 
 }
