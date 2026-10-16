@@ -4,7 +4,7 @@
 .DEFAULT_GOAL := help
 .PHONY: help deps setup dev build build-frontend generate test functional-test test-coverage lint clean clean-dist run serve \
         install install-user uninstall \
-        appimage package-appimage snap package-snap deb package-deb pacman package-pacman \
+        appimage package-appimage snap package-snap deb package-deb pacman package-pacman rpm package-rpm \
         chocolatey choco package-chocolatey package-choco brew homebrew package-brew \
         flatpak package-flatpak android android-apk packages package package-all package-checksums \
         version bump-patch bump-minor bump-major tag-release
@@ -190,6 +190,11 @@ pacman: build ## Build Arch Linux pacman package (.pkg.tar.*)
 
 package-pacman: pacman ## Alias for pacman
 
+rpm: build ## Build Red Hat / Fedora / openSUSE RPM package (.rpm)
+	@APP_VERSION=$(APP_VERSION) APP_RELEASE=$(APP_RELEASE) ./packaging/scripts/build-rpm.sh $(BINARY) $(DIST_DIR)
+
+package-rpm: rpm ## Alias for rpm
+
 chocolatey: ## Build Windows Chocolatey package (.nupkg)
 	@APP_VERSION=$(APP_VERSION) ./packaging/scripts/build-chocolatey.py $(DIST_DIR)
 
@@ -213,7 +218,7 @@ android: android-apk ## Build standalone installable Android APK and Termux ARM6
 android-apk: ## Build standalone installable Android APK package (.apk)
 	@./packaging/scripts/build-android.sh
 
-packages: appimage snap deb pacman chocolatey brew flatpak android package-checksums ## Build all distribution packages (Linux, Windows, macOS, Android)
+packages: appimage snap deb pacman rpm chocolatey brew flatpak android package-checksums ## Build all distribution packages (Linux, Windows, macOS, Android)
 	@printf "\n$(BOLD)$(GREEN)========================================================================$(RESET)\n"
 	@printf "$(BOLD)$(GREEN)✔ All packages successfully generated in $(DIST_DIR)/$(RESET)\n"
 	@printf "$(BOLD)$(GREEN)========================================================================$(RESET)\n"
