@@ -30,6 +30,10 @@ export function AnalyzeGameTimeManagement(arg1) {
   return window['go']['main']['App']['AnalyzeGameTimeManagement'](arg1);
 }
 
+export function AnalyzePlayerFairPlay(arg1, arg2) {
+  return window['go']['main']['App']['AnalyzePlayerFairPlay'](arg1, arg2);
+}
+
 export function AnalyzePlayerTimeManagement(arg1, arg2) {
   return window['go']['main']['App']['AnalyzePlayerTimeManagement'](arg1, arg2);
 }
@@ -108,6 +112,10 @@ export function DismissSupportNag() {
 
 export function DispatchRPC(arg1, arg2) {
   return window['go']['main']['App']['DispatchRPC'](arg1, arg2);
+}
+
+export function DownloadAndAnalyzePlayerFairPlay(arg1, arg2, arg3) {
+  return window['go']['main']['App']['DownloadAndAnalyzePlayerFairPlay'](arg1, arg2, arg3);
 }
 
 export function DownloadTWICIssue(arg1) {

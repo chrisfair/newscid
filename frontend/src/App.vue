@@ -46,6 +46,7 @@ import RepertoireShortenerModal from './components/RepertoireShortenerModal.vue'
 import ProphylaxisModal from './components/ProphylaxisModal.vue'
 import SupportModal from './components/SupportModal.vue'
 import MegaDatabaseModal from './components/MegaDatabaseModal.vue'
+import FairPlayModal from './components/FairPlayModal.vue'
 import { initUITheme, applyUITheme, toggleDarkLight, currentUITheme, UI_THEMES } from './utils/theme'
 import { Bot, Sparkles, Brain, Shield, Maximize2, Minimize2, AlertTriangle, Crosshair } from '@lucide/vue'
 import { playerbot, persona, scid, tournament, imbalance, explainer, blundervault, scout } from '../wailsjs/go/models'
@@ -320,6 +321,7 @@ const showRepertoireShortenerModal = ref(false)
 const showProphylaxisModal = ref(false)
 const showSupportModal = ref(false)
 const showMegaDatabaseModal = ref(false)
+const showFairPlayModal = ref(false)
 const antiPersonaTargetId = ref<string>('')
 const antiPersonaTargetName = ref<string>('')
 const showOpeningTreeModal = ref(false)
@@ -2383,6 +2385,14 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
     icon: 'download',
     category: 'Actions',
     action: () => { showMegaDatabaseModal.value = true }
+  },
+  {
+    id: 'fairplay-timecontrol-inspector',
+    title: 'Fair-Play & Time-Control Consistency Inspector',
+    subtitle: 'Longitudinal multi-time-control (Bullet/Blitz/Rapid/Classical) & everyday anomaly dossier',
+    icon: 'shield',
+    category: 'Tools',
+    action: () => { showFairPlayModal.value = true }
   }
 ])
 </script>
@@ -2476,6 +2486,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       @repertoire-shortener="showRepertoireShortenerModal = true"
       @prophylaxis="showProphylaxisModal = true"
       @show-support="showSupportModal = true"
+      @fair-play-inspector="showFairPlayModal = true"
     />
 
 
@@ -3069,6 +3080,16 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       :db-name="dbInfo?.name"
       @imported="handleTwicImported"
       @close="showMegaDatabaseModal = false"
+    />
+
+    <!-- Longitudinal Fair-Play & Time-Control Consistency Inspector Modal -->
+    <FairPlayModal
+      v-if="showFairPlayModal"
+      :db-open="!!dbInfo?.basePath"
+      :initial-player="gameTags.White && gameTags.White !== '?' ? gameTags.White : ''"
+      @select-game="(gid: number) => { showFairPlayModal = false; handleLoadGame(gid) }"
+      @imported="handleTwicImported"
+      @close="showFairPlayModal = false"
     />
 
     <!-- Engine vs Engine Match / Tournament Modal -->

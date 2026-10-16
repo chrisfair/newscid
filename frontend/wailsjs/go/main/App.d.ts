@@ -4,6 +4,7 @@ import {blundervault} from '../models';
 import {persona} from '../models';
 import {training} from '../models';
 import {stats} from '../models';
+import {fairplay} from '../models';
 import {engine} from '../models';
 import {eco} from '../models';
 import {scid} from '../models';
@@ -41,6 +42,8 @@ export function AggregatePersonaGames(arg1:string):Promise<persona.AggregateResu
 export function AnalyzeBoardSafety(arg1:string):Promise<training.BoardSafetyReport>;
 
 export function AnalyzeGameTimeManagement(arg1:number):Promise<stats.GameTimeManagementReport>;
+
+export function AnalyzePlayerFairPlay(arg1:string,arg2:number):Promise<fairplay.PlayerFairPlayDossier>;
 
 export function AnalyzePlayerTimeManagement(arg1:string,arg2:number):Promise<stats.PlayerTimeManagementDossier>;
 
@@ -81,6 +84,8 @@ export function DeleteVariation(arg1:number,arg2:number):Promise<void>;
 export function DismissSupportNag():Promise<support.SupportStatus>;
 
 export function DispatchRPC(arg1:string,arg2:Array<json.RawMessage>):Promise<any>;
+
+export function DownloadAndAnalyzePlayerFairPlay(arg1:string,arg2:string,arg3:number):Promise<fairplay.PlayerFairPlayDossier>;
 
 export function DownloadTWICIssue(arg1:number):Promise<online.TWICIssueResult>;
 
