@@ -31,10 +31,38 @@ cp packaging/pacman/newscid.install "${STAGE_DIR}/newscid.install"
 # 2. Copy icons
 python3 packaging/scripts/generate-icons.py build/appicon.png "${STAGE_DIR}/icons"
 
-# 3. Render PKGBUILD with current version and release
-sed -e "s/^pkgver=.*/pkgver=${VERSION}/" \
-    -e "s/^pkgrel=.*/pkgrel=${RELEASE}/" \
-    packaging/pacman/PKGBUILD > "${STAGE_DIR}/PKGBUILD"
+# 3. Generate PKGBUILD for local staged binary
+cat <<EOF > "${STAGE_DIR}/PKGBUILD"
+# Maintainer: Christopher Patrick Fair <christopherpatrickfair@gmail.com>
+pkgname=newscid
+pkgver=${VERSION}
+pkgrel=${RELEASE}
+pkgdesc="Modern Chess Information Database (Scid vs. PC Rewrite)"
+arch=('x86_64')
+url="https://github.com/chrisfair/newscid"
+license=('GPL-3.0-or-later')
+depends=('gtk3' 'webkit2gtk-4.1' 'hicolor-icon-theme')
+optdepends=(
+    'stockfish: strong default UCI chess engine'
+    'fruit: legacy UCI chess engine'
+)
+install="newscid.install"
+
+package() {
+    install -Dm755 "\${srcdir}/../newscid" "\${pkgdir}/usr/bin/newscid"
+    install -Dm644 "\${srcdir}/../newscid.desktop" "\${pkgdir}/usr/share/applications/newscid.desktop"
+    install -Dm644 "\${srcdir}/../org.newscid.NewScid.metainfo.xml" "\${pkgdir}/usr/share/metainfo/org.newscid.NewScid.metainfo.xml"
+    install -Dm644 "\${srcdir}/../newscid.mime.xml" "\${pkgdir}/usr/share/mime/packages/newscid.xml"
+    if [ -f "\${srcdir}/../newscid.1" ]; then
+        install -Dm644 "\${srcdir}/../newscid.1" "\${pkgdir}/usr/share/man/man1/newscid.1"
+    fi
+    for size in 16 32 48 64 128 256 512 1024; do
+        if [ -f "\${srcdir}/../icons/\${size}x\${size}.png" ]; then
+            install -Dm644 "\${srcdir}/../icons/\${size}x\${size}.png" "\${pkgdir}/usr/share/icons/hicolor/\${size}x\${size}/apps/newscid.png"
+        fi
+    done
+}
+EOF
 
 # 4. Check for makepkg
 if ! command -v makepkg >/dev/null 2>&1; then
