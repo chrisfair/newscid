@@ -17,7 +17,8 @@ import {
   X,
   RefreshCw,
   FolderOpen,
-  Globe
+  Globe,
+  Crosshair
 } from '@lucide/vue'
 import {
   GetPersonas,
@@ -43,6 +44,7 @@ const emit = defineEmits<{
   (e: 'close'): void
   (e: 'sparPersona', p: persona.Persona): void
   (e: 'openPersonaDb', p: persona.Persona): void
+  (e: 'exploitPersona', p: persona.Persona): void
 }>()
 
 const personasList = ref<persona.Persona[]>([])
@@ -362,6 +364,12 @@ async function handleOpenDatabase() {
 function handleStartSparring() {
   if (!selectedPersona.value) return
   emit('sparPersona', selectedPersona.value)
+  emit('close')
+}
+
+function handleExploitPersona() {
+  if (!selectedPersona.value) return
+  emit('exploitPersona', selectedPersona.value)
   emit('close')
 }
 </script>
@@ -766,6 +774,16 @@ function handleStartSparring() {
             <div v-else />
 
             <div class="flex items-center gap-2">
+              <button
+                v-if="selectedPersona.id"
+                class="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                title="Evaluate opening vulnerabilities and generate weaponized anti-book"
+                @click="handleExploitPersona"
+              >
+                <Crosshair class="w-3.5 h-3.5" />
+                <span>Opening Exploiter & Anti-Book</span>
+              </button>
+
               <button
                 v-if="selectedPersona.id"
                 class="px-3.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"

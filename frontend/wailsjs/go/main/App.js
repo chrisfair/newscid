@@ -537,3 +537,27 @@ export function VerifyDatabase() {
 export function VerifyRepertoireMove(arg1, arg2, arg3) {
   return window['go']['main']['App']['VerifyRepertoireMove'](arg1, arg2, arg3);
 }
+
+export function EvaluateOpponentWeaknesses(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['EvaluateOpponentWeaknesses'](arg1, arg2, arg3, arg4);
+}
+
+export function EvaluatePersonaWeaknesses(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['EvaluatePersonaWeaknesses'](arg1, arg2, arg3, arg4);
+}
+
+export function ExportAntiPersonaPolyglotBook(arg1, arg2) {
+  return window['go']['main']['App']['ExportAntiPersonaPolyglotBook'](arg1, arg2);
+}
+
+export function ExportAntiPersonaPGN(arg1, arg2) {
+  return window['go']['main']['App']['ExportAntiPersonaPGN'](arg1, arg2);
+}
+
+export function SaveBookFileDialog(arg1) {
+  return window['go']['main']['App']['SaveBookFileDialog'](arg1);
+}
+
+export function SavePGNFileDialog(arg1) {
+  return window['go']['main']['App']['SavePGNFileDialog'](arg1);
+}
