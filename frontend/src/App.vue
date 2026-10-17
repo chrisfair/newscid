@@ -865,7 +865,7 @@ function updateResponsiveBoardSize() {
     bottomDrawerHeight.value = maxDrawerH
   }
 
-  // 1. Measure available workspace dimensions
+  // 1. Measure available workspace & left-column dimensions
   const topBarsH = zenMode.value
     ? 0
     : (34 + (effectiveCompact.value ? 0 : 48) + ((effectiveCompact.value && openGameTabs.value.length <= 1) ? 0 : 34))
@@ -873,28 +873,47 @@ function updateResponsiveBoardSize() {
 
   const wsClientH = workspaceRef.value?.clientHeight || 0
   const wsClientW = workspaceRef.value?.clientWidth || 0
+  const leftClientH = leftColRef.value?.clientHeight || 0
 
-  const wsH = wsClientH > 120
-    ? (wsClientH - 16)
-    : Math.max(220, screenH - topBarsH - bottomDrawerH - 16)
+  const wsH = (screenW >= 768 && leftClientH > 120)
+    ? leftClientH
+    : wsClientH > 120
+      ? (wsClientH - 16)
+      : Math.max(220, screenH - topBarsH - bottomDrawerH - 16)
   const wsW = wsClientW > 200
     ? (wsClientW - 16)
     : Math.max(280, screenW - 16)
 
-  // 2. Measure only the non-board items actually rendered inside left-col
-  let nonBoardH = 0
-  if (activeSimulation.value) nonBoardH += 48
-  if (isTheoreticalNovelty.value) nonBoardH += 32
-  if (blunderRadarAlert.value) nonBoardH += 32
+  // 2. Measure actual DOM height + fallback estimates for non-board items inside left-col
+  let measuredNonBoardH = 0
+  let measuredCount = 0
+  if (leftColRef.value) {
+    for (const child of Array.from(leftColRef.value.children)) {
+      const el = child as HTMLElement
+      if (!el.classList.contains('chessboard-wrapper-host')) {
+        measuredNonBoardH += el.offsetHeight
+        measuredCount++
+      }
+    }
+  }
+
+  let estimatedNonBoardH = 0
+  let estCount = 0
+  if (activeSimulation.value) { estimatedNonBoardH += 52; estCount++ }
+  if (isTheoreticalNovelty.value) { estimatedNonBoardH += 34; estCount++ }
+  if (blunderRadarAlert.value) { estimatedNonBoardH += 34; estCount++ }
   if (showLeftImbalancePanel.value && imbalanceReport.value) {
-    nonBoardH += (screenH < 880 ? 38 : 84)
+    estimatedNonBoardH += 44
+    estCount++
   }
   if (showLeftEnginePanel.value) {
-    nonBoardH += 122
+    estimatedNonBoardH += (isAnalyzing.value ? 168 : 136)
+    estCount++
   }
-  if (nonBoardH > 0) {
-    nonBoardH += 12
-  }
+
+  const itemCount = Math.max(measuredCount, estCount)
+  const gapsH = itemCount * 6 // gap-1.5 = 6px per flex gap
+  const nonBoardH = Math.max(measuredNonBoardH, estimatedNonBoardH) + gapsH + 12
 
   const availH = Math.max(180, wsH - nonBoardH)
   const evalBarExtra = showEvalBar.value ? 26 : 4
@@ -1195,7 +1214,7 @@ watch([showExportGameModal, showGuessTheMoveModal, showTimeManagementModal], ([e
   }
 })
 
-watch([leftColWidth, bottomDrawerHeight, bottomDrawerOpen, userForcedBottomDrawer, effectiveCompact, showBottomGamesDrawer, showLeftEnginePanel, showLeftImbalancePanel, zenMode, showEvalBar, imbalanceReport, activeSimulation, isTheoreticalNovelty, blunderRadarAlert], () => {
+watch([leftColWidth, bottomDrawerHeight, bottomDrawerOpen, userForcedBottomDrawer, effectiveCompact, showBottomGamesDrawer, showLeftEnginePanel, showLeftImbalancePanel, isAnalyzing, zenMode, showEvalBar, imbalanceReport, activeSimulation, isTheoreticalNovelty, blunderRadarAlert], () => {
   nextTick(() => updateResponsiveBoardSize())
 })
 
@@ -3265,7 +3284,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         <!-- Left Column: Auto-Sized Chessboard & Optional Docked Left Panels -->
         <div
           ref="leftColRef"
-          class="left-col flex flex-col items-center justify-center gap-1.5 w-full md:w-auto shrink-0 md:h-full overflow-hidden"
+          class="left-col flex flex-col items-center justify-start pt-1 gap-1.5 w-full md:w-auto shrink-0 md:h-full overflow-hidden"
           :style="{ width: isMdScreen ? `${leftColWidth}px` : '100%' }"
         >
           <!-- Player Simulation Sparring Match Status -->
@@ -3360,7 +3379,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
                 ✕
               </button>
             </div>
-            <ImbalanceBar :report="imbalanceReport" />
+            <ImbalanceBar :report="imbalanceReport" :compact="true" />
           </div>
 
           <!-- Live Engine Analysis Bar (Auto-moved to Right Column 'Engine' tab on compact screens) -->
