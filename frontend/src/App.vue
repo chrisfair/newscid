@@ -811,7 +811,14 @@ onUnmounted(() => {
     resizeObserver = null
   }
   EventsOff('engine:eval')
+  EventsOff('annotate:progress')
   if (playInterval) clearInterval(playInterval)
+})
+
+watch([showExportGameModal, showGuessTheMoveModal], ([exportOpen, guessOpen]) => {
+  if ((exportOpen || guessOpen) && flatMoves.value.length > 0) {
+    ParsePGN(buildCurrentGamePGN()).catch(() => {})
+  }
 })
 
 watch([leftColWidth, bottomDrawerHeight, bottomDrawerOpen, zenMode, showEvalBar, imbalanceReport, activeSimulation, isTheoreticalNovelty, blunderRadarAlert], () => {
@@ -872,8 +879,9 @@ async function handleMove(moveInput: string) {
     const from = uci.slice(0, 2)
     const to = uci.slice(2, 4)
 
-    // Truncate forward history if moving from middle of game
+    // Truncate forward history and flatMoves if moving from middle of game
     history.value = history.value.slice(0, currentPly.value + 1)
+    flatMoves.value = flatMoves.value.slice(0, currentPly.value)
     history.value.push({
       fen: nextState.fen,
       lastMove: { from, to },
@@ -1282,13 +1290,17 @@ async function handleSaveCurrentGame() {
     }
   }
   try {
+    const pgn = buildCurrentGamePGN()
+    const parsed = await ParsePGN(pgn)
     const gameObj: any = {
-      tags: gameTags.value,
-      startFen: history.value[0].fen,
-      result: gameTags.value.Result || '*',
+      ...(parsed || {}),
+      tags: { ...(parsed?.tags || {}), ...gameTags.value },
+      startFen: history.value[0]?.fen || parsed?.startFen || startingFEN,
+      result: gameTags.value.Result || parsed?.result || '*',
       plyCount: flatMoves.value.length,
     }
     const newId = await SaveGame(gameObj)
+    activeGameId.value = newId
     alert(`Game saved successfully as Game #${newId}`)
     await refreshGames()
   } catch (err) {

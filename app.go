@@ -397,6 +397,13 @@ func (a *App) SaveGame(game *chess.Game) (int, error) {
 		return 0, fmt.Errorf("no database open")
 	}
 
+	if game != nil && game.RootMove == nil && a.activeGame != nil && a.activeGame.RootMove != nil {
+		game.RootMove = a.activeGame.RootMove
+	}
+	if game != nil {
+		a.activeGame = game
+	}
+
 	return a.db.SaveGame(game)
 }
 
