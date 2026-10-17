@@ -157,7 +157,7 @@ async function handleMove(uci: string) {
 
     moveHistory.value.push({
       ply: moveHistory.value.length + 1,
-      san: uci,
+      san: nextState.moveSan || uci,
       uci,
     })
 
@@ -203,7 +203,7 @@ async function triggerEngineMove() {
 
     moveHistory.value.push({
       ply: moveHistory.value.length + 1,
-      san: best,
+      san: nextState.moveSan || best,
       uci: best,
     })
 

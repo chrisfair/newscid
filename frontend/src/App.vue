@@ -3242,7 +3242,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
     <RepertoireShortenerModal
       v-if="showRepertoireShortenerModal"
       @close="showRepertoireShortenerModal = false"
-      @repertoire-saved="(repId) => { showRepertoireShortenerModal = false; showOpeningTrainerModal = true; }"
+      @repertoire-saved="() => {}"
     />
 
     <!-- Quiet Moves & Prophylaxis Drill Modal -->
