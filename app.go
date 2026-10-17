@@ -448,7 +448,7 @@ func (a *App) CompactDatabase() (*scid.CompactStats, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if !a.db.IsOpen {
+	if a.db == nil || !a.db.IsOpen {
 		return nil, fmt.Errorf("no database open")
 	}
 
@@ -460,7 +460,7 @@ func (a *App) SortDatabase(criteria scid.SortCriteria) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if !a.db.IsOpen {
+	if a.db == nil || !a.db.IsOpen {
 		return fmt.Errorf("no database open")
 	}
 
@@ -472,7 +472,7 @@ func (a *App) FindDuplicateGames(criteria scid.DuplicateCriteria) ([]scid.Duplic
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
-	if !a.db.IsOpen {
+	if a.db == nil || !a.db.IsOpen {
 		return nil, fmt.Errorf("no database open")
 	}
 
@@ -484,7 +484,7 @@ func (a *App) DeleteDuplicateGames(criteria scid.DuplicateCriteria) (int, error)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if !a.db.IsOpen {
+	if a.db == nil || !a.db.IsOpen {
 		return 0, fmt.Errorf("no database open")
 	}
 
@@ -496,7 +496,7 @@ func (a *App) VerifyDatabase() (*scid.VerificationReport, error) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
-	if !a.db.IsOpen {
+	if a.db == nil || !a.db.IsOpen {
 		return nil, fmt.Errorf("no database open")
 	}
 
@@ -508,7 +508,7 @@ func (a *App) GetDatabaseStatistics() (*scid.DatabaseStatistics, error) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
-	if !a.db.IsOpen {
+	if a.db == nil || !a.db.IsOpen {
 		return nil, fmt.Errorf("no database open")
 	}
 
@@ -520,7 +520,7 @@ func (a *App) ImportPGNBatch(pgnText string) (*scid.ImportStats, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if !a.db.IsOpen {
+	if a.db == nil || !a.db.IsOpen {
 		return nil, fmt.Errorf("no database open")
 	}
 
@@ -532,7 +532,7 @@ func (a *App) ImportPGNFileBatch(filePath string) (*scid.ImportStats, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if !a.db.IsOpen {
+	if a.db == nil || !a.db.IsOpen {
 		return nil, fmt.Errorf("no database open")
 	}
 
@@ -708,7 +708,7 @@ func (a *App) SearchPosition(fen string) ([]*scid.GameSummary, error) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
-	if !a.db.IsOpen {
+	if a.db == nil || !a.db.IsOpen {
 		return nil, fmt.Errorf("no database open")
 	}
 
@@ -1238,7 +1238,7 @@ func (a *App) MinePuzzlesFromDatabase(playerName string, maxGames int) ([]puzzle
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
-	if !a.db.IsOpen {
+	if a.db == nil || !a.db.IsOpen {
 		return nil, fmt.Errorf("no database open to mine puzzles from")
 	}
 
@@ -1264,24 +1264,51 @@ func (a *App) GetVersionInfo() version.Info {
 // Online Account Sync (Chess.com & Lichess)
 // ==========================================
 
+func (a *App) ensureProfileMgr() *online.ProfileManager {
+	if a.profileMgr == nil {
+		a.profileMgr, _ = online.NewProfileManager("")
+	}
+	return a.profileMgr
+}
+
 func (a *App) GetSyncProfiles() ([]*online.Profile, error) {
-	return a.profileMgr.GetProfiles(), nil
+	pm := a.ensureProfileMgr()
+	if pm == nil {
+		return []*online.Profile{}, nil
+	}
+	return pm.GetProfiles(), nil
 }
 
 func (a *App) GetSyncProfile(id string) (*online.Profile, error) {
-	return a.profileMgr.GetProfile(id)
+	pm := a.ensureProfileMgr()
+	if pm == nil {
+		return nil, fmt.Errorf("profile manager unavailable")
+	}
+	return pm.GetProfile(id)
 }
 
 func (a *App) SaveSyncProfile(p *online.Profile) error {
-	return a.profileMgr.SaveProfile(p)
+	pm := a.ensureProfileMgr()
+	if pm == nil {
+		return fmt.Errorf("profile manager unavailable")
+	}
+	return pm.SaveProfile(p)
 }
 
 func (a *App) DeleteSyncProfile(id string) error {
-	return a.profileMgr.DeleteProfile(id)
+	pm := a.ensureProfileMgr()
+	if pm == nil {
+		return fmt.Errorf("profile manager unavailable")
+	}
+	return pm.DeleteProfile(id)
 }
 
 func (a *App) SyncOnlineProfile(profileID string) (*online.SyncResult, error) {
-	profile, err := a.profileMgr.GetProfile(profileID)
+	pm := a.ensureProfileMgr()
+	if pm == nil {
+		return nil, fmt.Errorf("profile manager unavailable")
+	}
+	profile, err := pm.GetProfile(profileID)
 	if err != nil {
 		return nil, err
 	}
@@ -1294,13 +1321,13 @@ func (a *App) SyncOnlineProfile(profileID string) (*online.SyncResult, error) {
 
 	targetPath := strings.TrimSpace(profile.TargetDatabase)
 	if targetPath == "" {
-		if !a.db.IsOpen {
+		if a.db == nil || !a.db.IsOpen {
 			return nil, fmt.Errorf("no target database specified in profile and no database currently open")
 		}
 		targetDB = a.db
 	} else {
 		basePath := strings.TrimSuffix(targetPath, ".si4")
-		if a.db.IsOpen && filepath.Clean(a.db.BasePath) == filepath.Clean(basePath) {
+		if a.db != nil && a.db.IsOpen && filepath.Clean(a.db.BasePath) == filepath.Clean(basePath) {
 			targetDB = a.db
 		} else {
 			targetDB = scid.NewDatabase()
@@ -3109,9 +3136,13 @@ func (a *App) ImportMegaDatabase(opts online.MegaImportOptions) (*online.MegaImp
 			cleanBase = strings.TrimSuffix(cleanBase, ".si4")
 			newDBPath := filepath.Join(userDBDir, cleanBase)
 			if _, err := os.Stat(newDBPath + ".si4"); err == nil {
-				_, _ = a.OpenDatabase(newDBPath)
+				if _, err := a.OpenDatabase(newDBPath); err != nil {
+					return nil, fmt.Errorf("opening database %s: %w", newDBPath, err)
+				}
 			} else {
-				_, _ = a.CreateDatabase(newDBPath, cleanBase)
+				if _, err := a.CreateDatabase(newDBPath, cleanBase); err != nil {
+					return nil, fmt.Errorf("creating database %s: %w", newDBPath, err)
+				}
 			}
 			a.mu.Lock()
 			targetDB = a.db
@@ -3172,9 +3203,13 @@ func (a *App) DownloadAndAnalyzePlayerFairPlay(platform string, username string,
 		safeName := "fairplay_" + strings.ToLower(regexp.MustCompile(`[^a-zA-Z0-9_-]`).ReplaceAllString(user, "_"))
 		dbPath := filepath.Join(userDBDir, safeName)
 		if _, err := os.Stat(dbPath + ".si4"); err == nil {
-			_, _ = a.OpenDatabase(dbPath)
+			if _, err := a.OpenDatabase(dbPath); err != nil {
+				return nil, fmt.Errorf("opening fair-play database: %w", err)
+			}
 		} else {
-			_, _ = a.CreateDatabase(dbPath, "Fair-Play Dossier: "+user)
+			if _, err := a.CreateDatabase(dbPath, "Fair-Play Dossier: "+user); err != nil {
+				return nil, fmt.Errorf("creating fair-play database: %w", err)
+			}
 		}
 	}
 
