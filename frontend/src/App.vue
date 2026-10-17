@@ -47,8 +47,25 @@ import ProphylaxisModal from './components/ProphylaxisModal.vue'
 import SupportModal from './components/SupportModal.vue'
 import MegaDatabaseModal from './components/MegaDatabaseModal.vue'
 import FairPlayModal from './components/FairPlayModal.vue'
+import FloatingPanel from './components/FloatingPanel.vue'
+import LivePortalPanel from './components/LivePortalPanel.vue'
+import DatabaseHubPanel, { type DatabaseRolesStatusView } from './components/DatabaseHubPanel.vue'
+import PreferencesModal, { type AppPreferencesModel } from './components/PreferencesModal.vue'
+import {
+  workspacePanels,
+  floatingPanels,
+  setPanelMode,
+  setPanelDockZone,
+  togglePanelFloater,
+  togglePanelVisibility,
+  bringFloaterToFront,
+  updateFloaterRect,
+  applyLayoutPreset,
+  resetWorkspaceLayout,
+  type PanelId
+} from './utils/workspaceLayout'
 import { initUITheme, applyUITheme, toggleDarkLight, currentUITheme, UI_THEMES } from './utils/theme'
-import { Bot, Sparkles, Brain, Shield, Maximize2, Minimize2, AlertTriangle, Crosshair } from '@lucide/vue'
+import { Bot, Sparkles, Brain, Shield, Maximize2, Minimize2, AlertTriangle, Crosshair, ExternalLink, X, PanelRight } from '@lucide/vue'
 import { playerbot, persona, scid, tournament, imbalance, explainer, blundervault, scout } from '../wailsjs/go/models'
 
 // Import Wails backend bindings
@@ -106,6 +123,18 @@ import {
   GenerateOpponentScoutingReport,
   GetPersona,
   GetSupportStatus,
+  GetAppPreferences,
+  SaveAppPreferences,
+  SetDefaultDatabase,
+  SetReferenceDatabase,
+  OpenDefaultDatabase,
+  OpenClipbase,
+  GetDatabaseRolesStatus,
+  GetWindowStartupConfig,
+  LaunchDetachedPanelWindow,
+  LaunchPortalWindow,
+  PublishWorkspaceState,
+  GetSharedWorkspaceState,
 } from '../wailsjs/go/main/App'
 import { EventsOn, EventsOff, ClipboardSetText, ClipboardGetText, BrowserOpenURL } from '../wailsjs/runtime/runtime'
 
@@ -123,7 +152,7 @@ const legalMoves = ref<string[]>([])
 const inCheck = ref(false)
 const lastMove = ref<{ from: string; to: string } | null>(null)
 const flipped = ref(false)
-const activeTab = ref<'notation' | 'tree' | 'info'>('notation')
+const activeTab = ref<'notation' | 'tree' | 'db-roles' | 'portal' | 'info'>('notation')
 const bottomDrawerOpen = ref(true)
 
 // History & Move Tree
@@ -322,9 +351,214 @@ const showProphylaxisModal = ref(false)
 const showSupportModal = ref(false)
 const showMegaDatabaseModal = ref(false)
 const showFairPlayModal = ref(false)
+const showPreferencesModal = ref(false)
+const preferencesSection = ref('databases')
 const antiPersonaTargetId = ref<string>('')
 const antiPersonaTargetName = ref<string>('')
 const showOpeningTreeModal = ref(false)
+
+const appPreferences = ref<AppPreferencesModel>({
+  defaultDatabasePath: '',
+  referenceDatabasePath: '',
+  autoOpenDefaultDb: true,
+  useReferenceDbForTree: true,
+  defaultPieceSet: 'cburnett',
+  defaultBoardTheme: 'classic-wood',
+  defaultUITheme: 'dark',
+  defaultNotationStyle: 'san',
+  soundEnabled: true,
+  showEvalBar: true,
+  threatModeDefault: false,
+  defaultEngine: '',
+  defaultMultiPv: 1,
+  defaultThreads: 2,
+  defaultHashMb: 64,
+  annotateMoveTimeMs: 150,
+  lichessUsername: '',
+  chessComUsername: '',
+  defaultPortalPlatform: 'lichess',
+  portalWindowMode: 'browser-app',
+  customBrowserCmd: '',
+})
+
+const dbRolesStatus = ref<DatabaseRolesStatusView | null>(null)
+const windowStartupMode = ref<{
+  mode: string
+  panelId: string
+  portalUrl: string
+  portalTitle: string
+  initialFen: string
+  initialDb: string
+}>({
+  mode: 'main',
+  panelId: '',
+  portalUrl: '',
+  portalTitle: '',
+  initialFen: '',
+  initialDb: '',
+})
+let multiScreenSyncTimer: number | null = null
+let lastSyncedTimestamp = 0
+const windowInstanceId = `win-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+
+async function refreshDatabaseRolesStatus() {
+  try {
+    const status = await GetDatabaseRolesStatus()
+    if (status) {
+      dbRolesStatus.value = status as DatabaseRolesStatusView
+    }
+  } catch {
+    // Ignore in test/mock environments
+  }
+}
+
+async function publishCurrentWorkspaceState() {
+  if (windowStartupMode.value.mode !== 'main') return
+  try {
+    await PublishWorkspaceState({
+      updatedAtMs: Date.now(),
+      sourceId: windowInstanceId,
+      fen: currentFEN.value,
+      lastMoveFrom: lastMove.value?.from || '',
+      lastMoveTo: lastMove.value?.to || '',
+      currentPly: currentPly.value,
+      dbPath: dbInfo.value?.basePath || '',
+      dbName: dbInfo.value?.name || '',
+      activeGameId: activeGameId.value || 0,
+      gameTags: { ...gameTags.value },
+    } as any)
+  } catch {
+    // Ignore sync write errors
+  }
+}
+
+function openPreferencesModal(section = 'databases') {
+  preferencesSection.value = section || 'databases'
+  showPreferencesModal.value = true
+}
+
+function openDatabaseHubView() {
+  setPanelMode('db-roles', 'docked')
+  setPanelDockZone('db-roles', 'right')
+  activeTab.value = 'db-roles'
+  refreshDatabaseRolesStatus()
+}
+
+function openPortalView() {
+  if (workspacePanels.value.portal.mode === 'hidden') {
+    setPanelMode('portal', 'docked')
+  }
+  if (workspacePanels.value.portal.mode === 'docked') {
+    setPanelDockZone('portal', 'right')
+    activeTab.value = 'portal'
+  } else {
+    bringFloaterToFront('portal')
+  }
+}
+
+async function handleSetDefaultDatabase(path: string) {
+  try {
+    const status = await SetDefaultDatabase(path)
+    if (status) {
+      dbRolesStatus.value = status as DatabaseRolesStatusView
+    }
+    const prefs = await GetAppPreferences()
+    if (prefs) {
+      appPreferences.value = prefs as AppPreferencesModel
+    }
+  } catch (err) {
+    console.error('Failed to set default database:', err)
+  }
+}
+
+async function handleSetCurrentAsDefaultDB() {
+  if (!dbInfo.value?.basePath) return
+  await handleSetDefaultDatabase(dbInfo.value.basePath)
+}
+
+async function handleOpenDefaultDatabase() {
+  try {
+    const info = await OpenDefaultDatabase()
+    if (info) {
+      dbInfo.value = info
+      currentPage.value = 1
+      await refreshGames()
+      if (gamesList.value.length > 0) {
+        await handleLoadGame(1)
+      }
+      await refreshDatabaseRolesStatus()
+    }
+  } catch (err: any) {
+    alert(err?.message || err)
+  }
+}
+
+async function handleSetReferenceDatabase(path: string, useForTree: boolean) {
+  try {
+    const status = await SetReferenceDatabase(path, useForTree)
+    if (status) {
+      dbRolesStatus.value = status as DatabaseRolesStatusView
+    }
+    const prefs = await GetAppPreferences()
+    if (prefs) {
+      appPreferences.value = prefs as AppPreferencesModel
+    }
+    fetchOpeningTree(currentFEN.value)
+  } catch (err) {
+    console.error('Failed to set reference database:', err)
+  }
+}
+
+async function handleOpenClipbase() {
+  try {
+    const info = await OpenClipbase()
+    if (info) {
+      dbInfo.value = info
+      currentPage.value = 1
+      await refreshGames()
+      await refreshDatabaseRolesStatus()
+    }
+  } catch (err: any) {
+    alert(`Failed to open Clipbase: ${err?.message || err}`)
+  }
+}
+
+async function handleSaveAppPreferences(prefs: AppPreferencesModel) {
+  try {
+    const saved = await SaveAppPreferences(prefs as any)
+    if (saved) {
+      appPreferences.value = saved as AppPreferencesModel
+    }
+    await refreshDatabaseRolesStatus()
+    fetchOpeningTree(currentFEN.value)
+  } catch (err) {
+    console.error('Failed to save preferences:', err)
+  }
+}
+
+async function handleDetachPanelScreen(panelId: PanelId) {
+  const panel = workspacePanels.value[panelId]
+  const title = panel ? `NewScid — ${panel.title} [Screen Panel]` : `NewScid — ${panelId} [Screen Panel]`
+  await publishCurrentWorkspaceState()
+  try {
+    await LaunchDetachedPanelWindow(panelId, title, currentFEN.value, dbInfo.value?.basePath || '')
+  } catch (err: any) {
+    alert(`Failed to launch screen window: ${err?.message || err}`)
+  }
+}
+
+async function handleLaunchPortalWindow(platform: 'lichess' | 'chesscom', customUrl?: string) {
+  const url = customUrl || (platform === 'chesscom' ? 'https://www.chess.com/play/online' : 'https://lichess.org')
+  try {
+    await LaunchPortalWindow(platform, url, appPreferences.value.portalWindowMode || 'browser-app')
+  } catch {
+    try {
+      BrowserOpenURL(url)
+    } catch {
+      window.open(url, '_blank')
+    }
+  }
+}
 
 function openAntiPersonaModal(target?: persona.Persona | { id: string; displayName?: string } | string) {
   if (typeof target === 'string') {
@@ -718,6 +952,28 @@ onMounted(async () => {
     initUITheme()
     window.addEventListener('resize', handleWindowResize)
 
+    // 0. Check window startup config (main workspace vs detached Hyprland screen panel vs live portal)
+    try {
+      const winCfg = await GetWindowStartupConfig()
+      if (winCfg && winCfg.mode) {
+        windowStartupMode.value = winCfg as any
+      }
+    } catch {
+      // Default to main mode
+    }
+
+    // Load saved user preferences
+    try {
+      const prefs = await GetAppPreferences()
+      if (prefs) {
+        appPreferences.value = prefs as AppPreferencesModel
+        if (prefs.defaultPieceSet) currentPieceSet.value = prefs.defaultPieceSet
+        if (prefs.defaultBoardTheme) currentThemeId.value = prefs.defaultBoardTheme
+      }
+    } catch {
+      // Ignore in test environment
+    }
+
     // 1. Load sets and themes
     pieceSets.value = (await GetPieceSets()) as PieceSetOption[]
     boardThemes.value = (await GetBoardThemes()) as BoardThemeOption[]
@@ -730,7 +986,9 @@ onMounted(async () => {
     discoveredEngines.value = (await GetDiscoveredEngines()) as EngineOption[]
     availableEngines.value = await GetAvailableEngines()
 
-    if (discoveredEngines.value.length > 0) {
+    if (appPreferences.value.defaultEngine) {
+      selectedEngine.value = appPreferences.value.defaultEngine
+    } else if (discoveredEngines.value.length > 0) {
       const firstAvailable = discoveredEngines.value.find(e => e.available)
       if (firstAvailable) {
         selectedEngine.value = firstAvailable.name || firstAvailable.cmd
@@ -752,9 +1010,13 @@ onMounted(async () => {
       engineMultiPv.value = initMPV
     }
 
-    // 5. Auto-open user's database or first discovered base
+    // 5. Auto-open Default Database (or initial DB passed via --db flag, or first discovered user base)
     let autoBase: string | null = null
-    if (discoveredDatabases.value.length > 0) {
+    if (windowStartupMode.value.initialDb) {
+      autoBase = windowStartupMode.value.initialDb
+    } else if (appPreferences.value.autoOpenDefaultDb && appPreferences.value.defaultDatabasePath) {
+      autoBase = appPreferences.value.defaultDatabasePath
+    } else if (discoveredDatabases.value.length > 0) {
       const userBase = discoveredDatabases.value.find(d => d.name === 'ChristopherFair' && d.exists)
         || discoveredDatabases.value.find(d => d.category === 'User Databases' && d.exists && d.numGames > 0)
         || discoveredDatabases.value.find(d => d.exists && d.numGames > 0 && d.numGames < 100000)
@@ -768,13 +1030,49 @@ onMounted(async () => {
 
     if (autoBase) {
       await handleOpenDiscoveredBase(autoBase)
+      if (!appPreferences.value.defaultDatabasePath) {
+        await handleSetDefaultDatabase(autoBase)
+      }
+    }
+    await refreshDatabaseRolesStatus()
+
+    if (windowStartupMode.value.initialFen) {
+      await updateBoardState(windowStartupMode.value.initialFen)
+    }
+
+    // If launched as a detached Hyprland multi-screen panel window, start live state synchronization!
+    if (windowStartupMode.value.mode === 'panel') {
+      if (windowStartupMode.value.panelId === 'engine' && !isAnalyzing.value) {
+        toggleAnalysis()
+      }
+      multiScreenSyncTimer = window.setInterval(async () => {
+        try {
+          const shared = await GetSharedWorkspaceState()
+          if (shared && shared.updatedAtMs > lastSyncedTimestamp && shared.sourceId !== windowInstanceId) {
+            lastSyncedTimestamp = shared.updatedAtMs
+            if (shared.dbPath && shared.dbPath !== dbInfo.value?.basePath) {
+              await handleOpenDiscoveredBase(shared.dbPath)
+            }
+            if (shared.fen && shared.fen !== currentFEN.value) {
+              lastMove.value = shared.lastMoveFrom && shared.lastMoveTo
+                ? { from: shared.lastMoveFrom, to: shared.lastMoveTo }
+                : null
+              await updateBoardState(shared.fen)
+            }
+          }
+        } catch {
+          // Ignore sync poll errors
+        }
+      }, 600)
+    } else {
+      await publishCurrentWorkspaceState()
     }
 
     // 6. Check voluntary support status (exempts author machine via Chess.com & Lichess IDs; 24h cooldown on dismiss)
     const checkSupportNag = async () => {
       try {
         const supStatus = await GetSupportStatus()
-        if (supStatus && supStatus.shouldShowNag) {
+        if (supStatus && supStatus.shouldShowNag && windowStartupMode.value.mode === 'main') {
           showSupportModal.value = true
         }
       } catch {
@@ -784,7 +1082,6 @@ onMounted(async () => {
     await checkSupportNag()
     setInterval(checkSupportNag, 30 * 60 * 1000)
 
-    // Update board state for start position
     // Setup ResizeObserver for adaptive right-sizing of the chessboard
     nextTick(() => {
       updateResponsiveBoardSize()
@@ -813,6 +1110,7 @@ onUnmounted(() => {
   EventsOff('engine:eval')
   EventsOff('annotate:progress')
   if (playInterval) clearInterval(playInterval)
+  if (multiScreenSyncTimer) clearInterval(multiScreenSyncTimer)
 })
 
 watch([showExportGameModal, showGuessTheMoveModal, showTimeManagementModal], ([exportOpen, guessOpen, timeOpen]) => {
@@ -832,6 +1130,8 @@ watch(currentFEN, (newFen) => {
 watch(activeTab, (newTab) => {
   if (newTab === 'tree') {
     fetchOpeningTree(currentFEN.value)
+  } else if (newTab === 'db-roles') {
+    refreshDatabaseRolesStatus()
   }
 })
 
@@ -856,6 +1156,8 @@ async function updateBoardState(fen: string) {
     if (isAnalyzing.value) {
       AnalyzePosition(state.fen, [], 20).catch(console.error)
     }
+
+    publishCurrentWorkspaceState()
   } catch (err) {
     console.error('Error updating board state:', err)
   }
@@ -1011,6 +1313,11 @@ function handleKeydown(e: KeyboardEvent) {
 
   // Ctrl Combos
   if (e.ctrlKey || e.metaKey) {
+    if (e.key === ',') {
+      e.preventDefault()
+      showPreferencesModal.value = !showPreferencesModal.value
+      return
+    }
     if (e.key === 'b' || e.key === 'B') {
       e.preventDefault()
       showSetupBoardModal.value = true
@@ -1139,6 +1446,7 @@ function handleKeydown(e: KeyboardEvent) {
     showSupportModal.value ||
     showMegaDatabaseModal.value ||
     showFairPlayModal.value ||
+    showPreferencesModal.value ||
     showImportModal.value
   ) {
     return
@@ -1201,6 +1509,8 @@ async function handleOpenDB() {
     if (gamesList.value.length > 0) {
       await handleLoadGame(1)
     }
+    await refreshDatabaseRolesStatus()
+    await publishCurrentWorkspaceState()
   } catch (err) {
     alert(`Failed to open database: ${err}`)
   }
@@ -1214,6 +1524,8 @@ async function handleCreateDB() {
     dbInfo.value = info
     currentPage.value = 1
     await refreshGames()
+    await refreshDatabaseRolesStatus()
+    await publishCurrentWorkspaceState()
   } catch (err) {
     alert(`Failed to create database: ${err}`)
   }
@@ -1227,6 +1539,8 @@ async function handleCloseDB() {
     totalGames.value = 0
     currentPage.value = 1
     handleNewGame()
+    await refreshDatabaseRolesStatus()
+    await publishCurrentWorkspaceState()
   } catch (err) {
     alert(`Failed to close database: ${err}`)
   }
@@ -1241,6 +1555,8 @@ async function handleOpenSystemBase(path: string) {
     if (gamesList.value.length > 0) {
       await handleLoadGame(1)
     }
+    await refreshDatabaseRolesStatus()
+    await publishCurrentWorkspaceState()
   } catch (err) {
     console.error('Failed to open sample base:', err)
   }
@@ -1257,6 +1573,8 @@ async function handleOpenDiscoveredBase(path: string) {
       await handleLoadGame(1)
     }
     bottomDrawerOpen.value = true
+    await refreshDatabaseRolesStatus()
+    await publishCurrentWorkspaceState()
   } catch (err) {
     console.error('Failed to open database:', err)
     alert(`Failed to open database: ${err}`)
@@ -1270,6 +1588,7 @@ async function handleDatabaseUpdated() {
     dbInfo.value = info
     totalGames.value = info.numGames
   }
+  await refreshDatabaseRolesStatus()
 }
 
 async function handleLoadGame(id: number) {
@@ -2458,254 +2777,952 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
     icon: 'shield',
     category: 'Tools',
     action: () => { showFairPlayModal.value = true }
+  },
+  {
+    id: 'preferences-document',
+    title: 'Preferences & Options Document',
+    subtitle: 'Configure Default Database, Panels/Floaters, Hyprland Multi-Screen, Portals & Appearance',
+    icon: 'sliders',
+    category: 'Options',
+    shortcut: 'Ctrl+,',
+    action: () => openPreferencesModal('databases')
+  },
+  {
+    id: 'database-hub-roles',
+    title: 'Database Hub & Relationships (Default / Active / Reference / Clipbase)',
+    subtitle: 'Understand how databases relate, set Default Startup DB, or assign Reference Theory DB',
+    icon: 'database',
+    category: 'Actions',
+    action: () => openDatabaseHubView()
+  },
+  {
+    id: 'set-default-db',
+    title: 'Set Current Database as Default Startup Database',
+    subtitle: 'Automatically open this database whenever NewScid starts',
+    icon: 'star',
+    category: 'Actions',
+    action: () => handleSetCurrentAsDefaultDB()
+  },
+  {
+    id: 'live-portal-lichess-chesscom',
+    title: 'Lichess.org & Chess.com Live Portal',
+    subtitle: 'Open in-app Live TV/Puzzle portal or launch dedicated multi-screen Hyprland windows',
+    icon: 'globe',
+    category: 'Tools',
+    action: () => openPortalView()
+  },
+  {
+    id: 'float-panels-preset',
+    title: 'Float Key Panels (Floaters Preset)',
+    subtitle: 'Undock Opening Tree and Live Engine into draggable floating windows',
+    icon: 'layers',
+    category: 'Options',
+    action: () => applyLayoutPreset('floaters')
+  },
+  {
+    id: 'reset-docked-panels',
+    title: 'Reset All Panels to Docked Layout',
+    subtitle: 'Restore standard docked workspace layout',
+    icon: 'layout',
+    category: 'Options',
+    action: () => resetWorkspaceLayout()
   }
 ])
 </script>
 
 <template>
   <div class="app-root flex flex-col h-screen w-screen bg-zinc-950 text-zinc-100 overflow-hidden font-sans">
-    <!-- Desktop Application Menu Bar (Scid vs. PC Parity) -->
-    <MenuBar
-      :db-name="dbInfo?.name"
-      :piece-sets="pieceSets"
-      :board-themes="boardThemes"
-      :current-piece-set="currentPieceSet"
-      :current-theme-id="currentThemeId"
-      :trial-mode="trialMode"
-      :is-analyzing="isAnalyzing"
-      @new-game="handleNewGame"
-      @open-d-b="handleOpenDB"
-      @create-d-b="handleCreateDB"
-      @close-d-b="handleCloseDB"
-      @save-game="handleSaveCurrentGame"
-      @delete-game="handleDeleteCurrentGame"
-      @first-game="handleFirstGame"
-      @prev-game="handlePrevGame"
-      @next-game="handleNextGame"
-      @last-game="handleLastGame"
-      @random-game="handleRandomGame"
-      @import-p-g-n="handleImportPGN"
-      @export-p-g-n="handleExportPGN"
-      @copy-f-e-n="handleCopyFEN"
-      @paste-f-e-n="handlePasteFEN"
-      @setup-board="handleSetupBoard"
-      @toggle-trial-mode="toggleTrialMode"
-      @undo-move="goPrev"
-      @redo-move="goNext"
-      @toggle-analysis="toggleAnalysis"
-      @annotate-game="handleAnnotateGame"
-      @play-vs-engine="handlePlayVsEngine"
-      @tactics-trainer="handleTacticsTrainer"
-      @opening-tree="handleOpenTreeWindow"
-      @open-tree-window="handleOpenTreeWindow"
-      @opening-trainer="showOpeningTrainerModal = true"
-      @progressive-tactics="showProgressiveTacticsModal = true"
-      @mine-puzzles="showPuzzleMinerModal = true"
-      @search-header="showSearchModal = true"
-      @search-position="handleSearchPosition"
-      @toggle-flip="flipped = !flipped"
-      @change-piece-set="currentPieceSet = $event"
-      @change-theme="currentThemeId = $event"
-      @open-settings="handleOpenSettings"
-      @show-shortcuts="showShortcutsModal = true"
-      @show-about="showAboutModal = true"
-      @show-help="showHelpModal = true"
-      @open-web-docs="handleOpenWebDocs"
-      @database-maintenance="showMaintenanceModal = true"
-      @online-sync="showOnlineSyncModal = true"
-      @simulate-player="showPlayerSimulationModal = true"
-      @player-personas="showPersonaModal = true"
-      @show-crosstable="showTournamentCrosstableModal = true"
-      @eco-browser="showEcoBrowserModal = true"
-      @guess-the-move="showGuessTheMoveModal = true"
-      @database-stats="showDatabaseStatsModal = true"
-      @edit-tags="handleOpenEditTags"
-      @twic-downloader="showTwicModal = true"
-      @mega-downloader="showMegaDatabaseModal = true"
-      @engine-match="showEngineMatchModal = true"
-      @export-game="showExportGameModal = true"
-      @standardize-names="handleStandardizeNames"
-      :sound-enabled="soundEnabled"
-      :blindfold="blindfoldMode"
-      :threat-mode="threatMode"
-      :show-eval-bar="showEvalBar"
-      :zen-mode="zenMode"
-      @toggle-sound="toggleSound"
-      @toggle-blindfold="toggleBlindfold"
-      @toggle-threat-mode="toggleThreatMode"
-      @toggle-eval-bar="toggleEvalBar"
-      @chess960="showChess960Modal = true"
-      @coordinate-trainer="showCoordinateTrainerModal = true"
-      @command-palette="showCommandPalette = true"
-      @blunder-vault="showBlunderVaultModal = true"
-      @opponent-scout="showOpponentScoutModal = true"
-      @anti-persona="openAntiPersonaModal()"
-      @toggle-zen-mode="toggleZenMode"
-      @explain-move="handleExplainMove(currentPly)"
-      :current-u-i-theme="currentUITheme"
-      @change-u-i-theme="applyUITheme"
-      @toggle-dark-light="toggleDarkLight"
-      @piece-safety="showPieceSafetyModal = true"
-      @intuition-storm="showIntuitionStormModal = true"
-      @time-management="showTimeManagementModal = true"
-      @repertoire-shortener="showRepertoireShortenerModal = true"
-      @prophylaxis="showProphylaxisModal = true"
-      @show-support="showSupportModal = true"
-      @fair-play-inspector="showFairPlayModal = true"
-    />
-
-
-    <!-- Top Header Bar -->
-    <HeaderBar
-      v-if="!zenMode"
-      ref="headerBarRef"
-      :db-name="dbInfo?.name"
-      :system-bases="systemBases"
-      :discovered-databases="discoveredDatabases"
-      :piece-sets="pieceSets"
-      :board-themes="boardThemes"
-      :current-piece-set="currentPieceSet"
-      :current-theme-id="currentThemeId"
-      :current-u-i-theme="currentUITheme"
-      :flipped="flipped"
-      @open-d-b="handleOpenDB"
-      @create-d-b="handleCreateDB"
-      @open-system-base="handleOpenSystemBase"
-      @open-discovered-base="handleOpenDiscoveredBase"
-      @import-p-g-n="handleImportPGN"
-      @export-p-g-n="handleExportPGN"
-      @change-piece-set="currentPieceSet = $event"
-      @change-theme="currentThemeId = $event"
-      @change-u-i-theme="applyUITheme"
-      @toggle-dark-light="toggleDarkLight"
-      @toggle-flip="flipped = !flipped"
-    />
-
-    <!-- Multi-Game Tabbed Workspace Strip -->
+    <!-- ========================================================================= -->
+    <!-- MODE A: Detached Multi-Screen Hyprland Panel Window (--window-panel <id>) -->
+    <!-- ========================================================================= -->
     <div
-      v-if="!zenMode"
-      class="workspace-tabs-bar flex items-center gap-1.5 px-3 py-1 bg-zinc-950 border-b border-zinc-800/80 text-xs overflow-x-auto select-none"
+      v-if="windowStartupMode.mode === 'panel'"
+      class="flex-1 flex flex-col h-full w-full overflow-hidden bg-zinc-950"
     >
-      <div
-        v-for="(tab, idx) in openGameTabs"
-        :key="tab.id"
-        class="group flex items-center gap-2 px-3 py-1.5 rounded-t-lg border-t border-x cursor-pointer transition-all max-w-[240px]"
-        :class="activeGameTabIdx === idx
-          ? 'bg-zinc-900 border-zinc-700 text-zinc-100 font-semibold shadow-xs'
-          : 'bg-zinc-950/60 border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50'"
-        @click="switchGameTab(idx)"
-      >
-        <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="activeGameTabIdx === idx ? 'bg-emerald-400' : 'bg-zinc-600'" />
-        <span class="truncate">{{ tab.title }}</span>
-        <button
-          v-if="openGameTabs.length > 1"
-          class="w-4 h-4 ml-1 rounded hover:bg-zinc-800 hover:text-rose-400 flex items-center justify-center text-zinc-500 opacity-60 group-hover:opacity-100 transition-all text-[11px]"
-          title="Close tab"
-          @click.stop="closeGameTab(idx)"
-        >
-          ✕
-        </button>
-      </div>
-
-      <button
-        class="px-2.5 py-1 rounded-md hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors flex items-center gap-1 text-xs cursor-pointer ml-1"
-        title="Open new game tab"
-        @click="openNewGameTab"
-      >
-        <span class="font-bold text-sm leading-none">+</span>
-        <span class="text-[11px]">New Tab</span>
-      </button>
-    </div>
-
-    <!-- Main Workspace (Split Grid) -->
-    <div
-      ref="workspaceRef"
-      class="workspace-grid flex-1 flex flex-col md:flex-row overflow-hidden p-2 gap-1 relative"
-    >
-      <!-- Left Column: Chessboard & Engine Control (Resizable) -->
-      <div
-        ref="leftColRef"
-        class="left-col flex flex-col items-center justify-between gap-1.5 w-full md:w-auto shrink-0 h-full overflow-hidden"
-        :style="{ width: isMdScreen ? `${leftColWidth}px` : '100%' }"
-      >
-        <!-- Player Simulation Sparring Match Status -->
-        <div
-          v-if="activeSimulation"
-          class="w-full bg-gradient-to-r from-purple-950/80 via-zinc-900 to-purple-950/80 border border-purple-500/40 rounded-xl p-2.5 flex items-center justify-between text-xs shadow-md animate-fade-in"
-        >
-          <div class="flex items-center gap-2 min-w-0">
-            <div class="w-7 h-7 rounded-lg bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 shrink-0">
-              <Bot class="w-4 h-4" :class="{ 'animate-pulse text-purple-400': isBotThinking }" />
-            </div>
-            <div class="truncate">
-              <div class="flex items-center gap-1.5">
-                <span class="font-bold text-zinc-100">{{ activeSimulation.playerName }}</span>
-                <span class="px-1.5 py-0.5 rounded text-[10px] bg-purple-900/60 text-purple-200 font-mono">
-                  ~{{ activeSimulation.personality.estimatedElo || 2400 }} Elo
-                </span>
-                <span v-if="isBotThinking" class="text-[10px] text-amber-400 animate-pulse">Thinking...</span>
-              </div>
-              <p class="text-[11px] text-zinc-400 truncate">{{ botMoveStatus || 'Sparring match active' }}</p>
-            </div>
-          </div>
+      <!-- Multi-Screen Sync Status Header -->
+      <div class="flex items-center justify-between px-3 py-2 bg-zinc-900 border-b border-zinc-800 text-xs shrink-0">
+        <div class="flex items-center gap-2">
+          <span class="px-2 py-0.5 rounded bg-purple-600/20 border border-purple-500/40 text-purple-300 font-bold text-[10px] uppercase tracking-wider">
+            Hyprland Screen Panel
+          </span>
+          <span class="font-bold text-zinc-100">
+            {{ windowStartupMode.portalTitle || `NewScid — ${windowStartupMode.panelId}` }}
+          </span>
+          <span v-if="dbInfo?.name" class="text-zinc-400 font-mono text-[11px]">
+            • DB: {{ dbInfo.name }}
+          </span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            Live Sync Active
+          </span>
           <button
-            class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] border border-zinc-700 hover:border-zinc-600 transition-colors shrink-0 ml-2 cursor-pointer"
-            @click="stopSimulation"
+            class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] cursor-pointer"
+            @click="openPreferencesModal('multiscreen')"
           >
-            End Sparring
+            Preferences
           </button>
         </div>
+      </div>
 
-        <!-- Theory Novelty Pill -->
-        <div
-          v-if="isTheoreticalNovelty"
-          class="w-full flex items-center justify-between px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 font-semibold shadow-xs"
-        >
-          <span class="flex items-center gap-1.5">
-            <Sparkles class="w-3.5 h-3.5 text-amber-400" />
-            <span>Theoretical Novelty (N)</span>
-          </span>
-          <span class="text-[10px] text-amber-400/80 font-mono">Out of Book • 0 Games</span>
-        </div>
+      <!-- Full-Window Rendered Panel Content -->
+      <div class="flex-1 overflow-hidden p-2">
+        <OpeningTree
+          v-if="windowStartupMode.panelId === 'tree'"
+          :fen="currentFEN"
+          :tree-data="treeData"
+          :loading="treeLoading"
+          :db-open="!!dbInfo || !!dbRolesStatus?.referenceDbPath"
+          :db-name="dbRolesStatus?.useRefForTree && dbRolesStatus?.referenceDbName ? `${dbRolesStatus.referenceDbName} (Ref)` : dbInfo?.name"
+          :eco-code="gameTags.ECO"
+          :opening-name="gameTags.Opening || gameTags.Event"
+          :discovered-databases="discoveredDatabases"
+          @play-move="handleMove"
+          @refresh="fetchOpeningTree(currentFEN)"
+          @open-db="handleOpenDB"
+          @open-discovered-db="handleOpenDiscoveredBase"
+          @go-first="goFirst"
+          @go-prev="goPrev"
+          @pop-out-window="handleOpenTreeWindow"
+        />
 
-        <!-- Blunder Radar Alert Banner -->
-        <div
-          v-if="blunderRadarAlert"
-          class="w-full flex items-center gap-2 px-3 py-1.5 bg-rose-950/90 border border-rose-500/50 rounded-xl text-xs text-rose-200 font-semibold shadow-md animate-pulse"
-        >
-          <AlertTriangle class="w-4 h-4 text-rose-400 shrink-0" />
-          <span class="truncate">{{ blunderRadarAlert }}</span>
-        </div>
-
-        <!-- Interactive Chessboard -->
-        <div class="chessboard-wrapper-host flex items-center justify-center w-full shrink-0">
-          <Chessboard
-            :fen="currentFEN"
-            :legal-moves="legalMoves"
-            :piece-set="currentPieceSet"
-            :board-theme="currentTheme"
-            :flipped="flipped"
-            :last-move="lastMove"
-            :in-check="inCheck"
-            :sound-enabled="soundEnabled"
-            :blindfold="blindfoldMode"
-            :show-eval-bar="showEvalBar"
-            :eval-score="evalScore"
-            :eval-mate="evalMate"
-            :threat-squares="threatSquares"
-            :arrows="engineArrows"
-            :board-size="computedBoardSize"
-            @move="handleMove"
+        <div v-else-if="windowStartupMode.panelId === 'engine'" class="h-full flex flex-col gap-3">
+          <EnginePanel
+            :eval-info="evalInfo"
+            :is-analyzing="isAnalyzing"
+            :available-engines="availableEngines"
+            :discovered-engines="discoveredEngines"
+            :selected-engine="selectedEngine"
+            :multi-pv="engineMultiPv"
+            :tablebase-result="tablebaseResult"
+            @toggle-analysis="toggleAnalysis"
+            @select-engine="handleSelectEngine"
+            @change-multi-p-v="handleChangeMultiPV"
+            @change-threads="handleChangeThreads"
+            @change-hash="handleChangeHash"
+            @preview-move="handlePreviewCandidateMove"
           />
-        </div>
-
-        <!-- Interactive Material & Positional Imbalance Bar -->
-        <div class="w-full">
           <ImbalanceBar :report="imbalanceReport" />
         </div>
 
-        <!-- Live Engine Analysis Bar -->
-        <div class="w-full">
+        <div v-else-if="windowStartupMode.panelId === 'notation'" class="h-full flex flex-col gap-2">
+          <EvaluationGraph
+            :analysis="gameAnalysis"
+            :current-ply="currentPly"
+            :is-analyzing-game="isAnalyzingGame"
+            :progress="annotationProgress"
+            :moves="flatMoves"
+            @jump="jumpToPly"
+            @annotate="handleAnnotateGame"
+          />
+          <div class="flex-1 overflow-hidden">
+            <MoveNotation
+              :moves="flatMoves"
+              :current-ply="currentPly"
+              :is-playing="isPlaying"
+              :result="gameTags.Result || '*'"
+              @jump="jumpToPly"
+              @first="goFirst"
+              @prev="goPrev"
+              @next="goNext"
+              @last="goLast"
+              @toggle-play="toggleAutoplay"
+              @copy-p-g-n="handleExportPGN"
+              @set-n-a-g="handleSetNAG"
+              @clear-n-a-gs="handleClearNAGs"
+              @set-comment="handleSetComment"
+              @promote-variation="handlePromoteVariation"
+              @delete-variation="handleDeleteVariation"
+              @explain-move="handleExplainMove"
+            />
+          </div>
+        </div>
+
+        <GameBrowser
+          v-else-if="windowStartupMode.panelId === 'games'"
+          :games="gamesList"
+          :total-games="totalGames"
+          :current-page="currentPage"
+          :page-size="pageSize"
+          :active-game-id="activeGameId"
+          :db-name="dbInfo?.name"
+          :active-criteria="searchFilter"
+          @load-game="handleLoadGame"
+          @page-change="handlePageChange"
+          @search="handleSearch"
+          @open-advanced-search="showSearchModal = true"
+          @new-game="handleNewGame"
+          @save-game="handleSaveCurrentGame"
+          @delete-game="handleDeleteGame"
+        />
+
+        <LivePortalPanel
+          v-else-if="windowStartupMode.panelId === 'portal'"
+          :current-fen="currentFEN"
+          :default-window-mode="appPreferences.portalWindowMode"
+          :lichess-username="appPreferences.lichessUsername"
+          :chess-com-username="appPreferences.chessComUsername"
+          @open-online-sync="showOnlineSyncModal = true"
+          @open-fair-play="showFairPlayModal = true"
+          @detach-portal-screen="handleDetachPanelScreen('portal')"
+          @float-portal="togglePanelFloater('portal')"
+        />
+
+        <DatabaseHubPanel
+          v-else-if="windowStartupMode.panelId === 'db-roles'"
+          :roles-status="dbRolesStatus"
+          :discovered-databases="discoveredDatabases"
+          @open-d-b="handleOpenDB"
+          @create-d-b="handleCreateDB"
+          @open-discovered-base="handleOpenDiscoveredBase"
+          @set-default-d-b="handleSetDefaultDatabase"
+          @set-reference-d-b="handleSetReferenceDatabase"
+          @open-default-d-b="handleOpenDefaultDatabase"
+          @open-clipbase="handleOpenClipbase"
+          @open-mega-downloader="showMegaDatabaseModal = true"
+          @open-online-sync="showOnlineSyncModal = true"
+          @open-maintenance="showMaintenanceModal = true"
+        />
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- MODE B: Main Multi-Panel Workspace (Docked + Floating + Multi-Screen)     -->
+    <!-- ========================================================================= -->
+    <template v-else>
+      <!-- Desktop Application Menu Bar (Reorganized & Scid vs. PC Parity) -->
+      <MenuBar
+        :db-name="dbInfo?.name"
+        :default-db-name="dbRolesStatus?.defaultDbName"
+        :is-active-default-db="dbRolesStatus?.isActiveDefault"
+        :reference-db-name="dbRolesStatus?.referenceDbName"
+        :piece-sets="pieceSets"
+        :board-themes="boardThemes"
+        :current-piece-set="currentPieceSet"
+        :current-theme-id="currentThemeId"
+        :trial-mode="trialMode"
+        :is-analyzing="isAnalyzing"
+        @new-game="handleNewGame"
+        @open-d-b="handleOpenDB"
+        @create-d-b="handleCreateDB"
+        @close-d-b="handleCloseDB"
+        @save-game="handleSaveCurrentGame"
+        @delete-game="handleDeleteCurrentGame"
+        @first-game="handleFirstGame"
+        @prev-game="handlePrevGame"
+        @next-game="handleNextGame"
+        @last-game="handleLastGame"
+        @random-game="handleRandomGame"
+        @import-p-g-n="handleImportPGN"
+        @export-p-g-n="handleExportPGN"
+        @copy-f-e-n="handleCopyFEN"
+        @paste-f-e-n="handlePasteFEN"
+        @setup-board="handleSetupBoard"
+        @toggle-trial-mode="toggleTrialMode"
+        @undo-move="goPrev"
+        @redo-move="goNext"
+        @toggle-analysis="toggleAnalysis"
+        @annotate-game="handleAnnotateGame"
+        @play-vs-engine="handlePlayVsEngine"
+        @tactics-trainer="handleTacticsTrainer"
+        @opening-tree="handleOpenTreeWindow"
+        @open-tree-window="handleOpenTreeWindow"
+        @opening-trainer="showOpeningTrainerModal = true"
+        @progressive-tactics="showProgressiveTacticsModal = true"
+        @mine-puzzles="showPuzzleMinerModal = true"
+        @search-header="showSearchModal = true"
+        @search-position="handleSearchPosition"
+        @toggle-flip="flipped = !flipped"
+        @change-piece-set="currentPieceSet = $event"
+        @change-theme="currentThemeId = $event"
+        @open-settings="handleOpenSettings"
+        @open-preferences="openPreferencesModal"
+        @open-database-hub="openDatabaseHubView"
+        @set-current-as-default-d-b="handleSetCurrentAsDefaultDB"
+        @open-default-d-b="handleOpenDefaultDatabase"
+        @open-clipbase="handleOpenClipbase"
+        @open-portal-panel="openPortalView"
+        @launch-portal-window="handleLaunchPortalWindow"
+        @detach-panel-screen="handleDetachPanelScreen"
+        @show-shortcuts="showShortcutsModal = true"
+        @show-about="showAboutModal = true"
+        @show-help="showHelpModal = true"
+        @open-web-docs="handleOpenWebDocs"
+        @database-maintenance="showMaintenanceModal = true"
+        @online-sync="showOnlineSyncModal = true"
+        @simulate-player="showPlayerSimulationModal = true"
+        @player-personas="showPersonaModal = true"
+        @show-crosstable="showTournamentCrosstableModal = true"
+        @eco-browser="showEcoBrowserModal = true"
+        @guess-the-move="showGuessTheMoveModal = true"
+        @database-stats="showDatabaseStatsModal = true"
+        @edit-tags="handleOpenEditTags"
+        @twic-downloader="showTwicModal = true"
+        @mega-downloader="showMegaDatabaseModal = true"
+        @engine-match="showEngineMatchModal = true"
+        @export-game="showExportGameModal = true"
+        @standardize-names="handleStandardizeNames"
+        :sound-enabled="soundEnabled"
+        :blindfold="blindfoldMode"
+        :threat-mode="threatMode"
+        :show-eval-bar="showEvalBar"
+        :zen-mode="zenMode"
+        @toggle-sound="toggleSound"
+        @toggle-blindfold="toggleBlindfold"
+        @toggle-threat-mode="toggleThreatMode"
+        @toggle-eval-bar="toggleEvalBar"
+        @chess960="showChess960Modal = true"
+        @coordinate-trainer="showCoordinateTrainerModal = true"
+        @command-palette="showCommandPalette = true"
+        @blunder-vault="showBlunderVaultModal = true"
+        @opponent-scout="showOpponentScoutModal = true"
+        @anti-persona="openAntiPersonaModal()"
+        @toggle-zen-mode="toggleZenMode"
+        @explain-move="handleExplainMove(currentPly)"
+        :current-u-i-theme="currentUITheme"
+        @change-u-i-theme="applyUITheme"
+        @toggle-dark-light="toggleDarkLight"
+        @piece-safety="showPieceSafetyModal = true"
+        @intuition-storm="showIntuitionStormModal = true"
+        @time-management="showTimeManagementModal = true"
+        @repertoire-shortener="showRepertoireShortenerModal = true"
+        @prophylaxis="showProphylaxisModal = true"
+        @show-support="showSupportModal = true"
+        @fair-play-inspector="showFairPlayModal = true"
+      />
+
+      <!-- Top Header Bar -->
+      <HeaderBar
+        v-if="!zenMode"
+        ref="headerBarRef"
+        :db-name="dbInfo?.name"
+        :default-db-name="dbRolesStatus?.defaultDbName"
+        :is-active-default-db="dbRolesStatus?.isActiveDefault"
+        :reference-db-name="dbRolesStatus?.referenceDbName"
+        :system-bases="systemBases"
+        :discovered-databases="discoveredDatabases"
+        :piece-sets="pieceSets"
+        :board-themes="boardThemes"
+        :current-piece-set="currentPieceSet"
+        :current-theme-id="currentThemeId"
+        :current-u-i-theme="currentUITheme"
+        :flipped="flipped"
+        @open-d-b="handleOpenDB"
+        @create-d-b="handleCreateDB"
+        @open-system-base="handleOpenSystemBase"
+        @open-discovered-base="handleOpenDiscoveredBase"
+        @import-p-g-n="handleImportPGN"
+        @export-p-g-n="handleExportPGN"
+        @change-piece-set="currentPieceSet = $event"
+        @change-theme="currentThemeId = $event"
+        @change-u-i-theme="applyUITheme"
+        @toggle-dark-light="toggleDarkLight"
+        @toggle-flip="flipped = !flipped"
+        @set-current-as-default-d-b="handleSetCurrentAsDefaultDB"
+        @open-database-hub="openDatabaseHubView"
+        @open-portal-panel="openPortalView"
+        @launch-portal-window="handleLaunchPortalWindow"
+        @open-preferences="openPreferencesModal"
+      />
+
+      <!-- Multi-Game Tabbed Workspace Strip -->
+      <div
+        v-if="!zenMode"
+        class="workspace-tabs-bar flex items-center justify-between gap-1.5 px-3 py-1 bg-zinc-950 border-b border-zinc-800/80 text-xs overflow-x-auto select-none"
+      >
+        <div class="flex items-center gap-1.5 overflow-x-auto">
+          <div
+            v-for="(tab, idx) in openGameTabs"
+            :key="tab.id"
+            class="group flex items-center gap-2 px-3 py-1.5 rounded-t-lg border-t border-x cursor-pointer transition-all max-w-[240px]"
+            :class="activeGameTabIdx === idx
+              ? 'bg-zinc-900 border-zinc-700 text-zinc-100 font-semibold shadow-xs'
+              : 'bg-zinc-950/60 border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50'"
+            @click="switchGameTab(idx)"
+          >
+            <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="activeGameTabIdx === idx ? 'bg-emerald-400' : 'bg-zinc-600'" />
+            <span class="truncate">{{ tab.title }}</span>
+            <button
+              v-if="openGameTabs.length > 1"
+              class="w-4 h-4 ml-1 rounded hover:bg-zinc-800 hover:text-rose-400 flex items-center justify-center text-zinc-500 opacity-60 group-hover:opacity-100 transition-all text-[11px]"
+              title="Close tab"
+              @click.stop="closeGameTab(idx)"
+            >
+              ✕
+            </button>
+          </div>
+
+          <button
+            class="px-2.5 py-1 rounded-md hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors flex items-center gap-1 text-xs cursor-pointer ml-1"
+            title="Open new game tab"
+            @click="openNewGameTab"
+          >
+            <span class="font-bold text-sm leading-none">+</span>
+            <span class="text-[11px]">New Tab</span>
+          </button>
+        </div>
+
+        <!-- Database Relationship Status Pill in Tab Strip -->
+        <div class="hidden lg:flex items-center gap-2 text-[11px] shrink-0">
+          <button
+            class="px-2 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 flex items-center gap-1.5 cursor-pointer transition-colors"
+            title="Click to view and configure how Default, Active, Reference, and Clipbase databases relate"
+            @click="openDatabaseHubView"
+          >
+            <span class="text-emerald-400 font-semibold">Active: {{ dbInfo?.name || 'None' }}</span>
+            <span v-if="dbRolesStatus?.isActiveDefault" class="text-amber-400 font-bold" title="Default Startup DB">★ Default</span>
+            <span v-if="dbRolesStatus?.useRefForTree && dbRolesStatus?.referenceDbName" class="text-sky-400 border-l border-zinc-700 pl-1.5">
+              Tree Ref: {{ dbRolesStatus.referenceDbName }}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Workspace (Split Grid) -->
+      <div
+        ref="workspaceRef"
+        class="workspace-grid flex-1 flex flex-col md:flex-row overflow-hidden p-2 gap-1 relative"
+      >
+        <!-- Left Column: Chessboard & Docked Left Panels (Resizable) -->
+        <div
+          ref="leftColRef"
+          class="left-col flex flex-col items-center justify-between gap-1.5 w-full md:w-auto shrink-0 h-full overflow-hidden"
+          :style="{ width: isMdScreen ? `${leftColWidth}px` : '100%' }"
+        >
+          <!-- Player Simulation Sparring Match Status -->
+          <div
+            v-if="activeSimulation"
+            class="w-full bg-gradient-to-r from-purple-950/80 via-zinc-900 to-purple-950/80 border border-purple-500/40 rounded-xl p-2.5 flex items-center justify-between text-xs shadow-md animate-fade-in"
+          >
+            <div class="flex items-center gap-2 min-w-0">
+              <div class="w-7 h-7 rounded-lg bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 shrink-0">
+                <Bot class="w-4 h-4" :class="{ 'animate-pulse text-purple-400': isBotThinking }" />
+              </div>
+              <div class="truncate">
+                <div class="flex items-center gap-1.5">
+                  <span class="font-bold text-zinc-100">{{ activeSimulation.playerName }}</span>
+                  <span class="px-1.5 py-0.5 rounded text-[10px] bg-purple-900/60 text-purple-200 font-mono">
+                    ~{{ activeSimulation.personality.estimatedElo || 2400 }} Elo
+                  </span>
+                  <span v-if="isBotThinking" class="text-[10px] text-amber-400 animate-pulse">Thinking...</span>
+                </div>
+                <p class="text-[11px] text-zinc-400 truncate">{{ botMoveStatus || 'Sparring match active' }}</p>
+              </div>
+            </div>
+            <button
+              class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] border border-zinc-700 hover:border-zinc-600 transition-colors shrink-0 ml-2 cursor-pointer"
+              @click="stopSimulation"
+            >
+              End Sparring
+            </button>
+          </div>
+
+          <!-- Theory Novelty Pill -->
+          <div
+            v-if="isTheoreticalNovelty"
+            class="w-full flex items-center justify-between px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 font-semibold shadow-xs"
+          >
+            <span class="flex items-center gap-1.5">
+              <Sparkles class="w-3.5 h-3.5 text-amber-400" />
+              <span>Theoretical Novelty (N)</span>
+            </span>
+            <span class="text-[10px] text-amber-400/80 font-mono">Out of Book • 0 Games</span>
+          </div>
+
+          <!-- Blunder Radar Alert Banner -->
+          <div
+            v-if="blunderRadarAlert"
+            class="w-full flex items-center gap-2 px-3 py-1.5 bg-rose-950/90 border border-rose-500/50 rounded-xl text-xs text-rose-200 font-semibold shadow-md animate-pulse"
+          >
+            <AlertTriangle class="w-4 h-4 text-rose-400 shrink-0" />
+            <span class="truncate">{{ blunderRadarAlert }}</span>
+          </div>
+
+          <!-- Interactive Chessboard -->
+          <div class="chessboard-wrapper-host flex items-center justify-center w-full shrink-0">
+            <Chessboard
+              :fen="currentFEN"
+              :legal-moves="legalMoves"
+              :piece-set="currentPieceSet"
+              :board-theme="currentTheme"
+              :flipped="flipped"
+              :last-move="lastMove"
+              :in-check="inCheck"
+              :sound-enabled="soundEnabled"
+              :blindfold="blindfoldMode"
+              :show-eval-bar="showEvalBar"
+              :eval-score="evalScore"
+              :eval-mate="evalMate"
+              :threat-squares="threatSquares"
+              :arrows="engineArrows"
+              :board-size="computedBoardSize"
+              @move="handleMove"
+            />
+          </div>
+
+          <!-- Interactive Material & Positional Imbalance Bar (Dockable / Floater / Removable) -->
+          <div
+            v-if="workspacePanels.imbalance.mode === 'docked' && workspacePanels.imbalance.dockZone === 'left'"
+            class="w-full relative group/imbalance"
+          >
+            <div class="absolute right-2 top-1.5 z-10 hidden group-hover/imbalance:flex items-center gap-1 bg-zinc-900/90 border border-zinc-700 rounded px-1 py-0.5 text-[10px]">
+              <button
+                class="text-amber-300 hover:text-amber-200 px-1 cursor-pointer"
+                title="Undock as Floating Window (Floater)"
+                @click="togglePanelFloater('imbalance')"
+              >
+                Float
+              </button>
+              <button
+                class="text-zinc-400 hover:text-rose-300 px-1 cursor-pointer"
+                title="Hide Imbalance Panel"
+                @click="setPanelMode('imbalance', 'hidden')"
+              >
+                ✕
+              </button>
+            </div>
+            <ImbalanceBar :report="imbalanceReport" />
+          </div>
+
+          <!-- Live Engine Analysis Bar (Dockable / Floater / Removable / Multi-Screen) -->
+          <div
+            v-if="workspacePanels.engine.mode === 'docked' && workspacePanels.engine.dockZone === 'left'"
+            class="w-full relative group/engine"
+          >
+            <div class="absolute right-2 top-1.5 z-10 hidden group-hover/engine:flex items-center gap-1 bg-zinc-900/90 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px]">
+              <button
+                class="text-amber-300 hover:text-amber-200 px-1 cursor-pointer"
+                title="Undock Engine into a draggable Floater window"
+                @click="togglePanelFloater('engine')"
+              >
+                Float
+              </button>
+              <button
+                class="text-purple-300 hover:text-purple-200 px-1 cursor-pointer"
+                title="Detach Engine into separate Hyprland Screen Window"
+                @click="handleDetachPanelScreen('engine')"
+              >
+                Screen ↗
+              </button>
+              <button
+                class="text-zinc-400 hover:text-rose-300 px-1 cursor-pointer"
+                title="Hide Engine Panel"
+                @click="setPanelMode('engine', 'hidden')"
+              >
+                ✕
+              </button>
+            </div>
+            <EnginePanel
+              :eval-info="evalInfo"
+              :is-analyzing="isAnalyzing"
+              :available-engines="availableEngines"
+              :discovered-engines="discoveredEngines"
+              :selected-engine="selectedEngine"
+              :multi-pv="engineMultiPv"
+              :tablebase-result="tablebaseResult"
+              @toggle-analysis="toggleAnalysis"
+              @select-engine="handleSelectEngine"
+              @change-multi-p-v="handleChangeMultiPV"
+              @change-threads="handleChangeThreads"
+              @change-hash="handleChangeHash"
+              @preview-move="handlePreviewCandidateMove"
+            />
+          </div>
+        </div>
+
+        <!-- Horizontal Drag Splitter (between Left and Right Panes) -->
+        <div
+          class="hidden md:flex items-center justify-center w-2 cursor-col-resize hover:bg-emerald-500/20 active:bg-emerald-500/40 rounded transition-colors group select-none relative z-10 shrink-0"
+          :class="{ 'bg-emerald-500/30': isResizingH }"
+          title="Drag to resize panes (Double-click to reset)"
+          @mousedown="startHorizontalResize"
+          @dblclick="resetHorizontalResize"
+        >
+          <div
+            class="w-1 h-8 rounded-full bg-zinc-700 group-hover:bg-emerald-400 group-active:bg-emerald-400 transition-colors"
+            :class="{ 'bg-emerald-400': isResizingH }"
+          />
+        </div>
+
+        <!-- Right Column: Customizable Docked Tabbed Panels -->
+        <div class="right-col flex-1 min-w-0 flex flex-col overflow-hidden bg-zinc-900 border border-zinc-800 rounded-xl shadow-lg">
+          <!-- Tabs Header + Panel Float / Detach / Customize Controls -->
+          <div class="tabs-header flex items-center justify-between gap-2 p-2 bg-zinc-950 border-b border-zinc-800 overflow-x-auto">
+            <div class="flex items-center gap-1 overflow-x-auto">
+              <button
+                v-if="workspacePanels.notation.mode === 'docked'"
+                class="px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap"
+                :class="activeTab === 'notation'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'"
+                @click="activeTab = 'notation'"
+              >
+                Notation & Analysis
+              </button>
+              <button
+                v-if="workspacePanels.tree.mode === 'docked'"
+                class="px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap"
+                :class="activeTab === 'tree'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'"
+                @click="activeTab = 'tree'"
+              >
+                Opening Tree
+              </button>
+              <button
+                v-if="workspacePanels['db-roles'].mode === 'docked'"
+                class="px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1"
+                :class="activeTab === 'db-roles'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'"
+                @click="activeTab = 'db-roles'"
+              >
+                <span>Databases & Roles</span>
+                <span v-if="dbRolesStatus?.isActiveDefault" class="text-amber-300 text-[10px]">★</span>
+              </button>
+              <button
+                v-if="workspacePanels.portal.mode === 'docked'"
+                class="px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1"
+                :class="activeTab === 'portal'
+                  ? 'bg-sky-600 text-white shadow-sm'
+                  : 'text-sky-400/90 hover:text-sky-200 hover:bg-zinc-800'"
+                @click="activeTab = 'portal'"
+              >
+                <span>Lichess / Chess.com</span>
+              </button>
+              <button
+                v-if="workspacePanels.info.mode === 'docked'"
+                class="px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap"
+                :class="activeTab === 'info'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'"
+                @click="activeTab = 'info'"
+              >
+                Game Info
+              </button>
+            </div>
+
+            <!-- Active Tab Panel Controls (Float / Detach to Hyprland Screen / Hide / Bottom Drawer Toggle) -->
+            <div class="flex items-center gap-1 shrink-0">
+              <button
+                class="text-[11px] text-amber-300 hover:text-amber-200 px-2 py-1 rounded bg-amber-950/40 hover:bg-amber-900/50 border border-amber-500/30 transition-colors cursor-pointer"
+                :title="`Undock '${activeTab}' into a draggable Floating Window (Floater)`"
+                @click="togglePanelFloater(activeTab as PanelId)"
+              >
+                Float ❐
+              </button>
+              <button
+                class="text-[11px] text-purple-300 hover:text-purple-200 px-2 py-1 rounded bg-purple-950/40 hover:bg-purple-900/50 border border-purple-500/30 transition-colors cursor-pointer"
+                :title="`Detach '${activeTab}' into a native OS window for another Hyprland monitor`"
+                @click="handleDetachPanelScreen(activeTab as PanelId)"
+              >
+                Screen ↗
+              </button>
+              <button
+                class="text-[11px] text-zinc-400 hover:text-rose-300 px-1.5 py-1 rounded bg-zinc-800/80 hover:bg-zinc-800 transition-colors cursor-pointer"
+                :title="`Hide '${activeTab}' panel (restore anytime from Windows menu)`"
+                @click="setPanelMode(activeTab as PanelId, 'hidden')"
+              >
+                ✕
+              </button>
+              <button
+                class="text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded bg-zinc-800/80 hover:bg-zinc-800 transition-colors cursor-pointer ml-1"
+                @click="bottomDrawerOpen = !bottomDrawerOpen"
+              >
+                {{ bottomDrawerOpen ? 'Hide DB ▼' : 'Show DB ▲' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Tab Content -->
+          <div class="tab-content flex-1 overflow-hidden p-2">
+            <!-- 1. Notation & Evaluation Curve View -->
+            <div v-show="activeTab === 'notation'" class="h-full flex flex-col gap-2">
+              <EvaluationGraph
+                :analysis="gameAnalysis"
+                :current-ply="currentPly"
+                :is-analyzing-game="isAnalyzingGame"
+                :progress="annotationProgress"
+                :moves="flatMoves"
+                @jump="jumpToPly"
+                @annotate="handleAnnotateGame"
+              />
+
+              <div class="flex-1 overflow-hidden">
+                <MoveNotation
+                  :moves="flatMoves"
+                  :current-ply="currentPly"
+                  :is-playing="isPlaying"
+                  :result="gameTags.Result || '*'"
+                  @jump="jumpToPly"
+                  @first="goFirst"
+                  @prev="goPrev"
+                  @next="goNext"
+                  @last="goLast"
+                  @toggle-play="toggleAutoplay"
+                  @copy-p-g-n="handleExportPGN"
+                  @set-n-a-g="handleSetNAG"
+                  @clear-n-a-gs="handleClearNAGs"
+                  @set-comment="handleSetComment"
+                  @promote-variation="handlePromoteVariation"
+                  @delete-variation="handleDeleteVariation"
+                  @explain-move="handleExplainMove"
+                />
+              </div>
+            </div>
+
+            <!-- 2. Opening Tree View -->
+            <div v-show="activeTab === 'tree'" class="h-full">
+              <OpeningTree
+                :fen="currentFEN"
+                :tree-data="treeData"
+                :loading="treeLoading"
+                :db-open="!!dbInfo || !!dbRolesStatus?.referenceDbPath"
+                :db-name="dbRolesStatus?.useRefForTree && dbRolesStatus?.referenceDbName ? `${dbRolesStatus.referenceDbName} (Reference)` : dbInfo?.name"
+                :eco-code="gameTags.ECO"
+                :opening-name="gameTags.Opening || gameTags.Event"
+                :discovered-databases="discoveredDatabases"
+                @play-move="handleMove"
+                @refresh="fetchOpeningTree(currentFEN)"
+                @open-db="handleOpenDB"
+                @open-discovered-db="handleOpenDiscoveredBase"
+                @go-first="goFirst"
+                @go-prev="goPrev"
+                @pop-out-window="handleOpenTreeWindow"
+              />
+            </div>
+
+            <!-- 3. Databases & Roles Hub View (Default / Active / Reference / Clipbase) -->
+            <div v-show="activeTab === 'db-roles'" class="h-full overflow-hidden">
+              <DatabaseHubPanel
+                :roles-status="dbRolesStatus"
+                :discovered-databases="discoveredDatabases"
+                @open-d-b="handleOpenDB"
+                @create-d-b="handleCreateDB"
+                @open-discovered-base="handleOpenDiscoveredBase"
+                @set-default-d-b="handleSetDefaultDatabase"
+                @set-reference-d-b="handleSetReferenceDatabase"
+                @open-default-d-b="handleOpenDefaultDatabase"
+                @open-clipbase="handleOpenClipbase"
+                @open-mega-downloader="showMegaDatabaseModal = true"
+                @open-online-sync="showOnlineSyncModal = true"
+                @open-maintenance="showMaintenanceModal = true"
+              />
+            </div>
+
+            <!-- 4. Lichess.org & Chess.com Live Portal View -->
+            <div v-show="activeTab === 'portal'" class="h-full overflow-hidden">
+              <LivePortalPanel
+                :current-fen="currentFEN"
+                :default-window-mode="appPreferences.portalWindowMode"
+                :lichess-username="appPreferences.lichessUsername"
+                :chess-com-username="appPreferences.chessComUsername"
+                @open-online-sync="showOnlineSyncModal = true"
+                @open-fair-play="showFairPlayModal = true"
+                @detach-portal-screen="handleDetachPanelScreen('portal')"
+                @float-portal="togglePanelFloater('portal')"
+              />
+            </div>
+
+            <!-- 5. Game Info & Header View -->
+            <div v-show="activeTab === 'info'" class="h-full overflow-y-auto p-4 space-y-4">
+              <div class="grid grid-cols-2 gap-3 text-xs font-mono">
+                <div class="p-3 bg-zinc-950 rounded-lg border border-zinc-800">
+                  <span class="text-zinc-500 uppercase font-semibold">White Player</span>
+                  <p class="text-base font-bold text-zinc-100 mt-1">{{ gameTags.White || '?' }}</p>
+                  <span v-if="gameTags.WhiteElo" class="text-xs text-emerald-400">Elo: {{ gameTags.WhiteElo }}</span>
+                </div>
+                <div class="p-3 bg-zinc-950 rounded-lg border border-zinc-800">
+                  <span class="text-zinc-500 uppercase font-semibold">Black Player</span>
+                  <p class="text-base font-bold text-zinc-100 mt-1">{{ gameTags.Black || '?' }}</p>
+                  <span v-if="gameTags.BlackElo" class="text-xs text-emerald-400">Elo: {{ gameTags.BlackElo }}</span>
+                </div>
+              </div>
+
+              <div class="p-3 bg-zinc-950 rounded-lg border border-zinc-800 space-y-2 text-xs">
+                <div class="flex justify-between">
+                  <span class="text-zinc-500 font-semibold">Event:</span>
+                  <span class="text-zinc-200">{{ gameTags.Event || '?' }}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-zinc-500 font-semibold">Site:</span>
+                  <span class="text-zinc-200">{{ gameTags.Site || '?' }}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-zinc-500 font-semibold">Date:</span>
+                  <span class="text-zinc-200">{{ gameTags.Date || '????.??.??' }}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-zinc-500 font-semibold">Result:</span>
+                  <span class="text-emerald-400 font-bold">{{ gameTags.Result || '*' }}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-zinc-500 font-semibold">ECO:</span>
+                  <span class="text-zinc-200 font-mono">{{ gameTags.ECO || 'A00' }}</span>
+                </div>
+                <div v-if="gameTags.Annotator" class="flex justify-between">
+                  <span class="text-zinc-500 font-semibold">Annotator:</span>
+                  <span class="text-amber-400 font-medium">{{ gameTags.Annotator }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vertical Drag Splitter (between Workspace and Database Drawer) -->
+      <div
+        v-if="!zenMode && bottomDrawerOpen && workspacePanels.games.mode === 'docked'"
+        class="flex items-center justify-center h-2 cursor-row-resize hover:bg-emerald-500/20 active:bg-emerald-500/40 transition-colors group select-none relative z-10 shrink-0"
+        :class="{ 'bg-emerald-500/30': isResizingV }"
+        title="Drag to resize database drawer (Double-click to reset)"
+        @mousedown="startVerticalResize"
+        @dblclick="resetVerticalResize"
+      >
+        <div
+          class="h-1 w-12 rounded-full bg-zinc-700 group-hover:bg-emerald-400 group-active:bg-emerald-400 transition-colors"
+          :class="{ 'bg-emerald-400': isResizingV }"
+        />
+      </div>
+
+      <!-- Bottom Panel: Database Games Browser (Collapsible, Resizable, Floatable & Multi-Screen) -->
+      <div
+        v-if="!zenMode && bottomDrawerOpen && workspacePanels.games.mode === 'docked'"
+        class="bottom-drawer shrink-0 px-2 pb-2 transition-all duration-75 overflow-hidden relative group/gamesdrawer"
+        :style="{ height: `${bottomDrawerHeight}px` }"
+      >
+        <div class="absolute right-4 top-2 z-20 hidden group-hover/gamesdrawer:flex items-center gap-1 bg-zinc-900/95 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px]">
+          <button
+            class="text-amber-300 hover:text-amber-200 px-1 cursor-pointer"
+            title="Undock Database Games List as a Floater Window"
+            @click="togglePanelFloater('games')"
+          >
+            Float ❐
+          </button>
+          <button
+            class="text-purple-300 hover:text-purple-200 px-1 cursor-pointer"
+            title="Detach Database Games List into separate Hyprland Screen Window"
+            @click="handleDetachPanelScreen('games')"
+          >
+            Screen ↗
+          </button>
+        </div>
+        <GameBrowser
+          :games="gamesList"
+          :total-games="totalGames"
+          :current-page="currentPage"
+          :page-size="pageSize"
+          :active-game-id="activeGameId"
+          :db-name="dbInfo?.name"
+          :active-criteria="searchFilter"
+          @load-game="handleLoadGame"
+          @page-change="handlePageChange"
+          @search="handleSearch"
+          @open-advanced-search="showSearchModal = true"
+          @new-game="handleNewGame"
+          @save-game="handleSaveCurrentGame"
+          @delete-game="handleDeleteGame"
+        />
+      </div>
+
+      <!-- ===================================================================== -->
+      <!-- FLOATING PANELS ("FLOATERS") LAYER                                    -->
+      <!-- ===================================================================== -->
+      <FloatingPanel
+        v-for="fp in floatingPanels"
+        :key="fp.id"
+        :panel="fp"
+        @focus="bringFloaterToFront"
+        @update-rect="updateFloaterRect"
+        @dock="(id, zone) => setPanelDockZone(id, zone || fp.defaultDockZone)"
+        @detach-screen="handleDetachPanelScreen"
+        @hide="(id) => setPanelMode(id, 'hidden')"
+      >
+        <div v-if="fp.id === 'notation'" class="h-full flex flex-col gap-2 p-2">
+          <EvaluationGraph
+            :analysis="gameAnalysis"
+            :current-ply="currentPly"
+            :is-analyzing-game="isAnalyzingGame"
+            :progress="annotationProgress"
+            :moves="flatMoves"
+            @jump="jumpToPly"
+            @annotate="handleAnnotateGame"
+          />
+          <div class="flex-1 overflow-hidden">
+            <MoveNotation
+              :moves="flatMoves"
+              :current-ply="currentPly"
+              :is-playing="isPlaying"
+              :result="gameTags.Result || '*'"
+              @jump="jumpToPly"
+              @first="goFirst"
+              @prev="goPrev"
+              @next="goNext"
+              @last="goLast"
+              @toggle-play="toggleAutoplay"
+              @copy-p-g-n="handleExportPGN"
+              @set-n-a-g="handleSetNAG"
+              @clear-n-a-gs="handleClearNAGs"
+              @set-comment="handleSetComment"
+              @promote-variation="handlePromoteVariation"
+              @delete-variation="handleDeleteVariation"
+              @explain-move="handleExplainMove"
+            />
+          </div>
+        </div>
+
+        <div v-else-if="fp.id === 'tree'" class="h-full p-2">
+          <OpeningTree
+            :fen="currentFEN"
+            :tree-data="treeData"
+            :loading="treeLoading"
+            :db-open="!!dbInfo || !!dbRolesStatus?.referenceDbPath"
+            :db-name="dbRolesStatus?.useRefForTree && dbRolesStatus?.referenceDbName ? `${dbRolesStatus.referenceDbName} (Ref)` : dbInfo?.name"
+            :eco-code="gameTags.ECO"
+            :opening-name="gameTags.Opening || gameTags.Event"
+            :discovered-databases="discoveredDatabases"
+            @play-move="handleMove"
+            @refresh="fetchOpeningTree(currentFEN)"
+            @open-db="handleOpenDB"
+            @open-discovered-db="handleOpenDiscoveredBase"
+            @go-first="goFirst"
+            @go-prev="goPrev"
+            @pop-out-window="handleOpenTreeWindow"
+          />
+        </div>
+
+        <div v-else-if="fp.id === 'db-roles'" class="h-full p-2">
+          <DatabaseHubPanel
+            :roles-status="dbRolesStatus"
+            :discovered-databases="discoveredDatabases"
+            @open-d-b="handleOpenDB"
+            @create-d-b="handleCreateDB"
+            @open-discovered-base="handleOpenDiscoveredBase"
+            @set-default-d-b="handleSetDefaultDatabase"
+            @set-reference-d-b="handleSetReferenceDatabase"
+            @open-default-d-b="handleOpenDefaultDatabase"
+            @open-clipbase="handleOpenClipbase"
+            @open-mega-downloader="showMegaDatabaseModal = true"
+            @open-online-sync="showOnlineSyncModal = true"
+            @open-maintenance="showMaintenanceModal = true"
+          />
+        </div>
+
+        <div v-else-if="fp.id === 'portal'" class="h-full p-2">
+          <LivePortalPanel
+            :current-fen="currentFEN"
+            :default-window-mode="appPreferences.portalWindowMode"
+            :lichess-username="appPreferences.lichessUsername"
+            :chess-com-username="appPreferences.chessComUsername"
+            @open-online-sync="showOnlineSyncModal = true"
+            @open-fair-play="showFairPlayModal = true"
+            @detach-portal-screen="handleDetachPanelScreen('portal')"
+            @float-portal="togglePanelFloater('portal')"
+          />
+        </div>
+
+        <div v-else-if="fp.id === 'engine'" class="h-full p-2">
           <EnginePanel
             :eval-info="evalInfo"
             :is-analyzing="isAnalyzing"
@@ -2722,209 +3739,77 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
             @preview-move="handlePreviewCandidateMove"
           />
         </div>
-      </div>
 
-      <!-- Horizontal Drag Splitter (between Left and Right Panes) -->
-      <div
-        class="hidden md:flex items-center justify-center w-2 cursor-col-resize hover:bg-emerald-500/20 active:bg-emerald-500/40 rounded transition-colors group select-none relative z-10 shrink-0"
-        :class="{ 'bg-emerald-500/30': isResizingH }"
-        title="Drag to resize panes (Double-click to reset)"
-        @mousedown="startHorizontalResize"
-        @dblclick="resetHorizontalResize"
-      >
-        <div
-          class="w-1 h-8 rounded-full bg-zinc-700 group-hover:bg-emerald-400 group-active:bg-emerald-400 transition-colors"
-          :class="{ 'bg-emerald-400': isResizingH }"
-        />
-      </div>
-
-      <!-- Right Column: Tabbed Panels (Moves, Opening Tree, Game Info) -->
-      <div class="right-col flex-1 min-w-0 flex flex-col overflow-hidden bg-zinc-900 border border-zinc-800 rounded-xl shadow-lg">
-        <!-- Tabs Header -->
-        <div class="tabs-header flex items-center justify-between p-2 bg-zinc-950 border-b border-zinc-800">
-          <div class="flex items-center gap-1">
-            <button
-              class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer"
-              :class="activeTab === 'notation'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'"
-              @click="activeTab = 'notation'"
-            >
-              Notation & Analysis
-            </button>
-            <button
-              class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer"
-              :class="activeTab === 'tree'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'"
-              @click="activeTab = 'tree'"
-            >
-              Opening Tree
-            </button>
-            <button
-              class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer"
-              :class="activeTab === 'info'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'"
-              @click="activeTab = 'info'"
-            >
-              Game Info
-            </button>
-          </div>
-
-          <!-- Bottom Drawer Toggle -->
-          <button
-            class="text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded bg-zinc-800/80 hover:bg-zinc-800 transition-colors cursor-pointer"
-            @click="bottomDrawerOpen = !bottomDrawerOpen"
-          >
-            {{ bottomDrawerOpen ? 'Hide Database ▼' : 'Show Database ▲' }}
-          </button>
+        <div v-else-if="fp.id === 'imbalance'" class="h-full p-2">
+          <ImbalanceBar :report="imbalanceReport" />
         </div>
 
-        <!-- Tab Content -->
-        <div class="tab-content flex-1 overflow-hidden p-2">
-          <!-- 1. Notation & Evaluation Curve View -->
-          <div v-show="activeTab === 'notation'" class="h-full flex flex-col gap-2">
-            <!-- Evaluation Graph with Clock & Time Trouble Sparkline -->
-            <EvaluationGraph
-              :analysis="gameAnalysis"
-              :current-ply="currentPly"
-              :is-analyzing-game="isAnalyzingGame"
-              :progress="annotationProgress"
-              :moves="flatMoves"
-              @jump="jumpToPly"
-              @annotate="handleAnnotateGame"
-            />
-
-            <!-- Move Notation List -->
-            <div class="flex-1 overflow-hidden">
-              <MoveNotation
-                :moves="flatMoves"
-                :current-ply="currentPly"
-                :is-playing="isPlaying"
-                :result="gameTags.Result || '*'"
-                @jump="jumpToPly"
-                @first="goFirst"
-                @prev="goPrev"
-                @next="goNext"
-                @last="goLast"
-                @toggle-play="toggleAutoplay"
-                @copy-p-g-n="handleExportPGN"
-                @set-n-a-g="handleSetNAG"
-                @clear-n-a-gs="handleClearNAGs"
-                @set-comment="handleSetComment"
-                @promote-variation="handlePromoteVariation"
-                @delete-variation="handleDeleteVariation"
-                @explain-move="handleExplainMove"
-              />
-            </div>
-          </div>
-
-          <!-- 2. Opening Tree View -->
-          <div v-show="activeTab === 'tree'" class="h-full">
-            <OpeningTree
-              :fen="currentFEN"
-              :tree-data="treeData"
-              :loading="treeLoading"
-              :db-open="!!dbInfo"
-              :db-name="dbInfo?.name"
-              :eco-code="gameTags.ECO"
-              :opening-name="gameTags.Opening || gameTags.Event"
-              :discovered-databases="discoveredDatabases"
-              @play-move="handleMove"
-              @refresh="fetchOpeningTree(currentFEN)"
-              @open-db="handleOpenDB"
-              @open-discovered-db="handleOpenDiscoveredBase"
-              @go-first="goFirst"
-              @go-prev="goPrev"
-              @pop-out-window="handleOpenTreeWindow"
-            />
-          </div>
-
-          <!-- 3. Game Info & Header View -->
-          <div v-show="activeTab === 'info'" class="h-full overflow-y-auto p-4 space-y-4">
-            <div class="grid grid-cols-2 gap-3 text-xs font-mono">
-              <div class="p-3 bg-zinc-950 rounded-lg border border-zinc-800">
-                <span class="text-zinc-500 uppercase font-semibold">White Player</span>
-                <p class="text-base font-bold text-zinc-100 mt-1">{{ gameTags.White || '?' }}</p>
-                <span v-if="gameTags.WhiteElo" class="text-xs text-emerald-400">Elo: {{ gameTags.WhiteElo }}</span>
-              </div>
-              <div class="p-3 bg-zinc-950 rounded-lg border border-zinc-800">
-                <span class="text-zinc-500 uppercase font-semibold">Black Player</span>
-                <p class="text-base font-bold text-zinc-100 mt-1">{{ gameTags.Black || '?' }}</p>
-                <span v-if="gameTags.BlackElo" class="text-xs text-emerald-400">Elo: {{ gameTags.BlackElo }}</span>
-              </div>
-            </div>
-
-            <div class="p-3 bg-zinc-950 rounded-lg border border-zinc-800 space-y-2 text-xs">
-              <div class="flex justify-between">
-                <span class="text-zinc-500 font-semibold">Event:</span>
-                <span class="text-zinc-200">{{ gameTags.Event || '?' }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-zinc-500 font-semibold">Site:</span>
-                <span class="text-zinc-200">{{ gameTags.Site || '?' }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-zinc-500 font-semibold">Date:</span>
-                <span class="text-zinc-200">{{ gameTags.Date || '????.??.??' }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-zinc-500 font-semibold">Result:</span>
-                <span class="text-emerald-400 font-bold">{{ gameTags.Result || '*' }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-zinc-500 font-semibold">ECO:</span>
-                <span class="text-zinc-200 font-mono">{{ gameTags.ECO || 'A00' }}</span>
-              </div>
-              <div v-if="gameTags.Annotator" class="flex justify-between">
-                <span class="text-zinc-500 font-semibold">Annotator:</span>
-                <span class="text-amber-400 font-medium">{{ gameTags.Annotator }}</span>
-              </div>
-            </div>
-          </div>
+        <div v-else-if="fp.id === 'games'" class="h-full p-2">
+          <GameBrowser
+            :games="gamesList"
+            :total-games="totalGames"
+            :current-page="currentPage"
+            :page-size="pageSize"
+            :active-game-id="activeGameId"
+            :db-name="dbInfo?.name"
+            :active-criteria="searchFilter"
+            @load-game="handleLoadGame"
+            @page-change="handlePageChange"
+            @search="handleSearch"
+            @open-advanced-search="showSearchModal = true"
+            @new-game="handleNewGame"
+            @save-game="handleSaveCurrentGame"
+            @delete-game="handleDeleteGame"
+          />
         </div>
-      </div>
-    </div>
 
-    <!-- Vertical Drag Splitter (between Workspace and Database Drawer) -->
-    <div
-      v-if="!zenMode && bottomDrawerOpen"
-      class="flex items-center justify-center h-2 cursor-row-resize hover:bg-emerald-500/20 active:bg-emerald-500/40 transition-colors group select-none relative z-10 shrink-0"
-      :class="{ 'bg-emerald-500/30': isResizingV }"
-      title="Drag to resize database drawer (Double-click to reset)"
-      @mousedown="startVerticalResize"
-      @dblclick="resetVerticalResize"
-    >
-      <div
-        class="h-1 w-12 rounded-full bg-zinc-700 group-hover:bg-emerald-400 group-active:bg-emerald-400 transition-colors"
-        :class="{ 'bg-emerald-400': isResizingV }"
-      />
-    </div>
+        <div v-else-if="fp.id === 'info'" class="h-full overflow-y-auto p-3 space-y-2 text-xs">
+          <div class="font-bold text-zinc-100">{{ gameTags.White || '?' }} vs {{ gameTags.Black || '?' }}</div>
+          <div class="text-zinc-400">{{ gameTags.Event || '?' }} ({{ gameTags.Date || '?' }}) • {{ gameTags.Result || '*' }}</div>
+        </div>
+      </FloatingPanel>
+    </template>
 
-    <!-- Bottom Panel: Database Games Browser (Collapsible & Resizable) -->
-    <div
-      v-if="!zenMode && bottomDrawerOpen"
-      class="bottom-drawer shrink-0 px-2 pb-2 transition-all duration-75 overflow-hidden"
-      :style="{ height: `${bottomDrawerHeight}px` }"
-    >
-      <GameBrowser
-        :games="gamesList"
-        :total-games="totalGames"
-        :current-page="currentPage"
-        :page-size="pageSize"
-        :active-game-id="activeGameId"
-        :db-name="dbInfo?.name"
-        :active-criteria="searchFilter"
-        @load-game="handleLoadGame"
-        @page-change="handlePageChange"
-        @search="handleSearch"
-        @open-advanced-search="showSearchModal = true"
-        @new-game="handleNewGame"
-        @save-game="handleSaveCurrentGame"
-        @delete-game="handleDeleteGame"
-      />
-    </div>
+    <!-- ===================================================================== -->
+    <!-- PREFERENCES & OPTIONS DOCUMENT MODAL (Ctrl+,)                         -->
+    <!-- ===================================================================== -->
+    <PreferencesModal
+      v-if="showPreferencesModal"
+      :initial-section="preferencesSection"
+      :preferences="appPreferences"
+      :roles-status="dbRolesStatus"
+      :discovered-databases="discoveredDatabases"
+      :piece-sets="pieceSets"
+      :board-themes="boardThemes"
+      :discovered-engines="discoveredEngines"
+      :current-piece-set="currentPieceSet"
+      :current-theme-id="currentThemeId"
+      :current-u-i-theme="currentUITheme"
+      :sound-enabled="soundEnabled"
+      :show-eval-bar="showEvalBar"
+      :threat-mode="threatMode"
+      :blindfold="blindfoldMode"
+      :left-col-width="leftColWidth"
+      :bottom-drawer-height="bottomDrawerHeight"
+      @close="showPreferencesModal = false"
+      @save-preferences="handleSaveAppPreferences"
+      @set-default-d-b="handleSetDefaultDatabase"
+      @set-reference-d-b="handleSetReferenceDatabase"
+      @open-default-d-b="handleOpenDefaultDatabase"
+      @open-clipbase="handleOpenClipbase"
+      @open-discovered-base="handleOpenDiscoveredBase"
+      @change-piece-set="currentPieceSet = $event"
+      @change-theme="currentThemeId = $event"
+      @change-u-i-theme="applyUITheme"
+      @toggle-sound="toggleSound"
+      @toggle-eval-bar="toggleEvalBar"
+      @toggle-threat-mode="toggleThreatMode"
+      @toggle-blindfold="toggleBlindfold"
+      @update-left-width="(w: number) => { leftColWidth = w }"
+      @update-bottom-height="(h: number) => { bottomDrawerHeight = h }"
+      @detach-panel-screen="handleDetachPanelScreen"
+      @launch-portal-window="handleLaunchPortalWindow"
+    />
 
     <!-- Setup Board / FEN Editor Modal (Ctrl+B) -->
     <BoardSetupModal
@@ -2963,8 +3848,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       :fen="currentFEN"
       :tree-data="treeData"
       :loading="treeLoading"
-      :db-open="!!dbInfo"
-      :db-name="dbInfo?.name"
+      :db-open="!!dbInfo || !!dbRolesStatus?.referenceDbPath"
+      :db-name="dbRolesStatus?.useRefForTree && dbRolesStatus?.referenceDbName ? `${dbRolesStatus.referenceDbName} (Ref)` : dbInfo?.name"
       :eco-code="gameTags.ECO"
       :opening-name="gameTags.Opening || gameTags.Event"
       :discovered-databases="discoveredDatabases"
@@ -3186,7 +4071,6 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       v-if="showCoordinateTrainerModal"
       @close="showCoordinateTrainerModal = false"
     />
-
 
     <!-- Import PGN Modal -->
     <div

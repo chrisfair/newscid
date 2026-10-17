@@ -91,6 +91,7 @@ type App struct {
 	listenerMu       sync.RWMutex
 	eventListener    EventListener
 	db               *scid.Database
+	refDB            *scid.Database
 	eco              *eco.Classifier
 	driver           *sciddriver.Driver
 	engine           *engine.Engine
@@ -165,6 +166,9 @@ func (a *App) shutdown(ctx context.Context) {
 	}
 	if a.db != nil && a.db.IsOpen {
 		_ = a.db.Close()
+	}
+	if a.refDB != nil && a.refDB.IsOpen {
+		_ = a.refDB.Close()
 	}
 }
 
@@ -639,12 +643,24 @@ func (a *App) ExportPGN(game *chess.Game) (string, error) {
 }
 
 func (a *App) GetOpeningTree(fen string) (*tree.TreeResult, error) {
+	prefs, _ := a.GetAppPreferences()
+	if prefs != nil && prefs.ReferenceDatabasePath != "" && prefs.UseReferenceDBForTree {
+		_ = a.openReferenceDatabaseInternal(prefs.ReferenceDatabasePath)
+	}
+
 	a.mu.RLock()
 	db := a.db
+	refDB := a.refDB
 	a.mu.RUnlock()
 
 	var res *tree.TreeResult
 	var err error
+	if prefs != nil && prefs.UseReferenceDBForTree && refDB != nil && refDB.IsOpen {
+		res, _ = tree.BuildTreeFromDatabase(refDB, fen, 1000)
+		if res != nil && len(res.Moves) > 0 {
+			return res, nil
+		}
+	}
 	if db != nil && db.IsOpen {
 		res, err = tree.BuildTreeFromDatabase(db, fen, 1000)
 		if err != nil {
