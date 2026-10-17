@@ -25,11 +25,12 @@ type SideEvaluation struct {
 
 // Report holds the comparative positional and material imbalance between White and Black.
 type Report struct {
-	FEN           string         `json:"fen"`
-	White         SideEvaluation `json:"white"`
-	Black         SideEvaluation `json:"black"`
-	MaterialDelta int            `json:"materialDelta"` // White - Black (in pawns: Q=9, R=5, B=3, N=3, P=1)
-	PositionalSummary string     `json:"positionalSummary"`
+	FEN               string         `json:"fen"`
+	White             SideEvaluation `json:"white"`
+	Black             SideEvaluation `json:"black"`
+	MaterialDelta     int            `json:"materialDelta"`     // White - Black (in pawns: Q=9, R=5, B=3, N=3, P=1)
+	EstimatedEvalCp   int            `json:"estimatedEvalCp"`   // White - Black centipawn estimate combining material & positional factors
+	PositionalSummary string         `json:"positionalSummary"`
 }
 
 // AnalyzeBoard computes the imbalance report for a given chess board.
@@ -42,7 +43,7 @@ func AnalyzeBoard(board *chess.Board) *Report {
 	bEval := analyzeSide(board, chess.Black)
 
 	delta := wEval.MaterialPoints - bEval.MaterialPoints
-
+	estCp := computeEstimatedEvalCp(wEval, bEval, delta)
 	summary := generateSummary(wEval, bEval, delta)
 
 	return &Report{
@@ -50,6 +51,7 @@ func AnalyzeBoard(board *chess.Board) *Report {
 		White:             wEval,
 		Black:             bEval,
 		MaterialDelta:     delta,
+		EstimatedEvalCp:   estCp,
 		PositionalSummary: summary,
 	}
 }
@@ -291,11 +293,30 @@ func analyzeOpenFiles(board *chess.Board, color chess.Color) int {
 	return filesControlled
 }
 
+func computeEstimatedEvalCp(w, b SideEvaluation, delta int) int {
+	cp := delta * 100
+	if w.HasBishopPair && !b.HasBishopPair {
+		cp += 35
+	} else if b.HasBishopPair && !w.HasBishopPair {
+		cp -= 35
+	}
+	cp += (w.PawnStructure.PassedPawns - b.PawnStructure.PassedPawns) * 25
+	cp -= (w.PawnStructure.IsolatedPawns - b.PawnStructure.IsolatedPawns) * 12
+	cp -= (w.PawnStructure.DoubledPawns - b.PawnStructure.DoubledPawns) * 12
+	cp += (w.KingSafety - b.KingSafety) / 2
+	cp += (w.ControlledTerritory - b.ControlledTerritory) * 3
+	return cp
+}
+
 func generateSummary(w, b SideEvaluation, delta int) string {
 	if delta > 2 {
 		return "White holds a decisive material advantage."
 	} else if delta < -2 {
 		return "Black holds a decisive material advantage."
+	} else if delta > 0 {
+		return "White holds a material advantage."
+	} else if delta < 0 {
+		return "Black holds a material advantage."
 	}
 
 	if w.HasBishopPair && !b.HasBishopPair {
@@ -316,8 +337,5 @@ func generateSummary(w, b SideEvaluation, delta int) string {
 		return "Black enjoys significantly greater king shelter safety."
 	}
 
-	if delta == 0 {
-		return "Material is equal; dynamic play revolves around space and activity."
-	}
-	return "Slight material and positional tension balance."
+	return "Material is equal; dynamic play revolves around space and activity."
 }

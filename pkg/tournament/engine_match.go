@@ -381,8 +381,8 @@ func (r *EngineMatchRunner) playSingleGame(
 			activePlayer = blackPlayer
 		}
 
-		// 4. Request move from active engine
-		moveUCI, evalInfo, err := activePlayer.SearchMove(ctx, board.FEN(), res.MovesUCI, r.Config.TimeControlMs)
+		// 4. Request move from active engine (board.FEN() already includes all moves played so far)
+		moveUCI, evalInfo, err := activePlayer.SearchMove(ctx, board.FEN(), nil, r.Config.TimeControlMs)
 		if err != nil {
 			res.Termination = fmt.Sprintf("engine error: %v", err)
 			if board.Turn == chess.White {
@@ -432,12 +432,9 @@ func (r *EngineMatchRunner) playSingleGame(
 			break
 		}
 
-		// 7. Continuous Eval Adjudication
+		// 7. Continuous Eval Adjudication (evalInfo.ScoreCp is already normalized to White's perspective)
 		if r.Config.AdjudicateEvalCp > 0 && evalInfo.Depth >= 6 {
 			score := evalInfo.ScoreCp
-			if board.Turn == chess.White { // Black just moved; negate to convert to White perspective
-				score = -score
-			}
 			if score >= r.Config.AdjudicateEvalCp {
 				if lastEvalSide == 1 {
 					consecutiveEvalCount++

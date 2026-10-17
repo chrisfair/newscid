@@ -143,14 +143,20 @@ func mineGame(g *chess.Game, eng *engine.Engine, filter MiningFilter) []MinedPuz
 
 		// If engine is available and game has tactical blunders/punishments
 		if eng != nil && ply > 6 && !filter.OnlyCheckmate {
-			// Check if current position has a decisive tactical move
+			// Check if current position has a decisive tactical move for the side to move
 			bestMove, eval, err := eng.SearchBestMove(fenBefore, nil, 80)
-			if err == nil && (math.Abs(float64(eval.ScoreCp)) >= 300 || eval.MateIn != 0) {
+			moverScoreCp := eval.ScoreCp
+			moverMateIn := eval.MateIn
+			if !isWhite {
+				moverScoreCp = -moverScoreCp
+				moverMateIn = -moverMateIn
+			}
+			if err == nil && (moverScoreCp >= 300 || moverMateIn > 0) {
 				// Significant advantage detected!
 				theme := "Tactical Advantage"
-				if eval.MateIn != 0 {
-					theme = fmt.Sprintf("Mate in %d", int(math.Abs(float64(eval.MateIn))))
-				} else if math.Abs(float64(eval.ScoreCp)) >= 500 {
+				if moverMateIn > 0 {
+					theme = fmt.Sprintf("Mate in %d", moverMateIn)
+				} else if moverScoreCp >= 500 {
 					theme = "Decisive Advantage (+5.0)"
 				}
 

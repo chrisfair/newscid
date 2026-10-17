@@ -75,6 +75,13 @@ const currentMultiPv = computed(() => {
   return props.multiPv || props.evalInfo?.multiPv || 1
 })
 
+function isWhiteAdvantage(scoreCp?: number, mateIn?: number): boolean {
+  if (mateIn !== undefined && mateIn !== 0) {
+    return mateIn > 0
+  }
+  return (scoreCp || 0) >= 0
+}
+
 // Format scores for any PVLine or root eval
 function formatScoreVal(scoreCp: number, mateIn: number): string {
   if (mateIn !== 0) {
@@ -94,11 +101,11 @@ const formattedScore = computed(() => {
 const evalBarPercent = computed(() => {
   if (!props.evalInfo) return 50
   if (props.evalInfo.mateIn !== 0) {
-    return props.evalInfo.mateIn > 0 ? 98 : 2
+    return props.evalInfo.mateIn > 0 ? 100 : 0
   }
   const cp = props.evalInfo.scoreCp
-  const clamped = Math.max(-1000, Math.min(1000, cp))
-  return 50 + (clamped / 1000) * 45
+  const val = 50 + 50 * (2 / (1 + Math.exp(-0.0036 * cp)) - 1)
+  return Math.max(5, Math.min(95, val))
 })
 
 // Single PV line string
@@ -389,7 +396,7 @@ function handleApplyHash(h: number) {
         <span class="text-xs text-zinc-500 font-mono">D: {{ evalInfo?.depth || 0 }}</span>
         <span
           class="px-2.5 py-1 rounded font-mono font-bold text-sm tracking-wider shadow-inner"
-          :class="(evalInfo?.scoreCp || 0) >= 0 ? 'bg-zinc-200 text-zinc-900' : 'bg-zinc-950 text-zinc-100 border border-zinc-800'"
+          :class="isWhiteAdvantage(evalInfo?.scoreCp, evalInfo?.mateIn) ? 'bg-zinc-200 text-zinc-900' : 'bg-zinc-950 text-zinc-100 border border-zinc-800'"
         >
           {{ formattedScore }}
         </span>
@@ -428,7 +435,7 @@ function handleApplyHash(h: number) {
         <!-- Score pill -->
         <span
           class="px-1.5 py-0.5 rounded text-[11px] font-semibold font-mono shrink-0 mt-0.5"
-          :class="line.scoreCp >= 0 
+          :class="isWhiteAdvantage(line.scoreCp, line.mateIn)
             ? 'bg-zinc-800 text-emerald-300' 
             : 'bg-zinc-900 text-rose-300 border border-zinc-800'"
         >

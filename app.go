@@ -1782,6 +1782,7 @@ func (a *App) GetSimulatedMove(playerName string, fen string, isWhite bool) (*pl
 		}
 
 		bestUCI, _, err := eng.SearchBestMove(fen, nil, movetimeMs)
+		_ = eng.ResetStrengthOptions()
 		if err == nil && bestUCI != "" {
 			board, _ := chess.ParseFEN(fen)
 			san := bestUCI
@@ -1871,6 +1872,7 @@ func (a *App) GetPersonaSimulatedMove(personaID string, fen string, isWhite bool
 		}
 
 		bestUCI, _, err := eng.SearchBestMove(fen, nil, movetimeMs)
+		_ = eng.ResetStrengthOptions()
 		if err == nil && bestUCI != "" {
 			board, _ := chess.ParseFEN(fen)
 			san := bestUCI

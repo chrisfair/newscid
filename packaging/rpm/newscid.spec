@@ -1,5 +1,5 @@
 Name:           newscid
-Version:        1.3.16
+Version:        1.3.17
 Release:        1%{?dist}
 Summary:        Modern Chess Information Database (Scid vs. PC Rewrite)
 

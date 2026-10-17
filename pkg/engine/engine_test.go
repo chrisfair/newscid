@@ -391,4 +391,27 @@ func TestAnnotateGameWhileAnalyzing(t *testing.T) {
 	assert.Equal(t, "Qxf7#", lastMove.SAN)
 }
 
+func TestParseInfoLinePerspectiveNormalization(t *testing.T) {
+	whiteTurnFEN := "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1"
+	blackTurnFEN := "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
 
+	// 1. White to move, UCI engine reports +450 cp (White winning)
+	lineW, okW := engine.ParseInfoLine("info depth 18 multipv 1 score cp 450 nodes 120000 nps 500000 pv e2e4 e7e5", whiteTurnFEN)
+	require.True(t, okW)
+	assert.Equal(t, 450, lineW.ScoreCp, "White-to-move +450 cp should remain +450 cp (White advantage)")
+
+	// 2. Black to move, UCI engine reports +450 cp (Black winning from Black's POV -> -450 cp from White's POV)
+	lineB, okB := engine.ParseInfoLine("info depth 18 multipv 1 score cp 450 nodes 120000 nps 500000 pv e7e5 g1f3", blackTurnFEN)
+	require.True(t, okB)
+	assert.Equal(t, -450, lineB.ScoreCp, "Black-to-move +450 cp must be negated to -450 cp (Black advantage)")
+
+	// 3. Black to move, UCI engine reports -300 cp (Black losing from Black's POV -> +300 cp from White's POV)
+	lineBLosing, okBLosing := engine.ParseInfoLine("info depth 18 multipv 1 score cp -300 nodes 120000 nps 500000 pv e7e5 g1f3", blackTurnFEN)
+	require.True(t, okBLosing)
+	assert.Equal(t, 300, lineBLosing.ScoreCp, "Black-to-move -300 cp must be negated to +300 cp (White advantage)")
+
+	// 4. Black to move, UCI engine reports mate 3 (Black mates White in 3 -> -3 from White's POV)
+	lineBMate, okBMate := engine.ParseInfoLine("info depth 20 multipv 1 score mate 3 nodes 50000 nps 250000 pv d8h4", blackTurnFEN)
+	require.True(t, okBMate)
+	assert.Equal(t, -3, lineBMate.MateIn, "Black-to-move mate 3 must be negated to -3 (Black mates White)")
+}
