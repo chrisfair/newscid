@@ -226,6 +226,10 @@ export function GetAllBlunderPuzzles() {
   return window['go']['main']['App']['GetAllBlunderPuzzles']();
 }
 
+export function GetAppPreferences() {
+  return window['go']['main']['App']['GetAppPreferences']();
+}
+
 export function GetAvailableEngines() {
   return window['go']['main']['App']['GetAvailableEngines']();
 }
@@ -252,6 +256,10 @@ export function GetDatabaseInfo() {
 
 export function GetDatabasePlayers() {
   return window['go']['main']['App']['GetDatabasePlayers']();
+}
+
+export function GetDatabaseRolesStatus() {
+  return window['go']['main']['App']['GetDatabaseRolesStatus']();
 }
 
 export function GetDatabaseStatistics() {
@@ -390,6 +398,10 @@ export function GetScidSystemBases() {
   return window['go']['main']['App']['GetScidSystemBases']();
 }
 
+export function GetSharedWorkspaceState() {
+  return window['go']['main']['App']['GetSharedWorkspaceState']();
+}
+
 export function GetSimulatedMove(arg1, arg2, arg3) {
   return window['go']['main']['App']['GetSimulatedMove'](arg1, arg2, arg3);
 }
@@ -418,6 +430,10 @@ export function GetVersionInfo() {
   return window['go']['main']['App']['GetVersionInfo']();
 }
 
+export function GetWindowStartupConfig() {
+  return window['go']['main']['App']['GetWindowStartupConfig']();
+}
+
 export function ImportMegaDatabase(arg1) {
   return window['go']['main']['App']['ImportMegaDatabase'](arg1);
 }
@@ -442,6 +458,14 @@ export function IsScidDriverAvailable() {
   return window['go']['main']['App']['IsScidDriverAvailable']();
 }
 
+export function LaunchDetachedPanelWindow(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['LaunchDetachedPanelWindow'](arg1, arg2, arg3, arg4);
+}
+
+export function LaunchPortalWindow(arg1, arg2, arg3) {
+  return window['go']['main']['App']['LaunchPortalWindow'](arg1, arg2, arg3);
+}
+
 export function LoadTacticsPuzzle(arg1, arg2) {
   return window['go']['main']['App']['LoadTacticsPuzzle'](arg1, arg2);
 }
@@ -454,8 +478,16 @@ export function MinePuzzlesFromDatabase(arg1, arg2) {
   return window['go']['main']['App']['MinePuzzlesFromDatabase'](arg1, arg2);
 }
 
+export function OpenClipbase() {
+  return window['go']['main']['App']['OpenClipbase']();
+}
+
 export function OpenDatabase(arg1) {
   return window['go']['main']['App']['OpenDatabase'](arg1);
+}
+
+export function OpenDefaultDatabase() {
+  return window['go']['main']['App']['OpenDefaultDatabase']();
 }
 
 export function OpenFileDialog() {
@@ -494,6 +526,10 @@ export function PromoteVariation(arg1, arg2) {
   return window['go']['main']['App']['PromoteVariation'](arg1, arg2);
 }
 
+export function PublishWorkspaceState(arg1) {
+  return window['go']['main']['App']['PublishWorkspaceState'](arg1);
+}
+
 export function QueryPolyglotBook(arg1, arg2) {
   return window['go']['main']['App']['QueryPolyglotBook'](arg1, arg2);
 }
@@ -512,6 +548,10 @@ export function RecordUserSupport(arg1, arg2) {
 
 export function RemovePersonaIdentifier(arg1, arg2) {
   return window['go']['main']['App']['RemovePersonaIdentifier'](arg1, arg2);
+}
+
+export function SaveAppPreferences(arg1) {
+  return window['go']['main']['App']['SaveAppPreferences'](arg1);
 }
 
 export function SaveBookFileDialog(arg1) {
@@ -554,6 +594,10 @@ export function SearchPosition(arg1) {
   return window['go']['main']['App']['SearchPosition'](arg1);
 }
 
+export function SetDefaultDatabase(arg1) {
+  return window['go']['main']['App']['SetDefaultDatabase'](arg1);
+}
+
 export function SetEngineHash(arg1) {
   return window['go']['main']['App']['SetEngineHash'](arg1);
 }
@@ -576,6 +620,10 @@ export function SetGameNAG(arg1, arg2) {
 
 export function SetNotationStyle(arg1) {
   return window['go']['main']['App']['SetNotationStyle'](arg1);
+}
+
+export function SetReferenceDatabase(arg1, arg2) {
+  return window['go']['main']['App']['SetReferenceDatabase'](arg1, arg2);
 }
 
 export function SetSupportStripeURL(arg1) {

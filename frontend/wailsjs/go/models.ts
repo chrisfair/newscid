@@ -896,6 +896,58 @@ export namespace imbalance {
 
 export namespace main {
 	
+	export class AppPreferences {
+	    defaultDatabasePath: string;
+	    referenceDatabasePath: string;
+	    autoOpenDefaultDb: boolean;
+	    useReferenceDbForTree: boolean;
+	    defaultPieceSet: string;
+	    defaultBoardTheme: string;
+	    defaultUITheme: string;
+	    defaultNotationStyle: string;
+	    soundEnabled: boolean;
+	    showEvalBar: boolean;
+	    threatModeDefault: boolean;
+	    defaultEngine: string;
+	    defaultMultiPv: number;
+	    defaultThreads: number;
+	    defaultHashMb: number;
+	    annotateMoveTimeMs: number;
+	    lichessUsername: string;
+	    chessComUsername: string;
+	    defaultPortalPlatform: string;
+	    portalWindowMode: string;
+	    customBrowserCmd: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppPreferences(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.defaultDatabasePath = source["defaultDatabasePath"];
+	        this.referenceDatabasePath = source["referenceDatabasePath"];
+	        this.autoOpenDefaultDb = source["autoOpenDefaultDb"];
+	        this.useReferenceDbForTree = source["useReferenceDbForTree"];
+	        this.defaultPieceSet = source["defaultPieceSet"];
+	        this.defaultBoardTheme = source["defaultBoardTheme"];
+	        this.defaultUITheme = source["defaultUITheme"];
+	        this.defaultNotationStyle = source["defaultNotationStyle"];
+	        this.soundEnabled = source["soundEnabled"];
+	        this.showEvalBar = source["showEvalBar"];
+	        this.threatModeDefault = source["threatModeDefault"];
+	        this.defaultEngine = source["defaultEngine"];
+	        this.defaultMultiPv = source["defaultMultiPv"];
+	        this.defaultThreads = source["defaultThreads"];
+	        this.defaultHashMb = source["defaultHashMb"];
+	        this.annotateMoveTimeMs = source["annotateMoveTimeMs"];
+	        this.lichessUsername = source["lichessUsername"];
+	        this.chessComUsername = source["chessComUsername"];
+	        this.defaultPortalPlatform = source["defaultPortalPlatform"];
+	        this.portalWindowMode = source["portalWindowMode"];
+	        this.customBrowserCmd = source["customBrowserCmd"];
+	    }
+	}
 	export class BoardState {
 	    fen: string;
 	    turn: string;
@@ -943,6 +995,54 @@ export namespace main {
 	        this.numGames = source["numGames"];
 	        this.description = source["description"];
 	    }
+	}
+	export class DatabaseRolesStatus {
+	    activeDb?: DatabaseInfo;
+	    defaultDbPath: string;
+	    defaultDbName: string;
+	    isActiveDefault: boolean;
+	    referenceDb?: DatabaseInfo;
+	    referenceDbPath: string;
+	    referenceDbName: string;
+	    useRefForTree: boolean;
+	    clipbasePath: string;
+	    isClipbase: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new DatabaseRolesStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.activeDb = this.convertValues(source["activeDb"], DatabaseInfo);
+	        this.defaultDbPath = source["defaultDbPath"];
+	        this.defaultDbName = source["defaultDbName"];
+	        this.isActiveDefault = source["isActiveDefault"];
+	        this.referenceDb = this.convertValues(source["referenceDb"], DatabaseInfo);
+	        this.referenceDbPath = source["referenceDbPath"];
+	        this.referenceDbName = source["referenceDbName"];
+	        this.useRefForTree = source["useRefForTree"];
+	        this.clipbasePath = source["clipbasePath"];
+	        this.isClipbase = source["isClipbase"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class GamesPage {
 	    total: number;
@@ -1010,6 +1110,40 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class SharedWorkspaceState {
+	    updatedAtMs: number;
+	    sourceId: string;
+	    fen: string;
+	    lastMoveFrom: string;
+	    lastMoveTo: string;
+	    currentPly: number;
+	    dbPath: string;
+	    dbName: string;
+	    activeGameId: number;
+	    gameTags: Record<string, string>;
+	    pendingMoveUci?: string;
+	    pendingLoadId?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SharedWorkspaceState(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.updatedAtMs = source["updatedAtMs"];
+	        this.sourceId = source["sourceId"];
+	        this.fen = source["fen"];
+	        this.lastMoveFrom = source["lastMoveFrom"];
+	        this.lastMoveTo = source["lastMoveTo"];
+	        this.currentPly = source["currentPly"];
+	        this.dbPath = source["dbPath"];
+	        this.dbName = source["dbName"];
+	        this.activeGameId = source["activeGameId"];
+	        this.gameTags = source["gameTags"];
+	        this.pendingMoveUci = source["pendingMoveUci"];
+	        this.pendingLoadId = source["pendingLoadId"];
+	    }
+	}
 	export class TacticsPuzzle {
 	    gameId: number;
 	    totalGames: number;
@@ -1040,6 +1174,28 @@ export namespace main {
 	        this.sanMoves = source["sanMoves"];
 	        this.turn = source["turn"];
 	        this.theme = source["theme"];
+	    }
+	}
+	export class WindowStartupConfig {
+	    mode: string;
+	    panelId: string;
+	    portalUrl: string;
+	    portalTitle: string;
+	    initialFen: string;
+	    initialDb: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WindowStartupConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.mode = source["mode"];
+	        this.panelId = source["panelId"];
+	        this.portalUrl = source["portalUrl"];
+	        this.portalTitle = source["portalTitle"];
+	        this.initialFen = source["initialFen"];
+	        this.initialDb = source["initialDb"];
 	    }
 	}
 

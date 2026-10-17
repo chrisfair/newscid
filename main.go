@@ -49,11 +49,15 @@ func main() {
 		if arg == "-h" || arg == "--help" || arg == "help" {
 			fmt.Printf("NewScid - Modern Chess Information Database (%s)\n", version.Short())
 			fmt.Println("Usage: newscid [options] [database.si4 | file.pgn]")
+			fmt.Println("       newscid --window-panel <tree|engine|notation|games|board|portal|db-hub> [--title <title>]")
+			fmt.Println("       newscid --portal-url <https://lichess.org | https://www.chess.com> [--title <title>]")
 			fmt.Println("       newscid serve [--host 127.0.0.1] [--port 8080] [--data-dir /path]")
 			fmt.Println("\nOptions:")
-			fmt.Println("  -v, --version    Print application version details")
-			fmt.Println("  -h, --help       Display this help message")
-			fmt.Println("  serve, --server  Run in standalone web / mobile server mode (for Android / browser)")
+			fmt.Println("  -v, --version         Print application version details")
+			fmt.Println("  -h, --help            Display this help message")
+			fmt.Println("  --window-panel <id>   Launch a detached multi-screen panel window (for Hyprland / multi-monitor)")
+			fmt.Println("  --portal-url <url>    Launch a dedicated live portal window into Lichess.org or Chess.com")
+			fmt.Println("  serve, --server       Run in standalone web / mobile server mode (for Android / browser)")
 			os.Exit(0)
 		}
 		if arg == "serve" || arg == "--server" || arg == "-server" {
@@ -65,6 +69,51 @@ func main() {
 
 			runServer(app, *host, *port, *dataDir)
 			return
+		}
+	}
+
+	windowTitle := "NewScid - Modern Chess Information Database"
+	windowWidth := 1280
+	windowHeight := 850
+	minWidth := 460
+	minHeight := 360
+
+	for i := 1; i < len(os.Args); i++ {
+		switch os.Args[i] {
+		case "--window-panel":
+			if i+1 < len(os.Args) {
+				windowStartupCfg.Mode = "panel"
+				windowStartupCfg.PanelID = os.Args[i+1]
+				windowTitle = fmt.Sprintf("NewScid — %s [Screen Panel]", os.Args[i+1])
+				windowWidth = 820
+				windowHeight = 680
+				i++
+			}
+		case "--portal-url":
+			if i+1 < len(os.Args) {
+				windowStartupCfg.Mode = "portal"
+				windowStartupCfg.PortalURL = os.Args[i+1]
+				windowTitle = "NewScid Live Portal"
+				windowWidth = 1120
+				windowHeight = 800
+				i++
+			}
+		case "--title":
+			if i+1 < len(os.Args) {
+				windowStartupCfg.PortalTitle = os.Args[i+1]
+				windowTitle = os.Args[i+1]
+				i++
+			}
+		case "--fen":
+			if i+1 < len(os.Args) {
+				windowStartupCfg.InitialFEN = os.Args[i+1]
+				i++
+			}
+		case "--db":
+			if i+1 < len(os.Args) {
+				windowStartupCfg.InitialDB = os.Args[i+1]
+				i++
+			}
 		}
 	}
 
@@ -87,11 +136,11 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:     "NewScid - Modern Chess Information Database",
-		Width:     1280,
-		Height:    850,
-		MinWidth:  960,
-		MinHeight: 650,
+		Title:     windowTitle,
+		Width:     windowWidth,
+		Height:    windowHeight,
+		MinWidth:  minWidth,
+		MinHeight: minHeight,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

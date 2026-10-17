@@ -13,7 +13,10 @@ import {
   ChevronDown,
   Sun,
   Moon,
-  Check
+  Check,
+  Star,
+  LayoutGrid,
+  Globe
 } from '@lucide/vue'
 import { UI_THEMES, type UITheme } from '../utils/theme'
 
@@ -45,6 +48,11 @@ export interface DiscoveredDatabase {
 
 const props = defineProps<{
   dbName?: string
+  activeDbPath?: string
+  defaultDbName?: string
+  defaultDbPath?: string
+  isActiveDefaultDb?: boolean
+  referenceDbName?: string
   systemBases: string[]
   discoveredDatabases?: DiscoveredDatabase[]
   pieceSets: PieceSetOption[]
@@ -60,6 +68,10 @@ const emit = defineEmits<{
   (e: 'createDB'): void
   (e: 'openSystemBase', path: string): void
   (e: 'openDiscoveredBase', path: string): void
+  (e: 'setDefaultDB', path: string): void
+  (e: 'openDatabaseHub'): void
+  (e: 'openPreferences', section?: string): void
+  (e: 'openPortalPanel', platform?: 'lichess' | 'chesscom'): void
   (e: 'importPGN'): void
   (e: 'exportPGN'): void
   (e: 'changePieceSet', id: string): void
@@ -206,19 +218,68 @@ defineExpose({
             </div>
           </div>
         </div>
+
+        <button
+          class="header-btn flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-emerald-300 text-xs font-medium border border-emerald-500/30 transition-colors cursor-pointer"
+          title="View how Default DB, Active DB, Reference DB, and Clipbase relate"
+          @click="emit('openDatabaseHub')"
+        >
+          <Database class="w-3.5 h-3.5 text-emerald-400" />
+          <span class="hidden lg:inline">DB Roles</span>
+        </button>
       </div>
     </div>
 
-    <!-- Center: Active Database Title -->
+    <!-- Center: Active Database & Relationship Status -->
     <div class="hidden md:flex items-center gap-2">
       <span class="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Active Base:</span>
       <span class="text-xs font-mono font-bold text-zinc-200 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded-md">
         {{ dbName || 'No Base Loaded' }}
       </span>
+
+      <button
+        v-if="dbName && activeDbPath"
+        class="px-2 py-0.5 rounded-md text-[11px] font-semibold border flex items-center gap-1 transition-colors cursor-pointer"
+        :class="isActiveDefaultDb
+          ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+          : 'bg-zinc-900 hover:bg-amber-950/50 border-zinc-800 text-zinc-400 hover:text-amber-300'"
+        :title="isActiveDefaultDb ? `${dbName} is your Default Startup Database` : `Set ${dbName} as your Default Startup Database`"
+        @click="emit('setDefaultDB', activeDbPath)"
+      >
+        <Star class="w-3 h-3" :class="isActiveDefaultDb ? 'fill-amber-400 text-amber-400' : 'text-zinc-500'" />
+        <span>{{ isActiveDefaultDb ? 'Default DB' : 'Set Default' }}</span>
+      </button>
+
+      <span
+        v-if="referenceDbName"
+        class="hidden xl:flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-950/40 border border-cyan-500/30 text-[11px] font-mono text-cyan-300"
+        title="Reference Database used for Opening Tree statistics"
+      >
+        <BookOpen class="w-3 h-3 text-cyan-400" />
+        <span>Ref: {{ referenceDbName }}</span>
+      </span>
     </div>
 
-    <!-- Right: Import/Export, Board Flip & Settings -->
-    <div class="flex items-center gap-2">
+    <!-- Right: Import/Export, Panels/Floaters, Board Flip & Preferences -->
+    <div class="flex items-center gap-1.5">
+      <button
+        class="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs flex items-center gap-1 border border-zinc-800 transition-colors cursor-pointer"
+        title="Customize Panels, Floaters & Multi-Screen (Hyprland)"
+        @click="emit('openPreferences', 'panels')"
+      >
+        <LayoutGrid class="w-3.5 h-3.5 text-amber-400" />
+        <span class="hidden lg:inline">Panels</span>
+      </button>
+
+      <button
+        class="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs flex items-center gap-1 border border-zinc-800 transition-colors cursor-pointer"
+        title="Open Lichess.org / Chess.com Live Portal"
+        @click="emit('openPortalPanel', 'lichess')"
+      >
+        <Globe class="w-3.5 h-3.5 text-cyan-400" />
+        <span class="hidden xl:inline">Portal</span>
+      </button>
+
       <button
         class="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs flex items-center gap-1 border border-zinc-800 transition-colors"
         title="Import PGN"
@@ -262,6 +323,14 @@ defineExpose({
         @click="showSettingsModal = true"
       >
         <Palette class="w-4 h-4 text-emerald-400" />
+      </button>
+
+      <button
+        class="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 transition-colors cursor-pointer"
+        title="Preferences & Options Document (Ctrl+,)"
+        @click="emit('openPreferences', 'databases')"
+      >
+        <Settings class="w-4 h-4 text-emerald-400" />
       </button>
     </div>
 

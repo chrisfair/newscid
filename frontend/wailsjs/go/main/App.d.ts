@@ -141,6 +141,8 @@ export function GenerateSafetyDrillsFromDatabase(arg1:number):Promise<Array<trai
 
 export function GetAllBlunderPuzzles():Promise<Array<blundervault.Puzzle>>;
 
+export function GetAppPreferences():Promise<main.AppPreferences>;
+
 export function GetAvailableEngines():Promise<Array<string>>;
 
 export function GetBestMove(arg1:string,arg2:Array<string>,arg3:number):Promise<string>;
@@ -154,6 +156,8 @@ export function GetDatabaseDemographics():Promise<stats.DatabaseDemographics>;
 export function GetDatabaseInfo():Promise<main.DatabaseInfo>;
 
 export function GetDatabasePlayers():Promise<Array<string>>;
+
+export function GetDatabaseRolesStatus():Promise<main.DatabaseRolesStatus>;
 
 export function GetDatabaseStatistics():Promise<scid.DatabaseStatistics>;
 
@@ -223,6 +227,8 @@ export function GetSafetyDrillBatch(arg1:number,arg2:string):Promise<Array<train
 
 export function GetScidSystemBases():Promise<Array<string>>;
 
+export function GetSharedWorkspaceState():Promise<main.SharedWorkspaceState>;
+
 export function GetSimulatedMove(arg1:string,arg2:string,arg3:boolean):Promise<playerbot.SimulatedMove>;
 
 export function GetSupportStatus():Promise<support.SupportStatus>;
@@ -237,6 +243,8 @@ export function GetTournamentEvents():Promise<Array<tournament.EventSummary>>;
 
 export function GetVersionInfo():Promise<version.Info>;
 
+export function GetWindowStartupConfig():Promise<main.WindowStartupConfig>;
+
 export function ImportMegaDatabase(arg1:online.MegaImportOptions):Promise<online.MegaImportResult>;
 
 export function ImportPGNBatch(arg1:string):Promise<scid.ImportStats>;
@@ -249,13 +257,21 @@ export function IsEngineMatchRunning():Promise<boolean>;
 
 export function IsScidDriverAvailable():Promise<boolean>;
 
+export function LaunchDetachedPanelWindow(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
+export function LaunchPortalWindow(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function LoadTacticsPuzzle(arg1:string,arg2:number):Promise<main.TacticsPuzzle>;
 
 export function MakeMove(arg1:string,arg2:string):Promise<main.BoardState>;
 
 export function MinePuzzlesFromDatabase(arg1:string,arg2:number):Promise<Array<puzzleminer.MinedPuzzle>>;
 
+export function OpenClipbase():Promise<main.DatabaseInfo>;
+
 export function OpenDatabase(arg1:string):Promise<main.DatabaseInfo>;
+
+export function OpenDefaultDatabase():Promise<main.DatabaseInfo>;
 
 export function OpenFileDialog():Promise<string>;
 
@@ -275,6 +291,8 @@ export function ProbeTablebase(arg1:string):Promise<tablebase.TablebaseResult>;
 
 export function PromoteVariation(arg1:number,arg2:number):Promise<void>;
 
+export function PublishWorkspaceState(arg1:main.SharedWorkspaceState):Promise<void>;
+
 export function QueryPolyglotBook(arg1:string,arg2:string):Promise<Array<polyglot.BookMove>>;
 
 export function RecordBlunderReview(arg1:string,arg2:number):Promise<blundervault.Puzzle>;
@@ -284,6 +302,8 @@ export function RecordRepertoirePractice(arg1:string,arg2:string,arg3:string,arg
 export function RecordUserSupport(arg1:string,arg2:string):Promise<support.SupportStatus>;
 
 export function RemovePersonaIdentifier(arg1:string,arg2:string):Promise<persona.Persona>;
+
+export function SaveAppPreferences(arg1:main.AppPreferences):Promise<main.AppPreferences>;
 
 export function SaveBookFileDialog(arg1:string):Promise<string>;
 
@@ -305,6 +325,8 @@ export function SearchECO(arg1:string,arg2:string,arg3:number):Promise<Array<eco
 
 export function SearchPosition(arg1:string):Promise<Array<scid.GameSummary>>;
 
+export function SetDefaultDatabase(arg1:string):Promise<main.DatabaseRolesStatus>;
+
 export function SetEngineHash(arg1:number):Promise<void>;
 
 export function SetEngineMultiPV(arg1:number):Promise<void>;
@@ -316,6 +338,8 @@ export function SetEventListener(arg1:any):Promise<void>;
 export function SetGameNAG(arg1:number,arg2:number):Promise<void>;
 
 export function SetNotationStyle(arg1:string):Promise<void>;
+
+export function SetReferenceDatabase(arg1:string,arg2:boolean):Promise<main.DatabaseRolesStatus>;
 
 export function SetSupportStripeURL(arg1:string):Promise<void>;
 
