@@ -206,39 +206,74 @@ func writeHTMLNodeTree(sb *strings.Builder, node *chess.MoveNode, moveNum int, i
 }
 
 func getDiagramFEN(g *chess.Game, ply int) string {
-	if g.RootMove == nil {
-		return chess.StartingFEN
+	startFEN := chess.StartingFEN
+	if g != nil {
+		if g.StartFEN != "" && g.StartFEN != "?" {
+			startFEN = g.StartFEN
+		} else if fenTag := g.Tag("FEN"); fenTag != "" && fenTag != "?" {
+			startFEN = fenTag
+		}
+	}
+	if g == nil || g.RootMove == nil || ply == 0 {
+		return startFEN
+	}
+
+	b := chess.NewBoard()
+	if startFEN != chess.StartingFEN {
+		if parsed, err := chess.ParseFEN(startFEN); err == nil {
+			b = parsed
+		}
 	}
 
 	// Default: final position
 	if ply < 0 {
 		curr := g.RootMove
-		for curr.Next != nil {
+		for curr != nil {
+			if curr.Move.From != curr.Move.To {
+				b.MakeMove(curr.Move)
+			}
+			if curr.Next == nil {
+				if curr.FEN != "" {
+					return curr.FEN
+				}
+				if curr.Move.From != curr.Move.To {
+					return b.FEN()
+				}
+				return startFEN
+			}
 			curr = curr.Next
 		}
-		if curr.FEN != "" {
-			return curr.FEN
-		}
-		return chess.StartingFEN
+		return startFEN
 	}
 
 	// Move forward to ply
 	currPly := 1
 	curr := g.RootMove
 	for curr != nil {
-		if currPly == ply && curr.FEN != "" {
-			return curr.FEN
+		if curr.Move.From != curr.Move.To {
+			b.MakeMove(curr.Move)
+		}
+		if currPly == ply {
+			if curr.FEN != "" {
+				return curr.FEN
+			}
+			if curr.Move.From != curr.Move.To {
+				return b.FEN()
+			}
 		}
 		if curr.Next == nil {
 			if curr.FEN != "" {
 				return curr.FEN
+			}
+			if curr.Move.From != curr.Move.To {
+				return b.FEN()
 			}
 			break
 		}
 		curr = curr.Next
 		currPly++
 	}
-	return chess.StartingFEN
+	return startFEN
 }
 
 func getDiagramCaption(g *chess.Game, ply int) string {

@@ -185,6 +185,11 @@ func BuildPersonalityFromIdentifiers(db *scid.Database, displayName string, iden
 
 		curr := game.RootMove
 		board := chess.NewBoard()
+		if game.StartFEN != "" && game.StartFEN != chess.StartingFEN {
+			if parsed, err := chess.ParseFEN(game.StartFEN); err == nil {
+				board = parsed
+			}
+		}
 		ply := 0
 
 		for curr != nil && ply < 250 {
@@ -197,7 +202,7 @@ func BuildPersonalityFromIdentifiers(db *scid.Database, displayName string, iden
 					bookMap = p.BlackBook
 				}
 
-				recordBookMove(bookMap, posKey, curr.UCI, curr.SAN, entry.Result, moverIsWhite)
+				recordBookMove(bookMap, posKey, curr.UCI, curr.SAN, entryResult, moverIsWhite)
 			}
 
 			m, err := board.ParseUCI(curr.UCI)

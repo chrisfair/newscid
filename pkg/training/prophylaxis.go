@@ -263,22 +263,33 @@ func GenerateProphylaxisDrillsFromDatabase(db *scid.Database, count int) ([]Prop
 			break
 		}
 
-		entry := db.Entries[gIdx]
-		if (entry.Flags & scid.FlagDelete) != 0 {
+		db.RLock()
+		if gIdx < 0 || gIdx >= len(db.Entries) {
+			db.RUnlock()
 			continue
 		}
+		entry := db.Entries[gIdx]
+		if entry == nil || (entry.Flags&scid.FlagDelete) != 0 {
+			db.RUnlock()
+			continue
+		}
+		whiteName := db.Names.GetName(scid.NamePlayer, entry.WhiteID)
+		blackName := db.Names.GetName(scid.NamePlayer, entry.BlackID)
+		event := db.Names.GetName(scid.NameEvent, entry.EventID)
+		db.RUnlock()
 
 		game, err := db.GetGame(gIdx + 1)
 		if err != nil || game == nil || game.RootMove == nil {
 			continue
 		}
 
-		whiteName := db.Names.GetName(scid.NamePlayer, entry.WhiteID)
-		blackName := db.Names.GetName(scid.NamePlayer, entry.BlackID)
-		event := db.Names.GetName(scid.NameEvent, entry.EventID)
-
 		// Search for quiet king steps (Kh1/Kh8) or pawn restraint (a3/h3/a6/h6)
 		b := chess.NewBoard()
+		if game.StartFEN != "" && game.StartFEN != chess.StartingFEN {
+			if parsed, err := chess.ParseFEN(game.StartFEN); err == nil {
+				b = parsed
+			}
+		}
 		curr := game.RootMove
 		ply := 0
 

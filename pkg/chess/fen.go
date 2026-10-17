@@ -201,18 +201,21 @@ func ParseFEN(fen string) (*Board, error) {
 			pt := p.Type()
 
 			if pt == King {
-				if b.PieceCount[c] > 0 {
+				if b.PieceCount[c] > 0 && b.PieceCount[c] < 16 {
 					oldSq := b.PieceList[c][0]
 					b.PieceList[c][b.PieceCount[c]] = oldSq
 					b.PiecePos[oldSq] = b.PieceCount[c]
 				}
 				b.PieceList[c][0] = sq
 				b.PiecePos[sq] = 0
-			} else {
+				if b.PieceCount[c] < 16 {
+					b.PieceCount[c]++
+				}
+			} else if b.PieceCount[c] < 16 {
 				b.PiecePos[sq] = b.PieceCount[c]
 				b.PieceList[c][b.PieceCount[c]] = sq
+				b.PieceCount[c]++
 			}
-			b.PieceCount[c]++
 		}
 	}
 
