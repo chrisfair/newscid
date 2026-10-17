@@ -341,7 +341,7 @@ onMounted(() => {
               :fen="currentFEN"
               :piece-set="pieceSet"
               :board-theme="boardTheme"
-              :flipped="currentDrill?.sideToMove === 'black' || currentFEN.split(' ')[1] === 'b'"
+              :flipped="currentDrill?.turn === 'black' || currentDrill?.turn === 'b' || currentFEN.split(' ')[1] === 'b'"
               :interactive="!feedback"
               :arrows="boardArrows"
               class="w-full h-full"

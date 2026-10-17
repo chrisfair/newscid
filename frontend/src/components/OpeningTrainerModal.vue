@@ -271,7 +271,7 @@ async function addManualMove(moveSAN: string) {
     const fenBefore = currentFEN.value
     const parsedState = await MakeMove(fenBefore, moveSAN)
     const san = parsedState.moveSan || moveSAN
-    const uci = parsedState.lastMove ? `${parsedState.lastMove.from}${parsedState.lastMove.to}` : moveSAN
+    const uci = parsedState.moveUci || moveSAN
     await AddRepertoireMove(activeRep.value.id, fenBefore, uci, san, parsedState.fen, noteInput.value)
     noteInput.value = ''
     currentFEN.value = parsedState.fen

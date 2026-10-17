@@ -468,7 +468,7 @@ onUnmounted(() => {
               :fen="currentFEN"
               :piece-set="pieceSet"
               :board-theme="boardTheme"
-              :flipped="currentChallenge?.sideToMove === 'black' || currentFEN.split(' ')[1] === 'b'"
+              :flipped="currentFEN.split(' ')[1] === 'b'"
               :interactive="false"
               class="w-full h-full"
             />
