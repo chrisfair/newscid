@@ -1073,25 +1073,78 @@ function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'F1') {
     e.preventDefault()
     showHelpModal.value = true
+    return
   } else if (e.key === 'F2') {
     e.preventDefault()
     toggleAnalysis()
+    return
   } else if (e.key === 'F3') {
     e.preventDefault()
     handleOpenTreeWindow()
+    return
   } else if (e.key === 'F6') {
     e.preventDefault()
     showEcoBrowserModal.value = !showEcoBrowserModal.value
+    return
   } else if (e.key === 'F7') {
     e.preventDefault()
     showTournamentCrosstableModal.value = !showTournamentCrosstableModal.value
+    return
   } else if (e.key === 'F10') {
     e.preventDefault()
     toggleDarkLight()
+    return
   } else if (e.key === '?') {
     e.preventDefault()
     showShortcutsModal.value = true
-  } else if (e.key === 'ArrowLeft') {
+    return
+  }
+
+  // Guard single-key board navigation, flip, and autoplay when any modal is open
+  if (
+    showSetupBoardModal.value ||
+    showPlayEngineModal.value ||
+    showTacticsModal.value ||
+    showOpeningTrainerModal.value ||
+    showProgressiveTacticsModal.value ||
+    showPuzzleMinerModal.value ||
+    showShortcutsModal.value ||
+    showAboutModal.value ||
+    showHelpModal.value ||
+    showSearchModal.value ||
+    showMaintenanceModal.value ||
+    showOnlineSyncModal.value ||
+    showPlayerSimulationModal.value ||
+    showPersonaModal.value ||
+    showTournamentCrosstableModal.value ||
+    showEcoBrowserModal.value ||
+    showGuessTheMoveModal.value ||
+    showDatabaseStatsModal.value ||
+    showEditTagsModal.value ||
+    showTwicModal.value ||
+    showEngineMatchModal.value ||
+    showExportGameModal.value ||
+    showChess960Modal.value ||
+    showCoordinateTrainerModal.value ||
+    showCommandPalette.value ||
+    showExplainMoveModal.value ||
+    showBlunderVaultModal.value ||
+    showOpponentScoutModal.value ||
+    showAntiPersonaModal.value ||
+    showPieceSafetyModal.value ||
+    showIntuitionStormModal.value ||
+    showTimeManagementModal.value ||
+    showRepertoireShortenerModal.value ||
+    showProphylaxisModal.value ||
+    showSupportModal.value ||
+    showMegaDatabaseModal.value ||
+    showFairPlayModal.value ||
+    showImportModal.value
+  ) {
+    return
+  }
+
+  if (e.key === 'ArrowLeft') {
     goPrev()
   } else if (e.key === 'ArrowRight') {
     goNext()
