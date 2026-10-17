@@ -224,6 +224,38 @@ func (e *Engine) GetLastEval() EvalInfo {
 	return e.lastEval
 }
 
+// ResetStrengthOptions restores full engine strength after a weakened/persona simulation search.
+func (e *Engine) ResetStrengthOptions() error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.stdin != nil {
+		fmt.Fprintln(e.stdin, "setoption name UCI_LimitStrength value false")
+		fmt.Fprintln(e.stdin, "setoption name Skill Level value 20")
+		fmt.Fprintln(e.stdin, "setoption name Contempt value 0")
+		fmt.Fprintln(e.stdin, "isready")
+	}
+	return nil
+}
+
+func effectiveSearchFEN(fen string, moves []string) string {
+	if len(moves) == 0 {
+		return fen
+	}
+	board, err := chess.ParseFEN(fen)
+	if err != nil {
+		return fen
+	}
+	for _, uci := range moves {
+		m, err := board.ParseUCI(uci)
+		if err != nil {
+			break
+		}
+		board.MakeMove(m)
+	}
+	return board.FEN()
+}
+
 // Analyze sends a position and begins analysis.
 func (e *Engine) Analyze(fen string, moves []string, maxDepth int) error {
 	e.mu.Lock()
@@ -241,7 +273,7 @@ func (e *Engine) Analyze(fen string, moves []string, maxDepth int) error {
 		fmt.Fprintf(e.stdin, "setoption name MultiPV value %d\n", e.multiPV)
 	}
 
-	e.currentFEN = fen
+	e.currentFEN = effectiveSearchFEN(fen, moves)
 	e.pvLines = make(map[int]PVLine)
 	e.lastEval = EvalInfo{
 		MultiPV: e.multiPV,
@@ -309,7 +341,12 @@ func (e *Engine) SearchBestMove(fen string, moves []string, movetimeMs int) (str
 
 	bestMoveCh := make(chan string, 1)
 	e.bestMoveListener = bestMoveCh
-	e.currentFEN = fen
+	e.currentFEN = effectiveSearchFEN(fen, moves)
+	e.pvLines = make(map[int]PVLine)
+	e.lastEval = EvalInfo{
+		MultiPV: e.multiPV,
+		Lines:   make([]PVLine, 0),
+	}
 
 	posCmd := "position fen " + fen
 	if len(moves) > 0 {
@@ -516,12 +553,20 @@ func FormatPV(fen string, pvMoves []string) (candidateSAN string, formattedPV st
 	return candidateSAN, formattedPV
 }
 
+func isBlackToMove(fen string) bool {
+	fields := strings.Fields(fen)
+	return len(fields) >= 2 && fields[1] == "b"
+}
+
 // ParseInfoLine parses a UCI 'info' line and returns the PVLine and whether it contained a PV.
+// Per UCI convention, engine scores are reported from the side-to-move's perspective; ParseInfoLine
+// normalizes ScoreCp and MateIn to White's absolute perspective (+ = White advantage, - = Black advantage).
 func ParseInfoLine(line string, currentFEN string) (PVLine, bool) {
 	var pvLine PVLine
 	pvLine.MultiPV = 1
 	tokens := strings.Fields(line)
 	hasPV := false
+	blackTurn := isBlackToMove(currentFEN)
 
 	for i := 0; i < len(tokens); i++ {
 		t := tokens[i]
@@ -541,6 +586,9 @@ func ParseInfoLine(line string, currentFEN string) (PVLine, bool) {
 			if i+2 < len(tokens) {
 				typ := tokens[i+1]
 				val, _ := strconv.Atoi(tokens[i+2])
+				if blackTurn {
+					val = -val
+				}
 				if typ == "cp" {
 					pvLine.ScoreCp = val
 				} else if typ == "mate" {

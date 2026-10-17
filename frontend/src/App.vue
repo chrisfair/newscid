@@ -683,7 +683,13 @@ const threatSquares = computed(() => {
   return Array.from(set)
 })
 
-const evalScore = computed(() => evalInfo.value?.scoreCp ?? 0)
+const evalScore = computed(() => {
+  if (evalInfo.value) return evalInfo.value.scoreCp
+  if (imbalanceReport.value) {
+    return (imbalanceReport.value as any).estimatedEvalCp ?? (imbalanceReport.value.materialDelta * 100)
+  }
+  return 0
+})
 const evalMate = computed(() => (evalInfo.value?.mateIn ? evalInfo.value.mateIn : null))
 
 const engineArrows = computed(() => {
@@ -1150,11 +1156,13 @@ async function updateBoardState(fen: string) {
     fetchOpeningTree(state.fen)
 
     // Update positional imbalance metrics
-    updateImbalance(state.fen)
+    await updateImbalance(state.fen)
 
-    // If live engine analysis is active, send position
+    // If live engine analysis is active, send position; otherwise clear stale evalInfo from prior plies/bot searches
     if (isAnalyzing.value) {
       AnalyzePosition(state.fen, [], 20).catch(console.error)
+    } else {
+      evalInfo.value = null
     }
 
     publishCurrentWorkspaceState()
@@ -1165,7 +1173,7 @@ async function updateBoardState(fen: string) {
 
 async function handleMove(moveInput: string) {
   try {
-    const evalBefore = evalInfo.value?.scoreCp || 0
+    const evalBefore = evalScore.value
     let moveSAN = moveInput
     try {
       moveSAN = await FormatMove(currentFEN.value, moveInput, 'san')
@@ -1208,19 +1216,17 @@ async function handleMove(moveInput: string) {
 
     await updateBoardState(nextState.fen)
 
-    // Blunder Radar evaluation check (if analysis is active)
-    if (isAnalyzing.value && evalInfo.value?.scoreCp !== undefined) {
-      const evalAfter = evalInfo.value.scoreCp
-      const swing = isWhite ? (evalBefore - evalAfter) : (evalAfter - evalBefore)
-      if (swing >= 200) {
-        triggerBlunderRadar(`⚠️ Blunder Radar: Move dropped evaluation by ${(swing / 100).toFixed(1)} pawns!`)
-      }
+    // Blunder Radar evaluation check
+    const evalAfter = evalScore.value
+    const swing = isWhite ? (evalBefore - evalAfter) : (evalAfter - evalBefore)
+    if (swing >= 200) {
+      triggerBlunderRadar(`⚠️ Blunder Radar: Move dropped evaluation by ${(swing / 100).toFixed(1)} pawns!`)
     }
 
     // If simulated match is active and game is not finished, trigger bot response!
     if (activeSimulation.value && !isBotThinking.value) {
       if (nextState.isCheckmate) {
-        const winner = isWhite ? 'Player' : activeSimulation.value.playerName
+        const winner = 'Player'
         gameTags.value.Result = isWhite ? '1-0' : '0-1'
         botMoveStatus.value = `Checkmate! ${winner} wins.`
       } else if (nextState.isStalemate) {
@@ -2330,7 +2336,7 @@ async function triggerSimulatedOpponentMove() {
     await updateBoardState(nextState.fen)
 
     if (nextState.isCheckmate) {
-      const winner = isBotWhite ? activeSimulation.value.playerName : 'Player'
+      const winner = activeSimulation.value.playerName
       gameTags.value.Result = isBotWhite ? '1-0' : '0-1'
       botMoveStatus.value = `Checkmate! ${winner} wins.`
     } else if (nextState.isStalemate) {

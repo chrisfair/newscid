@@ -227,12 +227,9 @@ func evalPositionWhitePOV(eng *Engine, b *chess.Board, movetimeMs int) (bestMove
 		return "", 0, 0
 	}
 
+	// SearchBestMove / ParseInfoLine already normalizes ScoreCp and MateIn to White's perspective
 	scoreCp = eval.ScoreCp
 	mateIn = eval.MateIn
-	if b.Turn == chess.Black {
-		scoreCp = -scoreCp
-		mateIn = -mateIn
-	}
 	if mateIn > 0 {
 		scoreCp = 3000 - (mateIn * 50)
 	} else if mateIn < 0 {

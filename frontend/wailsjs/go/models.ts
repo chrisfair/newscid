@@ -858,6 +858,7 @@ export namespace imbalance {
 	    white: SideEvaluation;
 	    black: SideEvaluation;
 	    materialDelta: number;
+	    estimatedEvalCp: number;
 	    positionalSummary: string;
 	
 	    static createFrom(source: any = {}) {
@@ -870,6 +871,7 @@ export namespace imbalance {
 	        this.white = this.convertValues(source["white"], SideEvaluation);
 	        this.black = this.convertValues(source["black"], SideEvaluation);
 	        this.materialDelta = source["materialDelta"];
+	        this.estimatedEvalCp = source["estimatedEvalCp"];
 	        this.positionalSummary = source["positionalSummary"];
 	    }
 	

@@ -194,7 +194,7 @@ func TestEngineMatch_EvalAdjudication(t *testing.T) {
 	}
 	p2 := &evalPlayer{
 		name:   "BlackDefense",
-		evalCp: -1200,
+		evalCp: 1200,
 		moves:  []string{"e7e5", "b8c6", "f8c5", "g8f6"},
 	}
 

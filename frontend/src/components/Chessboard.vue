@@ -164,7 +164,7 @@ const evalWhitePercent = computed(() => {
 
 const evalLabel = computed(() => {
   if (props.evalMate !== null && props.evalMate !== undefined && props.evalMate !== 0) {
-    return `M${Math.abs(props.evalMate)}`
+    return props.evalMate > 0 ? `M${props.evalMate}` : `-M${Math.abs(props.evalMate)}`
   }
   if (props.evalScore === null || props.evalScore === undefined) {
     return ''
@@ -379,23 +379,26 @@ watch(() => props.fen, (newFEN) => {
     <!-- PyChess-style Vertical Evaluation Gauge -->
     <div
       v-if="showEvalBar"
-      class="eval-bar w-3.5 flex flex-col justify-between bg-zinc-950 rounded-sm overflow-hidden border border-zinc-700/80 relative shadow-inner select-none transition-all duration-300"
+      class="eval-bar w-3.5 flex justify-between bg-zinc-950 rounded-sm overflow-hidden border border-zinc-700/80 relative shadow-inner select-none transition-all duration-300"
+      :class="flipped ? 'flex-col-reverse' : 'flex-col'"
       :style="{ height: boardSize ? `${boardSize}px` : '100%' }"
       :title="`Evaluation: ${evalLabel}`"
     >
       <div
-        class="eval-black w-full bg-zinc-900 transition-all duration-300 relative flex items-start justify-center"
+        class="eval-black w-full bg-zinc-900 transition-all duration-300 relative flex justify-center"
+        :class="flipped ? 'items-end' : 'items-start'"
         :style="{ height: `${100 - evalWhitePercent}%` }"
       >
-        <span v-if="evalWhitePercent < 50" class="text-[8px] font-mono font-bold text-zinc-300 mt-1 select-none">
+        <span v-if="evalWhitePercent < 50" class="text-[8px] font-mono font-bold text-zinc-300 my-1 select-none">
           {{ evalLabel }}
         </span>
       </div>
       <div
-        class="eval-white w-full bg-zinc-100 transition-all duration-300 relative flex items-end justify-center"
+        class="eval-white w-full bg-zinc-100 transition-all duration-300 relative flex justify-center"
+        :class="flipped ? 'items-start' : 'items-end'"
         :style="{ height: `${evalWhitePercent}%` }"
       >
-        <span v-if="evalWhitePercent >= 50" class="text-[8px] font-mono font-bold text-zinc-900 mb-1 select-none">
+        <span v-if="evalWhitePercent >= 50" class="text-[8px] font-mono font-bold text-zinc-900 my-1 select-none">
           {{ evalLabel }}
         </span>
       </div>
