@@ -815,8 +815,8 @@ onUnmounted(() => {
   if (playInterval) clearInterval(playInterval)
 })
 
-watch([showExportGameModal, showGuessTheMoveModal], ([exportOpen, guessOpen]) => {
-  if ((exportOpen || guessOpen) && flatMoves.value.length > 0) {
+watch([showExportGameModal, showGuessTheMoveModal, showTimeManagementModal], ([exportOpen, guessOpen, timeOpen]) => {
+  if ((exportOpen || guessOpen || timeOpen) && flatMoves.value.length > 0) {
     ParsePGN(buildCurrentGamePGN()).catch(() => {})
   }
 })

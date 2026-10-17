@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import {
   Globe,
   Plus,
@@ -142,12 +142,14 @@ async function handleImportOpponentGames() {
   opponentImportResult.value = null
 
   let cancelEvents: (() => void) | null = null
-  if (typeof window !== 'undefined' && (window as any).runtime?.EventsOnMultiple) {
+  try {
     cancelEvents = EventsOn('online:fetch-progress', (progress: any) => {
       if (progress && progress.message) {
         statusMessage.value = progress.message
       }
-    })
+    }) as any
+  } catch {
+    // Ignore in test environments without Wails runtime
   }
 
   try {
@@ -178,11 +180,11 @@ async function handleImportOpponentGames() {
     errorMessage.value = `Opponent import failed: ${err?.message || err}`
   } finally {
     if (cancelEvents) {
-      cancelEvents()
+      try { cancelEvents() } catch {}
     }
-    if (typeof window !== 'undefined' && (window as any).runtime?.EventsOff) {
+    try {
       EventsOff('online:fetch-progress')
-    }
+    } catch {}
     isImportingOpponent.value = false
   }
 }
@@ -199,6 +201,12 @@ const activeProfile = computed(() => {
 
 onMounted(async () => {
   await loadProfiles()
+})
+
+onUnmounted(() => {
+  try {
+    EventsOff('online:fetch-progress')
+  } catch {}
 })
 
 async function loadProfiles() {

@@ -6,6 +6,7 @@ import type { scout } from '../../wailsjs/go/models'
 
 const props = defineProps<{
   initialPlayer?: string
+  activeDbName?: string
 }>()
 
 const emit = defineEmits<{
