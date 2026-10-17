@@ -739,18 +739,26 @@ func AnalyzePlayerTimeManagement(db *scid.Database, playerName string, maxGames 
 
 	gamesSampled := 0
 
-	for i := 0; i < len(db.Entries); i++ {
+	numGames := db.NumGames()
+	for i := 0; i < numGames; i++ {
 		if gamesSampled >= maxGames {
 			break
 		}
 
+		db.RLock()
+		if i >= len(db.Entries) {
+			db.RUnlock()
+			break
+		}
 		entry := db.Entries[i]
-		if (entry.Flags & scid.FlagDelete) != 0 {
+		if entry == nil || (entry.Flags&scid.FlagDelete) != 0 {
+			db.RUnlock()
 			continue
 		}
 
 		white := db.Names.GetName(scid.NamePlayer, entry.WhiteID)
 		black := db.Names.GetName(scid.NamePlayer, entry.BlackID)
+		db.RUnlock()
 
 		isWhite := strings.Contains(strings.ToLower(white), cleanTarget)
 		isBlack := strings.Contains(strings.ToLower(black), cleanTarget)
