@@ -152,8 +152,9 @@ const legalMoves = ref<string[]>([])
 const inCheck = ref(false)
 const lastMove = ref<{ from: string; to: string } | null>(null)
 const flipped = ref(false)
-const activeTab = ref<'notation' | 'tree' | 'db-roles' | 'portal' | 'info'>('notation')
+const activeTab = ref<'notation' | 'tree' | 'games' | 'engine' | 'db-roles' | 'portal' | 'info'>('notation')
 const bottomDrawerOpen = ref(true)
+const showMoreTabsDropdown = ref(false)
 
 // History & Move Tree
 const history = ref<{ fen: string; lastMove: { from: string; to: string } | null }[]>([
@@ -764,16 +765,66 @@ const botMoveStatus = ref<string | null>(null)
 
 
 // Resizable Panes & Adaptive Sizing State
+const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1280)
+const windowHeight = ref(typeof window !== 'undefined' ? window.innerHeight : 800)
+const compactModeOverride = ref<'auto' | 'compact' | 'full'>('auto')
+const userForcedBottomDrawer = ref(false)
+const hasUserManuallyResizedLeft = ref(false)
+
+// Automatically activate compact layout on screens/tiles smaller than 1180px wide or 860px tall
+const isSmallScreen = computed(() => windowHeight.value < 860 || windowWidth.value < 1180)
+const effectiveCompact = computed(() =>
+  compactModeOverride.value === 'compact' ||
+  (compactModeOverride.value === 'auto' && isSmallScreen.value)
+)
+
+const showBottomGamesDrawer = computed(() =>
+  !zenMode.value &&
+  workspacePanels.value.games.mode === 'docked' &&
+  workspacePanels.value.games.dockZone === 'bottom' &&
+  (effectiveCompact.value ? userForcedBottomDrawer.value : bottomDrawerOpen.value)
+)
+
+const showLeftImbalancePanel = computed(() =>
+  !effectiveCompact.value &&
+  workspacePanels.value.imbalance.mode === 'docked' &&
+  workspacePanels.value.imbalance.dockZone === 'left'
+)
+
+const showLeftEnginePanel = computed(() =>
+  !effectiveCompact.value &&
+  workspacePanels.value.engine.mode === 'docked' &&
+  workspacePanels.value.engine.dockZone === 'left'
+)
+
+function toggleCompactLayout() {
+  if (effectiveCompact.value) {
+    compactModeOverride.value = 'full'
+  } else {
+    compactModeOverride.value = 'compact'
+  }
+  hasUserManuallyResizedLeft.value = false
+  nextTick(() => updateResponsiveBoardSize())
+}
+
+function toggleBottomGamesDrawer() {
+  if (effectiveCompact.value) {
+    userForcedBottomDrawer.value = !userForcedBottomDrawer.value
+  } else {
+    bottomDrawerOpen.value = !bottomDrawerOpen.value
+  }
+  nextTick(() => updateResponsiveBoardSize())
+}
+
 function getInitialLeftColWidth(): number {
   const saved = Number(localStorage.getItem('newscid:leftColWidth'))
   const screenW = typeof window !== 'undefined' ? window.innerWidth : 1280
-  const maxW = Math.max(320, screenW - 360)
-  if (saved && saved >= 300 && saved <= maxW) {
+  const maxW = Math.max(280, screenW - 320)
+  if (saved && saved >= 260 && saved <= maxW && screenW >= 1200) {
     return saved
   }
-  // Adaptive default based on screen size
-  if (screenW < 1200) return Math.max(340, Math.floor(screenW * 0.44))
-  if (screenW < 1440) return Math.max(400, Math.floor(screenW * 0.42))
+  if (screenW < 1000) return Math.max(280, Math.floor(screenW * 0.52))
+  if (screenW < 1440) return Math.max(380, Math.floor(screenW * 0.48))
   return 560
 }
 
@@ -784,10 +835,9 @@ function getInitialBottomDrawerHeight(): number {
   if (saved && saved >= 100 && saved <= maxH) {
     return saved
   }
-  // Adaptive default based on screen size
-  if (screenH < 800) return 165
-  if (screenH < 960) return 200
-  return 240
+  if (screenH < 800) return 155
+  if (screenH < 960) return 195
+  return 235
 }
 
 const leftColWidth = ref<number>(getInitialLeftColWidth())
@@ -807,55 +857,74 @@ function updateResponsiveBoardSize() {
 
   const screenW = window.innerWidth
   const screenH = window.innerHeight
+  windowWidth.value = screenW
+  windowHeight.value = screenH
 
-  // Clamp leftColWidth and bottomDrawerHeight to current screen limits
-  const maxLeftW = Math.max(320, screenW - 360)
-  if (leftColWidth.value > maxLeftW) {
-    leftColWidth.value = maxLeftW
-  }
-  const maxDrawerH = Math.max(120, Math.floor(screenH * 0.42))
+  const maxDrawerH = Math.max(120, Math.floor(screenH * 0.4))
   if (bottomDrawerHeight.value > maxDrawerH) {
     bottomDrawerHeight.value = maxDrawerH
   }
 
-  // 1. Available height inside left column
-  let colH = leftColRef.value?.clientHeight || 0
-  let colW = leftColRef.value?.clientWidth || leftColWidth.value
+  // 1. Measure available workspace dimensions
+  const topBarsH = zenMode.value
+    ? 0
+    : (34 + (effectiveCompact.value ? 0 : 48) + ((effectiveCompact.value && openGameTabs.value.length <= 1) ? 0 : 34))
+  const bottomDrawerH = showBottomGamesDrawer.value ? (bottomDrawerHeight.value + 8) : 0
 
-  if (!colH || colH < 100) {
-    const topBars = zenMode.value ? 0 : 105
-    const bottomDrawer = (!zenMode.value && bottomDrawerOpen.value) ? bottomDrawerHeight.value : 0
-    colH = Math.max(260, screenH - topBars - bottomDrawer - 24)
-  }
+  const wsClientH = workspaceRef.value?.clientHeight || 0
+  const wsClientW = workspaceRef.value?.clientWidth || 0
 
-  // 2. Measure non-board items in left-col (banners, imbalance bar, engine panel)
+  const wsH = wsClientH > 120
+    ? (wsClientH - 16)
+    : Math.max(220, screenH - topBarsH - bottomDrawerH - 16)
+  const wsW = wsClientW > 200
+    ? (wsClientW - 16)
+    : Math.max(280, screenW - 16)
+
+  // 2. Measure only the non-board items actually rendered inside left-col
   let nonBoardH = 0
-  if (activeSimulation.value) nonBoardH += 46
-  if (isTheoreticalNovelty.value) nonBoardH += 34
-  if (blunderRadarAlert.value) nonBoardH += 34
-
-  // ImbalanceBar height (compact / expanded)
-  if (imbalanceReport.value) {
-    nonBoardH += (screenH < 780 ? 36 : 84)
+  if (activeSimulation.value) nonBoardH += 48
+  if (isTheoreticalNovelty.value) nonBoardH += 32
+  if (blunderRadarAlert.value) nonBoardH += 32
+  if (showLeftImbalancePanel.value && imbalanceReport.value) {
+    nonBoardH += (screenH < 880 ? 38 : 84)
+  }
+  if (showLeftEnginePanel.value) {
+    nonBoardH += 122
+  }
+  if (nonBoardH > 0) {
+    nonBoardH += 12
   }
 
-  // EnginePanel height
-  nonBoardH += 115
+  const availH = Math.max(180, wsH - nonBoardH)
+  const evalBarExtra = showEvalBar.value ? 26 : 4
 
-  // Margin, padding & flex gap buffers
-  nonBoardH += 22
+  if (screenW >= 768) {
+    const minRightW = screenW < 920 ? 250 : screenW < 1150 ? 300 : 350
+    const maxBoardW = Math.max(180, wsW - minRightW - evalBarExtra - 12)
 
-  const availH = Math.max(180, colH - nonBoardH)
-  const availW = Math.max(180, colW - (showEvalBar.value ? 30 : 12))
-
-  // The square board size is the minimum of available width and height
-  const idealSize = Math.floor(Math.min(availW, availH))
-
-  // Right-size board: allow up to 800px on 2K/4K displays, minimum 200px on compact screens
-  computedBoardSize.value = Math.max(200, Math.min(800, idealSize))
+    if (hasUserManuallyResizedLeft.value) {
+      const maxLeftW = Math.max(240, wsW - minRightW)
+      if (leftColWidth.value > maxLeftW) {
+        leftColWidth.value = maxLeftW
+      }
+      const availW = Math.max(180, leftColWidth.value - evalBarExtra - 4)
+      computedBoardSize.value = Math.max(180, Math.min(800, Math.floor(Math.min(availH, availW))))
+    } else {
+      const idealBoard = Math.max(180, Math.min(800, Math.floor(Math.min(availH, maxBoardW))))
+      computedBoardSize.value = idealBoard
+      leftColWidth.value = idealBoard + evalBarExtra + 4
+    }
+  } else {
+    // Stacked vertical layout for narrow windows (< 768px)
+    const idealBoard = Math.max(180, Math.floor(Math.min(wsW - evalBarExtra - 4, wsH * 0.54)))
+    computedBoardSize.value = idealBoard
+  }
 }
 
 function handleWindowResize() {
+  windowWidth.value = window.innerWidth
+  windowHeight.value = window.innerHeight
   isMdScreen.value = window.innerWidth >= 768
   nextTick(() => updateResponsiveBoardSize())
 }
@@ -863,6 +932,7 @@ function handleWindowResize() {
 function startHorizontalResize(e: MouseEvent) {
   e.preventDefault()
   isResizingH.value = true
+  hasUserManuallyResizedLeft.value = true
   const startX = e.clientX
   const startWidth = leftColWidth.value
   document.body.style.cursor = 'col-resize'
@@ -870,8 +940,8 @@ function startHorizontalResize(e: MouseEvent) {
 
   function onMouseMove(moveEvent: MouseEvent) {
     const delta = moveEvent.clientX - startX
-    const minW = 320
-    const maxW = Math.max(minW, window.innerWidth - 300)
+    const minW = 240
+    const maxW = Math.max(minW, window.innerWidth - 260)
     leftColWidth.value = Math.max(minW, Math.min(maxW, startWidth + delta))
     updateResponsiveBoardSize()
   }
@@ -891,8 +961,8 @@ function startHorizontalResize(e: MouseEvent) {
 }
 
 function resetHorizontalResize() {
-  leftColWidth.value = getInitialLeftColWidth()
-  localStorage.setItem('newscid:leftColWidth', String(leftColWidth.value))
+  hasUserManuallyResizedLeft.value = false
+  localStorage.removeItem('newscid:leftColWidth')
   nextTick(() => updateResponsiveBoardSize())
 }
 
@@ -1125,7 +1195,7 @@ watch([showExportGameModal, showGuessTheMoveModal, showTimeManagementModal], ([e
   }
 })
 
-watch([leftColWidth, bottomDrawerHeight, bottomDrawerOpen, zenMode, showEvalBar, imbalanceReport, activeSimulation, isTheoreticalNovelty, blunderRadarAlert], () => {
+watch([leftColWidth, bottomDrawerHeight, bottomDrawerOpen, userForcedBottomDrawer, effectiveCompact, showBottomGamesDrawer, showLeftEnginePanel, showLeftImbalancePanel, zenMode, showEvalBar, imbalanceReport, activeSimulation, isTheoreticalNovelty, blunderRadarAlert], () => {
   nextTick(() => updateResponsiveBoardSize())
 })
 
@@ -3074,6 +3144,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         :threat-mode="threatMode"
         :show-eval-bar="showEvalBar"
         :zen-mode="zenMode"
+        :compact-layout="effectiveCompact"
         @toggle-sound="toggleSound"
         @toggle-blindfold="toggleBlindfold"
         @toggle-threat-mode="toggleThreatMode"
@@ -3085,6 +3156,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         @opponent-scout="showOpponentScoutModal = true"
         @anti-persona="openAntiPersonaModal()"
         @toggle-zen-mode="toggleZenMode"
+        @toggle-compact-layout="toggleCompactLayout"
         @explain-move="handleExplainMove(currentPly)"
         :current-u-i-theme="currentUITheme"
         @change-u-i-theme="applyUITheme"
@@ -3098,9 +3170,9 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         @fair-play-inspector="showFairPlayModal = true"
       />
 
-      <!-- Top Header Bar -->
+      <!-- Top Header Bar (Auto-hidden in Compact / Small-Screen Mode to maximize board height) -->
       <HeaderBar
-        v-if="!zenMode"
+        v-if="!zenMode && !effectiveCompact"
         ref="headerBarRef"
         :db-name="dbInfo?.name"
         :default-db-name="dbRolesStatus?.defaultDbName"
@@ -3132,9 +3204,9 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         @open-preferences="openPreferencesModal"
       />
 
-      <!-- Multi-Game Tabbed Workspace Strip -->
+      <!-- Multi-Game Tabbed Workspace Strip (Auto-hidden on compact screens when only 1 game tab is open) -->
       <div
-        v-if="!zenMode"
+        v-if="!zenMode && (!effectiveCompact || openGameTabs.length > 1)"
         class="workspace-tabs-bar flex items-center justify-between gap-1.5 px-3 py-1 bg-zinc-950 border-b border-zinc-800/80 text-xs overflow-x-auto select-none"
       >
         <div class="flex items-center gap-1.5 overflow-x-auto">
@@ -3188,22 +3260,22 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       <!-- Main Workspace (Split Grid) -->
       <div
         ref="workspaceRef"
-        class="workspace-grid flex-1 flex flex-col md:flex-row overflow-hidden p-2 gap-1 relative"
+        class="workspace-grid flex-1 flex flex-col md:flex-row overflow-hidden p-1.5 md:p-2 gap-1 relative min-h-0"
       >
-        <!-- Left Column: Chessboard & Docked Left Panels (Resizable) -->
+        <!-- Left Column: Auto-Sized Chessboard & Optional Docked Left Panels -->
         <div
           ref="leftColRef"
-          class="left-col flex flex-col items-center justify-between gap-1.5 w-full md:w-auto shrink-0 h-full overflow-hidden"
+          class="left-col flex flex-col items-center justify-center gap-1.5 w-full md:w-auto shrink-0 md:h-full overflow-hidden"
           :style="{ width: isMdScreen ? `${leftColWidth}px` : '100%' }"
         >
           <!-- Player Simulation Sparring Match Status -->
           <div
             v-if="activeSimulation"
-            class="w-full bg-gradient-to-r from-purple-950/80 via-zinc-900 to-purple-950/80 border border-purple-500/40 rounded-xl p-2.5 flex items-center justify-between text-xs shadow-md animate-fade-in"
+            class="w-full bg-gradient-to-r from-purple-950/80 via-zinc-900 to-purple-950/80 border border-purple-500/40 rounded-xl px-2.5 py-1.5 flex items-center justify-between text-xs shadow-md animate-fade-in"
           >
             <div class="flex items-center gap-2 min-w-0">
-              <div class="w-7 h-7 rounded-lg bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 shrink-0">
-                <Bot class="w-4 h-4" :class="{ 'animate-pulse text-purple-400': isBotThinking }" />
+              <div class="w-6 h-6 rounded-lg bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 shrink-0">
+                <Bot class="w-3.5 h-3.5" :class="{ 'animate-pulse text-purple-400': isBotThinking }" />
               </div>
               <div class="truncate">
                 <div class="flex items-center gap-1.5">
@@ -3227,7 +3299,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           <!-- Theory Novelty Pill -->
           <div
             v-if="isTheoreticalNovelty"
-            class="w-full flex items-center justify-between px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 font-semibold shadow-xs"
+            class="w-full flex items-center justify-between px-3 py-1 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 font-semibold shadow-xs"
           >
             <span class="flex items-center gap-1.5">
               <Sparkles class="w-3.5 h-3.5 text-amber-400" />
@@ -3239,13 +3311,13 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           <!-- Blunder Radar Alert Banner -->
           <div
             v-if="blunderRadarAlert"
-            class="w-full flex items-center gap-2 px-3 py-1.5 bg-rose-950/90 border border-rose-500/50 rounded-xl text-xs text-rose-200 font-semibold shadow-md animate-pulse"
+            class="w-full flex items-center gap-2 px-3 py-1 bg-rose-950/90 border border-rose-500/50 rounded-xl text-xs text-rose-200 font-semibold shadow-md animate-pulse"
           >
             <AlertTriangle class="w-4 h-4 text-rose-400 shrink-0" />
             <span class="truncate">{{ blunderRadarAlert }}</span>
           </div>
 
-          <!-- Interactive Chessboard -->
+          <!-- Interactive Auto-Sized Chessboard -->
           <div class="chessboard-wrapper-host flex items-center justify-center w-full shrink-0">
             <Chessboard
               :fen="currentFEN"
@@ -3267,9 +3339,9 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
             />
           </div>
 
-          <!-- Interactive Material & Positional Imbalance Bar (Dockable / Floater / Removable) -->
+          <!-- Interactive Material & Positional Imbalance Bar (Auto-hidden under board on compact screens) -->
           <div
-            v-if="workspacePanels.imbalance.mode === 'docked' && workspacePanels.imbalance.dockZone === 'left'"
+            v-if="showLeftImbalancePanel"
             class="w-full relative group/imbalance"
           >
             <div class="absolute right-2 top-1.5 z-10 hidden group-hover/imbalance:flex items-center gap-1 bg-zinc-900/90 border border-zinc-700 rounded px-1 py-0.5 text-[10px]">
@@ -3291,9 +3363,9 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
             <ImbalanceBar :report="imbalanceReport" />
           </div>
 
-          <!-- Live Engine Analysis Bar (Dockable / Floater / Removable / Multi-Screen) -->
+          <!-- Live Engine Analysis Bar (Auto-moved to Right Column 'Engine' tab on compact screens) -->
           <div
-            v-if="workspacePanels.engine.mode === 'docked' && workspacePanels.engine.dockZone === 'left'"
+            v-if="showLeftEnginePanel"
             class="w-full relative group/engine"
           >
             <div class="absolute right-2 top-1.5 z-10 hidden group-hover/engine:flex items-center gap-1 bg-zinc-900/90 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px]">
@@ -3341,7 +3413,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         <div
           class="hidden md:flex items-center justify-center w-2 cursor-col-resize hover:bg-emerald-500/20 active:bg-emerald-500/40 rounded transition-colors group select-none relative z-10 shrink-0"
           :class="{ 'bg-emerald-500/30': isResizingH }"
-          title="Drag to resize panes (Double-click to reset)"
+          title="Drag to resize panes (Double-click to auto-fit board)"
           @mousedown="startHorizontalResize"
           @dblclick="resetHorizontalResize"
         >
@@ -3352,80 +3424,170 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         </div>
 
         <!-- Right Column: Customizable Docked Tabbed Panels -->
-        <div class="right-col flex-1 min-w-0 flex flex-col overflow-hidden bg-zinc-900 border border-zinc-800 rounded-xl shadow-lg">
+        <div class="right-col flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-zinc-900 border border-zinc-800 rounded-xl shadow-lg">
           <!-- Tabs Header + Panel Float / Detach / Customize Controls -->
-          <div class="tabs-header flex items-center justify-between gap-2 p-2 bg-zinc-950 border-b border-zinc-800 overflow-x-auto">
-            <div class="flex items-center gap-1 overflow-x-auto">
+          <div class="tabs-header flex items-center justify-between gap-1.5 p-1.5 bg-zinc-950 border-b border-zinc-800">
+            <div class="flex items-center gap-1 overflow-x-auto min-w-0">
               <button
                 v-if="workspacePanels.notation.mode === 'docked'"
-                class="px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap"
+                class="px-2 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap"
                 :class="activeTab === 'notation'
                   ? 'bg-emerald-600 text-white shadow-sm'
                   : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'"
                 @click="activeTab = 'notation'"
               >
-                Notation & Analysis
+                {{ effectiveCompact ? 'Moves' : 'Notation & Analysis' }}
               </button>
+
               <button
                 v-if="workspacePanels.tree.mode === 'docked'"
-                class="px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap"
+                class="px-2 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap"
                 :class="activeTab === 'tree'
                   ? 'bg-emerald-600 text-white shadow-sm'
                   : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'"
                 @click="activeTab = 'tree'"
               >
-                Opening Tree
+                {{ effectiveCompact ? 'Tree' : 'Opening Tree' }}
               </button>
+
+              <!-- Games Tab (automatically shown when bottom drawer is collapsed or on compact screens) -->
               <button
-                v-if="workspacePanels['db-roles'].mode === 'docked'"
-                class="px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1"
+                v-if="!showBottomGamesDrawer || workspacePanels.games.dockZone === 'right' || activeTab === 'games'"
+                class="px-2 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1"
+                :class="activeTab === 'games'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'"
+                @click="activeTab = 'games'"
+              >
+                <span>Games</span>
+                <span v-if="totalGames > 0" class="text-[10px] font-mono opacity-80">({{ totalGames }})</span>
+              </button>
+
+              <!-- Engine Tab (automatically shown on compact screens when Engine is moved out from under the board) -->
+              <button
+                v-if="!showLeftEnginePanel || workspacePanels.engine.dockZone === 'right' || activeTab === 'engine'"
+                class="px-2 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1"
+                :class="activeTab === 'engine'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'"
+                @click="activeTab = 'engine'"
+              >
+                <span>Engine</span>
+                <span
+                  v-if="isAnalyzing"
+                  class="px-1 py-0.2 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300"
+                >
+                  {{ evalScore >= 0 ? `+${(evalScore / 100).toFixed(1)}` : (evalScore / 100).toFixed(1) }}
+                </span>
+              </button>
+
+              <!-- Secondary Tabs: Shown inline on large screens, or when active, or via 'More ▾' on compact screens -->
+              <button
+                v-if="(!effectiveCompact && workspacePanels['db-roles'].mode === 'docked') || activeTab === 'db-roles'"
+                class="px-2 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1"
                 :class="activeTab === 'db-roles'
                   ? 'bg-emerald-600 text-white shadow-sm'
                   : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'"
                 @click="activeTab = 'db-roles'"
               >
-                <span>Databases & Roles</span>
+                <span>{{ effectiveCompact ? 'DBs' : 'Databases & Roles' }}</span>
                 <span v-if="dbRolesStatus?.isActiveDefault" class="text-amber-300 text-[10px]">★</span>
               </button>
+
               <button
-                v-if="workspacePanels.portal.mode === 'docked'"
-                class="px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1"
+                v-if="(!effectiveCompact && workspacePanels.portal.mode === 'docked') || activeTab === 'portal'"
+                class="px-2 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1"
                 :class="activeTab === 'portal'
                   ? 'bg-sky-600 text-white shadow-sm'
                   : 'text-sky-400/90 hover:text-sky-200 hover:bg-zinc-800'"
                 @click="activeTab = 'portal'"
               >
-                <span>Lichess / Chess.com</span>
+                <span>{{ effectiveCompact ? 'Portal' : 'Lichess / Chess.com' }}</span>
               </button>
+
               <button
-                v-if="workspacePanels.info.mode === 'docked'"
-                class="px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap"
+                v-if="(!effectiveCompact && workspacePanels.info.mode === 'docked') || activeTab === 'info'"
+                class="px-2 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap"
                 :class="activeTab === 'info'
                   ? 'bg-emerald-600 text-white shadow-sm'
                   : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'"
                 @click="activeTab = 'info'"
               >
-                Game Info
+                {{ effectiveCompact ? 'Info' : 'Game Info' }}
               </button>
+
+              <!-- Compact More Panels Popover Button -->
+              <div v-if="effectiveCompact" class="relative shrink-0">
+                <button
+                  class="px-2 py-1 rounded-lg text-[11px] font-semibold bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 cursor-pointer whitespace-nowrap"
+                  title="More workspace panels (Databases, Lichess/Chess.com Portal, Game Info)"
+                  @click="showMoreTabsDropdown = !showMoreTabsDropdown"
+                >
+                  More ▾
+                </button>
+                <div
+                  v-if="showMoreTabsDropdown"
+                  class="fixed inset-0 z-40"
+                  @click="showMoreTabsDropdown = false"
+                />
+                <div
+                  v-if="showMoreTabsDropdown"
+                  class="absolute top-full left-0 mt-1 w-48 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl py-1 z-50 text-xs"
+                >
+                  <button
+                    class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+                    @click="activeTab = 'db-roles'; showMoreTabsDropdown = false"
+                  >
+                    <span>Databases &amp; Roles</span>
+                    <span v-if="dbRolesStatus?.isActiveDefault" class="text-amber-300 text-[10px]">★</span>
+                  </button>
+                  <button
+                    class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-sky-300 flex items-center justify-between cursor-pointer"
+                    @click="activeTab = 'portal'; showMoreTabsDropdown = false"
+                  >
+                    <span>Lichess / Chess.com</span>
+                  </button>
+                  <button
+                    class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+                    @click="activeTab = 'info'; showMoreTabsDropdown = false"
+                  >
+                    <span>Game Info &amp; Tags</span>
+                  </button>
+                  <div class="h-px bg-zinc-800 my-1" />
+                  <button
+                    class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-300 flex items-center justify-between cursor-pointer"
+                    @click="openNewGameTab(); showMoreTabsDropdown = false"
+                  >
+                    <span>+ New Game Tab</span>
+                  </button>
+                  <button
+                    class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-400 flex items-center justify-between cursor-pointer"
+                    @click="toggleBottomGamesDrawer(); showMoreTabsDropdown = false"
+                  >
+                    <span>{{ showBottomGamesDrawer ? 'Hide Bottom DB Drawer' : 'Show Bottom DB Drawer' }}</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <!-- Active Tab Panel Controls (Float / Detach to Hyprland Screen / Hide / Bottom Drawer Toggle) -->
             <div class="flex items-center gap-1 shrink-0">
               <button
-                class="text-[11px] text-amber-300 hover:text-amber-200 px-2 py-1 rounded bg-amber-950/40 hover:bg-amber-900/50 border border-amber-500/30 transition-colors cursor-pointer"
+                class="text-[11px] text-amber-300 hover:text-amber-200 px-1.5 py-1 rounded bg-amber-950/40 hover:bg-amber-900/50 border border-amber-500/30 transition-colors cursor-pointer"
                 :title="`Undock '${activeTab}' into a draggable Floating Window (Floater)`"
                 @click="togglePanelFloater(activeTab as PanelId)"
               >
-                Float ❐
+                <span class="hidden sm:inline">Float </span>❐
               </button>
               <button
-                class="text-[11px] text-purple-300 hover:text-purple-200 px-2 py-1 rounded bg-purple-950/40 hover:bg-purple-900/50 border border-purple-500/30 transition-colors cursor-pointer"
+                class="text-[11px] text-purple-300 hover:text-purple-200 px-1.5 py-1 rounded bg-purple-950/40 hover:bg-purple-900/50 border border-purple-500/30 transition-colors cursor-pointer"
                 :title="`Detach '${activeTab}' into a native OS window for another Hyprland monitor`"
                 @click="handleDetachPanelScreen(activeTab as PanelId)"
               >
-                Screen ↗
+                <span class="hidden sm:inline">Screen </span>↗
               </button>
               <button
+                v-if="!effectiveCompact"
                 class="text-[11px] text-zinc-400 hover:text-rose-300 px-1.5 py-1 rounded bg-zinc-800/80 hover:bg-zinc-800 transition-colors cursor-pointer"
                 :title="`Hide '${activeTab}' panel (restore anytime from Windows menu)`"
                 @click="setPanelMode(activeTab as PanelId, 'hidden')"
@@ -3433,16 +3595,17 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
                 ✕
               </button>
               <button
-                class="text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded bg-zinc-800/80 hover:bg-zinc-800 transition-colors cursor-pointer ml-1"
-                @click="bottomDrawerOpen = !bottomDrawerOpen"
+                v-if="!effectiveCompact"
+                class="text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded bg-zinc-800/80 hover:bg-zinc-800 transition-colors cursor-pointer ml-0.5"
+                @click="toggleBottomGamesDrawer()"
               >
-                {{ bottomDrawerOpen ? 'Hide DB ▼' : 'Show DB ▲' }}
+                {{ showBottomGamesDrawer ? 'Hide DB ▼' : 'Show DB ▲' }}
               </button>
             </div>
           </div>
 
           <!-- Tab Content -->
-          <div class="tab-content flex-1 overflow-hidden p-2">
+          <div class="tab-content flex-1 overflow-hidden p-2 min-h-0">
             <!-- 1. Notation & Evaluation Curve View -->
             <div v-show="activeTab === 'notation'" class="h-full flex flex-col gap-2">
               <EvaluationGraph
@@ -3497,6 +3660,46 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
                 @go-prev="goPrev"
                 @pop-out-window="handleOpenTreeWindow"
               />
+            </div>
+
+            <!-- 2b. Database Games Browser Tab (Used in Compact / Small-Screen Mode when bottom drawer is collapsed) -->
+            <div v-show="activeTab === 'games'" class="h-full overflow-hidden">
+              <GameBrowser
+                :games="gamesList"
+                :total-games="totalGames"
+                :current-page="currentPage"
+                :page-size="pageSize"
+                :active-game-id="activeGameId"
+                :db-name="dbInfo?.name"
+                :active-criteria="searchFilter"
+                @load-game="handleLoadGame"
+                @page-change="handlePageChange"
+                @search="handleSearch"
+                @open-advanced-search="showSearchModal = true"
+                @new-game="handleNewGame"
+                @save-game="handleSaveCurrentGame"
+                @delete-game="handleDeleteGame"
+              />
+            </div>
+
+            <!-- 2c. Live Engine & Imbalance Tab (Used in Compact / Small-Screen Mode when Engine is moved out from under board) -->
+            <div v-show="activeTab === 'engine'" class="h-full overflow-y-auto flex flex-col gap-2.5">
+              <EnginePanel
+                :eval-info="evalInfo"
+                :is-analyzing="isAnalyzing"
+                :available-engines="availableEngines"
+                :discovered-engines="discoveredEngines"
+                :selected-engine="selectedEngine"
+                :multi-pv="engineMultiPv"
+                :tablebase-result="tablebaseResult"
+                @toggle-analysis="toggleAnalysis"
+                @select-engine="handleSelectEngine"
+                @change-multi-p-v="handleChangeMultiPV"
+                @change-threads="handleChangeThreads"
+                @change-hash="handleChangeHash"
+                @preview-move="handlePreviewCandidateMove"
+              />
+              <ImbalanceBar :report="imbalanceReport" />
             </div>
 
             <!-- 3. Databases & Roles Hub View (Default / Active / Reference / Clipbase) -->
@@ -3579,7 +3782,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
 
       <!-- Vertical Drag Splitter (between Workspace and Database Drawer) -->
       <div
-        v-if="!zenMode && bottomDrawerOpen && workspacePanels.games.mode === 'docked'"
+        v-if="showBottomGamesDrawer"
         class="flex items-center justify-center h-2 cursor-row-resize hover:bg-emerald-500/20 active:bg-emerald-500/40 transition-colors group select-none relative z-10 shrink-0"
         :class="{ 'bg-emerald-500/30': isResizingV }"
         title="Drag to resize database drawer (Double-click to reset)"
@@ -3592,9 +3795,9 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         />
       </div>
 
-      <!-- Bottom Panel: Database Games Browser (Collapsible, Resizable, Floatable & Multi-Screen) -->
+      <!-- Bottom Panel: Database Games Browser (Auto-collapsed into 'Games' right tab on smaller screens) -->
       <div
-        v-if="!zenMode && bottomDrawerOpen && workspacePanels.games.mode === 'docked'"
+        v-if="showBottomGamesDrawer"
         class="bottom-drawer shrink-0 px-2 pb-2 transition-all duration-75 overflow-hidden relative group/gamesdrawer"
         :style="{ height: `${bottomDrawerHeight}px` }"
       >

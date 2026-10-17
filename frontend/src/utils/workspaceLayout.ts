@@ -34,7 +34,7 @@ export interface PanelConfig {
   floaterRect: FloaterRect
 }
 
-export type LayoutPresetId = 'standard' | 'floaters' | 'hyprland-multiscreen' | 'minimal'
+export type LayoutPresetId = 'standard' | 'floaters' | 'hyprland-multiscreen' | 'minimal' | 'compact'
 
 const STORAGE_KEY = 'newscid:workspacePanels:v1'
 
@@ -266,6 +266,17 @@ export function applyLayoutPreset(preset: LayoutPresetId) {
     fresh.notation.mode = 'docked'
     fresh.games.mode = 'hidden'
     workspacePanels.value = fresh
+  } else if (preset === 'compact') {
+    // Small screen / tiled window preset: maximize board height by moving Engine & Games into right tabs and hiding non-essential panels
+    fresh.imbalance.mode = 'hidden'
+    fresh.engine.mode = 'docked'
+    fresh.engine.dockZone = 'right'
+    fresh.games.mode = 'docked'
+    fresh.games.dockZone = 'right'
+    fresh['db-roles'].mode = 'hidden'
+    fresh.portal.mode = 'hidden'
+    fresh.info.mode = 'hidden'
+    workspacePanels.value = fresh
   } else if (preset === 'minimal') {
     fresh.imbalance.mode = 'hidden'
     fresh.engine.mode = 'hidden'
@@ -274,6 +285,26 @@ export function applyLayoutPreset(preset: LayoutPresetId) {
     workspacePanels.value = fresh
   }
   saveWorkspacePanels()
+}
+
+export function autoAdaptPanelsForScreenSize(screenW: number, screenH: number): boolean {
+  const isSmallScreen = screenH < 860 || screenW < 1180
+  if (isSmallScreen) {
+    // Move engine & games out of vertical stack under the board into right-column tabs, and hide secondary clutter
+    if (workspacePanels.value.imbalance.mode === 'docked' && workspacePanels.value.imbalance.dockZone === 'left') {
+      workspacePanels.value.imbalance.mode = 'hidden'
+    }
+    if (screenH < 840 && workspacePanels.value.engine.mode === 'docked' && workspacePanels.value.engine.dockZone === 'left') {
+      workspacePanels.value.engine.dockZone = 'right'
+    }
+    if (screenW < 1100) {
+      if (workspacePanels.value['db-roles'].mode === 'docked') workspacePanels.value['db-roles'].mode = 'hidden'
+      if (workspacePanels.value.portal.mode === 'docked') workspacePanels.value.portal.mode = 'hidden'
+      if (workspacePanels.value.info.mode === 'docked') workspacePanels.value.info.mode = 'hidden'
+    }
+    return true
+  }
+  return false
 }
 
 export function resetWorkspaceLayout() {

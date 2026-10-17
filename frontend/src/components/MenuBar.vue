@@ -92,6 +92,7 @@ const props = defineProps<{
   threatMode?: boolean
   showEvalBar?: boolean
   zenMode?: boolean
+  compactLayout?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -163,6 +164,7 @@ const emit = defineEmits<{
   (e: 'opponentScout'): void
   (e: 'antiPersona'): void
   (e: 'toggleZenMode'): void
+  (e: 'toggleCompactLayout'): void
   (e: 'explainMove'): void
   (e: 'openTreeWindow'): void
   (e: 'changeUITheme', id: string): void
@@ -945,6 +947,12 @@ onUnmounted(() => {
         <div class="px-3.5 py-1 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Layout Presets</div>
         <div class="px-3 py-1 grid grid-cols-2 gap-1.5">
           <button
+            class="px-2.5 py-1.5 rounded bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 font-semibold text-left text-[11px] cursor-pointer col-span-2"
+            @click="selectItem(() => { applyLayoutPreset('compact'); emit('toggleCompactLayout') })"
+          >
+            ⚡ Compact / Small-Screen Auto-Fit (Maximize Board)
+          </button>
+          <button
             class="px-2.5 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-left text-[11px] cursor-pointer"
             @click="selectItem(() => applyLayoutPreset('standard'))"
           >
@@ -1180,15 +1188,46 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Right-Side Quick Triggers: Lichess, Chess.com, Preferences, Support & Command Palette -->
-    <div class="ml-auto mr-2 flex items-center gap-1.5">
+    <!-- Right-Side Quick Triggers: Active DB (in compact mode), Flip, Compact Auto-Fit, Lichess/Chess.com, Preferences & Command Palette -->
+    <div class="ml-auto mr-1 flex items-center gap-1">
+      <button
+        v-if="compactLayout"
+        class="px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-emerald-500/50 text-zinc-200 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer transition-colors"
+        title="Active Database (click to manage Database Roles & switch DB)"
+        @click="emit('openDatabaseHub')"
+      >
+        <Database class="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+        <span class="font-mono text-[11px] font-semibold max-w-[110px] truncate">{{ dbName || 'No DB' }}</span>
+      </button>
+
+      <button
+        v-if="compactLayout"
+        class="px-1.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white text-xs flex items-center gap-1 cursor-pointer transition-colors"
+        title="Flip Board (F)"
+        @click="emit('toggleFlip')"
+      >
+        <RotateCcw class="w-3.5 h-3.5 text-zinc-400" />
+      </button>
+
+      <button
+        class="px-2 py-1 rounded-lg border text-xs flex items-center gap-1 cursor-pointer transition-colors"
+        :class="compactLayout
+          ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300'
+          : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-zinc-200'"
+        title="Toggle Compact / Small-Screen Auto-Fit Mode (maximizes board & reduces active panels)"
+        @click="emit('toggleCompactLayout')"
+      >
+        <LayoutGrid class="w-3.5 h-3.5" :class="compactLayout ? 'text-emerald-400' : 'text-zinc-400'" />
+        <span class="hidden md:inline text-[11px] font-medium">{{ compactLayout ? 'Compact' : 'Fit Screen' }}</span>
+      </button>
+
       <button
         class="px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-emerald-500/50 text-zinc-300 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer transition-colors"
         title="Open Lichess.org / Chess.com Live Portal"
         @click="emit('openPortalPanel', 'lichess')"
       >
         <Globe class="w-3.5 h-3.5 text-emerald-400" />
-        <span class="hidden lg:inline text-[11px] font-medium">Lichess / Chess.com</span>
+        <span class="hidden xl:inline text-[11px] font-medium">Lichess / Chess.com</span>
       </button>
 
       <button
@@ -1197,7 +1236,7 @@ onUnmounted(() => {
         @click="emit('openPreferences', 'databases')"
       >
         <Settings class="w-3.5 h-3.5 text-emerald-400" />
-        <span class="hidden md:inline text-[11px] font-medium">Preferences</span>
+        <span class="hidden lg:inline text-[11px] font-medium">Preferences</span>
       </button>
 
       <button
@@ -1206,16 +1245,16 @@ onUnmounted(() => {
         @click="emit('showSupport')"
       >
         <Heart class="w-3.5 h-3.5 text-rose-400 fill-rose-400/20" />
-        <span class="hidden xl:inline text-[11px] font-medium">Support</span>
+        <span class="hidden 2xl:inline text-[11px] font-medium">Support</span>
       </button>
 
       <button
-        class="px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-zinc-200 text-xs flex items-center gap-2 cursor-pointer transition-colors shadow-xs"
+        class="px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-zinc-200 text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
         title="Universal Command Palette & Spotlight (Ctrl+K)"
         @click="emit('commandPalette')"
       >
         <Search class="w-3.5 h-3.5 text-emerald-400" />
-        <span class="hidden sm:inline text-[11px]">Command Palette</span>
+        <span class="hidden lg:inline text-[11px]">Command Palette</span>
         <kbd class="px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] font-mono text-zinc-400 border border-zinc-700">Ctrl+K</kbd>
       </button>
     </div>

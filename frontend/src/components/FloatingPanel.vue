@@ -106,10 +106,12 @@ function toggleMinimize() {
     class="floater-window fixed bg-zinc-900/95 backdrop-blur-md border border-emerald-500/40 rounded-xl shadow-2xl flex flex-col overflow-hidden transition-shadow"
     :class="{ 'ring-2 ring-emerald-400/50': isDragging || isResizing }"
     :style="{
-      left: `${panel.floaterRect.x}px`,
-      top: `${panel.floaterRect.y}px`,
+      left: `min(${panel.floaterRect.x}px, max(8px, calc(100vw - ${Math.min(panel.floaterRect.width, 320)}px)))`,
+      top: `min(${panel.floaterRect.y}px, max(36px, calc(100vh - 56px)))`,
       width: `${panel.floaterRect.width}px`,
+      maxWidth: 'calc(100vw - 16px)',
       height: panel.floaterRect.minimized ? '38px' : `${panel.floaterRect.height}px`,
+      maxHeight: 'calc(100vh - 48px)',
       zIndex: panel.floaterRect.zIndex || 35,
     }"
     @mousedown="emit('focus', panel.id)"

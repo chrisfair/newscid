@@ -9,6 +9,7 @@ import {
   resetWorkspaceLayout,
   togglePanelFloater,
   applyLayoutPreset,
+  autoAdaptPanelsForScreenSize,
 } from '../../utils/workspaceLayout'
 
 describe('Workspace Customization, Database Roles, Floaters, Hyprland & Live Portals', () => {
@@ -28,11 +29,21 @@ describe('Workspace Customization, Database Roles, Floaters, Hyprland & Live Por
     expect(workspacePanels.value.tree.mode).toBe('floater')
     expect(workspacePanels.value.engine.mode).toBe('floater')
 
+    applyLayoutPreset('compact')
+    expect(workspacePanels.value.imbalance.mode).toBe('hidden')
+    expect(workspacePanels.value.engine.dockZone).toBe('right')
+    expect(workspacePanels.value.games.dockZone).toBe('right')
+
     applyLayoutPreset('minimal')
     expect(workspacePanels.value.games.mode).toBe('hidden')
 
     applyLayoutPreset('standard')
     expect(workspacePanels.value.games.mode).toBe('docked')
+
+    const adapted = autoAdaptPanelsForScreenSize(960, 720)
+    expect(adapted).toBe(true)
+    expect(workspacePanels.value.imbalance.mode).toBe('hidden')
+    expect(workspacePanels.value.engine.dockZone).toBe('right')
   })
 
   it('renders DatabaseHubPanel with clear 4-role database hierarchy and Set Default / Set Reference actions', async () => {
