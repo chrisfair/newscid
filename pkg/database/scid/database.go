@@ -86,7 +86,6 @@ func (db *Database) Open(path string) error {
 	base := strings.TrimSuffix(path, ".si4")
 	base = strings.TrimSuffix(base, ".sn4")
 	base = strings.TrimSuffix(base, ".sg4")
-	db.BasePath = base
 
 	si4Path := base + ".si4"
 	sn4Path := base + ".sn4"
@@ -102,18 +101,20 @@ func (db *Database) Open(path string) error {
 		return fmt.Errorf("game data file not found: %s", sg4Path)
 	}
 
-	// 1. Read names
+	// 1. Read names into local NameBase first
 	nb := NewNameBase()
 	if err := nb.ReadFromFile(sn4Path); err != nil {
 		return fmt.Errorf("reading namebase: %w", err)
 	}
-	db.Names = nb
 
-	// 2. Read index
+	// 2. Read index into local slice first
 	header, entries, err := LoadAllEntries(si4Path)
 	if err != nil {
 		return fmt.Errorf("reading index: %w", err)
 	}
+
+	db.BasePath = base
+	db.Names = nb
 	db.Header = header
 	db.Entries = entries
 	db.IsOpen = true
@@ -129,20 +130,18 @@ func (db *Database) Create(path string, description string) error {
 	base := strings.TrimSuffix(path, ".si4")
 	base = strings.TrimSuffix(base, ".sn4")
 	base = strings.TrimSuffix(base, ".sg4")
-	db.BasePath = base
 
-	db.Names = NewNameBase()
-	db.Header = &IndexHeader{
+	nb := NewNameBase()
+	header := &IndexHeader{
 		Version:     400,
 		BaseType:    0,
 		NumGames:    0,
 		AutoLoad:    2,
 		Description: description,
 	}
-	db.Entries = nil
 
-	// Write empty files
-	if err := db.Names.WriteToFile(base + ".sn4"); err != nil {
+	// Write empty files first before mutating db state
+	if err := nb.WriteToFile(base + ".sn4"); err != nil {
 		return err
 	}
 
@@ -150,7 +149,7 @@ func (db *Database) Create(path string, description string) error {
 	if err != nil {
 		return err
 	}
-	if err := WriteIndexHeader(fSi, db.Header); err != nil {
+	if err := WriteIndexHeader(fSi, header); err != nil {
 		fSi.Close()
 		return err
 	}
@@ -162,6 +161,10 @@ func (db *Database) Create(path string, description string) error {
 	}
 	fSg.Close()
 
+	db.BasePath = base
+	db.Names = nb
+	db.Header = header
+	db.Entries = nil
 	db.IsOpen = true
 	return nil
 }
