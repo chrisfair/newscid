@@ -361,9 +361,18 @@ func EncodeGameData(game *chess.Game) ([]byte, error) {
 		if k == "White" || k == "Black" || k == "Event" || k == "Site" || k == "Round" || k == "Date" || k == "Result" || k == "WhiteElo" || k == "BlackElo" {
 			continue
 		}
+		if k == "" {
+			continue
+		}
+		if len(v) > 255 {
+			v = v[:255]
+		}
 		if code, ok := commonTagIDs[k]; ok {
 			buf.WriteByte(code)
 		} else {
+			if len(k) > 240 {
+				k = k[:240]
+			}
 			buf.WriteByte(byte(len(k)))
 			buf.WriteString(k)
 		}

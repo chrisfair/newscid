@@ -278,6 +278,9 @@ func (nb *NameBase) Write(w io.Writer) error {
 			}
 
 			name := nb.NamesByID[nt][id]
+			if len(name) > 255 {
+				name = name[:255]
+			}
 			length := uint8(len(name))
 			if err := binary.Write(w, binary.BigEndian, length); err != nil {
 				return err
