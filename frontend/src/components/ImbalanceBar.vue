@@ -5,6 +5,7 @@ import type { imbalance } from '../../wailsjs/go/models'
 
 const props = defineProps<{
   report: imbalance.Report | null
+  compact?: boolean
 }>()
 
 const matDelta = computed(() => props.report?.materialDelta ?? 0)
@@ -29,7 +30,7 @@ const blackKingColor = computed(() => {
   return 'bg-red-500'
 })
 
-const isExpanded = ref(typeof window !== 'undefined' ? window.innerHeight >= 780 : true)
+const isExpanded = ref(!props.compact)
 </script>
 
 <template>
