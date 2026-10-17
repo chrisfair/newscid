@@ -146,3 +146,34 @@ func TestBuildPlayerFairPlayDossier_CrossControlConsistency(t *testing.T) {
 		t.Errorf("expected ReportMarkdown to include Per-Time-Control Consistent Issue Matrix")
 	}
 }
+
+func TestAnalyzePlayerFairPlay_SingleGameDatabaseAndPartialEval(t *testing.T) {
+	// Regression test for 1-based database game indexing and partially annotated games
+	pgnText := `
+[Event "Rated Rapid game"]
+[Site "https://lichess.org/single1"]
+[Date "2026.10.16"]
+[White "SingleDBPlayer"]
+[Black "OpponentX"]
+[Result "1-0"]
+[WhiteElo "1800"]
+[BlackElo "1820"]
+[TimeControl "600+0"]
+
+1. e4 { [%eval 0.2] [%clk 0:10:00] } e5 { [%eval 0.2] [%clk 0:10:00] }
+2. Nf3 { [%eval 0.3] [%clk 0:09:55] } Nc6 { [%eval 0.3] [%clk 0:09:55] }
+3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 9. h3 Na5 10. Bc2 c5 11. d4 Qc7 12. Nbd2 cxd4 13. cxd4 1-0
+`
+	games, err := chess.ParsePGNDatabase(strings.NewReader(pgnText))
+	if err != nil {
+		t.Fatalf("ParsePGNDatabase failed: %v", err)
+	}
+	dossier := BuildPlayerFairPlayDossier("SingleDBPlayer", games, []int{1})
+	if dossier.TotalGamesAnalyzed != 1 {
+		t.Fatalf("expected 1 game analyzed, got %d", dossier.TotalGamesAnalyzed)
+	}
+	if dossier.AllGames[0].GameID != 1 {
+		t.Errorf("expected GameID = 1, got %d", dossier.AllGames[0].GameID)
+	}
+}
+
