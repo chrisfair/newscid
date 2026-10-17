@@ -69,35 +69,32 @@ func AnnotateGame(game *chess.Game, eng *Engine, movetimeMs int, progressCb ...f
 
 	curr := game.RootMove
 	ply := 1
-	var prevScoreCp int
+
+	// Evaluate initial position before ply 1
+	bestMoveBefore, scoreBefore, _ := evalPositionWhitePOV(eng, board, movetimeMs)
 
 	for curr != nil {
-		fenBefore := board.FEN()
 		isWhite := (board.Turn == chess.White)
-
-		// Search position before move to get best alternative and true evaluation
-		bestMove, eval, err := eng.SearchBestMove(fenBefore, nil, movetimeMs)
-		if err != nil {
-			// fallback if search times out
+		bestMove := bestMoveBefore
+		if bestMove == "" {
 			bestMove = curr.UCI
 		}
 
-		scoreCp := eval.ScoreCp
-		if eval.MateIn > 0 {
-			scoreCp = 3000 - (eval.MateIn * 50)
-		} else if eval.MateIn < 0 {
-			scoreCp = -3000 - (eval.MateIn * 50)
-		}
+		// Advance board with the played move
+		board.MakeMove(curr.Move)
+
+		// Evaluate position after the move (which also serves as before-eval for next ply)
+		nextBestMove, scoreAfter, mateAfter := evalPositionWhitePOV(eng, board, movetimeMs)
 
 		// Calculate centipawn loss from mover's perspective
 		var loss int
-		if ply > 1 {
+		if curr.UCI != bestMove {
 			if isWhite {
-				// White's turn: compare with previous position (White wants score to increase)
-				loss = prevScoreCp - scoreCp
+				// White wants White-perspective score to stay high
+				loss = scoreBefore - scoreAfter
 			} else {
-				// Black's turn: compare with previous position (Black wants score to decrease)
-				loss = scoreCp - prevScoreCp
+				// Black wants White-perspective score to stay low
+				loss = scoreAfter - scoreBefore
 			}
 		}
 		if loss < 0 {
@@ -124,7 +121,7 @@ func AnnotateGame(game *chess.Game, eng *Engine, movetimeMs int, progressCb ...f
 			} else {
 				analysis.BlackBlunders++
 			}
-			comment = fmt.Sprintf("%.2f (blunder, best was %s)", float64(scoreCp)/100.0, bestMove)
+			comment = fmt.Sprintf("%.2f (blunder, best was %s)", float64(scoreAfter)/100.0, bestMove)
 		} else if loss >= 100 {
 			nag = 2 // ? Mistake
 			if isWhite {
@@ -132,7 +129,7 @@ func AnnotateGame(game *chess.Game, eng *Engine, movetimeMs int, progressCb ...f
 			} else {
 				analysis.BlackMistakes++
 			}
-			comment = fmt.Sprintf("%.2f (mistake, better was %s)", float64(scoreCp)/100.0, bestMove)
+			comment = fmt.Sprintf("%.2f (mistake, better was %s)", float64(scoreAfter)/100.0, bestMove)
 		} else if loss >= 50 {
 			nag = 6 // ?! Inaccuracy
 			if isWhite {
@@ -140,12 +137,12 @@ func AnnotateGame(game *chess.Game, eng *Engine, movetimeMs int, progressCb ...f
 			} else {
 				analysis.BlackInaccs++
 			}
-			comment = fmt.Sprintf("%.2f (inaccuracy, better was %s)", float64(scoreCp)/100.0, bestMove)
-		} else if curr.UCI == bestMove && (loss == 0) && math.Abs(float64(scoreCp)) < 500 {
+			comment = fmt.Sprintf("%.2f (inaccuracy, better was %s)", float64(scoreAfter)/100.0, bestMove)
+		} else if curr.UCI == bestMove && (loss == 0) && math.Abs(float64(scoreAfter)) < 500 {
 			nag = 1 // ! Good move
-			comment = fmt.Sprintf("%.2f (best)", float64(scoreCp)/100.0)
+			comment = fmt.Sprintf("%.2f (best)", float64(scoreAfter)/100.0)
 		} else {
-			comment = fmt.Sprintf("%.2f", float64(scoreCp)/100.0)
+			comment = fmt.Sprintf("%.2f", float64(scoreAfter)/100.0)
 		}
 
 		// Apply NAG and comment to game node
@@ -158,8 +155,8 @@ func AnnotateGame(game *chess.Game, eng *Engine, movetimeMs int, progressCb ...f
 			Ply:      ply,
 			SAN:      curr.SAN,
 			UCI:      curr.UCI,
-			ScoreCp:  scoreCp,
-			MateIn:   eval.MateIn,
+			ScoreCp:  scoreAfter,
+			MateIn:   mateAfter,
 			BestMove: bestMove,
 			DeltaCp:  loss,
 			NAG:      nag,
@@ -171,10 +168,9 @@ func AnnotateGame(game *chess.Game, eng *Engine, movetimeMs int, progressCb ...f
 			progressCb[0](ply, totalPlies, ma)
 		}
 
-		prevScoreCp = scoreCp
+		bestMoveBefore = nextBestMove
+		scoreBefore = scoreAfter
 
-		// Advance board
-		board.MakeMove(curr.Move)
 		curr = curr.Next
 		ply++
 	}
@@ -213,4 +209,34 @@ func calculateAccuracy(losses []float64) float64 {
 		acc = 0.0
 	}
 	return math.Round(acc*10) / 10
+}
+
+func evalPositionWhitePOV(eng *Engine, b *chess.Board, movetimeMs int) (bestMove string, scoreCp int, mateIn int) {
+	if len(b.GenerateLegalMoves()) == 0 {
+		if b.InCheck(b.Turn) {
+			if b.Turn == chess.White {
+				return "", -3000, -1
+			}
+			return "", 3000, 1
+		}
+		return "", 0, 0
+	}
+
+	best, eval, err := eng.SearchBestMove(b.FEN(), nil, movetimeMs)
+	if err != nil {
+		return "", 0, 0
+	}
+
+	scoreCp = eval.ScoreCp
+	mateIn = eval.MateIn
+	if b.Turn == chess.Black {
+		scoreCp = -scoreCp
+		mateIn = -mateIn
+	}
+	if mateIn > 0 {
+		scoreCp = 3000 - (mateIn * 50)
+	} else if mateIn < 0 {
+		scoreCp = -3000 - (mateIn * 50)
+	}
+	return best, scoreCp, mateIn
 }
