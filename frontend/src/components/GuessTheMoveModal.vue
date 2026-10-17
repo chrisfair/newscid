@@ -142,6 +142,7 @@ async function submitMoveGuess(guess: string) {
       if (session.value) {
         session.value.score = fb.totalScore
         session.value.correctGuesses++
+        session.value.currentPlyIdx += fb.opponentReplySAN ? 2 : 1
       }
       if (fb.isFinished) {
         isFinished.value = true
@@ -164,16 +165,19 @@ async function requestHint() {
   if (isFinished.value) return
   try {
     const res = await GetGuessTheMoveHint()
-    // res can be a string or array depending on binding
     let text = ''
-    let level = 1
+    let level = (currentHint.value?.level || 0) + 1
+    if (level > 3) level = 3
     if (typeof res === 'string') {
       text = res
     } else if (res && typeof res === 'object') {
       text = res[0] || (res as any).text || String(res)
-      level = res[1] || (res as any).level || 1
+      level = res[1] || (res as any).level || level
     }
     currentHint.value = { text, level }
+    if (session.value) {
+      session.value.hintsUsed = (session.value.hintsUsed || 0) + 1
+    }
   } catch (err: any) {
     errorMessage.value = `Hint error: ${err}`
   }
@@ -195,6 +199,9 @@ async function handleSkip() {
     }
     moveInput.value = ''
     currentFEN.value = fb.currentFEN
+    if (session.value) {
+      session.value.currentPlyIdx += fb.opponentReplySAN ? 2 : 1
+    }
     if (fb.isFinished) {
       isFinished.value = true
       summary.value = fb.summary || null
