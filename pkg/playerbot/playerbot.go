@@ -96,15 +96,26 @@ func BuildPersonalityFromIdentifiers(db *scid.Database, displayName string, iden
 	whiteECOCounts := make(map[string]int)
 	blackECOCounts := make(map[string]int)
 
-	numGames := len(db.Entries)
+	numGames := db.NumGames()
 	for i := 0; i < numGames; i++ {
+		db.RLock()
+		if i >= len(db.Entries) {
+			db.RUnlock()
+			break
+		}
 		entry := db.Entries[i]
-		if (entry.Flags & scid.FlagDelete) != 0 {
+		if entry == nil || (entry.Flags&scid.FlagDelete) != 0 {
+			db.RUnlock()
 			continue
 		}
 
 		whiteName := strings.ToLower(db.Names.GetName(scid.NamePlayer, entry.WhiteID))
 		blackName := strings.ToLower(db.Names.GetName(scid.NamePlayer, entry.BlackID))
+		entryWhiteElo := int(entry.WhiteElo)
+		entryBlackElo := int(entry.BlackElo)
+		entryResult := entry.Result
+		entryEcoCode := entry.EcoCode
+		db.RUnlock()
 
 		isWhite := false
 		isBlack := false
@@ -124,14 +135,14 @@ func BuildPersonalityFromIdentifiers(db *scid.Database, displayName string, iden
 		p.TotalGames++
 		if isWhite {
 			p.WhiteGames++
-			if entry.WhiteElo > 0 {
-				totalEloSum += int(entry.WhiteElo)
+			if entryWhiteElo > 0 {
+				totalEloSum += entryWhiteElo
 				eloCount++
-				if int(entry.WhiteElo) > p.PeakElo {
-					p.PeakElo = int(entry.WhiteElo)
+				if entryWhiteElo > p.PeakElo {
+					p.PeakElo = entryWhiteElo
 				}
 			}
-			switch entry.Result {
+			switch entryResult {
 			case chess.ResultWhiteWins:
 				p.Wins++
 			case chess.ResultDraw:
@@ -139,20 +150,20 @@ func BuildPersonalityFromIdentifiers(db *scid.Database, displayName string, iden
 			case chess.ResultBlackWins:
 				p.Losses++
 			}
-			ecoStr := scid.FormatECO(entry.EcoCode)
+			ecoStr := scid.FormatECO(entryEcoCode)
 			if ecoStr != "" {
 				whiteECOCounts[ecoStr]++
 			}
 		} else {
 			p.BlackGames++
-			if entry.BlackElo > 0 {
-				totalEloSum += int(entry.BlackElo)
+			if entryBlackElo > 0 {
+				totalEloSum += entryBlackElo
 				eloCount++
-				if int(entry.BlackElo) > p.PeakElo {
-					p.PeakElo = int(entry.BlackElo)
+				if entryBlackElo > p.PeakElo {
+					p.PeakElo = entryBlackElo
 				}
 			}
-			switch entry.Result {
+			switch entryResult {
 			case chess.ResultBlackWins:
 				p.Wins++
 			case chess.ResultDraw:
@@ -160,7 +171,7 @@ func BuildPersonalityFromIdentifiers(db *scid.Database, displayName string, iden
 			case chess.ResultWhiteWins:
 				p.Losses++
 			}
-			ecoStr := scid.FormatECO(entry.EcoCode)
+			ecoStr := scid.FormatECO(entryEcoCode)
 			if ecoStr != "" {
 				blackECOCounts[ecoStr]++
 			}

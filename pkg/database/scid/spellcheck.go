@@ -301,7 +301,13 @@ func min(a, b, c int) int {
 // StandardizeDatabase scans all player names in the database, maps them to canonical
 // standardized forms, updates IndexEntry pointers, and returns a detailed summary.
 func (sc *SpellChecker) StandardizeDatabase(db *Database) (*SpellCheckSummary, error) {
-	if db == nil || !db.IsOpen {
+	if db == nil {
+		return nil, fmt.Errorf("database is not open")
+	}
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if !db.IsOpen {
 		return nil, fmt.Errorf("database is not open")
 	}
 

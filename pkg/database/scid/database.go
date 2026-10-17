@@ -78,6 +78,16 @@ func NewDatabase() *Database {
 	}
 }
 
+// Lock acquires a write lock on the database.
+func (db *Database) Lock() {
+	db.mu.Lock()
+}
+
+// Unlock releases a write lock on the database.
+func (db *Database) Unlock() {
+	db.mu.Unlock()
+}
+
 // Open loads a SCID database from basePath (e.g. "path/to/mygames" or "mygames.si4").
 func (db *Database) Open(path string) error {
 	db.mu.Lock()

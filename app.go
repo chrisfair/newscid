@@ -2693,14 +2693,25 @@ func (a *App) EvaluatePersonaWeaknesses(personaID string, targetColor string, ma
 			nameLookup[strings.ToLower(strings.TrimSpace(p.DisplayName))] = true
 		}
 
-		for i := 0; i < len(db.Entries); i++ {
+		numGames := db.NumGames()
+		for i := 0; i < numGames; i++ {
+			db.RLock()
+			if i >= len(db.Entries) {
+				db.RUnlock()
+				break
+			}
 			entry := db.Entries[i]
-			if (entry.Flags & scid.FlagDelete) != 0 {
+			if entry == nil || (entry.Flags&scid.FlagDelete) != 0 {
+				db.RUnlock()
 				continue
 			}
 
 			w := strings.ToLower(db.Names.GetName(scid.NamePlayer, entry.WhiteID))
 			b := strings.ToLower(db.Names.GetName(scid.NamePlayer, entry.BlackID))
+			entryDate := entry.Date
+			entryResult := entry.Result
+			entryHalfMoves := entry.NumHalfMoves
+			db.RUnlock()
 
 			isW := matchPlayerLookup(w, nameLookup)
 			isB := matchPlayerLookup(b, nameLookup)
@@ -2708,7 +2719,7 @@ func (a *App) EvaluatePersonaWeaknesses(personaID string, targetColor string, ma
 				continue
 			}
 
-			sig := fmt.Sprintf("%s|%s|%s|%s|%d", entry.Date, w, b, entry.Result, entry.NumHalfMoves)
+			sig := fmt.Sprintf("%s|%s|%s|%s|%d", entryDate, w, b, entryResult, entryHalfMoves)
 			if seenSigs[sig] {
 				continue
 			}

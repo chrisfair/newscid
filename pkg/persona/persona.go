@@ -439,15 +439,25 @@ func (pm *PersonaManager) AggregateGames(sourceDB *scid.Database, personaID stri
 		DedicatedDatabasePath: targetBasePath,
 	}
 
-	numGames := len(sourceDB.Entries)
+	numGames := sourceDB.NumGames()
 	for i := 0; i < numGames; i++ {
+		sourceDB.RLock()
+		if i >= len(sourceDB.Entries) {
+			sourceDB.RUnlock()
+			break
+		}
 		entry := sourceDB.Entries[i]
-		if (entry.Flags & scid.FlagDelete) != 0 {
+		if entry == nil || (entry.Flags&scid.FlagDelete) != 0 {
+			sourceDB.RUnlock()
 			continue
 		}
 
 		whiteName := strings.ToLower(sourceDB.Names.GetName(scid.NamePlayer, entry.WhiteID))
 		blackName := strings.ToLower(sourceDB.Names.GetName(scid.NamePlayer, entry.BlackID))
+		entryDate := entry.Date
+		entryResult := entry.Result
+		entryHalfMoves := entry.NumHalfMoves
+		sourceDB.RUnlock()
 
 		matched := false
 		for alias := range aliasLookup {
@@ -463,7 +473,7 @@ func (pm *PersonaManager) AggregateGames(sourceDB *scid.Database, personaID stri
 
 		result.TotalFound++
 
-		sig := fmt.Sprintf("%s|%s|%s|%s|%d", entry.Date, whiteName, blackName, entry.Result, entry.NumHalfMoves)
+		sig := fmt.Sprintf("%s|%s|%s|%s|%d", entryDate, whiteName, blackName, entryResult, entryHalfMoves)
 		if existingSigs[sig] {
 			result.DuplicatesSkipped++
 			continue
@@ -482,7 +492,7 @@ func (pm *PersonaManager) AggregateGames(sourceDB *scid.Database, personaID stri
 		result.NewlyAdded++
 	}
 
-	result.TotalPersonaGames = len(targetDB.Entries)
+	result.TotalPersonaGames = targetDB.NumGames()
 	return result, nil
 }
 
@@ -586,6 +596,8 @@ func SuggestIdentifiers(db *scid.Database, query string, existingIdentifiers []s
 	if db == nil || !db.IsOpen {
 		return []string{}
 	}
+	db.RLock()
+	defer db.RUnlock()
 
 	existingSet := make(map[string]bool)
 	for _, id := range existingIdentifiers {
@@ -657,6 +669,8 @@ func CalculatePersonaStatistics(db *scid.Database, p *Persona) *PersonaStatistic
 			DisplayName: "",
 		}
 	}
+	db.RLock()
+	defer db.RUnlock()
 
 	stats := &PersonaStatistics{
 		PersonaID:       p.ID,
@@ -694,7 +708,7 @@ func CalculatePersonaStatistics(db *scid.Database, p *Persona) *PersonaStatistic
 	numGames := len(db.Entries)
 	for i := 0; i < numGames; i++ {
 		entry := db.Entries[i]
-		if (entry.Flags & scid.FlagDelete) != 0 {
+		if entry == nil || (entry.Flags&scid.FlagDelete) != 0 {
 			continue
 		}
 
