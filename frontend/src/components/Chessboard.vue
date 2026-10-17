@@ -37,6 +37,7 @@ const props = withDefaults(defineProps<{
   evalScore?: number | null // centipawns
   evalMate?: number | null  // moves to mate
   boardSize?: number | null // dynamic responsive board dimension
+  interactive?: boolean
 }>(), {
   legalMoves: () => [],
   pieceSet: 'cburnett',
@@ -55,6 +56,7 @@ const props = withDefaults(defineProps<{
   evalScore: null,
   evalMate: null,
   boardSize: null,
+  interactive: true,
 })
 
 const emit = defineEmits<{
@@ -217,7 +219,7 @@ function onSquareClick(sq: SquareInfo) {
     customHighlightedSquares.value = new Set()
   }
 
-  if (promoPending.value) return
+  if (promoPending.value || !props.interactive) return
 
   // If a piece from current side was clicked and nothing selected, select it
   if (!selectedSquare.value) {
@@ -239,8 +241,8 @@ function onSquareClick(sq: SquareInfo) {
     return
   }
 
-  // Check if target is a legal destination
-  if (destinationSquares.value.has(sq.square)) {
+  // Check if target is a legal destination (or allow when legalMoves is not pre-filtered)
+  if (props.legalMoves.length === 0 || destinationSquares.value.has(sq.square)) {
     tryMakeMove(selectedSquare.value, sq.square)
   }
 
@@ -297,13 +299,13 @@ function tryMakeMove(from: string, to: string) {
 
 function confirmPromotion(promoPiece: string) {
   if (!promoPending.value) return
-  const { from, to } = promoPending.value
+  const { from, to } = promoPiece ? promoPending.value : promoPending.value
   emit('move', `${from}${to}${promoPiece.toLowerCase()}`)
   promoPending.value = null
 }
 
 function onDragStart(e: DragEvent, sq: SquareInfo) {
-  if (promoPending.value) {
+  if (promoPending.value || !props.interactive) {
     e.preventDefault()
     return
   }
@@ -327,8 +329,9 @@ function onDragOver(e: DragEvent) {
 
 function onDrop(e: DragEvent, targetSq: SquareInfo) {
   e.preventDefault()
+  if (!props.interactive) return
   const from = e.dataTransfer?.getData('text/plain')
-  if (from && destinationSquares.value.has(targetSq.square)) {
+  if (from && from !== targetSq.square && (props.legalMoves.length === 0 || destinationSquares.value.has(targetSq.square))) {
     tryMakeMove(from, targetSq.square)
   }
   selectedSquare.value = null
