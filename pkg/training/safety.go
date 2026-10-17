@@ -581,6 +581,11 @@ func ExtractSafetyDrillsFromDatabase(db *scid.Database, maxDrills int) []SafetyD
 		}
 
 		b := chess.NewBoard()
+		if g.StartFEN != "" && g.StartFEN != chess.StartingFEN {
+			if parsed, err := chess.ParseFEN(g.StartFEN); err == nil {
+				b = parsed
+			}
+		}
 		ply := 0
 		for curr := g.RootMove; curr != nil && ply < 40; curr = curr.Next {
 			b.MakeMove(curr.Move)
