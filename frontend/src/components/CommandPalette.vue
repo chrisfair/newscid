@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import {
   Search,
   FileText,
@@ -15,13 +15,27 @@ import {
   Target,
   Palette,
   Eye,
+  EyeOff,
   Volume2,
   HelpCircle,
   Wrench,
   Dices,
   Globe,
   SlidersHorizontal,
-  ArrowRight
+  ArrowRight,
+  Brain,
+  Shield,
+  Crosshair,
+  Clock,
+  Scissors,
+  Download,
+  Users,
+  Swords,
+  Bot,
+  Plus,
+  Heart,
+  Maximize2,
+  Sun
 } from '@lucide/vue'
 
 export interface CommandItem {
@@ -32,6 +46,52 @@ export interface CommandItem {
   icon: any
   shortcut?: string
   action: () => void
+}
+
+const iconMap: Record<string, any> = {
+  search: Search,
+  'file-text': FileText,
+  'folder-open': FolderOpen,
+  save: Save,
+  cpu: Cpu,
+  sparkles: Sparkles,
+  'book-open': BookOpen,
+  trophy: Trophy,
+  'bar-chart-3': BarChart3,
+  award: Award,
+  zap: Zap,
+  target: Target,
+  palette: Palette,
+  eye: Eye,
+  'eye-off': EyeOff,
+  'volume-2': Volume2,
+  'help-circle': HelpCircle,
+  wrench: Wrench,
+  dices: Dices,
+  globe: Globe,
+  sliders: SlidersHorizontal,
+  'sliders-horizontal': SlidersHorizontal,
+  brain: Brain,
+  shield: Shield,
+  crosshair: Crosshair,
+  clock: Clock,
+  scissors: Scissors,
+  download: Download,
+  users: Users,
+  swords: Swords,
+  bot: Bot,
+  plus: Plus,
+  heart: Heart,
+  'maximize-2': Maximize2,
+  sun: Sun
+}
+
+function resolveIcon(icon: any) {
+  if (!icon) return Sparkles
+  if (typeof icon === 'string') {
+    return iconMap[icon.toLowerCase()] || Sparkles
+  }
+  return icon
 }
 
 const props = defineProps<{
@@ -46,6 +106,10 @@ const emit = defineEmits<{
 const searchQuery = ref('')
 const selectedIndex = ref(0)
 const inputRef = ref<HTMLInputElement | null>(null)
+
+watch(searchQuery, () => {
+  selectedIndex.value = 0
+})
 
 const filteredCommands = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
@@ -96,8 +160,18 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
+watch(
+  () => props.isOpen,
+  (open) => {
+    if (open) onOpen()
+  }
+)
+
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
+  if (props.isOpen) {
+    onOpen()
+  }
 })
 
 onUnmounted(() => {
@@ -133,7 +207,7 @@ defineExpose({ onOpen })
           type="text"
           placeholder="Search commands, openings, players, tools... (or ↑↓ to navigate)"
           class="w-full bg-transparent text-sm text-zinc-100 placeholder-zinc-500 focus:outline-hidden"
-          @keydown="handleKeydown"
+          @keydown.stop="handleKeydown"
         />
         <span class="px-2 py-0.5 rounded text-[10px] bg-zinc-800 text-zinc-400 font-mono">ESC</span>
       </div>
@@ -160,7 +234,7 @@ defineExpose({ onOpen })
               class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
               :class="selectedIndex === idx ? 'bg-emerald-500 text-zinc-950 font-bold' : 'bg-zinc-800 text-zinc-400'"
             >
-              <component :is="cmd.icon" class="w-4 h-4" />
+              <component :is="resolveIcon(cmd.icon)" class="w-4 h-4" />
             </div>
             <div class="truncate">
               <div class="flex items-center gap-2">
