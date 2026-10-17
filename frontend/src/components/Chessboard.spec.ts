@@ -42,18 +42,20 @@ describe('Chessboard.vue', () => {
     expect(wrapper.findAll('.blindfold-dot').length).toBe(32)
   })
 
-  it('renders vertical evaluation gauge when showEvalBar is enabled', () => {
+  it('renders vertical evaluation gauge when showEvalBar is enabled even when evalMate is 0', () => {
     const wrapper = mount(Chessboard, {
       props: {
         fen: startFEN,
         showEvalBar: true,
         evalScore: 180, // +1.8
+        evalMate: 0,
       },
     })
 
     const evalBar = wrapper.find('.eval-bar')
     expect(evalBar.exists()).toBe(true)
     expect(evalBar.text()).toContain('+1.8')
+    expect(evalBar.text()).not.toContain('M0')
   })
 
   it('renders SVG move arrows when arrows prop is passed', () => {

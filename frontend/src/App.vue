@@ -450,7 +450,7 @@ const threatSquares = computed(() => {
 })
 
 const evalScore = computed(() => evalInfo.value?.scoreCp ?? 0)
-const evalMate = computed(() => evalInfo.value?.mateIn ?? 0)
+const evalMate = computed(() => (evalInfo.value?.mateIn ? evalInfo.value.mateIn : null))
 
 const engineArrows = computed(() => {
   if (!isAnalyzing.value || !evalInfo.value?.bestMove || evalInfo.value.bestMove.length < 4) {

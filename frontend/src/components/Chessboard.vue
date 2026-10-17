@@ -148,7 +148,7 @@ const allArrows = computed(() => {
 
 // Evaluation bar calculation
 const evalWhitePercent = computed(() => {
-  if (props.evalMate !== null && props.evalMate !== undefined) {
+  if (props.evalMate !== null && props.evalMate !== undefined && props.evalMate !== 0) {
     return props.evalMate > 0 ? 100 : 0
   }
   if (props.evalScore === null || props.evalScore === undefined) {
@@ -161,7 +161,7 @@ const evalWhitePercent = computed(() => {
 })
 
 const evalLabel = computed(() => {
-  if (props.evalMate !== null && props.evalMate !== undefined) {
+  if (props.evalMate !== null && props.evalMate !== undefined && props.evalMate !== 0) {
     return `M${Math.abs(props.evalMate)}`
   }
   if (props.evalScore === null || props.evalScore === undefined) {
@@ -204,9 +204,9 @@ function getSquareTarget(fromSq: string, toSq: string): { x: number; y: number }
 function getMarkerId(color?: string): string {
   if (!color) return 'green'
   const c = color.toLowerCase()
-  if (c.includes('ef4444') || c.includes('red')) return 'red'
-  if (c.includes('3b82f6') || c.includes('blue')) return 'blue'
-  if (c.includes('eab308') || c.includes('yellow')) return 'yellow'
+  if (c.includes('ef4444') || c.includes('239, 68, 68') || c.includes('f43f5e') || c.includes('red') || c.includes('rose')) return 'red'
+  if (c.includes('3b82f6') || c.includes('38bdf8') || c.includes('0ea5e9') || c.includes('59, 130, 246') || c.includes('blue') || c.includes('sky') || c.includes('cyan')) return 'blue'
+  if (c.includes('eab308') || c.includes('f59e0b') || c.includes('234, 179, 8') || c.includes('yellow') || c.includes('amber')) return 'yellow'
   return 'green'
 }
 
