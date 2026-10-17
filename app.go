@@ -2919,6 +2919,9 @@ func (a *App) AnalyzeGameTimeManagement(gameID int) (*stats.GameTimeManagementRe
 		targetGame = g
 	}
 
+	if targetGame == nil && a.db != nil && a.db.IsOpen && a.db.NumGames() > 0 {
+		targetGame, _ = a.db.GetGame(1)
+	}
 	if targetGame == nil {
 		return nil, fmt.Errorf("no game loaded or found to analyze")
 	}

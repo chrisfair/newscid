@@ -187,6 +187,13 @@ onMounted(() => {
 
       <!-- TAB 1: CURRENT GAME TIMELINE & TANKING AUDIT -->
       <div v-if="activeTab === 'game'" class="flex-1 flex flex-col overflow-hidden">
+        <div v-if="isGameLoading" class="p-8 text-center text-xs text-theme-text-muted">
+          Analyzing game clock telemetry...
+        </div>
+        <div v-else-if="gameError" class="m-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
+          <AlertTriangle class="w-4 h-4 shrink-0" />
+          <span>{{ gameError }}</span>
+        </div>
         <!-- Game Summary Bar -->
         <div v-if="gameReport" class="px-6 py-2.5 bg-theme-panel-header/40 border-b border-theme-border/60 flex items-center justify-between text-xs">
           <div class="flex items-center gap-4">

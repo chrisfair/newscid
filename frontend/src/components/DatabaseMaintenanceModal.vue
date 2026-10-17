@@ -15,7 +15,8 @@ import {
   FileText,
   Sliders,
   FolderOpen,
-  Check
+  Check,
+  Trash2
 } from '@lucide/vue'
 import {
   GetDatabaseStatistics,
