@@ -250,32 +250,35 @@ async function handleBuilderMove(uci: string) {
   const nextState = await MakeMove(fenBefore, uci)
   const from = uci.slice(0, 2)
   const to = uci.slice(2, 4)
+  const san = nextState.moveSan || uci
   lastMove.value = { from, to }
   currentFEN.value = nextState.fen
   legalMoves.value = nextState.legalMoves
   inCheck.value = nextState.inCheck
-  moveHistory.value.push({ ply: moveHistory.value.length + 1, san: uci, uci })
+  moveHistory.value.push({ ply: moveHistory.value.length + 1, san, uci })
 
-  // Auto-record to repertoire if played by repertoire side
+  // Record both repertoire-side moves and opponent replies so multi-move lines and Black repertoires work
   if (activeRep.value) {
-    const isWhiteTurn = fenBefore.split(' ')[1] === 'w'
-    const isRepTurn = (activeRep.value.color === 'w' && isWhiteTurn) || (activeRep.value.color === 'b' && !isWhiteTurn)
-    if (isRepTurn) {
-      await AddRepertoireMove(activeRep.value.id, fenBefore, uci, uci, nextState.fen, noteInput.value)
-      noteInput.value = ''
-      await selectRepertoire(activeRep.value.id)
-    }
+    await AddRepertoireMove(activeRep.value.id, fenBefore, uci, san, nextState.fen, noteInput.value)
+    noteInput.value = ''
+    activeRep.value = await GetRepertoire(activeRep.value.id)
   }
 }
 
 async function addManualMove(moveSAN: string) {
   if (!activeRep.value || !moveSAN.trim()) return
   try {
-    const parsedState = await MakeMove(currentFEN.value, moveSAN)
-    await AddRepertoireMove(activeRep.value.id, currentFEN.value, moveSAN, moveSAN, parsedState.fen, noteInput.value)
+    const fenBefore = currentFEN.value
+    const parsedState = await MakeMove(fenBefore, moveSAN)
+    const san = parsedState.moveSan || moveSAN
+    const uci = parsedState.lastMove ? `${parsedState.lastMove.from}${parsedState.lastMove.to}` : moveSAN
+    await AddRepertoireMove(activeRep.value.id, fenBefore, uci, san, parsedState.fen, noteInput.value)
     noteInput.value = ''
-    await selectRepertoire(activeRep.value.id)
-    await resetBoard()
+    currentFEN.value = parsedState.fen
+    legalMoves.value = parsedState.legalMoves
+    inCheck.value = parsedState.inCheck
+    moveHistory.value.push({ ply: moveHistory.value.length + 1, san, uci })
+    activeRep.value = await GetRepertoire(activeRep.value.id)
   } catch (err) {
     alert(`Invalid move: ${err}`)
   }
