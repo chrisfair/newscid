@@ -187,9 +187,9 @@ func AnalyzePlayerFairPlay(db *scid.Database, playerName string, maxGames int) (
 	var games []*chess.Game
 	var gameIDs []int
 
-	// Scan newest games first so recent platform downloads are prioritized
-	for idx := totalInDB - 1; idx >= 0 && len(games) < maxGames; idx-- {
-		summary, err := db.GetGameSummary(idx)
+	// Scan newest games first (1-based gameNum) so recent platform downloads are prioritized
+	for gameNum := totalInDB; gameNum >= 1 && len(games) < maxGames; gameNum-- {
+		summary, err := db.GetGameSummary(gameNum)
 		if err != nil {
 			continue
 		}
@@ -198,12 +198,12 @@ func AnalyzePlayerFairPlay(db *scid.Database, playerName string, maxGames int) (
 		if !wMatch && !bMatch {
 			continue
 		}
-		g, err := db.GetGame(idx)
+		g, err := db.GetGame(gameNum)
 		if err != nil || g == nil {
 			continue
 		}
 		games = append(games, g)
-		gameIDs = append(gameIDs, idx+1)
+		gameIDs = append(gameIDs, gameNum)
 	}
 
 	if len(games) == 0 {
@@ -400,8 +400,12 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 
 	// Traverse mainline to extract clocks, evaluations, and board complexity
 	board := chess.NewBoard()
-	if fen := g.Tag("FEN"); fen != "" && fen != "?" {
-		if parsed, err := chess.ParseFEN(fen); err == nil {
+	startFEN := strings.TrimSpace(g.StartFEN)
+	if startFEN == "" || startFEN == "?" {
+		startFEN = strings.TrimSpace(g.Tag("FEN"))
+	}
+	if startFEN != "" && startFEN != "?" && startFEN != chess.StartingFEN {
+		if parsed, err := chess.ParseFEN(startFEN); err == nil {
 			board = parsed
 		}
 	}
@@ -428,7 +432,7 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 	for node != nil {
 		ply++
 		turnColor := "white"
-		if ply%2 == 0 {
+		if board.Turn == chess.Black {
 			turnColor = "black"
 		}
 
@@ -473,18 +477,14 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 			spentSec = 0
 		}
 
-		// Extract or heuristically estimate evaluation
+		// Apply move to advance board and extract or heuristically estimate evaluation
+		board.MakeMove(node.Move)
 		var currEvalWhiteCp float64
 		if ev, ok := parseEvalWhiteCp(node.Comment); ok {
 			currEvalWhiteCp = ev
 			hasEval = true
 		} else {
-			// Apply move first to evaluate resulting board state
-			board.MakeMove(node.Move)
 			currEvalWhiteCp = evaluateBoardHeuristicWhiteCp(board)
-		}
-		if hasEval {
-			board.MakeMove(node.Move)
 		}
 
 		// Record metrics for target player on non-book plies (ply > 10)
