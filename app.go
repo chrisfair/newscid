@@ -3248,7 +3248,27 @@ func (a *App) DownloadAndAnalyzePlayerFairPlay(platform string, username string,
 		opts.LichessUsername = user
 	}
 
-	_, err := a.ImportPlayerGames(opts)
+	syncRes, err := a.ImportPlayerGames(opts)
+	if err != nil || (syncRes != nil && syncRes.TotalDownloaded == 0 && len(syncRes.Errors) > 0) {
+		// Automatically fall back to the other platform if the user left the dropdown on the wrong site
+		if opts.LichessUsername != "" && opts.ChessComUsername == "" {
+			fallbackOpts := opts
+			fallbackOpts.LichessUsername = ""
+			fallbackOpts.ChessComUsername = user
+			if fbRes, fbErr := a.ImportPlayerGames(fallbackOpts); fbErr == nil {
+				syncRes = fbRes
+				err = nil
+			}
+		} else if opts.ChessComUsername != "" && opts.LichessUsername == "" {
+			fallbackOpts := opts
+			fallbackOpts.ChessComUsername = ""
+			fallbackOpts.LichessUsername = user
+			if fbRes, fbErr := a.ImportPlayerGames(fallbackOpts); fbErr == nil {
+				syncRes = fbRes
+				err = nil
+			}
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
