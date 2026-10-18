@@ -620,6 +620,7 @@ func streamImportPGN(
 	scanned := 0
 	imported := 0
 	batch := make([]*chess.Game, 0, 250)
+	existingSigs := targetDB.BuildGameSignatureSet()
 
 	flushBatch := func() error {
 		if len(batch) == 0 {
@@ -659,6 +660,12 @@ func streamImportPGN(
 		for _, g := range games {
 			if minElo > 0 && !gameMeetsMinElo(g, minElo) {
 				continue
+			}
+			if existingSigs != nil && existingSigs.ContainsGame(g) {
+				continue // Skip game already in database without counting toward maxGames
+			}
+			if existingSigs != nil {
+				existingSigs.AddGame(g)
 			}
 			batch = append(batch, g)
 			if maxGames > 0 && (imported+len(batch)) >= maxGames {

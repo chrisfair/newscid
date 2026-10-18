@@ -40,7 +40,8 @@ func NewSyncManager(pm *ProfileManager) *SyncManager {
 	}
 }
 
-// SyncProfile executes a full sync for the given profile into targetDB.
+// SyncProfile executes a full incremental + backfill sync for the given profile into targetDB,
+// fetching the most recent games first and continuing into older games if necessary without counting games already in targetDB.
 func (sm *SyncManager) SyncProfile(p *Profile, targetDB *scid.Database) (*SyncResult, error) {
 	if p == nil {
 		return nil, fmt.Errorf("profile cannot be nil")
@@ -57,55 +58,51 @@ func (sm *SyncManager) SyncProfile(p *Profile, targetDB *scid.Database) (*SyncRe
 		Errors:      make([]string, 0),
 	}
 
+	existingSigs := targetDB.BuildGameSignatureSet()
 	var allGames []*chess.Game
 
-	// 1. Fetch from Lichess.org
+	// 1. Fetch from Lichess.org (newest first, continuing into older games, skipping existing)
 	if strings.TrimSpace(p.LichessUsername) != "" {
-		lichessPGN, err := sm.Lichess.FetchUserGames(
+		games, skipped, err := sm.Lichess.FetchUserGamesIncremental(
 			p.LichessUsername,
-			p.LastSyncTime,
 			p.LichessToken,
 			p.RatedOnly,
 			0,
+			existingSigs,
 		)
 		if err != nil {
 			res.Errors = append(res.Errors, fmt.Sprintf("Lichess error: %v", err))
-		} else if strings.TrimSpace(lichessPGN) != "" {
-			games, err := chess.ParsePGNDatabase(strings.NewReader(lichessPGN))
-			if err != nil {
-				res.Errors = append(res.Errors, fmt.Sprintf("Parsing Lichess PGN: %v", err))
-			} else {
-				res.LichessGames = len(games)
-				allGames = append(allGames, games...)
-			}
+		} else {
+			res.LichessGames = len(games)
+			res.DuplicatesSkipped += skipped
+			allGames = append(allGames, games...)
 		}
 	}
 
-	// 2. Fetch from Chess.com
+	// 2. Fetch from Chess.com (newest archives first, continuing into older archives, skipping existing)
 	if strings.TrimSpace(p.ChessComUsername) != "" {
-		var sinceYear, sinceMonth int
-		if p.LastSyncTime > 0 {
-			lastSyncDate := time.UnixMilli(p.LastSyncTime)
-			sinceYear = lastSyncDate.Year()
-			sinceMonth = int(lastSyncDate.Month())
-		}
-
-		chessComPGN, err := sm.ChessCom.FetchUserGames(p.ChessComUsername, sinceYear, sinceMonth)
+		games, skipped, err := sm.ChessCom.FetchUserGamesIncremental(
+			p.ChessComUsername,
+			0,
+			existingSigs,
+			nil,
+		)
 		if err != nil {
 			res.Errors = append(res.Errors, fmt.Sprintf("Chess.com error: %v", err))
-		} else if strings.TrimSpace(chessComPGN) != "" {
-			games, err := chess.ParsePGNDatabase(strings.NewReader(chessComPGN))
-			if err != nil {
-				res.Errors = append(res.Errors, fmt.Sprintf("Parsing Chess.com PGN: %v", err))
-			} else {
-				res.ChessComGames = len(games)
-				allGames = append(allGames, games...)
-			}
+		} else {
+			res.ChessComGames = len(games)
+			res.DuplicatesSkipped += skipped
+			allGames = append(allGames, games...)
 		}
 	}
 
 	res.TotalDownloaded = len(allGames)
 	if len(allGames) == 0 {
+		p.LastSyncTime = startTime.UnixMilli()
+		p.LastSyncGames = 0
+		if sm.Profiles != nil {
+			_ = sm.Profiles.SaveProfile(p)
+		}
 		res.DurationMs = time.Since(startTime).Milliseconds()
 		return res, nil
 	}
@@ -127,7 +124,7 @@ func (sm *SyncManager) SyncProfile(p *Profile, targetDB *scid.Database) (*SyncRe
 		if err != nil {
 			res.Errors = append(res.Errors, fmt.Sprintf("Deduplication error: %v", err))
 		} else {
-			res.DuplicatesSkipped = deletedDups
+			res.DuplicatesSkipped += deletedDups
 		}
 	}
 
@@ -138,7 +135,11 @@ func (sm *SyncManager) SyncProfile(p *Profile, targetDB *scid.Database) (*SyncRe
 			res.Errors = append(res.Errors, fmt.Sprintf("Blended database error: %v", err))
 		} else if blendedDB != nil {
 			defer blendedDB.Close()
-			_, _ = blendedDB.ImportGames(allGames)
+			blendedSigs := blendedDB.BuildGameSignatureSet()
+			newForBlended, _ := blendedSigs.FilterNewGames(allGames)
+			if len(newForBlended) > 0 {
+				_, _ = blendedDB.ImportGames(newForBlended)
+			}
 			if p.AutoDeduplicate {
 				_, _ = blendedDB.DeleteDuplicates(scid.DuplicateCriteria{ExactMoves: true})
 			}
@@ -163,18 +164,19 @@ type ImportPlayerOptions struct {
 	ChessComUsername string             `json:"chessComUsername"`
 	LichessUsername  string             `json:"lichessUsername"`
 	LichessToken     string             `json:"lichessToken,omitempty"`
-	TargetMode       DatabaseTargetMode `json:"targetMode"`       // "active", "dedicated", "blended"
-	DedicatedPath    string             `json:"dedicatedPath"`    // Path for dedicated DB
-	BlendedPath      string             `json:"blendedPath"`      // Path for blended master DB
+	TargetMode       DatabaseTargetMode `json:"targetMode"`    // "active", "dedicated", "blended"
+	DedicatedPath    string             `json:"dedicatedPath"` // Path for dedicated DB
+	BlendedPath      string             `json:"blendedPath"`   // Path for blended master DB
 	RatedOnly        bool               `json:"ratedOnly"`
 	MaxGames         int                `json:"maxGames"`
 	AutoDeduplicate  bool               `json:"autoDeduplicate"`
-	CreateProfile    bool               `json:"createProfile"`    // Save as persistent profile
+	CreateProfile    bool               `json:"createProfile"` // Save as persistent profile
 	ProgressFn       ProgressFn         `json:"-"`
 }
 
-// ImportPlayerGames downloads games for any player from Lichess or Chess.com and merges them
-// according to the selected destination mode (active, dedicated standalone, or blended).
+// ImportPlayerGames downloads games for any player or persona from Lichess or Chess.com,
+// starting from the most recent games and continuing into older games if necessary,
+// skipping games already present in the target database WITHOUT counting them toward MaxGames.
 func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *scid.Database) (*SyncResult, error) {
 	if strings.TrimSpace(opts.ChessComUsername) == "" && strings.TrimSpace(opts.LichessUsername) == "" {
 		return nil, fmt.Errorf("at least one username (Chess.com or Lichess) must be specified")
@@ -196,71 +198,6 @@ func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *sci
 		Errors:      make([]string, 0),
 	}
 
-	var allGames []*chess.Game
-
-	// 1. Fetch from Lichess
-	if strings.TrimSpace(opts.LichessUsername) != "" {
-		if opts.ProgressFn != nil {
-			opts.ProgressFn("connecting", 0, 0, fmt.Sprintf("Connecting to Lichess for %s...", opts.LichessUsername))
-		}
-		lichessPGN, err := sm.Lichess.FetchUserGames(
-			opts.LichessUsername,
-			0,
-			opts.LichessToken,
-			opts.RatedOnly,
-			opts.MaxGames,
-			opts.ProgressFn,
-		)
-		if err != nil {
-			res.Errors = append(res.Errors, fmt.Sprintf("Lichess error: %v", err))
-		} else if strings.TrimSpace(lichessPGN) != "" {
-			if opts.ProgressFn != nil {
-				opts.ProgressFn("parsing", 0, 0, "Parsing Lichess PGN games...")
-			}
-			games, err := chess.ParsePGNDatabase(strings.NewReader(lichessPGN))
-			if err != nil {
-				res.Errors = append(res.Errors, fmt.Sprintf("Parsing Lichess PGN: %v", err))
-			} else {
-				res.LichessGames = len(games)
-				allGames = append(allGames, games...)
-			}
-		}
-	}
-
-	// 2. Fetch from Chess.com
-	if strings.TrimSpace(opts.ChessComUsername) != "" {
-		if opts.ProgressFn != nil {
-			opts.ProgressFn("connecting", 0, 0, fmt.Sprintf("Connecting to Chess.com for %s...", opts.ChessComUsername))
-		}
-		chessComPGN, err := sm.ChessCom.FetchUserGamesWithProgress(
-			opts.ChessComUsername,
-			0,
-			0,
-			opts.MaxGames,
-			opts.ProgressFn,
-		)
-		if err != nil {
-			res.Errors = append(res.Errors, fmt.Sprintf("Chess.com error: %v", err))
-		} else if strings.TrimSpace(chessComPGN) != "" {
-			if opts.ProgressFn != nil {
-				opts.ProgressFn("parsing", 0, 0, "Parsing Chess.com PGN games...")
-			}
-			games, err := chess.ParsePGNDatabase(strings.NewReader(chessComPGN))
-			if err != nil {
-				res.Errors = append(res.Errors, fmt.Sprintf("Parsing Chess.com PGN: %v", err))
-			} else {
-				res.ChessComGames = len(games)
-				allGames = append(allGames, games...)
-			}
-		}
-	}
-
-	res.TotalDownloaded = len(allGames)
-	if len(allGames) == 0 {
-		res.DurationMs = time.Since(startTime).Milliseconds()
-		return res, nil
-	}
-
 	mode := opts.TargetMode
 	if mode == "" {
 		if activeDB != nil && activeDB.IsOpen {
@@ -270,12 +207,95 @@ func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *sci
 		}
 	}
 
-	// Helper to import into a database
-	importIntoDB := func(db *scid.Database) error {
-		if opts.ProgressFn != nil {
-			opts.ProgressFn("importing", len(allGames), len(allGames), fmt.Sprintf("Encoding and importing %d games into database...", len(allGames)))
+	// Build signature set of games ALREADY in the target database so we never count existing games toward MaxGames!
+	existingSigs := scid.NewGameSignatureSet()
+	switch mode {
+	case TargetActiveBase:
+		if activeDB != nil && activeDB.IsOpen {
+			existingSigs = activeDB.BuildGameSignatureSet()
 		}
-		stats, err := db.ImportGames(allGames)
+	case TargetDedicatedBase, TargetBlendedBase:
+		if strings.TrimSpace(opts.DedicatedPath) != "" {
+			cleanPath := strings.TrimSpace(opts.DedicatedPath)
+			base := strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(cleanPath, ".si4"), ".sn4"), ".sg4")
+			if activeDB != nil && activeDB.IsOpen && strings.TrimSuffix(activeDB.BasePath, ".si4") == base {
+				existingSigs = activeDB.BuildGameSignatureSet()
+			} else if _, err := os.Stat(base + ".si4"); err == nil {
+				tmpDB := scid.NewDatabase()
+				if err := tmpDB.Open(base); err == nil {
+					existingSigs = tmpDB.BuildGameSignatureSet()
+					_ = tmpDB.Close()
+				}
+			}
+		} else if activeDB != nil && activeDB.IsOpen {
+			existingSigs = activeDB.BuildGameSignatureSet()
+		}
+	}
+
+	var allGames []*chess.Game
+
+	// 1. Fetch from Lichess (newest first, continuing into older games, skipping existing)
+	if strings.TrimSpace(opts.LichessUsername) != "" {
+		if opts.ProgressFn != nil {
+			opts.ProgressFn("connecting", 0, 0, fmt.Sprintf("Connecting to Lichess for %s (%d existing games in DB)...", opts.LichessUsername, existingSigs.Count()))
+		}
+		games, skipped, err := sm.Lichess.FetchUserGamesIncremental(
+			opts.LichessUsername,
+			opts.LichessToken,
+			opts.RatedOnly,
+			opts.MaxGames,
+			existingSigs,
+			opts.ProgressFn,
+		)
+		if err != nil {
+			res.Errors = append(res.Errors, fmt.Sprintf("Lichess error: %v", err))
+		} else {
+			res.LichessGames = len(games)
+			res.DuplicatesSkipped += skipped
+			allGames = append(allGames, games...)
+		}
+	}
+
+	// 2. Fetch from Chess.com (newest archives first, continuing into older archives, skipping existing)
+	if strings.TrimSpace(opts.ChessComUsername) != "" {
+		if opts.ProgressFn != nil {
+			opts.ProgressFn("connecting", 0, 0, fmt.Sprintf("Connecting to Chess.com for %s (%d existing games in DB)...", opts.ChessComUsername, existingSigs.Count()))
+		}
+		games, skipped, err := sm.ChessCom.FetchUserGamesIncremental(
+			opts.ChessComUsername,
+			opts.MaxGames,
+			existingSigs,
+			opts.ProgressFn,
+		)
+		if err != nil {
+			res.Errors = append(res.Errors, fmt.Sprintf("Chess.com error: %v", err))
+		} else {
+			res.ChessComGames = len(games)
+			res.DuplicatesSkipped += skipped
+			allGames = append(allGames, games...)
+		}
+	}
+
+	res.TotalDownloaded = len(allGames)
+	if len(allGames) == 0 {
+		res.DurationMs = time.Since(startTime).Milliseconds()
+		return res, nil
+	}
+
+	// Helper to import only new games into a database
+	importIntoDB := func(db *scid.Database, countTowardPrimary bool) error {
+		dbSigs := db.BuildGameSignatureSet()
+		newForDB, skipped := dbSigs.FilterNewGames(allGames)
+		if countTowardPrimary {
+			res.DuplicatesSkipped += skipped
+		}
+		if len(newForDB) == 0 {
+			return nil
+		}
+		if opts.ProgressFn != nil {
+			opts.ProgressFn("importing", len(newForDB), len(newForDB), fmt.Sprintf("Encoding and importing %d new games into database...", len(newForDB)))
+		}
+		stats, err := db.ImportGames(newForDB)
 		if err != nil {
 			return err
 		}
@@ -285,7 +305,7 @@ func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *sci
 				opts.ProgressFn("deduplicating", 0, 0, "Scanning and removing duplicate games...")
 			}
 			dups, err := db.DeleteDuplicates(scid.DuplicateCriteria{ExactMoves: true})
-			if err == nil {
+			if err == nil && countTowardPrimary {
 				res.DuplicatesSkipped += dups
 			}
 		}
@@ -298,7 +318,7 @@ func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *sci
 		if activeDB == nil || !activeDB.IsOpen {
 			return nil, fmt.Errorf("active database is not open")
 		}
-		if err := importIntoDB(activeDB); err != nil {
+		if err := importIntoDB(activeDB, true); err != nil {
 			return nil, fmt.Errorf("importing to active database: %w", err)
 		}
 
@@ -312,7 +332,7 @@ func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *sci
 		base = strings.TrimSuffix(base, ".sg4")
 
 		if activeDB != nil && activeDB.IsOpen && strings.TrimSuffix(activeDB.BasePath, ".si4") == base {
-			if err := importIntoDB(activeDB); err != nil {
+			if err := importIntoDB(activeDB, true); err != nil {
 				return nil, fmt.Errorf("importing to dedicated database: %w", err)
 			}
 			break
@@ -323,11 +343,12 @@ func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *sci
 			return nil, err
 		}
 		defer db.Close()
-		if err := importIntoDB(db); err != nil {
+		if err := importIntoDB(db, true); err != nil {
 			return nil, fmt.Errorf("importing to dedicated database: %w", err)
 		}
 
 	case TargetBlendedBase:
+		countedPrimary := false
 		// Save to dedicated DB
 		if strings.TrimSpace(opts.DedicatedPath) != "" {
 			db, err := openOrCreateDatabase(opts.DedicatedPath, fmt.Sprintf("Dedicated database for %s", displayName))
@@ -335,7 +356,8 @@ func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *sci
 				res.Errors = append(res.Errors, fmt.Sprintf("Dedicated database error: %v", err))
 			} else {
 				defer db.Close()
-				_ = importIntoDB(db)
+				_ = importIntoDB(db, true)
+				countedPrimary = true
 			}
 		}
 
@@ -346,10 +368,10 @@ func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *sci
 				res.Errors = append(res.Errors, fmt.Sprintf("Blended database error: %v", err))
 			} else {
 				defer blendedDB.Close()
-				_ = importIntoDB(blendedDB)
+				_ = importIntoDB(blendedDB, !countedPrimary)
 			}
 		} else if activeDB != nil && activeDB.IsOpen {
-			_ = importIntoDB(activeDB)
+			_ = importIntoDB(activeDB, !countedPrimary)
 		}
 	}
 

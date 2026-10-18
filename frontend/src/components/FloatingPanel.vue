@@ -19,7 +19,7 @@ const emit = defineEmits<{
   (e: 'focus', id: PanelConfig['id']): void
   (e: 'updateRect', id: PanelConfig['id'], partial: Partial<PanelConfig['floaterRect']>): void
   (e: 'dock', id: PanelConfig['id'], zone?: DockZone): void
-  (e: 'detachScreen', id: PanelConfig['id']): void
+  (e: 'detachScreen', id: PanelConfig['id'], workspace?: string): void
   (e: 'hide', id: PanelConfig['id']): void
 }>()
 
@@ -27,7 +27,7 @@ const isDragging = ref(false)
 const isResizing = ref(false)
 
 function startDrag(e: MouseEvent) {
-  if ((e.target as HTMLElement)?.closest('button')) return
+  if ((e.target as HTMLElement)?.closest('button, select')) return
   e.preventDefault()
   emit('focus', props.panel.id)
   isDragging.value = true
@@ -143,11 +143,21 @@ function toggleMinimize() {
         <button
           class="px-1.5 py-0.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-cyan-300 text-[10px] flex items-center gap-1 transition-colors cursor-pointer"
           title="Detach to separate OS / Hyprland screen window"
-          @click.stop="emit('detachScreen', panel.id)"
+          @click.stop="emit('detachScreen', panel.id, panel.targetWorkspace)"
         >
           <ExternalLink class="w-3 h-3" />
           <span>Screen</span>
         </button>
+
+        <select
+          :value="panel.targetWorkspace || ''"
+          class="bg-zinc-900 border border-zinc-700/80 rounded px-1 py-0.5 text-[9px] text-cyan-300 font-mono cursor-pointer focus:outline-none"
+          title="Detach & relocate panel directly to Hyprland Workspace 1..10"
+          @change.stop="emit('detachScreen', panel.id, ($event.target as HTMLSelectElement).value)"
+        >
+          <option value="">WS ▾</option>
+          <option v-for="ws in 10" :key="ws" :value="String(ws)">WS {{ ws }}</option>
+        </select>
 
         <button
           class="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors cursor-pointer"

@@ -8,6 +8,10 @@ import {
   workspacePanels,
   resetWorkspaceLayout,
   togglePanelFloater,
+  setPanelMode,
+  setPanelWorkspace,
+  serializeWorkspacePanelsForPrefs,
+  hydrateWorkspacePanels,
   applyLayoutPreset,
   autoAdaptPanelsForScreenSize,
 } from '../../utils/workspaceLayout'
@@ -17,7 +21,29 @@ describe('Workspace Customization, Database Roles, Floaters, Hyprland & Live Por
     resetWorkspaceLayout()
   })
 
-  it('manages dockable, floating ("floater"), and hidden panel states and presets', () => {
+  it('manages dockable, floating ("floater"), detached, and hidden panel states (including the Chessboard) and workspace persistence', () => {
+    // Chessboard ('board') must be present and support docked, floater, and detached modes + workspace assignment
+    expect(workspacePanels.value.board).toBeDefined()
+    expect(workspacePanels.value.board.mode).toBe('docked')
+    togglePanelFloater('board')
+    expect(workspacePanels.value.board.mode).toBe('floater')
+    setPanelWorkspace('board', '2')
+    setPanelMode('board', 'detached')
+    expect(workspacePanels.value.board.mode).toBe('detached')
+    expect(workspacePanels.value.board.targetWorkspace).toBe('2')
+
+    const serialized = serializeWorkspacePanelsForPrefs()
+    expect(serialized.board.mode).toBe('detached')
+    expect(serialized.board.targetWorkspace).toBe('2')
+
+    resetWorkspaceLayout()
+    expect(workspacePanels.value.board.mode).toBe('docked')
+
+    hydrateWorkspacePanels(serialized)
+    expect(workspacePanels.value.board.mode).toBe('detached')
+    expect(workspacePanels.value.board.targetWorkspace).toBe('2')
+
+    resetWorkspaceLayout()
     expect(workspacePanels.value.tree.mode).toBe('docked')
     togglePanelFloater('tree')
     expect(workspacePanels.value.tree.mode).toBe('floater')

@@ -49,13 +49,14 @@ func main() {
 		if arg == "-h" || arg == "--help" || arg == "help" {
 			fmt.Printf("NewScid - Modern Chess Information Database (%s)\n", version.Short())
 			fmt.Println("Usage: newscid [options] [database.si4 | file.pgn]")
-			fmt.Println("       newscid --window-panel <tree|engine|notation|games|board|portal|db-hub> [--title <title>]")
+			fmt.Println("       newscid --window-panel <board|tree|engine|notation|games|imbalance|info|portal|db-roles> [--workspace <1..10>] [--title <title>]")
 			fmt.Println("       newscid --portal-url <https://lichess.org | https://www.chess.com> [--title <title>]")
 			fmt.Println("       newscid serve [--host 127.0.0.1] [--port 8080] [--data-dir /path]")
 			fmt.Println("\nOptions:")
 			fmt.Println("  -v, --version         Print application version details")
 			fmt.Println("  -h, --help            Display this help message")
 			fmt.Println("  --window-panel <id>   Launch a detached multi-screen panel window (for Hyprland / multi-monitor)")
+			fmt.Println("  --workspace <1..10>   Place the window onto a specific Hyprland workspace")
 			fmt.Println("  --portal-url <url>    Launch a dedicated live portal window into Lichess.org or Chess.com")
 			fmt.Println("  serve, --server       Run in standalone web / mobile server mode (for Android / browser)")
 			os.Exit(0)
@@ -85,8 +86,18 @@ func main() {
 				windowStartupCfg.Mode = "panel"
 				windowStartupCfg.PanelID = os.Args[i+1]
 				windowTitle = fmt.Sprintf("NewScid — %s [Screen Panel]", os.Args[i+1])
-				windowWidth = 820
-				windowHeight = 680
+				if windowStartupCfg.PanelID == "board" {
+					windowWidth = 680
+					windowHeight = 720
+				} else {
+					windowWidth = 820
+					windowHeight = 680
+				}
+				i++
+			}
+		case "--workspace":
+			if i+1 < len(os.Args) {
+				windowStartupCfg.Workspace = os.Args[i+1]
 				i++
 			}
 		case "--portal-url":
@@ -115,6 +126,12 @@ func main() {
 				i++
 			}
 		}
+	}
+
+	if windowStartupCfg.Workspace != "" {
+		go func(ws string) {
+			dispatchHyprlandWorkspace(os.Getpid(), ws, true)
+		}(windowStartupCfg.Workspace)
 	}
 
 	// On Android, always run the server mode for WebView or Termux

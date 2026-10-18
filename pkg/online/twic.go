@@ -154,7 +154,15 @@ func (c *TWICClient) ImportIssue(ctx context.Context, issue int, targetDB *scid.
 		return res, nil
 	}
 
-	importStats, err := targetDB.ImportGames(games)
+	existingSigs := targetDB.BuildGameSignatureSet()
+	newGames, _ := existingSigs.FilterNewGames(games)
+	if len(newGames) == 0 {
+		res.GamesImported = 0
+		res.DurationMs = time.Since(start).Milliseconds()
+		return res, nil
+	}
+
+	importStats, err := targetDB.ImportGames(newGames)
 	if err != nil {
 		res.DurationMs = time.Since(start).Milliseconds()
 		res.Error = err.Error()

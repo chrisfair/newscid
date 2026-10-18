@@ -174,20 +174,30 @@ func DiscoverScidDatabases() []DiscoveredDatabase {
 		}
 	}
 
-	// 3. Check ~/.scidvspc/data
+	// 3. Check ~/.scidvspc/data, ~/.local/share/newscid/databases, and persona folders
 	if home != "" {
-		scidDataDir := filepath.Join(home, ".scidvspc", "data")
-		if fi, err := os.Stat(scidDataDir); err == nil && fi.IsDir() {
-			entries, _ := os.ReadDir(scidDataDir)
-			for _, e := range entries {
-				if !e.IsDir() && strings.HasSuffix(e.Name(), ".si4") {
-					full := filepath.Join(scidDataDir, e.Name())
-					clean := strings.TrimSuffix(full, ".si4")
-					if !seen[clean] {
-						seen[clean] = true
-						meta := InspectDatabase(clean, "User Databases")
-						if meta.Exists {
-							results = append(results, meta)
+		extraDirs := []struct {
+			dir      string
+			category string
+		}{
+			{filepath.Join(home, ".scidvspc", "data"), "User Databases"},
+			{filepath.Join(home, ".local", "share", "newscid", "databases"), "User Databases"},
+			{filepath.Join(home, ".config", "newscid", "personas"), "Persona Databases"},
+			{filepath.Join(home, ".newscid", "personas"), "Persona Databases"},
+		}
+		for _, ed := range extraDirs {
+			if fi, err := os.Stat(ed.dir); err == nil && fi.IsDir() {
+				entries, _ := os.ReadDir(ed.dir)
+				for _, e := range entries {
+					if !e.IsDir() && strings.HasSuffix(e.Name(), ".si4") {
+						full := filepath.Join(ed.dir, e.Name())
+						clean := strings.TrimSuffix(full, ".si4")
+						if !seen[clean] {
+							seen[clean] = true
+							meta := InspectDatabase(clean, ed.category)
+							if meta.Exists {
+								results = append(results, meta)
+							}
 						}
 					}
 				}
