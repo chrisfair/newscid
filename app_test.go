@@ -1153,26 +1153,25 @@ func TestAppTWICDownloader(t *testing.T) {
 	defer db.Close()
 	app.db = db
 
-	// 3. Mock TWIC server
-	samplePGN := `[Event "World Cup"]
-[Site "Baku"]
-[Date "2023.08.15"]
-[Round "1"]
-[White "Carlsen, Magnus"]
-[Black "Praggnanandhaa, R"]
-[Result "1-0"]
-
-1. d4 Nf6 2. c4 e6 1-0`
-
-	zipData := makeAppTWICZip(t, "twic1500.pgn", samplePGN)
+	// 3. Mock TWIC server serving distinct games per issue
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
+		pgn := fmt.Sprintf(`[Event "World Cup %s"]
+[Site "Baku %s"]
+[Date "2023.08.15"]
+[Round "1"]
+[White "Carlsen, Magnus"]
+[Black "Opponent %s"]
+[Result "1-0"]
+
+1. d4 Nf6 2. c4 e6 1-0`, r.URL.Path, r.URL.Path, r.URL.Path)
+		zipBytes := makeAppTWICZip(t, "twic.pgn", pgn)
 		w.Header().Set("Content-Type", "application/zip")
 		w.WriteHeader(http.StatusOK)
-		w.Write(zipData)
+		w.Write(zipBytes)
 	}))
 	defer server.Close()
 
@@ -1187,6 +1186,11 @@ func TestAppTWICDownloader(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1500, res.IssueNumber)
 	assert.Equal(t, 1, res.GamesImported)
+
+	// Re-downloading the same issue skips already-present games
+	resDup, err := app.DownloadTWICIssue(1500)
+	require.NoError(t, err)
+	assert.Equal(t, 0, resDup.GamesImported)
 
 	// Check issue exists
 	exists, err := app.CheckTWICIssue(1500)

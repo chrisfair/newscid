@@ -16,7 +16,8 @@ import {
   Search,
   X,
   Copy,
-  Sparkles
+  Sparkles,
+  RefreshCw
 } from '@lucide/vue'
 import type { PieceSetOption, BoardThemeOption, DiscoveredDatabase } from './HeaderBar.vue'
 import type { EngineOption } from './EnginePanel.vue'
@@ -25,6 +26,7 @@ import {
   workspacePanels,
   setPanelMode,
   setPanelDockZone,
+  setPanelWorkspace,
   applyLayoutPreset,
   resetWorkspaceLayout,
   type PanelId,
@@ -47,6 +49,15 @@ export interface AppPreferencesModel {
   soundEnabled: boolean
   showEvalBar: boolean
   threatModeDefault: boolean
+  blindfoldDefault?: boolean
+  boardFlippedDefault?: boolean
+  compactLayoutMode?: string
+  leftColWidth?: number
+  bottomDrawerHeight?: number
+  bottomDrawerOpen?: boolean
+  mainWindowWorkspace?: string
+  autoRestoreWorkspaceWindows?: boolean
+  panelConfigs?: Record<string, any>
   defaultEngine: string
   defaultMultiPv: number
   defaultThreads: number
@@ -76,6 +87,8 @@ const props = defineProps<{
   blindfold: boolean
   leftColWidth: number
   bottomDrawerHeight: number
+  isUpdatingFromLocal?: boolean
+  localMergeStatus?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -95,7 +108,9 @@ const emit = defineEmits<{
   (e: 'toggleBlindfold'): void
   (e: 'updateLeftWidth', w: number): void
   (e: 'updateBottomHeight', h: number): void
-  (e: 'detachPanelScreen', panelId: PanelId): void
+  (e: 'detachPanelScreen', panelId: PanelId, workspace?: string): void
+  (e: 'moveMainToWorkspace', workspace: string): void
+  (e: 'updateFromLocal', targetPath?: string): void
   (e: 'launchPortalWindow', platform: 'lichess' | 'chesscom', url: string): void
 }>()
 
@@ -489,6 +504,45 @@ async function copyHyprlandSnippet() {
                   </label>
                 </div>
               </div>
+
+              <!-- Update Any Database with Local Databases Card -->
+              <div class="pt-2 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div class="font-bold text-zinc-200 flex items-center gap-1.5">
+                    <RefreshCw class="w-3.5 h-3.5 text-emerald-400" :class="{ 'animate-spin': isUpdatingFromLocal }" />
+                    <span>Update Databases with Local Games Already on Computer</span>
+                  </div>
+                  <p class="text-[11px] text-zinc-400">
+                    Deduplicates and merges all games from local <code class="text-emerald-400">.si4</code> and <code class="text-emerald-400">.pgn</code> databases (including Persona bases) into your Default, Reference, or Active database.
+                  </p>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <button
+                    v-if="rolesStatus?.activeDb?.basePath"
+                    class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                    :disabled="isUpdatingFromLocal"
+                    @click="emit('updateFromLocal', rolesStatus.activeDb.basePath)"
+                  >
+                    <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': isUpdatingFromLocal }" />
+                    <span>Update Active DB ({{ rolesStatus.activeDb.name }})</span>
+                  </button>
+                  <button
+                    v-if="localPrefs.referenceDatabasePath"
+                    class="px-3 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                    :disabled="isUpdatingFromLocal"
+                    @click="emit('updateFromLocal', localPrefs.referenceDatabasePath)"
+                  >
+                    <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': isUpdatingFromLocal }" />
+                    <span>Update Reference / Mega DB</span>
+                  </button>
+                </div>
+              </div>
+              <div
+                v-if="localMergeStatus"
+                class="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/40 text-emerald-200 text-xs"
+              >
+                {{ localMergeStatus }}
+              </div>
             </div>
           </section>
 
@@ -502,7 +556,7 @@ async function copyHyprlandSnippet() {
                 <span>2. Adjustable, Dockable, Removable &amp; Floating ("Floater") Panels</span>
               </h3>
               <p class="text-zinc-300 mt-1 leading-relaxed">
-                Every workspace panel in NewScid can be <strong>Docked</strong> (in the Left, Right, or Bottom dock), converted into a draggable/resizable <strong>Floater</strong> window, <strong>Detached to a separate OS Screen</strong>, or <strong>Hidden/Removed</strong>.
+                Every workspace panel in NewScid — <strong>including the Chessboard itself</strong> — can be <strong>Docked</strong>, converted into a draggable/resizable <strong>Floater</strong>, <strong>Detached to a specific Hyprland Workspace (1..10)</strong>, or <strong>Hidden</strong>. All changes are saved automatically to your user config (<code class="text-emerald-400">~/.config/newscid/preferences.json</code>).
               </p>
             </div>
 
@@ -547,7 +601,7 @@ async function copyHyprlandSnippet() {
             <!-- Per-Panel Configuration Table -->
             <div class="bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden">
               <div class="px-4 py-2.5 bg-zinc-900/80 border-b border-zinc-800 flex items-center justify-between">
-                <span class="font-bold text-zinc-100">Customize Individual Panels (Docked / Floater / Hidden / Screen)</span>
+                <span class="font-bold text-zinc-100">Customize Individual Panels (Docked / Floater / Hidden / Screen Workspace)</span>
                 <button
                   class="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] flex items-center gap-1 cursor-pointer"
                   @click="resetWorkspaceLayout()"
@@ -571,10 +625,11 @@ async function copyHyprlandSnippet() {
                         :class="{
                           'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30': panel.mode === 'docked',
                           'bg-amber-500/20 text-amber-300 border border-amber-500/30': panel.mode === 'floater',
+                          'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30': panel.mode === 'detached',
                           'bg-zinc-800 text-zinc-400 border border-zinc-700': panel.mode === 'hidden',
                         }"
                       >
-                        {{ panel.mode }}
+                        {{ panel.mode }}{{ panel.targetWorkspace ? ` (WS ${panel.targetWorkspace})` : '' }}
                       </span>
                     </div>
                     <p class="text-[11px] text-zinc-400 mt-0.5">{{ panel.description }}</p>
@@ -599,6 +654,13 @@ async function copyHyprlandSnippet() {
                       </button>
                       <button
                         class="px-2 py-1 rounded-md text-[11px] font-semibold cursor-pointer transition-colors"
+                        :class="panel.mode === 'detached' ? 'bg-cyan-600 text-white' : 'text-zinc-400 hover:text-zinc-200'"
+                        @click="emit('detachPanelScreen', panel.id, panel.targetWorkspace)"
+                      >
+                        Detached
+                      </button>
+                      <button
+                        class="px-2 py-1 rounded-md text-[11px] font-semibold cursor-pointer transition-colors"
                         :class="panel.mode === 'hidden' ? 'bg-rose-600/80 text-white' : 'text-zinc-400 hover:text-zinc-200'"
                         @click="setPanelMode(panel.id, 'hidden')"
                       >
@@ -608,7 +670,7 @@ async function copyHyprlandSnippet() {
 
                     <!-- Dock Zone Selector -->
                     <select
-                      v-if="panel.mode === 'docked'"
+                      v-if="panel.mode === 'docked' && panel.id !== 'board'"
                       :value="panel.dockZone"
                       class="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-[11px] text-zinc-200 focus:outline-none focus:border-emerald-500"
                       title="Select Dock Zone"
@@ -619,11 +681,22 @@ async function copyHyprlandSnippet() {
                       <option value="bottom">Bottom Dock (Drawer)</option>
                     </select>
 
+                    <!-- Hyprland Workspace Selector -->
+                    <select
+                      :value="panel.targetWorkspace || ''"
+                      class="bg-zinc-900 border border-cyan-500/40 rounded-lg px-2 py-1 text-[11px] text-cyan-300 font-mono focus:outline-none focus:border-cyan-400"
+                      title="Assign Hyprland Workspace (1..10) and launch/move panel there"
+                      @change="setPanelWorkspace(panel.id, ($event.target as HTMLSelectElement).value); if (($event.target as HTMLSelectElement).value) emit('detachPanelScreen', panel.id, ($event.target as HTMLSelectElement).value)"
+                    >
+                      <option value="">Workspace: Auto</option>
+                      <option v-for="ws in 10" :key="ws" :value="String(ws)">Workspace {{ ws }}</option>
+                    </select>
+
                     <!-- Detach to Screen Button -->
                     <button
                       class="px-2.5 py-1 rounded-lg bg-cyan-950/60 hover:bg-cyan-900/70 text-cyan-300 border border-cyan-500/40 text-[11px] font-semibold flex items-center gap-1 cursor-pointer transition-colors"
                       title="Open this panel in a dedicated OS window for multi-screen / Hyprland"
-                      @click="emit('detachPanelScreen', panel.id)"
+                      @click="emit('detachPanelScreen', panel.id, panel.targetWorkspace)"
                     >
                       <ExternalLink class="w-3 h-3" />
                       <span>Screen</span>
@@ -677,8 +750,38 @@ async function copyHyprlandSnippet() {
                 <span>3. Multi-Screen &amp; Hyprland Workspace Orchestration</span>
               </h3>
               <p class="text-zinc-300 mt-1 leading-relaxed">
-                Spread NewScid across multiple monitors or Hyprland workspaces. Detached Screen Panels run as native OS windows and <strong>automatically synchronize board positions, moves, and database state in real time</strong> with your main board.
+                Spread NewScid across multiple monitors or Hyprland workspaces. Detached Screen Panels (including a standalone <strong>Chessboard</strong> window) run as native OS windows, can be placed on specific Hyprland workspaces (`1..10`), and <strong>automatically synchronize board positions, moves, and database state in real time</strong>.
               </p>
+            </div>
+
+            <!-- Main Window Workspace & Auto-Restore Config -->
+            <div class="bg-zinc-950 border border-zinc-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <div class="font-bold text-sm text-zinc-100">Main Window Workspace &amp; Startup Persistence</div>
+                <p class="text-[11px] text-zinc-400">
+                  Choose which Hyprland workspace hosts the main NewScid window and whether detached panels re-launch on startup.
+                </p>
+              </div>
+              <div class="flex items-center gap-3 flex-wrap">
+                <select
+                  :value="localPrefs.mainWindowWorkspace || ''"
+                  class="bg-zinc-900 border border-cyan-500/40 rounded-lg px-3 py-1.5 text-xs text-cyan-300 font-mono"
+                  @change="localPrefs.mainWindowWorkspace = ($event.target as HTMLSelectElement).value; emit('moveMainToWorkspace', localPrefs.mainWindowWorkspace || ''); handleSave()"
+                >
+                  <option value="">Main Window: Current Workspace</option>
+                  <option v-for="ws in 10" :key="ws" :value="String(ws)">Move Main Window to Workspace {{ ws }}</option>
+                </select>
+
+                <label class="flex items-center gap-2 text-xs text-zinc-200 cursor-pointer">
+                  <input
+                    v-model="localPrefs.autoRestoreWorkspaceWindows"
+                    type="checkbox"
+                    class="w-4 h-4 accent-cyan-500"
+                    @change="handleSave"
+                  />
+                  <span>Auto-restore detached workspace windows on startup</span>
+                </label>
+              </div>
             </div>
 
             <!-- One-Click Detached Screen Launchers -->
@@ -686,8 +789,19 @@ async function copyHyprlandSnippet() {
               <div class="font-bold text-sm text-zinc-100">Launch Dedicated Screen Windows (Synchronized Live)</div>
               <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
                 <button
+                  class="p-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-emerald-500/50 text-left cursor-pointer transition-all"
+                  @click="emit('detachPanelScreen', 'board', workspacePanels.board?.targetWorkspace)"
+                >
+                  <div class="font-bold text-emerald-400 flex items-center justify-between">
+                    <span>Chessboard &amp; Clocks Screen</span>
+                    <ExternalLink class="w-3.5 h-3.5" />
+                  </div>
+                  <p class="text-[10px] text-zinc-400 mt-1">Detach the interactive Chessboard to its own OS window / Hyprland workspace</p>
+                </button>
+
+                <button
                   class="p-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-cyan-500/50 text-left cursor-pointer transition-all"
-                  @click="emit('detachPanelScreen', 'tree')"
+                  @click="emit('detachPanelScreen', 'tree', workspacePanels.tree?.targetWorkspace)"
                 >
                   <div class="font-bold text-cyan-400 flex items-center justify-between">
                     <span>Opening Tree Screen</span>
@@ -698,7 +812,7 @@ async function copyHyprlandSnippet() {
 
                 <button
                   class="p-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-emerald-500/50 text-left cursor-pointer transition-all"
-                  @click="emit('detachPanelScreen', 'engine')"
+                  @click="emit('detachPanelScreen', 'engine', workspacePanels.engine?.targetWorkspace)"
                 >
                   <div class="font-bold text-emerald-400 flex items-center justify-between">
                     <span>UCI Engine &amp; Telemetry</span>
@@ -709,7 +823,7 @@ async function copyHyprlandSnippet() {
 
                 <button
                   class="p-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-amber-500/50 text-left cursor-pointer transition-all"
-                  @click="emit('detachPanelScreen', 'games')"
+                  @click="emit('detachPanelScreen', 'games', workspacePanels.games?.targetWorkspace)"
                 >
                   <div class="font-bold text-amber-400 flex items-center justify-between">
                     <span>Database Games Browser</span>
@@ -720,7 +834,7 @@ async function copyHyprlandSnippet() {
 
                 <button
                   class="p-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-purple-500/50 text-left cursor-pointer transition-all"
-                  @click="emit('detachPanelScreen', 'notation')"
+                  @click="emit('detachPanelScreen', 'notation', workspacePanels.notation?.targetWorkspace)"
                 >
                   <div class="font-bold text-purple-400 flex items-center justify-between">
                     <span>Notation &amp; Eval Graph</span>

@@ -259,6 +259,8 @@ export function IsScidDriverAvailable():Promise<boolean>;
 
 export function LaunchDetachedPanelWindow(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
+export function LaunchPanelOnWorkspace(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
+
 export function LaunchPortalWindow(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function LoadTacticsPuzzle(arg1:string,arg2:number):Promise<main.TacticsPuzzle>;
@@ -266,6 +268,8 @@ export function LoadTacticsPuzzle(arg1:string,arg2:number):Promise<main.TacticsP
 export function MakeMove(arg1:string,arg2:string):Promise<main.BoardState>;
 
 export function MinePuzzlesFromDatabase(arg1:string,arg2:number):Promise<Array<puzzleminer.MinedPuzzle>>;
+
+export function MoveCurrentWindowToWorkspace(arg1:string):Promise<void>;
 
 export function OpenClipbase():Promise<main.DatabaseInfo>;
 
@@ -372,6 +376,8 @@ export function SubmitSafetyDrillAnswer(arg1:training.SafetyDrill,arg2:Array<str
 export function SuggestPersonaIdentifiers(arg1:string,arg2:Array<string>):Promise<Array<string>>;
 
 export function SyncOnlineProfile(arg1:string):Promise<online.SyncResult>;
+
+export function UpdateDatabaseFromLocal(arg1:string,arg2:Array<string>):Promise<scid.MergeStats>;
 
 export function UpdateGameHeaders(arg1:number,arg2:Record<string, string>):Promise<scid.GameSummary>;
 

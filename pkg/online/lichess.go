@@ -10,6 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"newscid/pkg/chess"
+	"newscid/pkg/database/scid"
 )
 
 const (
@@ -185,3 +188,149 @@ func (c *LichessClient) FetchUserGames(username string, sinceTimeMs int64, token
 
 	return pgnBuilder.String(), nil
 }
+
+// FetchUserGamesIncremental streams games for username from Lichess starting from the most recent games
+// and automatically continuing into older games if necessary, skipping any game already present in existingSigs
+// WITHOUT counting existing games toward maxNewGames.
+func (c *LichessClient) FetchUserGamesIncremental(
+	username string,
+	token string,
+	ratedOnly bool,
+	maxNewGames int,
+	existingSigs *scid.GameSignatureSet,
+	onProgress ...ProgressFn,
+) ([]*chess.Game, int, error) {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return nil, 0, fmt.Errorf("lichess username cannot be empty")
+	}
+
+	var progress ProgressFn
+	if len(onProgress) > 0 && onProgress[0] != nil {
+		progress = onProgress[0]
+	}
+
+	endpoint := fmt.Sprintf("%s/api/games/user/%s", strings.TrimRight(c.BaseURL, "/"), url.PathEscape(username))
+
+	queryParams := url.Values{}
+	queryParams.Set("clocks", "true")
+	queryParams.Set("evals", "true")
+	queryParams.Set("opening", "true")
+	if ratedOnly {
+		queryParams.Set("rated", "true")
+	}
+	// If we have existing games, request enough games to skip all existing ones and still collect maxNewGames new ones
+	if maxNewGames > 0 {
+		existingCount := 0
+		if existingSigs != nil {
+			existingCount = existingSigs.Count()
+		}
+		if existingCount == 0 {
+			queryParams.Set("max", strconv.Itoa(maxNewGames))
+		} else {
+			queryParams.Set("max", strconv.Itoa(maxNewGames+existingCount+50))
+		}
+	}
+
+	fullURL := endpoint + "?" + queryParams.Encode()
+	req, err := http.NewRequest(http.MethodGet, fullURL, nil)
+	if err != nil {
+		return nil, 0, fmt.Errorf("creating lichess request: %w", err)
+	}
+	req.Header.Set("Accept", "application/x-chess-pgn")
+	req.Header.Set("User-Agent", c.UserAgent)
+	if strings.TrimSpace(token) != "" {
+		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
+	}
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("lichess request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, 0, fmt.Errorf("lichess user %q not found", username)
+	}
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return nil, 0, fmt.Errorf("lichess rate limit exceeded, please wait before retrying")
+	}
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return nil, 0, fmt.Errorf("lichess API returned HTTP %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 64*1024), 2*1024*1024)
+
+	var currentGameLines strings.Builder
+	inMoves := false
+	var newGames []*chess.Game
+	skippedExisting := 0
+	lastReportTime := time.Now()
+
+	processOne := func(rawPGN string) bool {
+		trimmed := strings.TrimSpace(rawPGN)
+		if trimmed == "" {
+			return false
+		}
+		parsed, err := chess.ParsePGNDatabase(strings.NewReader(trimmed))
+		if err != nil || len(parsed) == 0 {
+			return false
+		}
+		for _, g := range parsed {
+			if g == nil {
+				continue
+			}
+			if existingSigs != nil && existingSigs.ContainsGame(g) {
+				skippedExisting++
+				continue
+			}
+			if existingSigs != nil {
+				existingSigs.AddGame(g)
+			}
+			newGames = append(newGames, g)
+			if maxNewGames > 0 && len(newGames) >= maxNewGames {
+				return true
+			}
+		}
+		if progress != nil && (time.Since(lastReportTime) > 350*time.Millisecond || len(newGames)%20 == 0) {
+			lastReportTime = time.Now()
+			msg := fmt.Sprintf("Lichess update: %d new games found (%d already in DB skipped)...", len(newGames), skippedExisting)
+			progress("downloading", len(newGames), maxNewGames, msg)
+		}
+		return false
+	}
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		trimmed := strings.TrimSpace(line)
+
+		if strings.HasPrefix(trimmed, "[") && inMoves {
+			if stop := processOne(currentGameLines.String()); stop {
+				currentGameLines.Reset()
+				inMoves = false
+				break
+			}
+			currentGameLines.Reset()
+			inMoves = false
+		} else if trimmed != "" && !strings.HasPrefix(trimmed, "[") && !strings.HasPrefix(trimmed, "%") {
+			inMoves = true
+		}
+
+		currentGameLines.WriteString(line)
+		currentGameLines.WriteByte('\n')
+	}
+
+	if currentGameLines.Len() > 0 && (maxNewGames <= 0 || len(newGames) < maxNewGames) {
+		_ = processOne(currentGameLines.String())
+	}
+
+	if progress != nil {
+		msg := fmt.Sprintf("Lichess sync complete: %d new games (%d existing skipped)", len(newGames), skippedExisting)
+		progress("downloaded", len(newGames), maxNewGames, msg)
+	}
+
+	return newGames, skippedExisting, nil
+}
+

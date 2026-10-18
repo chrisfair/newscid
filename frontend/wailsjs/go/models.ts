@@ -898,6 +898,64 @@ export namespace imbalance {
 
 export namespace main {
 	
+	export class SavedFloaterRect {
+	    x: number;
+	    y: number;
+	    width: number;
+	    height: number;
+	    minimized: boolean;
+	    zIndex: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SavedFloaterRect(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.x = source["x"];
+	        this.y = source["y"];
+	        this.width = source["width"];
+	        this.height = source["height"];
+	        this.minimized = source["minimized"];
+	        this.zIndex = source["zIndex"];
+	    }
+	}
+	export class SavedPanelConfig {
+	    mode: string;
+	    dockZone: string;
+	    targetWorkspace: string;
+	    floaterRect: SavedFloaterRect;
+	
+	    static createFrom(source: any = {}) {
+	        return new SavedPanelConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.mode = source["mode"];
+	        this.dockZone = source["dockZone"];
+	        this.targetWorkspace = source["targetWorkspace"];
+	        this.floaterRect = this.convertValues(source["floaterRect"], SavedFloaterRect);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class AppPreferences {
 	    defaultDatabasePath: string;
 	    referenceDatabasePath: string;
@@ -910,6 +968,15 @@ export namespace main {
 	    soundEnabled: boolean;
 	    showEvalBar: boolean;
 	    threatModeDefault: boolean;
+	    blindfoldDefault: boolean;
+	    boardFlippedDefault: boolean;
+	    compactLayoutMode: string;
+	    leftColWidth: number;
+	    bottomDrawerHeight: number;
+	    bottomDrawerOpen: boolean;
+	    mainWindowWorkspace: string;
+	    autoRestoreWorkspaceWindows: boolean;
+	    panelConfigs: Record<string, SavedPanelConfig>;
 	    defaultEngine: string;
 	    defaultMultiPv: number;
 	    defaultThreads: number;
@@ -938,6 +1005,15 @@ export namespace main {
 	        this.soundEnabled = source["soundEnabled"];
 	        this.showEvalBar = source["showEvalBar"];
 	        this.threatModeDefault = source["threatModeDefault"];
+	        this.blindfoldDefault = source["blindfoldDefault"];
+	        this.boardFlippedDefault = source["boardFlippedDefault"];
+	        this.compactLayoutMode = source["compactLayoutMode"];
+	        this.leftColWidth = source["leftColWidth"];
+	        this.bottomDrawerHeight = source["bottomDrawerHeight"];
+	        this.bottomDrawerOpen = source["bottomDrawerOpen"];
+	        this.mainWindowWorkspace = source["mainWindowWorkspace"];
+	        this.autoRestoreWorkspaceWindows = source["autoRestoreWorkspaceWindows"];
+	        this.panelConfigs = this.convertValues(source["panelConfigs"], SavedPanelConfig, true);
 	        this.defaultEngine = source["defaultEngine"];
 	        this.defaultMultiPv = source["defaultMultiPv"];
 	        this.defaultThreads = source["defaultThreads"];
@@ -949,6 +1025,24 @@ export namespace main {
 	        this.portalWindowMode = source["portalWindowMode"];
 	        this.customBrowserCmd = source["customBrowserCmd"];
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class BoardState {
 	    fen: string;
@@ -1112,6 +1206,8 @@ export namespace main {
 		    return a;
 		}
 	}
+	
+	
 	export class SharedWorkspaceState {
 	    updatedAtMs: number;
 	    sourceId: string;
@@ -1181,6 +1277,7 @@ export namespace main {
 	export class WindowStartupConfig {
 	    mode: string;
 	    panelId: string;
+	    workspace: string;
 	    portalUrl: string;
 	    portalTitle: string;
 	    initialFen: string;
@@ -1194,6 +1291,7 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.mode = source["mode"];
 	        this.panelId = source["panelId"];
+	        this.workspace = source["workspace"];
 	        this.portalUrl = source["portalUrl"];
 	        this.portalTitle = source["portalTitle"];
 	        this.initialFen = source["initialFen"];
@@ -2379,6 +2477,32 @@ export namespace scid {
 	        this.diffPawns = source["diffPawns"];
 	        this.oppositeBishops = source["oppositeBishops"];
 	        this.matchEndOnly = source["matchEndOnly"];
+	    }
+	}
+	export class MergeStats {
+	    sourcesProcessed: number;
+	    sourceNames: string[];
+	    totalScanned: number;
+	    imported: number;
+	    duplicatesSkipped: number;
+	    errors: number;
+	    durationMs: number;
+	    targetTotalGames: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MergeStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sourcesProcessed = source["sourcesProcessed"];
+	        this.sourceNames = source["sourceNames"];
+	        this.totalScanned = source["totalScanned"];
+	        this.imported = source["imported"];
+	        this.duplicatesSkipped = source["duplicatesSkipped"];
+	        this.errors = source["errors"];
+	        this.durationMs = source["durationMs"];
+	        this.targetTotalGames = source["targetTotalGames"];
 	    }
 	}
 	

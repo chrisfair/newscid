@@ -27,7 +27,8 @@ import {
   VerifyDatabase,
   ImportPGNBatch,
   ImportPGNFileBatch,
-  OpenPGNFileDialog
+  OpenPGNFileDialog,
+  UpdateDatabaseFromLocal
 } from '../../wailsjs/go/main/App'
 
 const props = defineProps<{
@@ -299,6 +300,22 @@ async function handleImportFile() {
     await loadStatistics()
   } catch (err: any) {
     errorMessage.value = err?.message || 'PGN file import failed'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleUpdateFromLocal() {
+  loading.value = true
+  errorMessage.value = ''
+  statusMessage.value = ''
+  try {
+    const statsRes = await UpdateDatabaseFromLocal('', [])
+    statusMessage.value = `Updated from ${statsRes.sourcesProcessed} local databases: +${statsRes.imported} new games added (${statsRes.duplicatesSkipped} duplicates skipped) in ${statsRes.durationMs}ms.`
+    emit('dbUpdated')
+    await loadStatistics()
+  } catch (err: any) {
+    errorMessage.value = err?.message || 'Updating from local databases failed'
   } finally {
     loading.value = false
   }
@@ -784,7 +801,7 @@ async function handleImportFile() {
               Batch-append multiple games from an external <code class="text-emerald-400 font-mono">.pgn</code> file directly into the active database, or paste raw PGN content below.
             </p>
 
-            <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center gap-3">
               <button
                 class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-xl text-xs flex items-center gap-2 transition-colors cursor-pointer"
                 :disabled="loading"
@@ -792,6 +809,16 @@ async function handleImportFile() {
               >
                 <FolderOpen class="w-4 h-4" />
                 Select & Import PGN File...
+              </button>
+
+              <button
+                class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-medium rounded-xl text-xs flex items-center gap-2 transition-colors cursor-pointer"
+                :disabled="loading"
+                title="Scan all local databases on your system and merge any non-duplicate games into this database"
+                @click="handleUpdateFromLocal"
+              >
+                <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': loading }" />
+                Update with Local Databases Already Here
               </button>
             </div>
 

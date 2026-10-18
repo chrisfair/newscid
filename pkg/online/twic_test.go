@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
+
 	"newscid/pkg/database/scid"
 )
 
@@ -194,9 +196,10 @@ func TestTWICClient_ImportIssue(t *testing.T) {
 }
 
 func TestTWICClient_ImportRange(t *testing.T) {
-	zipData := createTestZip(t, "games.pgn", sampleTWICPGN)
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		issuePGN := strings.ReplaceAll(sampleTWICPGN, `[White "Caruana, Fabiano"]`, fmt.Sprintf(`[White "Caruana, Fabiano %s"]`, r.URL.Path))
+		issuePGN = strings.ReplaceAll(issuePGN, `[Black "Caruana, Fabiano"]`, fmt.Sprintf(`[Black "Caruana, Fabiano %s"]`, r.URL.Path))
+		zipData := createTestZip(t, "games.pgn", issuePGN)
 		w.WriteHeader(http.StatusOK)
 		w.Write(zipData)
 	}))

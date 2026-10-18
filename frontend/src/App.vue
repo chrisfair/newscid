@@ -55,6 +55,7 @@ import {
   workspacePanels,
   floatingPanels,
   setPanelMode,
+  setPanelWorkspace,
   setPanelDockZone,
   togglePanelFloater,
   togglePanelVisibility,
@@ -62,6 +63,9 @@ import {
   updateFloaterRect,
   applyLayoutPreset,
   resetWorkspaceLayout,
+  serializeWorkspacePanelsForPrefs,
+  hydrateWorkspacePanels,
+  setOnPanelsChangedHook,
   type PanelId
 } from './utils/workspaceLayout'
 import { initUITheme, applyUITheme, toggleDarkLight, currentUITheme, UI_THEMES } from './utils/theme'
@@ -132,6 +136,9 @@ import {
   GetDatabaseRolesStatus,
   GetWindowStartupConfig,
   LaunchDetachedPanelWindow,
+  LaunchPanelOnWorkspace,
+  MoveCurrentWindowToWorkspace,
+  UpdateDatabaseFromLocal,
   LaunchPortalWindow,
   PublishWorkspaceState,
   GetSharedWorkspaceState,
@@ -370,6 +377,15 @@ const appPreferences = ref<AppPreferencesModel>({
   soundEnabled: true,
   showEvalBar: true,
   threatModeDefault: false,
+  blindfoldDefault: false,
+  boardFlippedDefault: false,
+  compactLayoutMode: 'auto',
+  leftColWidth: 520,
+  bottomDrawerHeight: 220,
+  bottomDrawerOpen: true,
+  mainWindowWorkspace: '',
+  autoRestoreWorkspaceWindows: false,
+  panelConfigs: {},
   defaultEngine: '',
   defaultMultiPv: 1,
   defaultThreads: 2,
@@ -382,10 +398,53 @@ const appPreferences = ref<AppPreferencesModel>({
   customBrowserCmd: '',
 })
 
+const prefsInitialized = ref(false)
+let persistConfigTimer: number | null = null
+const isUpdatingDbFromLocal = ref(false)
+const localMergeStatusMsg = ref<string | null>(null)
+
+function schedulePersistUserConfig() {
+  if (!prefsInitialized.value || windowStartupMode.value.mode !== 'main') return
+  if (persistConfigTimer) window.clearTimeout(persistConfigTimer)
+  persistConfigTimer = window.setTimeout(async () => {
+    try {
+      const payload: AppPreferencesModel = {
+        ...appPreferences.value,
+        defaultPieceSet: currentPieceSet.value,
+        defaultBoardTheme: currentThemeId.value,
+        defaultUITheme: currentUITheme.value,
+        soundEnabled: soundEnabled.value,
+        showEvalBar: showEvalBar.value,
+        threatModeDefault: threatMode.value,
+        blindfoldDefault: blindfoldMode.value,
+        boardFlippedDefault: flipped.value,
+        compactLayoutMode: compactModeOverride.value,
+        leftColWidth: leftColWidth.value,
+        bottomDrawerHeight: bottomDrawerHeight.value,
+        bottomDrawerOpen: bottomDrawerOpen.value,
+        defaultEngine: selectedEngine.value || appPreferences.value.defaultEngine,
+        defaultMultiPv: engineMultiPv.value || appPreferences.value.defaultMultiPv || 1,
+        panelConfigs: serializeWorkspacePanelsForPrefs(),
+      }
+      const saved = await SaveAppPreferences(payload as any)
+      if (saved) {
+        appPreferences.value = saved as AppPreferencesModel
+      }
+    } catch {
+      // Ignore in test environment
+    }
+  }, 180)
+}
+
+setOnPanelsChangedHook(() => {
+  schedulePersistUserConfig()
+})
+
 const dbRolesStatus = ref<DatabaseRolesStatusView | null>(null)
 const windowStartupMode = ref<{
   mode: string
   panelId: string
+  workspace?: string
   portalUrl: string
   portalTitle: string
   initialFen: string
@@ -393,6 +452,7 @@ const windowStartupMode = ref<{
 }>({
   mode: 'main',
   panelId: '',
+  workspace: '',
   portalUrl: '',
   portalTitle: '',
   initialFen: '',
@@ -414,10 +474,11 @@ async function refreshDatabaseRolesStatus() {
 }
 
 async function publishCurrentWorkspaceState() {
-  if (windowStartupMode.value.mode !== 'main') return
   try {
+    const now = Date.now()
+    lastSyncedTimestamp = now
     await PublishWorkspaceState({
-      updatedAtMs: Date.now(),
+      updatedAtMs: now,
       sourceId: windowInstanceId,
       fen: currentFEN.value,
       lastMoveFrom: lastMove.value?.from || '',
@@ -526,7 +587,11 @@ async function handleOpenClipbase() {
 
 async function handleSaveAppPreferences(prefs: AppPreferencesModel) {
   try {
-    const saved = await SaveAppPreferences(prefs as any)
+    const merged = {
+      ...prefs,
+      panelConfigs: serializeWorkspacePanelsForPrefs(),
+    }
+    const saved = await SaveAppPreferences(merged as any)
     if (saved) {
       appPreferences.value = saved as AppPreferencesModel
     }
@@ -537,14 +602,62 @@ async function handleSaveAppPreferences(prefs: AppPreferencesModel) {
   }
 }
 
-async function handleDetachPanelScreen(panelId: PanelId) {
+async function handleDetachPanelScreen(panelId: PanelId, workspace?: string) {
   const panel = workspacePanels.value[panelId]
-  const title = panel ? `NewScid — ${panel.title} [Screen Panel]` : `NewScid — ${panelId} [Screen Panel]`
+  const ws = workspace !== undefined ? workspace : (panel?.targetWorkspace || '')
+  if (panel) {
+    if (workspace !== undefined) {
+      setPanelWorkspace(panelId, ws)
+    }
+    if (panelId === 'board') {
+      setPanelMode('board', 'detached')
+    }
+  }
+  const title = panel
+    ? `NewScid — ${panel.title}${ws ? ` [WS ${ws}]` : ' [Screen Panel]'}`
+    : `NewScid — ${panelId}${ws ? ` [WS ${ws}]` : ' [Screen Panel]'}`
   await publishCurrentWorkspaceState()
   try {
-    await LaunchDetachedPanelWindow(panelId, title, currentFEN.value, dbInfo.value?.basePath || '')
+    if (typeof LaunchPanelOnWorkspace === 'function') {
+      await LaunchPanelOnWorkspace(panelId, ws, title, currentFEN.value, dbInfo.value?.basePath || '')
+    } else {
+      await LaunchDetachedPanelWindow(panelId, title, currentFEN.value, dbInfo.value?.basePath || '')
+    }
   } catch (err: any) {
     alert(`Failed to launch screen window: ${err?.message || err}`)
+  }
+}
+
+async function handleMoveCurrentWindowToWorkspace(workspace: string) {
+  if (!workspace) return
+  try {
+    windowStartupMode.value.workspace = workspace
+    appPreferences.value.mainWindowWorkspace = workspace
+    await MoveCurrentWindowToWorkspace(workspace)
+  } catch (err) {
+    console.error('Failed to move window to workspace:', err)
+  }
+}
+
+async function handleUpdateDatabaseFromLocal(targetPath = '') {
+  if (isUpdatingDbFromLocal.value) return
+  isUpdatingDbFromLocal.value = true
+  localMergeStatusMsg.value = 'Scanning local databases and merging new games...'
+  try {
+    const stats = await UpdateDatabaseFromLocal(targetPath, [])
+    discoveredDatabases.value = (await GetDiscoveredDatabases()) as DiscoveredDatabase[]
+    await refreshGames()
+    await refreshDatabaseRolesStatus()
+    fetchOpeningTree(currentFEN.value)
+    if (stats) {
+      localMergeStatusMsg.value = `Updated! +${stats.imported || 0} new games added (${stats.duplicatesSkipped || 0} existing skipped across ${stats.sourcesProcessed || 0} local DBs; total: ${stats.targetTotalGames || totalGames.value} games).`
+    } else {
+      localMergeStatusMsg.value = 'Database update completed.'
+    }
+  } catch (err: any) {
+    localMergeStatusMsg.value = `Update error: ${err?.message || err}`
+  } finally {
+    isUpdatingDbFromLocal.value = false
   }
 }
 
@@ -918,6 +1031,22 @@ function updateResponsiveBoardSize() {
   const availH = Math.max(180, wsH - nonBoardH)
   const evalBarExtra = showEvalBar.value ? 26 : 4
 
+  // If this OS window is a dedicated detached Chessboard window (--window-panel board)
+  if (windowStartupMode.value.mode === 'panel' && windowStartupMode.value.panelId === 'board') {
+    const detH = Math.max(200, screenH - 115)
+    const detW = Math.max(200, screenW - evalBarExtra - 24)
+    computedBoardSize.value = Math.max(180, Math.min(820, Math.floor(Math.min(detH, detW))))
+    return
+  }
+
+  // If the Chessboard is floating or detached to another workspace in the main window
+  if (workspacePanels.value.board && workspacePanels.value.board.mode !== 'docked') {
+    if (!hasUserManuallyResizedLeft.value) {
+      leftColWidth.value = (showLeftEnginePanel.value || showLeftImbalancePanel.value) ? 340 : 235
+    }
+    return
+  }
+
   if (screenW >= 768) {
     const minRightW = screenW < 920 ? 250 : screenW < 1150 ? 300 : 350
     const maxBoardW = Math.max(180, wsW - minRightW - evalBarExtra - 12)
@@ -1057,13 +1186,35 @@ onMounted(async () => {
       // Default to main mode
     }
 
-    // Load saved user preferences
+    // Load saved user preferences & panel workspace layout from ~/.config/newscid/preferences.json
     try {
       const prefs = await GetAppPreferences()
       if (prefs) {
         appPreferences.value = prefs as AppPreferencesModel
         if (prefs.defaultPieceSet) currentPieceSet.value = prefs.defaultPieceSet
         if (prefs.defaultBoardTheme) currentThemeId.value = prefs.defaultBoardTheme
+        if (prefs.defaultUITheme) applyUITheme(prefs.defaultUITheme as any)
+        if (typeof prefs.soundEnabled === 'boolean') soundEnabled.value = prefs.soundEnabled
+        if (typeof prefs.showEvalBar === 'boolean') showEvalBar.value = prefs.showEvalBar
+        if (typeof prefs.threatModeDefault === 'boolean') threatMode.value = prefs.threatModeDefault
+        if (typeof (prefs as any).blindfoldDefault === 'boolean') blindfoldMode.value = (prefs as any).blindfoldDefault
+        if (typeof (prefs as any).boardFlippedDefault === 'boolean') flipped.value = (prefs as any).boardFlippedDefault
+        const cmpMode = (prefs as any).compactLayoutMode
+        if (cmpMode === 'auto' || cmpMode === 'compact' || cmpMode === 'full') {
+          compactModeOverride.value = cmpMode
+        }
+        if ((prefs as any).leftColWidth && (prefs as any).leftColWidth >= 240) {
+          leftColWidth.value = (prefs as any).leftColWidth
+        }
+        if ((prefs as any).bottomDrawerHeight && (prefs as any).bottomDrawerHeight >= 100) {
+          bottomDrawerHeight.value = (prefs as any).bottomDrawerHeight
+        }
+        if (typeof (prefs as any).bottomDrawerOpen === 'boolean') {
+          bottomDrawerOpen.value = (prefs as any).bottomDrawerOpen
+        }
+        if ((prefs as any).panelConfigs) {
+          hydrateWorkspacePanels((prefs as any).panelConfigs)
+        }
       }
     } catch {
       // Ignore in test environment
@@ -1103,7 +1254,11 @@ onMounted(async () => {
     const initMPV = await GetEngineMultiPV()
     if (initMPV > 0) {
       engineMultiPv.value = initMPV
+    } else if (appPreferences.value.defaultMultiPv > 0) {
+      engineMultiPv.value = appPreferences.value.defaultMultiPv
     }
+
+    prefsInitialized.value = true
 
     // 5. Auto-open Default Database (or initial DB passed via --db flag, or first discovered user base)
     let autoBase: string | null = null
@@ -1135,33 +1290,44 @@ onMounted(async () => {
       await updateBoardState(windowStartupMode.value.initialFen)
     }
 
-    // If launched as a detached Hyprland multi-screen panel window, start live state synchronization!
+    // Start bidirectional live state synchronization across main and detached Hyprland screen windows!
     if (windowStartupMode.value.mode === 'panel') {
       if (windowStartupMode.value.panelId === 'engine' && !isAnalyzing.value) {
         toggleAnalysis()
       }
-      multiScreenSyncTimer = window.setInterval(async () => {
-        try {
-          const shared = await GetSharedWorkspaceState()
-          if (shared && shared.updatedAtMs > lastSyncedTimestamp && shared.sourceId !== windowInstanceId) {
-            lastSyncedTimestamp = shared.updatedAtMs
-            if (shared.dbPath && shared.dbPath !== dbInfo.value?.basePath) {
-              await handleOpenDiscoveredBase(shared.dbPath)
-            }
-            if (shared.fen && shared.fen !== currentFEN.value) {
-              lastMove.value = shared.lastMoveFrom && shared.lastMoveTo
-                ? { from: shared.lastMoveFrom, to: shared.lastMoveTo }
-                : null
-              await updateBoardState(shared.fen)
-            }
-          }
-        } catch {
-          // Ignore sync poll errors
-        }
-      }, 600)
     } else {
       await publishCurrentWorkspaceState()
+      // Auto-restore detached workspace windows on startup if enabled
+      if (appPreferences.value.autoRestoreWorkspaceWindows) {
+        for (const p of Object.values(workspacePanels.value)) {
+          if (p.mode === 'detached') {
+            handleDetachPanelScreen(p.id, p.targetWorkspace || '')
+          }
+        }
+      }
     }
+
+    multiScreenSyncTimer = window.setInterval(async () => {
+      try {
+        const shared = await GetSharedWorkspaceState()
+        if (shared && shared.updatedAtMs > lastSyncedTimestamp && shared.sourceId !== windowInstanceId) {
+          lastSyncedTimestamp = shared.updatedAtMs
+          if (shared.dbPath && shared.dbPath !== dbInfo.value?.basePath) {
+            await handleOpenDiscoveredBase(shared.dbPath)
+          }
+          if (shared.activeGameId && shared.activeGameId > 0 && shared.activeGameId !== activeGameId.value) {
+            await handleLoadGame(shared.activeGameId)
+          } else if (shared.fen && shared.fen !== currentFEN.value) {
+            lastMove.value = shared.lastMoveFrom && shared.lastMoveTo
+              ? { from: shared.lastMoveFrom, to: shared.lastMoveTo }
+              : null
+            await updateBoardState(shared.fen)
+          }
+        }
+      } catch {
+        // Ignore sync poll errors
+      }
+    }, 550)
 
     // 6. Check voluntary support status (exempts author machine via Chess.com & Lichess IDs; 24h cooldown on dismiss)
     const checkSupportNag = async () => {
@@ -1206,6 +1372,7 @@ onUnmounted(() => {
   EventsOff('annotate:progress')
   if (playInterval) clearInterval(playInterval)
   if (multiScreenSyncTimer) clearInterval(multiScreenSyncTimer)
+  if (persistConfigTimer) clearTimeout(persistConfigTimer)
 })
 
 watch([showExportGameModal, showGuessTheMoveModal, showTimeManagementModal], ([exportOpen, guessOpen, timeOpen]) => {
@@ -1214,8 +1381,27 @@ watch([showExportGameModal, showGuessTheMoveModal, showTimeManagementModal], ([e
   }
 })
 
-watch([leftColWidth, bottomDrawerHeight, bottomDrawerOpen, userForcedBottomDrawer, effectiveCompact, showBottomGamesDrawer, showLeftEnginePanel, showLeftImbalancePanel, isAnalyzing, zenMode, showEvalBar, imbalanceReport, activeSimulation, isTheoreticalNovelty, blunderRadarAlert], () => {
+watch([leftColWidth, bottomDrawerHeight, bottomDrawerOpen, userForcedBottomDrawer, effectiveCompact, showBottomGamesDrawer, showLeftEnginePanel, showLeftImbalancePanel, isAnalyzing, zenMode, showEvalBar, imbalanceReport, activeSimulation, isTheoreticalNovelty, blunderRadarAlert, () => workspacePanels.value.board?.mode], () => {
   nextTick(() => updateResponsiveBoardSize())
+})
+
+watch([
+  currentPieceSet,
+  currentThemeId,
+  currentUITheme,
+  soundEnabled,
+  showEvalBar,
+  threatMode,
+  blindfoldMode,
+  flipped,
+  compactModeOverride,
+  leftColWidth,
+  bottomDrawerHeight,
+  bottomDrawerOpen,
+  selectedEngine,
+  engineMultiPv,
+], () => {
+  schedulePersistUserConfig()
 })
 
 watch(currentFEN, (newFen) => {
@@ -2936,21 +3122,33 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
     >
       <!-- Multi-Screen Sync Status Header -->
       <div class="flex items-center justify-between px-3 py-2 bg-zinc-900 border-b border-zinc-800 text-xs shrink-0">
-        <div class="flex items-center gap-2">
-          <span class="px-2 py-0.5 rounded bg-purple-600/20 border border-purple-500/40 text-purple-300 font-bold text-[10px] uppercase tracking-wider">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="px-2 py-0.5 rounded bg-purple-600/20 border border-purple-500/40 text-purple-300 font-bold text-[10px] uppercase tracking-wider shrink-0">
             Hyprland Screen Panel
           </span>
-          <span class="font-bold text-zinc-100">
+          <span class="font-bold text-zinc-100 truncate">
             {{ windowStartupMode.portalTitle || `NewScid — ${windowStartupMode.panelId}` }}
           </span>
-          <span v-if="dbInfo?.name" class="text-zinc-400 font-mono text-[11px]">
+          <span v-if="dbInfo?.name" class="text-zinc-400 font-mono text-[11px] shrink-0">
             • DB: {{ dbInfo.name }}
           </span>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 shrink-0">
+          <label class="flex items-center gap-1 text-[11px] text-zinc-400">
+            <span>Workspace:</span>
+            <select
+              :value="windowStartupMode.workspace || ''"
+              class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[11px] text-purple-300 font-mono cursor-pointer"
+              title="Relocate this detached panel window to a specific Hyprland workspace (1..10)"
+              @change="handleMoveCurrentWindowToWorkspace(($event.target as HTMLSelectElement).value)"
+            >
+              <option value="">Current</option>
+              <option v-for="ws in 10" :key="ws" :value="String(ws)">WS {{ ws }}</option>
+            </select>
+          </label>
           <span class="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
             <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            Live Sync Active
+            Live Sync
           </span>
           <button
             class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] cursor-pointer"
@@ -2963,8 +3161,50 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
 
       <!-- Full-Window Rendered Panel Content -->
       <div class="flex-1 overflow-hidden p-2">
+        <div
+          v-if="windowStartupMode.panelId === 'board'"
+          class="h-full w-full flex flex-col items-center justify-between gap-2 overflow-hidden"
+        >
+          <div class="w-full flex items-center justify-between px-3 py-1.5 bg-zinc-900/90 border border-zinc-800 rounded-lg text-xs shrink-0">
+            <div class="flex items-center gap-2 truncate">
+              <span class="font-bold text-zinc-100">{{ gameTags.White || 'White' }}</span>
+              <span class="text-zinc-500">vs</span>
+              <span class="font-bold text-zinc-100">{{ gameTags.Black || 'Black' }}</span>
+              <span class="text-emerald-400 font-mono ml-1">{{ gameTags.Result || '*' }}</span>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <button class="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 cursor-pointer" title="First Move" @click="goFirst">|◀</button>
+              <button class="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 cursor-pointer" title="Previous Move" @click="goPrev">◀</button>
+              <button class="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 cursor-pointer" title="Next Move" @click="goNext">▶</button>
+              <button class="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 cursor-pointer" title="Last Move" @click="goLast">▶|</button>
+              <button class="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 cursor-pointer ml-1" title="Flip Board (F)" @click="flipped = !flipped">Flip</button>
+              <button class="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-sky-300 cursor-pointer" title="Toggle Eval Bar" @click="toggleEvalBar">Eval</button>
+            </div>
+          </div>
+          <div class="flex-1 flex items-center justify-center w-full overflow-hidden">
+            <Chessboard
+              :fen="currentFEN"
+              :legal-moves="legalMoves"
+              :piece-set="currentPieceSet"
+              :board-theme="currentTheme"
+              :flipped="flipped"
+              :last-move="lastMove"
+              :in-check="inCheck"
+              :sound-enabled="soundEnabled"
+              :blindfold="blindfoldMode"
+              :show-eval-bar="showEvalBar"
+              :eval-score="evalScore"
+              :eval-mate="evalMate"
+              :threat-squares="threatSquares"
+              :arrows="engineArrows"
+              :board-size="computedBoardSize"
+              @move="handleMove"
+            />
+          </div>
+        </div>
+
         <OpeningTree
-          v-if="windowStartupMode.panelId === 'tree'"
+          v-else-if="windowStartupMode.panelId === 'tree'"
           :fen="currentFEN"
           :tree-data="treeData"
           :loading="treeLoading"
@@ -2999,6 +3239,32 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
             @preview-move="handlePreviewCandidateMove"
           />
           <ImbalanceBar :report="imbalanceReport" />
+        </div>
+
+        <div v-else-if="windowStartupMode.panelId === 'imbalance'" class="h-full flex flex-col gap-3 p-2">
+          <ImbalanceBar :report="imbalanceReport" />
+        </div>
+
+        <div v-else-if="windowStartupMode.panelId === 'info'" class="h-full overflow-y-auto p-4 space-y-4">
+          <div class="grid grid-cols-2 gap-3 text-xs font-mono">
+            <div class="p-3 bg-zinc-900 rounded-lg border border-zinc-800">
+              <span class="text-zinc-500 uppercase font-semibold">White Player</span>
+              <p class="text-base font-bold text-zinc-100 mt-1">{{ gameTags.White || '?' }}</p>
+              <span v-if="gameTags.WhiteElo" class="text-xs text-emerald-400">Elo: {{ gameTags.WhiteElo }}</span>
+            </div>
+            <div class="p-3 bg-zinc-900 rounded-lg border border-zinc-800">
+              <span class="text-zinc-500 uppercase font-semibold">Black Player</span>
+              <p class="text-base font-bold text-zinc-100 mt-1">{{ gameTags.Black || '?' }}</p>
+              <span v-if="gameTags.BlackElo" class="text-xs text-emerald-400">Elo: {{ gameTags.BlackElo }}</span>
+            </div>
+          </div>
+          <div class="p-3 bg-zinc-900 rounded-lg border border-zinc-800 space-y-2 text-xs">
+            <div class="flex justify-between"><span class="text-zinc-500 font-semibold">Event:</span><span class="text-zinc-200">{{ gameTags.Event || '?' }}</span></div>
+            <div class="flex justify-between"><span class="text-zinc-500 font-semibold">Site:</span><span class="text-zinc-200">{{ gameTags.Site || '?' }}</span></div>
+            <div class="flex justify-between"><span class="text-zinc-500 font-semibold">Date:</span><span class="text-zinc-200">{{ gameTags.Date || '????.??.??' }}</span></div>
+            <div class="flex justify-between"><span class="text-zinc-500 font-semibold">Result:</span><span class="text-emerald-400 font-bold">{{ gameTags.Result || '*' }}</span></div>
+            <div class="flex justify-between"><span class="text-zinc-500 font-semibold">ECO:</span><span class="text-zinc-200 font-mono">{{ gameTags.ECO || 'A00' }}</span></div>
+          </div>
         </div>
 
         <div v-else-if="windowStartupMode.panelId === 'notation'" class="h-full flex flex-col gap-2">
@@ -3068,6 +3334,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           v-else-if="windowStartupMode.panelId === 'db-roles'"
           :roles-status="dbRolesStatus"
           :discovered-databases="discoveredDatabases"
+          :is-updating-from-local="isUpdatingDbFromLocal"
+          :local-merge-status="localMergeStatusMsg"
           @open-d-b="handleOpenDB"
           @create-d-b="handleCreateDB"
           @open-discovered-base="handleOpenDiscoveredBase"
@@ -3078,6 +3346,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           @open-mega-downloader="showMegaDatabaseModal = true"
           @open-online-sync="showOnlineSyncModal = true"
           @open-maintenance="showMaintenanceModal = true"
+          @update-from-local="handleUpdateDatabaseFromLocal"
         />
       </div>
     </div>
@@ -3336,8 +3605,36 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
             <span class="truncate">{{ blunderRadarAlert }}</span>
           </div>
 
-          <!-- Interactive Auto-Sized Chessboard -->
-          <div class="chessboard-wrapper-host flex items-center justify-center w-full shrink-0">
+          <!-- Interactive Auto-Sized Chessboard (or Detached/Floating Board Card) -->
+          <div
+            v-if="!workspacePanels.board || workspacePanels.board.mode === 'docked'"
+            class="chessboard-wrapper-host relative group/board flex items-center justify-center w-full shrink-0"
+          >
+            <div class="absolute right-2 top-1.5 z-20 hidden group-hover/board:flex items-center gap-1 bg-zinc-900/95 border border-zinc-700 rounded-lg px-1.5 py-0.5 text-[10px] shadow-lg">
+              <button
+                class="text-amber-300 hover:text-amber-200 px-1 cursor-pointer font-semibold"
+                title="Undock Chessboard into a draggable Floater window"
+                @click="togglePanelFloater('board')"
+              >
+                Float ❐
+              </button>
+              <button
+                class="text-purple-300 hover:text-purple-200 px-1 cursor-pointer font-semibold"
+                title="Detach Chessboard into its own Hyprland Screen Window"
+                @click="handleDetachPanelScreen('board')"
+              >
+                Screen ↗
+              </button>
+              <select
+                :value="workspacePanels.board?.targetWorkspace || ''"
+                class="bg-zinc-800 border border-zinc-700 rounded px-1 py-0.2 text-[10px] text-purple-200 font-mono cursor-pointer"
+                title="Detach & relocate Chessboard to a specific Hyprland Workspace (1..10)"
+                @change="handleDetachPanelScreen('board', ($event.target as HTMLSelectElement).value)"
+              >
+                <option value="">WS ▾</option>
+                <option v-for="ws in 10" :key="ws" :value="String(ws)">WS {{ ws }}</option>
+              </select>
+            </div>
             <Chessboard
               :fen="currentFEN"
               :legal-moves="legalMoves"
@@ -3356,6 +3653,35 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
               :board-size="computedBoardSize"
               @move="handleMove"
             />
+          </div>
+          <div
+            v-else
+            class="chessboard-wrapper-host w-full bg-zinc-900/90 border border-purple-500/30 rounded-xl p-3 flex flex-col items-center justify-center gap-2 text-center shadow-md shrink-0"
+          >
+            <div class="text-xs font-bold text-purple-300">
+              Chessboard {{ workspacePanels.board.mode === 'floater' ? 'Floating' : 'Detached' }}
+              <span v-if="workspacePanels.board.targetWorkspace" class="font-mono text-emerald-300">
+                (WS {{ workspacePanels.board.targetWorkspace }})
+              </span>
+            </div>
+            <p class="text-[11px] text-zinc-400">
+              Moves and games stay synchronized across all windows.
+            </p>
+            <div class="flex flex-wrap items-center justify-center gap-1.5">
+              <button
+                class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold cursor-pointer"
+                @click="setPanelMode('board', 'docked')"
+              >
+                Dock Board Here
+              </button>
+              <button
+                v-if="workspacePanels.board.mode === 'detached'"
+                class="px-2 py-1 rounded-lg bg-purple-950/60 hover:bg-purple-900/60 border border-purple-500/40 text-purple-200 text-[11px] cursor-pointer"
+                @click="handleDetachPanelScreen('board', workspacePanels.board.targetWorkspace)"
+              >
+                Re-Launch Window ↗
+              </button>
+            </div>
           </div>
 
           <!-- Interactive Material & Positional Imbalance Bar (Auto-hidden under board on compact screens) -->
@@ -3589,7 +3915,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
               </div>
             </div>
 
-            <!-- Active Tab Panel Controls (Float / Detach to Hyprland Screen / Hide / Bottom Drawer Toggle) -->
+            <!-- Active Tab Panel Controls (Float / Detach to Hyprland Screen / Workspace / Hide / Bottom Drawer Toggle) -->
             <div class="flex items-center gap-1 shrink-0">
               <button
                 class="text-[11px] text-amber-300 hover:text-amber-200 px-1.5 py-1 rounded bg-amber-950/40 hover:bg-amber-900/50 border border-amber-500/30 transition-colors cursor-pointer"
@@ -3605,6 +3931,15 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
               >
                 <span class="hidden sm:inline">Screen </span>↗
               </button>
+              <select
+                :value="workspacePanels[activeTab as PanelId]?.targetWorkspace || ''"
+                class="bg-zinc-900 border border-purple-500/30 rounded px-1 py-1 text-[10px] text-purple-300 font-mono cursor-pointer"
+                :title="`Detach & relocate '${activeTab}' to a specific Hyprland Workspace (1..10)`"
+                @change="handleDetachPanelScreen(activeTab as PanelId, ($event.target as HTMLSelectElement).value)"
+              >
+                <option value="">WS ▾</option>
+                <option v-for="ws in 10" :key="ws" :value="String(ws)">WS {{ ws }}</option>
+              </select>
               <button
                 v-if="!effectiveCompact"
                 class="text-[11px] text-zinc-400 hover:text-rose-300 px-1.5 py-1 rounded bg-zinc-800/80 hover:bg-zinc-800 transition-colors cursor-pointer"
@@ -3726,6 +4061,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
               <DatabaseHubPanel
                 :roles-status="dbRolesStatus"
                 :discovered-databases="discoveredDatabases"
+                :is-updating-from-local="isUpdatingDbFromLocal"
+                :local-merge-status="localMergeStatusMsg"
                 @open-d-b="handleOpenDB"
                 @create-d-b="handleCreateDB"
                 @open-discovered-base="handleOpenDiscoveredBase"
@@ -3736,6 +4073,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
                 @open-mega-downloader="showMegaDatabaseModal = true"
                 @open-online-sync="showOnlineSyncModal = true"
                 @open-maintenance="showMaintenanceModal = true"
+                @update-from-local="handleUpdateDatabaseFromLocal"
               />
             </div>
 
@@ -3867,7 +4205,28 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         @detach-screen="handleDetachPanelScreen"
         @hide="(id) => setPanelMode(id, 'hidden')"
       >
-        <div v-if="fp.id === 'notation'" class="h-full flex flex-col gap-2 p-2">
+        <div v-if="fp.id === 'board'" class="h-full w-full flex items-center justify-center p-2 overflow-hidden">
+          <Chessboard
+            :fen="currentFEN"
+            :legal-moves="legalMoves"
+            :piece-set="currentPieceSet"
+            :board-theme="currentTheme"
+            :flipped="flipped"
+            :last-move="lastMove"
+            :in-check="inCheck"
+            :sound-enabled="soundEnabled"
+            :blindfold="blindfoldMode"
+            :show-eval-bar="showEvalBar"
+            :eval-score="evalScore"
+            :eval-mate="evalMate"
+            :threat-squares="threatSquares"
+            :arrows="engineArrows"
+            :board-size="Math.max(180, Math.min(fp.floaterRect.width - (showEvalBar ? 54 : 24), fp.floaterRect.height - 54))"
+            @move="handleMove"
+          />
+        </div>
+
+        <div v-else-if="fp.id === 'notation'" class="h-full flex flex-col gap-2 p-2">
           <EvaluationGraph
             :analysis="gameAnalysis"
             :current-ply="currentPly"
@@ -3924,6 +4283,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           <DatabaseHubPanel
             :roles-status="dbRolesStatus"
             :discovered-databases="discoveredDatabases"
+            :is-updating-from-local="isUpdatingDbFromLocal"
+            :local-merge-status="localMergeStatusMsg"
             @open-d-b="handleOpenDB"
             @create-d-b="handleCreateDB"
             @open-discovered-base="handleOpenDiscoveredBase"
@@ -3934,6 +4295,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
             @open-mega-downloader="showMegaDatabaseModal = true"
             @open-online-sync="showOnlineSyncModal = true"
             @open-maintenance="showMaintenanceModal = true"
+            @update-from-local="handleUpdateDatabaseFromLocal"
           />
         </div>
 
@@ -4019,6 +4381,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       :blindfold="blindfoldMode"
       :left-col-width="leftColWidth"
       :bottom-drawer-height="bottomDrawerHeight"
+      :is-updating-from-local="isUpdatingDbFromLocal"
+      :local-merge-status="localMergeStatusMsg"
       @close="showPreferencesModal = false"
       @save-preferences="handleSaveAppPreferences"
       @set-default-d-b="handleSetDefaultDatabase"
@@ -4036,6 +4400,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       @update-left-width="(w: number) => { leftColWidth = w }"
       @update-bottom-height="(h: number) => { bottomDrawerHeight = h }"
       @detach-panel-screen="handleDetachPanelScreen"
+      @move-main-workspace="handleMoveCurrentWindowToWorkspace"
+      @update-from-local="handleUpdateDatabaseFromLocal"
       @launch-portal-window="handleLaunchPortalWindow"
     />
 

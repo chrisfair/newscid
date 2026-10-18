@@ -374,11 +374,11 @@ func TestSyncManager(t *testing.T) {
 	assert.Greater(t, updatedProfile.LastSyncTime, int64(0))
 	assert.Equal(t, 2, updatedProfile.LastSyncGames)
 
-	// 5. Test Auto-deduplication on subsequent sync (older Chess.com archive filtered by LastSyncTime)
+	// 5. Test Auto-deduplication on subsequent sync (existing games skipped during incremental fetch)
 	res2, err := sm.SyncProfile(profile, db)
 	require.NoError(t, err)
-	assert.Equal(t, 1, res2.TotalDownloaded)
-	assert.Equal(t, 1, res2.DuplicatesSkipped)
+	assert.Equal(t, 0, res2.TotalDownloaded)
+	assert.Equal(t, 2, res2.DuplicatesSkipped)
 }
 
 func TestOnlineEdgeCasesAndErrors(t *testing.T) {
@@ -664,6 +664,11 @@ func TestImportPlayerGamesAndBlendedSync(t *testing.T) {
 	assert.Greater(t, resBlendedActive.Imported, 0)
 
 	// 6. Test SyncProfile with TargetBlendedBase
+	blendedSyncTarget := scid.NewDatabase()
+	err = blendedSyncTarget.Create(filepath.Join(tmpDir, "blended_sync_target"), "Blended Sync Target")
+	require.NoError(t, err)
+	defer blendedSyncTarget.Close()
+
 	blendedProf := &Profile{
 		Name:             "Blended Sync Test",
 		LichessUsername:  "opponentgm",
@@ -671,7 +676,7 @@ func TestImportPlayerGamesAndBlendedSync(t *testing.T) {
 		BlendedDatabase:  blendedMasterPath,
 		AutoDeduplicate:  true,
 	}
-	resSyncBlended, err := sm.SyncProfile(blendedProf, activeDB)
+	resSyncBlended, err := sm.SyncProfile(blendedProf, blendedSyncTarget)
 	require.NoError(t, err)
 	assert.Greater(t, resSyncBlended.Imported, 0)
 
@@ -729,5 +734,80 @@ func TestImportPlayerGamesAdditionalEdgeCases(t *testing.T) {
 	assert.NotEmpty(t, resErr.Errors)
 }
 
+func TestIncrementalBackfillWithoutCountingExisting(t *testing.T) {
+	// Stream has 3 games (newest first: 2026.06.03, 2026.06.02, 2026.06.01).
+	// First sync with MaxGames=2 imports the 2 newest games (2026.06.03 and 2026.06.02).
+	// Second sync with MaxGames=2 skips the 2 newest games WITHOUT counting them toward MaxGames
+	// and imports the older game (2026.06.01)!
+	streamPGN := `[Event "Recent 3"]
+[Site "https://lichess.org/g3"]
+[Date "2026.06.03"]
+[White "PlayerA"]
+[Black "PlayerB"]
+[Result "1-0"]
 
+1. e4 e5 2. Nf3 Nc6 3. Bb5 1-0
 
+[Event "Recent 2"]
+[Site "https://lichess.org/g2"]
+[Date "2026.06.02"]
+[White "PlayerA"]
+[Black "PlayerC"]
+[Result "0-1"]
+
+1. d4 d5 2. c4 e6 0-1
+
+[Event "Older 1"]
+[Site "https://lichess.org/g1"]
+[Date "2026.06.01"]
+[White "PlayerD"]
+[Black "PlayerA"]
+[Result "1/2-1/2"]
+
+1. c4 c5 2. Nc3 Nc6 1/2-1/2
+`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-chess-pgn")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(streamPGN))
+	}))
+	defer srv.Close()
+
+	tmpDir := t.TempDir()
+	pm, err := NewProfileManager(filepath.Join(tmpDir, "pm_inc.json"))
+	require.NoError(t, err)
+	sm := NewSyncManager(pm)
+	sm.Lichess.BaseURL = srv.URL
+
+	dedPath := filepath.Join(tmpDir, "persona_inc.si4")
+
+	// 1st sync with MaxGames = 2 -> gets 2 newest games
+	res1, err := sm.ImportPlayerGames(ImportPlayerOptions{
+		PlayerName:      "PlayerA",
+		LichessUsername: "PlayerA",
+		TargetMode:      TargetDedicatedBase,
+		DedicatedPath:   dedPath,
+		MaxGames:        2,
+	}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 2, res1.Imported)
+	assert.Equal(t, 0, res1.DuplicatesSkipped)
+
+	// 2nd sync with MaxGames = 2 -> skips 2 existing games without counting them and backfills the 1 older game!
+	res2, err := sm.ImportPlayerGames(ImportPlayerOptions{
+		PlayerName:      "PlayerA",
+		LichessUsername: "PlayerA",
+		TargetMode:      TargetDedicatedBase,
+		DedicatedPath:   dedPath,
+		MaxGames:        2,
+	}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 1, res2.Imported)
+	assert.Equal(t, 2, res2.DuplicatesSkipped)
+
+	db := scid.NewDatabase()
+	require.NoError(t, db.Open(filepath.Join(tmpDir, "persona_inc")))
+	defer db.Close()
+	assert.Equal(t, 3, db.NumGames())
+}

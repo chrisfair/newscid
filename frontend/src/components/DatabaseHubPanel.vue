@@ -11,7 +11,8 @@ import {
   Globe,
   Wrench,
   ArrowRight,
-  Check
+  Check,
+  RefreshCw
 } from '@lucide/vue'
 import type { DiscoveredDatabase } from './HeaderBar.vue'
 
@@ -31,6 +32,8 @@ export interface DatabaseRolesStatusView {
 const props = defineProps<{
   rolesStatus: DatabaseRolesStatusView | null
   discoveredDatabases: DiscoveredDatabase[]
+  isUpdatingFromLocal?: boolean
+  localMergeStatus?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -44,6 +47,7 @@ const emit = defineEmits<{
   (e: 'openMegaDownloader'): void
   (e: 'openOnlineSync'): void
   (e: 'openMaintenance'): void
+  (e: 'updateFromLocal', targetPath?: string): void
 }>()
 
 function normalizePath(p?: string): string {
@@ -99,7 +103,16 @@ function formatCount(n: number): string {
           </p>
         </div>
 
-        <div class="flex items-center gap-1.5">
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <button
+            class="px-2.5 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+            :disabled="isUpdatingFromLocal"
+            title="Update the active database with all non-duplicate games from local databases already on your machine"
+            @click="emit('updateFromLocal', rolesStatus?.activeDb?.basePath || '')"
+          >
+            <RefreshCw class="w-3.5 h-3.5 text-emerald-400" :class="{ 'animate-spin': isUpdatingFromLocal }" />
+            <span>{{ isUpdatingFromLocal ? 'Updating from Local DBs...' : 'Update Active DB from Local' }}</span>
+          </button>
           <button
             class="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700 font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
             @click="emit('openDB')"
@@ -115,6 +128,14 @@ function formatCount(n: number): string {
             <span>New DB...</span>
           </button>
         </div>
+      </div>
+
+      <div
+        v-if="localMergeStatus"
+        class="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2"
+      >
+        <RefreshCw class="w-3.5 h-3.5 text-emerald-400 shrink-0" :class="{ 'animate-spin': isUpdatingFromLocal }" />
+        <span>{{ localMergeStatus }}</span>
       </div>
 
       <!-- 4 Database Role Cards -->
@@ -142,7 +163,7 @@ function formatCount(n: number): string {
             </p>
           </div>
 
-          <div class="flex items-center gap-1.5 pt-1">
+          <div class="flex items-center gap-1.5 pt-1 flex-wrap">
             <button
               v-if="rolesStatus?.defaultDbPath && !rolesStatus?.isActiveDefault"
               class="flex-1 px-2 py-1 rounded bg-amber-600 hover:bg-amber-500 text-white font-semibold text-[11px] cursor-pointer transition-colors"
@@ -156,6 +177,16 @@ function formatCount(n: number): string {
               @click="emit('setDefaultDB', rolesStatus.activeDb.basePath)"
             >
               ⭐ Set Current as Default
+            </button>
+            <button
+              v-if="rolesStatus?.defaultDbPath"
+              class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-emerald-300 border border-emerald-500/30 font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+              :disabled="isUpdatingFromLocal"
+              title="Update Default DB with non-duplicate games from local databases"
+              @click="emit('updateFromLocal', rolesStatus.defaultDbPath)"
+            >
+              <RefreshCw class="w-3 h-3" :class="{ 'animate-spin': isUpdatingFromLocal }" />
+              <span>Update Local</span>
             </button>
             <span
               v-if="rolesStatus?.isActiveDefault"
@@ -186,7 +217,7 @@ function formatCount(n: number): string {
             </p>
           </div>
 
-          <div class="flex items-center gap-1.5 pt-1">
+          <div class="flex items-center gap-1.5 pt-1 flex-wrap">
             <button
               v-if="rolesStatus?.activeDb"
               class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-[11px] flex items-center gap-1 cursor-pointer"
@@ -201,6 +232,16 @@ function formatCount(n: number): string {
             >
               <Globe class="w-3 h-3 text-cyan-400" />
               <span>Sync Online</span>
+            </button>
+            <button
+              v-if="rolesStatus?.activeDb?.basePath"
+              class="px-2 py-1 rounded bg-emerald-950/60 hover:bg-emerald-900/70 text-emerald-300 border border-emerald-500/40 text-[11px] font-semibold flex items-center gap-1 cursor-pointer"
+              :disabled="isUpdatingFromLocal"
+              title="Merge all non-duplicate local games into Active DB"
+              @click="emit('updateFromLocal', rolesStatus.activeDb.basePath)"
+            >
+              <RefreshCw class="w-3 h-3" :class="{ 'animate-spin': isUpdatingFromLocal }" />
+              <span>Update Local</span>
             </button>
           </div>
         </div>
@@ -225,7 +266,7 @@ function formatCount(n: number): string {
             </p>
           </div>
 
-          <div class="flex items-center justify-between gap-1.5 pt-1">
+          <div class="flex items-center justify-between gap-1.5 pt-1 flex-wrap">
             <label
               v-if="rolesStatus?.referenceDbPath"
               class="flex items-center gap-1.5 text-[11px] text-cyan-300 cursor-pointer select-none"
@@ -238,6 +279,16 @@ function formatCount(n: number): string {
               />
               <span>Use for Tree</span>
             </label>
+            <button
+              v-if="rolesStatus?.referenceDbPath"
+              class="px-2 py-1 rounded bg-cyan-950/60 hover:bg-cyan-900/70 text-cyan-300 border border-cyan-500/40 font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+              :disabled="isUpdatingFromLocal"
+              title="Update Reference / Mega Database with all non-duplicate games from local databases"
+              @click="emit('updateFromLocal', rolesStatus.referenceDbPath)"
+            >
+              <RefreshCw class="w-3 h-3" :class="{ 'animate-spin': isUpdatingFromLocal }" />
+              <span>Update Local</span>
+            </button>
             <button
               v-if="rolesStatus?.activeDb?.basePath && !isReferencePath(rolesStatus.activeDb.basePath)"
               class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-cyan-300 border border-cyan-500/30 font-semibold text-[11px] cursor-pointer transition-colors"
@@ -380,6 +431,16 @@ function formatCount(n: number): string {
                 @click="emit('setReferenceDB', isReferencePath(db.basePath) ? '' : db.basePath, true)"
               >
                 {{ isReferencePath(db.basePath) ? '📚 Reference' : 'Set Reference' }}
+              </button>
+
+              <button
+                class="px-2 py-1 rounded-md text-[11px] font-semibold border border-emerald-500/40 bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300 flex items-center gap-1 transition-colors cursor-pointer"
+                :disabled="isUpdatingFromLocal"
+                title="Update this database with all non-duplicate games from other local databases already on your computer"
+                @click="emit('updateFromLocal', db.basePath)"
+              >
+                <RefreshCw class="w-3 h-3" :class="{ 'animate-spin': isUpdatingFromLocal }" />
+                <span>Update Local</span>
               </button>
             </div>
           </div>

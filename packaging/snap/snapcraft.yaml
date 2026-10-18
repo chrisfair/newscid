@@ -1,6 +1,6 @@
 name: newscid
 base: core24
-version: '1.3.19'
+version: '1.3.20'
 summary: Modern Chess Information Database (Scid vs. PC Rewrite)
 description: |
   NewScid is a fresh, database-compatible rewrite of Scid vs. PC featuring a modern,

@@ -462,6 +462,10 @@ export function LaunchDetachedPanelWindow(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['LaunchDetachedPanelWindow'](arg1, arg2, arg3, arg4);
 }
 
+export function LaunchPanelOnWorkspace(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['LaunchPanelOnWorkspace'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function LaunchPortalWindow(arg1, arg2, arg3) {
   return window['go']['main']['App']['LaunchPortalWindow'](arg1, arg2, arg3);
 }
@@ -476,6 +480,10 @@ export function MakeMove(arg1, arg2) {
 
 export function MinePuzzlesFromDatabase(arg1, arg2) {
   return window['go']['main']['App']['MinePuzzlesFromDatabase'](arg1, arg2);
+}
+
+export function MoveCurrentWindowToWorkspace(arg1) {
+  return window['go']['main']['App']['MoveCurrentWindowToWorkspace'](arg1);
 }
 
 export function OpenClipbase() {
@@ -688,6 +696,10 @@ export function SuggestPersonaIdentifiers(arg1, arg2) {
 
 export function SyncOnlineProfile(arg1) {
   return window['go']['main']['App']['SyncOnlineProfile'](arg1);
+}
+
+export function UpdateDatabaseFromLocal(arg1, arg2) {
+  return window['go']['main']['App']['UpdateDatabaseFromLocal'](arg1, arg2);
 }
 
 export function UpdateGameHeaders(arg1, arg2) {

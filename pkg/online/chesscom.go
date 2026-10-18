@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"newscid/pkg/chess"
+	"newscid/pkg/database/scid"
 )
 
 const (
@@ -196,3 +199,80 @@ func (c *ChessComClient) FetchUserGamesWithProgress(username string, sinceYear, 
 
 	return pgnBuilder.String(), nil
 }
+
+// FetchUserGamesIncremental retrieves games for a Chess.com player starting from the most recent monthly archive
+// and automatically walking backwards into older archives if needed, skipping any game already present in existingSigs
+// WITHOUT counting existing games toward maxNewGames.
+func (c *ChessComClient) FetchUserGamesIncremental(
+	username string,
+	maxNewGames int,
+	existingSigs *scid.GameSignatureSet,
+	progress ProgressFn,
+) ([]*chess.Game, int, error) {
+	archives, err := c.FetchArchives(username)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(archives) == 0 {
+		return nil, 0, nil
+	}
+
+	var newGames []*chess.Game
+	skippedExisting := 0
+	totalArchives := len(archives)
+
+	// Walk from most recent monthly archive backwards to oldest archive
+	for step := 0; step < totalArchives; step++ {
+		archIdx := totalArchives - 1 - step
+		archURL := archives[archIdx]
+
+		if progress != nil {
+			msg := fmt.Sprintf("Checking Chess.com archive %d/%d (%d new, %d existing skipped)...", step+1, totalArchives, len(newGames), skippedExisting)
+			progress("downloading", len(newGames), maxNewGames, msg)
+		}
+
+		pgnText, err := c.FetchMonthlyPGN(archURL)
+		if err != nil {
+			return newGames, skippedExisting, fmt.Errorf("fetching archive %s: %w", archURL, err)
+		}
+		if strings.TrimSpace(pgnText) == "" {
+			continue
+		}
+
+		monthGames, err := chess.ParsePGNDatabase(strings.NewReader(pgnText))
+		if err != nil || len(monthGames) == 0 {
+			continue
+		}
+
+		// Process newest games in the month first
+		for gIdx := len(monthGames) - 1; gIdx >= 0; gIdx-- {
+			g := monthGames[gIdx]
+			if g == nil {
+				continue
+			}
+			if existingSigs != nil && existingSigs.ContainsGame(g) {
+				skippedExisting++
+				continue
+			}
+			if existingSigs != nil {
+				existingSigs.AddGame(g)
+			}
+			newGames = append(newGames, g)
+			if maxNewGames > 0 && len(newGames) >= maxNewGames {
+				break
+			}
+		}
+
+		if progress != nil {
+			msg := fmt.Sprintf("Chess.com update: %d new games found (%d existing skipped, %d/%d archives)", len(newGames), skippedExisting, step+1, totalArchives)
+			progress("downloading", len(newGames), maxNewGames, msg)
+		}
+
+		if maxNewGames > 0 && len(newGames) >= maxNewGames {
+			break
+		}
+	}
+
+	return newGames, skippedExisting, nil
+}
+

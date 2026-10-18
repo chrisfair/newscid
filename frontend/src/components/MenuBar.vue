@@ -58,7 +58,8 @@ import {
   LayoutGrid,
   Monitor,
   Settings,
-  ClipboardList
+  ClipboardList,
+  RefreshCw
 } from '@lucide/vue'
 import { PieceSetOption, BoardThemeOption } from './HeaderBar.vue'
 import { useNotation } from '../utils/notation'
@@ -67,6 +68,7 @@ import {
   workspacePanels,
   togglePanelFloater,
   togglePanelVisibility,
+  setPanelWorkspace,
   applyLayoutPreset,
   resetWorkspaceLayout,
   type PanelId,
@@ -135,7 +137,8 @@ const emit = defineEmits<{
   (e: 'openClipbase'): void
   (e: 'openPortalPanel', platform?: 'lichess' | 'chesscom'): void
   (e: 'launchPortalWindow', platform: 'lichess' | 'chesscom'): void
-  (e: 'detachPanelScreen', panelId: PanelId): void
+  (e: 'detachPanelScreen', panelId: PanelId, workspace?: string): void
+  (e: 'updateFromLocal'): void
   (e: 'showShortcuts'): void
   (e: 'showAbout'): void
   (e: 'showHelp'): void
@@ -424,6 +427,13 @@ onUnmounted(() => {
           @click="selectItem(() => emit('twicDownloader'))"
         >
           <span class="flex items-center gap-2.5 whitespace-nowrap"><Download class="w-4 h-4 shrink-0 text-cyan-400" /> Download TWIC Weekly Bulletins...</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-emerald-300 font-semibold flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('updateFromLocal'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><RefreshCw class="w-4 h-4 shrink-0 text-emerald-400" /> Update Database with Local DBs Already Here</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">Deduplicate</span>
         </button>
 
         <div class="h-px bg-zinc-800 my-1 mx-2" />
@@ -914,10 +924,19 @@ onUnmounted(() => {
             <button
               class="px-2 py-0.5 rounded bg-cyan-950/70 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/30 text-[10px] font-semibold cursor-pointer"
               title="Detach to separate OS / Hyprland screen window"
-              @click="selectItem(() => emit('detachPanelScreen', p.id))"
+              @click="selectItem(() => emit('detachPanelScreen', p.id, p.targetWorkspace))"
             >
               Screen ↗
             </button>
+            <select
+              :value="p.targetWorkspace || ''"
+              class="bg-zinc-950 border border-cyan-500/40 rounded px-1 py-0.5 text-[10px] text-cyan-300 font-mono cursor-pointer focus:outline-none"
+              title="Relocate panel onto Hyprland Workspace 1..10"
+              @change="setPanelWorkspace(p.id, ($event.target as HTMLSelectElement).value); selectItem(() => emit('detachPanelScreen', p.id, ($event.target as HTMLSelectElement).value))"
+            >
+              <option value="">WS ▾</option>
+              <option v-for="ws in 10" :key="ws" :value="String(ws)">WS {{ ws }}</option>
+            </select>
           </div>
         </div>
 

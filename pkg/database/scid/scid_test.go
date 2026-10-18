@@ -282,3 +282,83 @@ func TestAdvancedHeaderSearch(t *testing.T) {
 	assert.Equal(t, totalYears, db.CountMatches(scid.SearchCriteria{YearFrom: 1970, YearTo: 1980}))
 }
 
+func TestMergeFromDatabases(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 1. Create target database with 1 game
+	targetPath := filepath.Join(tmpDir, "target_mega")
+	targetDB := scid.NewDatabase()
+	require.NoError(t, targetDB.Create(targetPath, "Target Mega DB"))
+	defer targetDB.Close()
+
+	g1, err := chess.ParsePGN(`[Event "Wijk"]
+[Site "https://lichess.org/gameA"]
+[Date "2026.01.10"]
+[White "Carlsen, Magnus"]
+[Black "Nakamura, Hikaru"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 1-0`)
+	require.NoError(t, err)
+	_, err = targetDB.ImportGames([]*chess.Game{g1})
+	require.NoError(t, err)
+	assert.Equal(t, 1, targetDB.NumGames())
+
+	// 2. Create source .si4 database with 1 duplicate (g1) and 1 brand new game (g2)
+	srcSi4Path := filepath.Join(tmpDir, "local_persona")
+	srcDB := scid.NewDatabase()
+	require.NoError(t, srcDB.Create(srcSi4Path, "Local Persona DB"))
+	g2, err := chess.ParsePGN(`[Event "Candidates"]
+[Site "https://lichess.org/gameB"]
+[Date "2026.02.15"]
+[White "Caruana, Fabiano"]
+[Black "Carlsen, Magnus"]
+[Result "0-1"]
+
+1. d4 Nf6 2. c4 e6 3. Nc3 Bb4 0-1`)
+	require.NoError(t, err)
+	_, err = srcDB.ImportGames([]*chess.Game{g1, g2})
+	require.NoError(t, err)
+	require.NoError(t, srcDB.Close())
+
+	// 3. Create source .pgn file with 1 duplicate (g2) and 1 brand new game (g3)
+	srcPgnPath := filepath.Join(tmpDir, "local_club.pgn")
+	pgnContent := `[Event "Candidates"]
+[Site "https://lichess.org/gameB"]
+[Date "2026.02.15"]
+[White "Caruana, Fabiano"]
+[Black "Carlsen, Magnus"]
+[Result "0-1"]
+
+1. d4 Nf6 2. c4 e6 3. Nc3 Bb4 0-1
+
+[Event "Club Championship"]
+[Site "https://lichess.org/gameC"]
+[Date "2026.03.01"]
+[White "Firouzja, Alireza"]
+[Black "Gukesh, D"]
+[Result "1/2-1/2"]
+
+1. c4 c5 2. Nf3 Nf6 1/2-1/2
+`
+	require.NoError(t, os.WriteFile(srcPgnPath, []byte(pgnContent), 0o644))
+
+	// 4. Merge both sources (plus self path which should be ignored) into targetDB
+	mergeStats, err := targetDB.MergeFromDatabases([]string{targetPath, srcSi4Path, srcPgnPath}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 2, mergeStats.SourcesProcessed)
+	assert.Equal(t, 2, mergeStats.Imported)
+	assert.Equal(t, 2, mergeStats.DuplicatesSkipped)
+	assert.Equal(t, 3, targetDB.NumGames())
+
+	// Verify all 3 games load and decode cleanly from the updated target database
+	reopened := scid.NewDatabase()
+	require.NoError(t, reopened.Open(targetPath))
+	defer reopened.Close()
+	assert.Equal(t, 3, reopened.NumGames())
+	for id := 1; id <= 3; id++ {
+		gm, err := reopened.GetGame(id)
+		require.NoError(t, err)
+		assert.NotNil(t, gm.RootMove)
+	}
+}
