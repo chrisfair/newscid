@@ -561,8 +561,15 @@ async function handleCopyReport() {
 
                   <div class="bg-zinc-900/90 rounded-lg p-2 border border-zinc-800/80">
                     <div class="text-zinc-400">Move-Time CV</div>
-                    <div class="font-mono font-bold mt-0.5" :class="prof.avgMoveTimeCV <= 0.38 ? 'text-rose-400' : 'text-zinc-100'">
+                    <div
+                      v-if="prof.avgMoveTimeCV > 0 && prof.avgMoveTimeSec > 0"
+                      class="font-mono font-bold mt-0.5"
+                      :class="prof.avgMoveTimeCV <= 0.38 ? 'text-rose-400' : 'text-zinc-100'"
+                    >
                       {{ prof.avgMoveTimeCV }} <span class="text-[10px] text-zinc-400">({{ prof.avgMoveTimeSec }}s avg)</span>
+                    </div>
+                    <div v-else class="font-mono text-zinc-500 mt-0.5">
+                      No Clock Tags
                     </div>
                   </div>
                 </div>
@@ -613,8 +620,8 @@ async function handleCopyReport() {
                   <td class="py-2.5 px-3 font-mono">{{ day.winRatePct }}%</td>
                   <td class="py-2.5 px-3 font-mono">{{ day.avgAcpl }} cp</td>
                   <td class="py-2.5 px-3 font-mono">{{ day.top1AgreementPct }}%</td>
-                  <td class="py-2.5 px-3 font-mono" :class="day.avgMoveTimeCV <= 0.38 ? 'text-rose-400 font-bold' : ''">
-                    {{ day.avgMoveTimeCV }}
+                  <td class="py-2.5 px-3 font-mono" :class="day.avgMoveTimeCV > 0 && day.avgMoveTimeCV <= 0.38 ? 'text-rose-400 font-bold' : ''">
+                    {{ day.avgMoveTimeCV > 0 ? day.avgMoveTimeCV : 'N/A' }}
                   </td>
                   <td class="py-2.5 px-3 font-mono text-amber-300 font-semibold">{{ day.intrinsicPerformance }}</td>
                   <td class="py-2.5 px-3">
@@ -676,7 +683,7 @@ async function handleCopyReport() {
                   Official {{ g.playerElo }} → <strong class="text-amber-300">IPR {{ g.intrinsicPerformanceElo }}</strong>
                   • ACPL <strong class="text-zinc-200">{{ g.acpl }}</strong>
                   • Top-1 <strong class="text-emerald-400">{{ g.top1AgreementPct }}%</strong>
-                  • Move-Time CV <strong :class="g.moveTimeCV <= 0.38 ? 'text-rose-400' : 'text-zinc-200'">{{ g.moveTimeCV }}</strong>
+                  • Move-Time CV <strong :class="g.hasClockData && g.moveTimeCV > 0 && g.moveTimeCV <= 0.38 ? 'text-rose-400' : 'text-zinc-200'">{{ g.hasClockData ? g.moveTimeCV : 'N/A' }}</strong>
                 </div>
                 <div v-if="g.flags && g.flags.length > 0" class="flex flex-wrap gap-1.5 pt-1">
                   <span

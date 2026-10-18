@@ -423,6 +423,7 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 	prevWhiteClk := -1.0
 	prevBlackClk := -1.0
 	prevEvalWhiteCp := 20.0
+	prevHasEval := false
 	prevWasCapture := false
 
 	node := g.RootMove
@@ -477,15 +478,20 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 			spentSec = 0
 		}
 
-		// Apply move to advance board and extract or heuristically estimate evaluation
-		board.MakeMove(node.Move)
-		var currEvalWhiteCp float64
-		if ev, ok := parseEvalWhiteCp(node.Comment); ok {
-			currEvalWhiteCp = ev
+		currEvalWhiteCp, currHasEval := parseEvalWhiteCp(node.Comment)
+		if currHasEval {
 			hasEval = true
-		} else {
-			currEvalWhiteCp = evaluateBoardHeuristicWhiteCp(board)
 		}
+
+		// Compute heuristic 2-ply tactical + positional move loss BEFORE mutating board if [%eval] is absent
+		var heurLossCp float64
+		var heurIsTop1 bool
+		if turnColor == playerColor && ply > 10 && (!currHasEval || !prevHasEval) {
+			heurLossCp, heurIsTop1 = evaluateMoveLossHeuristic(board, node, ply, playerElo, playerScore)
+		}
+
+		// Advance board with the played move
+		board.MakeMove(node.Move)
 
 		// Record metrics for target player on non-book plies (ply > 10)
 		if turnColor == playerColor && ply > 10 {
@@ -498,34 +504,46 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 			}
 
 			var lossCp float64
-			if turnColor == "white" {
-				lossCp = prevEvalWhiteCp - currEvalWhiteCp
+			var isTop1 bool
+			if currHasEval && prevHasEval {
+				if turnColor == "white" {
+					lossCp = prevEvalWhiteCp - currEvalWhiteCp
+				} else {
+					lossCp = currEvalWhiteCp - prevEvalWhiteCp
+				}
+				if lossCp < 0 {
+					lossCp = 0
+				}
+				if lossCp > 500 {
+					lossCp = 500
+				}
+				isTop1 = lossCp <= 12.0
 			} else {
-				lossCp = currEvalWhiteCp - prevEvalWhiteCp
-			}
-			if lossCp < 0 {
-				lossCp = 0
-			}
-			if lossCp > 500 {
-				lossCp = 500
+				lossCp = heurLossCp
+				isTop1 = heurIsTop1
 			}
 
 			cpLosses = append(cpLosses, lossCp)
-			if lossCp <= 12.0 {
+			if isTop1 {
 				top1Count++
 			}
-			if lossCp >= 180.0 {
+			if lossCp >= 160.0 {
 				blunders++
 			}
 			if complexity >= 10 {
 				criticalLosses = append(criticalLosses, lossCp)
-				if lossCp <= 15.0 {
+				if isTop1 || lossCp <= 15.0 {
 					criticalTop1Count++
 				}
 			}
 		}
 
-		prevEvalWhiteCp = currEvalWhiteCp
+		if currHasEval {
+			prevEvalWhiteCp = currEvalWhiteCp
+			prevHasEval = true
+		} else {
+			prevHasEval = false
+		}
 		prevWasCapture = isCapture
 		node = node.Next
 	}
@@ -541,20 +559,30 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 		critAccPct = round1(100.0 * float64(criticalTop1Count) / float64(len(criticalLosses)))
 	}
 
-	// Estimate Ken Regan-style Intrinsic Performance Rating (IPR) from ACPL + Critical Accuracy
-	ipr := estimateIPR(acpl, critAccPct, playerElo, playerScore, opponentElo)
+	hasValidClock := hasClock && len(moveTimes) >= 4
+	if !hasValidClock {
+		avgTime = 0
+		stdTime = 0
+		cvTime = 0
+		roboticPct = 0
+	}
+
+	// Estimate Ken Regan-style Intrinsic Performance Rating (IPR) from ACPL + Critical Accuracy + Game Outcome
+	ipr := estimateIPR(acpl, critAccPct, playerElo, playerScore, opponentElo, hasEval, blunders, nonBookMoves)
 
 	// Calculate composite GameIssueScore (0-100) and diagnostic flags
 	issueScore, flags := scoreSingleGameAnomaly(
 		tcCat,
 		playerElo,
 		ipr,
+		playerScore,
 		acpl,
 		top1Pct,
 		critAccPct,
 		blunders,
 		nonBookMoves,
-		hasClock,
+		hasEval,
+		hasValidClock,
 		avgTime,
 		cvTime,
 		roboticPct,
@@ -576,7 +604,7 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 		PlayerScore:             playerScore,
 		TotalPlies:              ply,
 		NonBookMoves:            nonBookMoves,
-		HasClockData:            hasClock && len(moveTimes) >= 4,
+		HasClockData:            hasValidClock,
 		HasEvalData:             hasEval,
 		AvgMoveTimeSec:          round2(avgTime),
 		MoveTimeStdDevSec:       round2(stdTime),
@@ -610,6 +638,7 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 		timeSum         float64
 		cvSum           float64
 		clockGames      int
+		evalGames       int
 		roboticGamesCnt int
 		issueSum        float64
 	)
@@ -624,6 +653,9 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 		critSum += g.CriticalAccuracyPct
 		if g.BlunderCount == 0 {
 			blunderFreeCnt++
+		}
+		if g.HasEvalData {
+			evalGames++
 		}
 		if g.HasClockData {
 			clockGames++
@@ -658,7 +690,7 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 	blunderFreePct := round1(100.0 * float64(blunderFreeCnt) / float64(n))
 
 	avgMoveTime := 0.0
-	avgCV := 0.85
+	avgCV := 0.0
 	roboticGamePct := 0.0
 	if clockGames > 0 {
 		avgMoveTime = round2(timeSum / float64(clockGames))
@@ -675,20 +707,24 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 	if clockGames >= 2 && roboticGamePct >= 50.0 {
 		consistencyBonus += (roboticGamePct - 40.0) * 0.18
 	}
-	if eloDelta > 250 {
-		consistencyBonus += math.Min(18.0, float64(eloDelta-250)*0.04)
+	if eloDelta > 280 && (evalGames > 0 || clockGames > 0 || (winsSum/float64(n)) >= 0.65) {
+		consistencyBonus += math.Min(16.0, float64(eloDelta-280)*0.035)
 	}
 
 	consistentScore := round1(math.Min(99.0, math.Max(0.0, baseAvgIssue+consistencyBonus)))
-	zScore := round2((consistentScore - 28.0) / 14.5)
+	zScore := round2((consistentScore - 24.0) / 15.0)
 	if zScore < -2.0 {
 		zScore = -2.0
 	}
 
 	classification := classifyIssueScore(consistentScore)
+	cvStr := "no clock data"
+	if clockGames > 0 {
+		cvStr = fmt.Sprintf("Move-Time CV %.2f (%.1fs avg)", avgCV, avgMoveTime)
+	}
 	summary := fmt.Sprintf(
-		"%s (%d games across %d day(s)): Official %d vs. %d IPR (%+d), %.1f ACPL, %.1f%% Top-1 match, Move-Time CV %.2f — %s (Score %.1f/100, Z=%+.2fσ).",
-		category, n, daysActive, avgElo, avgIPR, eloDelta, avgACPL, avgTop1, avgCV, classification, consistentScore, zScore,
+		"%s (%d games across %d day(s)): Official %d vs. %d IPR (%+d), %.1f ACPL, %.1f%% Top-1 match, %s — %s (Score %.1f/100, Z=%+.2fσ).",
+		category, n, daysActive, avgElo, avgIPR, eloDelta, avgACPL, avgTop1, cvStr, classification, consistentScore, zScore,
 	)
 
 	return TimeControlIssueProfile{
@@ -755,7 +791,7 @@ func summarizeDailyGames(dateStr string, games []GameFairPlayRecord) DailyFairPl
 	}
 	sort.Strings(tcs)
 
-	avgCV := 0.85
+	avgCV := 0.0
 	if clockCnt > 0 {
 		avgCV = round2(cvSum / float64(clockCnt))
 	}
@@ -785,32 +821,42 @@ func computeCrossControlDivergence(profiles []TimeControlIssueProfile) CrossCont
 		}
 	}
 
-	// Pick fastest or lowest-issue control as human baseline, and highest-issue slower control as suspect
+	// Pick lowest-issue (or fastest) control as human baseline
 	baselineIdx := 0
-	suspectIdx := 0
-	for i := range profiles {
-		if profiles[i].ConsistentIssueScore < profiles[baselineIdx].ConsistentIssueScore {
+	for i := 1; i < len(profiles); i++ {
+		if profiles[i].ConsistentIssueScore < profiles[baselineIdx].ConsistentIssueScore ||
+			(profiles[i].ConsistentIssueScore == profiles[baselineIdx].ConsistentIssueScore &&
+				profiles[i].EloOverperformanceDelta < profiles[baselineIdx].EloOverperformanceDelta) {
 			baselineIdx = i
 		}
-		if profiles[i].ConsistentIssueScore > profiles[suspectIdx].ConsistentIssueScore {
+	}
+
+	// Pick highest-issue distinct control as suspect comparison control
+	suspectIdx := -1
+	for i := 0; i < len(profiles); i++ {
+		if i == baselineIdx {
+			continue
+		}
+		if suspectIdx == -1 ||
+			profiles[i].ConsistentIssueScore > profiles[suspectIdx].ConsistentIssueScore ||
+			(profiles[i].ConsistentIssueScore == profiles[suspectIdx].ConsistentIssueScore &&
+				profiles[i].EloOverperformanceDelta > profiles[suspectIdx].EloOverperformanceDelta) {
 			suspectIdx = i
 		}
+	}
+	if suspectIdx == -1 {
+		suspectIdx = 0
 	}
 
 	base := profiles[baselineIdx]
 	susp := profiles[suspectIdx]
-	if base.Category == susp.Category {
-		return CrossControlDivergence{
-			HasMultipleControls: true,
-			BaselineControl:     base.Category,
-			SuspectControl:      susp.Category,
-			Explanation:         "Consistent performance profile across all analyzed time controls.",
-		}
-	}
 
 	iprDelta := susp.IntrinsicPerformanceElo - base.IntrinsicPerformanceElo
-	acplDelta := round1(base.AvgACPL - susp.AvgACPL) // Positive means suspect control has much lower centipawn loss
-	cvDelta := round2(base.AvgMoveTimeCV - susp.AvgMoveTimeCV)
+	acplDelta := round1(base.AvgACPL - susp.AvgACPL) // Positive means suspect control has lower centipawn loss
+	cvDelta := 0.0
+	if base.AvgMoveTimeSec > 0 && susp.AvgMoveTimeSec > 0 {
+		cvDelta = round2(base.AvgMoveTimeCV - susp.AvgMoveTimeCV)
+	}
 
 	score := 0.0
 	if iprDelta > 150 {
@@ -824,11 +870,19 @@ func computeCrossControlDivergence(profiles []TimeControlIssueProfile) CrossCont
 	}
 	score = round1(math.Min(100.0, math.Max(0.0, score)))
 
-	explanation := fmt.Sprintf(
-		"Comparing %s vs. %s baseline: Intrinsic Performance jumps by %+d Elo (%d in %s vs. %d in %s), ACPL drops by %.1f cp (%.1f vs. %.1f), and Move-Time CV flattens by %+.2f (%.2f vs. %.2f).",
-		susp.Category, base.Category, iprDelta, susp.IntrinsicPerformanceElo, susp.Category, base.IntrinsicPerformanceElo, base.Category,
-		acplDelta, susp.AvgACPL, base.AvgACPL, -cvDelta, susp.AvgMoveTimeCV, base.AvgMoveTimeCV,
-	)
+	var explanation string
+	if score < 15.0 {
+		explanation = fmt.Sprintf(
+			"Consistent human performance profile across time controls (%s IPR %d / %.1f ACPL vs. %s baseline IPR %d / %.1f ACPL).",
+			susp.Category, susp.IntrinsicPerformanceElo, susp.AvgACPL, base.Category, base.IntrinsicPerformanceElo, base.AvgACPL,
+		)
+	} else {
+		explanation = fmt.Sprintf(
+			"Comparing %s vs. %s baseline: Intrinsic Performance jumps by %+d Elo (%d in %s vs. %d in %s), ACPL drops by %.1f cp (%.1f vs. %.1f), and Move-Time CV shifts by %+.2f.",
+			susp.Category, base.Category, iprDelta, susp.IntrinsicPerformanceElo, susp.Category, base.IntrinsicPerformanceElo, base.Category,
+			acplDelta, susp.AvgACPL, base.AvgACPL, -cvDelta,
+		)
+	}
 
 	return CrossControlDivergence{
 		HasMultipleControls: true,
@@ -845,45 +899,57 @@ func computeCrossControlDivergence(profiles []TimeControlIssueProfile) CrossCont
 func scoreSingleGameAnomaly(
 	tcCat string,
 	playerElo, ipr int,
+	playerScore float64,
 	acpl, top1Pct, critAccPct float64,
 	blunders, nonBookMoves int,
-	hasClock bool,
+	hasEval, hasClock bool,
 	avgTime, cvTime, roboticPct float64,
 	delayedRecaptures int,
 ) (float64, []string) {
-	score := 12.0
+	score := 8.0
 	var flags []string
 
-	// 1. Move Accuracy & ACPL vs Official Rating
 	eloDiff := ipr - playerElo
-	if acpl <= 14.0 && nonBookMoves >= 12 {
-		score += 32.0
-		flags = append(flags, fmt.Sprintf("Ultra-low ACPL (%.1f cp) over %d non-book moves", acpl, nonBookMoves))
-	} else if acpl <= 22.0 && nonBookMoves >= 12 {
-		score += 18.0
+
+	// 1. Move Accuracy & ACPL vs Official Rating
+	if hasEval {
+		// Engine-annotated moves ([%eval] tags present)
+		if acpl <= 14.0 && nonBookMoves >= 12 {
+			score += 34.0
+			flags = append(flags, fmt.Sprintf("Ultra-low engine ACPL (%.1f cp) over %d non-book moves", acpl, nonBookMoves))
+		} else if acpl <= 21.0 && nonBookMoves >= 12 {
+			score += 18.0
+		}
+		if critAccPct >= 88.0 && nonBookMoves >= 10 && acpl <= 22.0 {
+			score += 14.0
+			flags = append(flags, fmt.Sprintf("%.0f%% critical-position accuracy in high-tension middlegame", critAccPct))
+		}
+	} else {
+		// Heuristic tactical/positional screening when [%eval] tags are absent
+		if acpl <= 15.0 && blunders == 0 && playerScore >= 0.75 && nonBookMoves >= 16 {
+			score += 22.0
+			flags = append(flags, fmt.Sprintf("Near-zero tactical/positional loss (%.1f cp) over %d moves", acpl, nonBookMoves))
+		} else if acpl <= 21.0 && blunders == 0 && playerScore == 1.0 && nonBookMoves >= 16 {
+			score += 12.0
+		}
 	}
 
-	if eloDiff >= 450 {
-		score += math.Min(28.0, float64(eloDiff-300)*0.045)
+	if eloDiff >= 400 && (hasEval || playerScore >= 0.75) {
+		score += math.Min(26.0, float64(eloDiff-300)*0.045)
 		flags = append(flags, fmt.Sprintf("Intrinsic Performance %d (+%d above %d rating)", ipr, eloDiff, playerElo))
 	}
 
-	if critAccPct >= 88.0 && nonBookMoves >= 10 {
-		score += 14.0
-		flags = append(flags, fmt.Sprintf("%.0f%% critical-position accuracy in high-tension middlegame", critAccPct))
-	}
-
-	if blunders == 0 && nonBookMoves >= 20 && acpl <= 24.0 {
+	if blunders == 0 && nonBookMoves >= 22 && acpl <= 20.0 && playerScore >= 0.5 {
 		score += 8.0
 	}
 
 	// 2. Move-Time Cadence ("Robotic Pacing" / External Consultation Signature)
 	if hasClock {
 		if cvTime > 0 && cvTime <= 0.35 && avgTime >= 2.2 {
-			score += 24.0
+			score += 28.0
 			flags = append(flags, fmt.Sprintf("Robotic flat move-time cadence (%.1fs ± %.2f CV, %.0f%% in narrow band)", avgTime, cvTime, roboticPct))
 		} else if cvTime > 0 && cvTime <= 0.45 && roboticPct >= 65.0 {
-			score += 14.0
+			score += 16.0
 			flags = append(flags, fmt.Sprintf("Low move-time variance (CV %.2f, %.0f%% moves in 2.5s–8.5s band)", cvTime, roboticPct))
 		}
 		if delayedRecaptures >= 2 {
@@ -898,19 +964,311 @@ func scoreSingleGameAnomaly(
 	return score, flags
 }
 
-func estimateIPR(acpl, critAccPct float64, officialElo int, score float64, oppElo int) int {
-	// Empirical Regan/Lichess mapping from ACPL & critical accuracy to Intrinsic Performance Elo
-	rawIPR := 3350.0 - (acpl * 34.0) + ((critAccPct - 50.0) * 4.5)
-	if rawIPR > 3450 {
-		rawIPR = 3450
+func estimateIPR(acpl, critAccPct float64, officialElo int, score float64, oppElo int, hasEval bool, blunders int, nonBookMoves int) int {
+	if oppElo <= 0 {
+		oppElo = officialElo
 	}
-	if rawIPR < 800 {
-		rawIPR = 800
+	if officialElo <= 0 {
+		officialElo = 1500
 	}
-	// Blend slightly with game result vs opponent rating
-	perfResultElo := float64(oppElo) + (score-0.5)*600.0
-	blended := 0.80*rawIPR + 0.20*perfResultElo
+	perfResultElo := float64(oppElo) + (score-0.5)*650.0
+
+	if hasEval {
+		// Empirical Regan/Lichess mapping when engine [%eval] annotations are present
+		rawIPR := 3250.0 - (acpl * 31.0) + ((critAccPct - 50.0) * 3.5)
+		if rawIPR > 3350 {
+			rawIPR = 3350
+		}
+		if rawIPR < 750 {
+			rawIPR = 750
+		}
+		blended := 0.78*rawIPR + 0.22*perfResultElo
+		return int(math.Round(blended))
+	}
+
+	// When no [%eval] tags are embedded in the PGN, combine 2-ply tactical/positional move quality
+	// with empirical opponent-adjusted performance rating so normal human games are never inflated to 3000+.
+	expectedACPLForElo := math.Max(14.0, 58.0-float64(officialElo-1000)*0.022)
+	acplDelta := expectedACPLForElo - acpl
+	blunderPenalty := float64(blunders) * 28.0
+	moveQualityElo := float64(officialElo) + acplDelta*8.5 + (critAccPct-45.0)*2.0 - blunderPenalty
+	if moveQualityElo < float64(officialElo)-350 {
+		moveQualityElo = float64(officialElo) - 350
+	}
+	if moveQualityElo > float64(officialElo)+650 {
+		moveQualityElo = float64(officialElo) + 650
+	}
+	blended := 0.50*moveQualityElo + 0.50*perfResultElo
+	if blended < 800 {
+		blended = 800
+	}
+	if blended > 3100 {
+		blended = 3100
+	}
 	return int(math.Round(blended))
+}
+
+// evaluateMoveLossHeuristic evaluates a move in an unannotated game by comparing it against all legal
+// candidate moves using Piece-Square Tables (PST), king safety, development, and 1-ply opponent tactical
+// capture replies (hanging pieces / SEE).
+func evaluateMoveLossHeuristic(b *chess.Board, node *chess.MoveNode, ply int, playerElo int, playerScore float64) (lossCp float64, isTop1 bool) {
+	if b == nil || node == nil {
+		return 25.0, false
+	}
+	mover := b.Turn
+	legalMoves := b.GenerateLegalMoves()
+	if len(legalMoves) <= 1 {
+		return 0.0, true
+	}
+
+	playedScore := evaluateCandidateMove(b, node.Move, mover)
+	bestScore := playedScore
+	strictlyBetter := 0
+
+	for _, cand := range legalMoves {
+		sc := evaluateCandidateMove(b, cand, mover)
+		if sc > bestScore {
+			bestScore = sc
+		}
+		if cand != node.Move && sc > playedScore+3.5 {
+			strictlyBetter++
+		}
+	}
+
+	tacticalDiff := bestScore - playedScore
+	if tacticalDiff < 0 {
+		tacticalDiff = 0
+	}
+	if tacticalDiff > 450 {
+		tacticalDiff = 450
+	}
+
+	isTop1 = strictlyBetter == 0 && tacticalDiff <= 8.0
+	return tacticalDiff, isTop1
+}
+
+func evaluateCandidateMove(b *chess.Board, m chess.Move, mover chess.Color) float64 {
+	next := b.Clone()
+	next.MakeMove(m)
+	base := evaluatePositionForColor(next, mover)
+	oppColor := chess.White
+	if mover == chess.White {
+		oppColor = chess.Black
+	}
+	// Subtract opponent's best immediate net capture gain (hanging piece / unfavorable trade detection)
+	oppGain := bestCaptureGain(next, oppColor)
+	return base - oppGain*0.85
+}
+
+func bestCaptureGain(b *chess.Board, side chess.Color) float64 {
+	if b.Turn != side {
+		return 0
+	}
+	moves := b.GenerateLegalMoves()
+	bestGain := 0.0
+	for _, m := range moves {
+		target := b.Squares[m.To]
+		if target == chess.Empty && m.Promo == chess.None {
+			continue
+		}
+		valCaptured := pieceValueCp(target.Type())
+		if m.Promo != chess.None {
+			valCaptured += pieceValueCp(m.Promo) - 100.0
+		}
+		if valCaptured <= 0 {
+			continue
+		}
+		attackerVal := pieceValueCp(b.Squares[m.From].Type())
+		// Check if opponent can recapture on m.To
+		afterCap := b.Clone()
+		afterCap.MakeMove(m)
+		recaptured := false
+		oppMoves := afterCap.GenerateLegalMoves()
+		for _, rm := range oppMoves {
+			if rm.To == m.To {
+				recaptured = true
+				break
+			}
+		}
+		gain := valCaptured
+		if recaptured {
+			gain = valCaptured - attackerVal
+		}
+		if gain > bestGain {
+			bestGain = gain
+		}
+	}
+	return bestGain
+}
+
+func pieceValueCp(pt chess.PieceType) float64 {
+	switch pt {
+	case chess.Pawn:
+		return 100
+	case chess.Knight:
+		return 320
+	case chess.Bishop:
+		return 330
+	case chess.Rook:
+		return 500
+	case chess.Queen:
+		return 900
+	case chess.King:
+		return 20000
+	default:
+		return 0
+	}
+}
+
+func evaluatePositionForColor(b *chess.Board, perspective chess.Color) float64 {
+	wCp := evaluateBoardHeuristicWhiteCp(b)
+	if perspective == chess.Black {
+		return -wCp
+	}
+	return wCp
+}
+
+func evaluateBoardHeuristicWhiteCp(b *chess.Board) float64 {
+	if b == nil {
+		return 0
+	}
+	var score float64
+	wBishops := 0
+	bBishops := 0
+
+	for sq := chess.Square(0); sq < 64; sq++ {
+		p := b.Squares[sq]
+		if p == chess.Empty {
+			continue
+		}
+		file := int(sq) % 8
+		rank := int(sq) / 8
+		relRank := rank
+		if p.Color() == chess.Black {
+			relRank = 7 - rank
+		}
+		centerDist := math.Abs(float64(file)-3.5) + math.Abs(float64(rank)-3.5)
+
+		val := pieceValueCp(p.Type())
+		switch p.Type() {
+		case chess.Pawn:
+			// Advancement + central pawn bonus
+			val += float64(relRank-1) * 8.0
+			if (file == 3 || file == 4) && (relRank == 3 || relRank == 4) {
+				val += 18.0
+			}
+		case chess.Knight:
+			// Knights strongly prefer central squares and dislike the rim
+			val += (4.5 - centerDist) * 7.5
+			if relRank == 0 {
+				val -= 12.0 // Undeveloped back-rank penalty
+			}
+		case chess.Bishop:
+			val += (4.5 - centerDist) * 4.5
+			if relRank == 0 {
+				val -= 10.0
+			}
+			if p.Color() == chess.White {
+				wBishops++
+			} else {
+				bBishops++
+			}
+		case chess.Rook:
+			if relRank == 6 {
+				val += 22.0 // 7th rank bonus
+			}
+			if file == 3 || file == 4 {
+				val += 8.0
+			}
+		case chess.Queen:
+			val += (4.5 - centerDist) * 3.0
+		case chess.King:
+			val = 0 // Do not add 20000 king material to static balance
+			// Castled king safety bonus on g1/c1 or g8/c8
+			if relRank == 0 && (file == 6 || file == 2) {
+				val += 28.0
+			} else if relRank >= 2 {
+				val -= 25.0
+			}
+		}
+
+		if p.Color() == chess.White {
+			score += val
+		} else {
+			score -= val
+		}
+	}
+	if wBishops >= 2 {
+		score += 25.0
+	}
+	if bBishops >= 2 {
+		score -= 25.0
+	}
+	return score
+}
+
+func estimateBoardComplexity(b *chess.Board) int {
+	if b == nil {
+		return 8
+	}
+	nonPawnPieces := 0
+	for sq := chess.Square(0); sq < 64; sq++ {
+		p := b.Squares[sq]
+		if p != chess.Empty && p.Type() != chess.Pawn && p.Type() != chess.King {
+			nonPawnPieces++
+		}
+	}
+	return nonPawnPieces
+}
+
+func computeCadenceStats(times []float64) (mean, stdDev, cv, roboticPct float64) {
+	if len(times) == 0 {
+		return 0, 0, 0.85, 0
+	}
+	mean = meanFloat64(times)
+	if mean <= 0.05 {
+		return mean, 0, 0.85, 0
+	}
+	var sqDiffSum float64
+	narrowBandCnt := 0
+	for _, t := range times {
+		d := t - mean
+		sqDiffSum += d * d
+		if t >= 2.3 && t <= 8.8 {
+			narrowBandCnt++
+		}
+	}
+	stdDev = math.Sqrt(sqDiffSum / float64(len(times)))
+	cv = stdDev / mean
+	roboticPct = 100.0 * float64(narrowBandCnt) / float64(len(times))
+	return mean, stdDev, cv, roboticPct
+}
+
+func meanFloat64(vals []float64) float64 {
+	if len(vals) == 0 {
+		return 0
+	}
+	var sum float64
+	for _, v := range vals {
+		sum += v
+	}
+	return sum / float64(len(vals))
+}
+
+func normalizeDateStr(raw string) string {
+	s := strings.TrimSpace(raw)
+	if s == "" || strings.Contains(s, "?") {
+		return "Unknown-Date"
+	}
+	return strings.ReplaceAll(s, ".", "-")
+}
+
+func round1(v float64) float64 {
+	return math.Round(v*10.0) / 10.0
+}
+
+func round2(v float64) float64 {
+	return math.Round(v*100.0) / 100.0
 }
 
 func classifyIssueScore(score float64) string {
@@ -1058,104 +1416,4 @@ func parseEvalWhiteCp(comment string) (float64, bool) {
 	return cp, true
 }
 
-func evaluateBoardHeuristicWhiteCp(b *chess.Board) float64 {
-	if b == nil {
-		return 0
-	}
-	var score float64
-	for sq := chess.Square(0); sq < 64; sq++ {
-		p := b.Squares[sq]
-		if p == chess.Empty {
-			continue
-		}
-		val := 0.0
-		switch p.Type() {
-		case chess.Pawn:
-			val = 100
-		case chess.Knight:
-			val = 320
-		case chess.Bishop:
-			val = 330
-		case chess.Rook:
-			val = 500
-		case chess.Queen:
-			val = 900
-		}
-		// Small center control bonus
-		file := int(sq) % 8
-		rank := int(sq) / 8
-		if file >= 2 && file <= 5 && rank >= 2 && rank <= 5 {
-			val += 10
-		}
-		if p.Color() == chess.White {
-			score += val
-		} else {
-			score -= val
-		}
-	}
-	return score
-}
 
-func estimateBoardComplexity(b *chess.Board) int {
-	if b == nil {
-		return 8
-	}
-	nonPawnPieces := 0
-	for sq := chess.Square(0); sq < 64; sq++ {
-		p := b.Squares[sq]
-		if p != chess.Empty && p.Type() != chess.Pawn && p.Type() != chess.King {
-			nonPawnPieces++
-		}
-	}
-	return nonPawnPieces
-}
-
-func computeCadenceStats(times []float64) (mean, stdDev, cv, roboticPct float64) {
-	if len(times) == 0 {
-		return 0, 0, 0.85, 0
-	}
-	mean = meanFloat64(times)
-	if mean <= 0.05 {
-		return mean, 0, 0.85, 0
-	}
-	var sqDiffSum float64
-	narrowBandCnt := 0
-	for _, t := range times {
-		d := t - mean
-		sqDiffSum += d * d
-		if t >= 2.3 && t <= 8.8 {
-			narrowBandCnt++
-		}
-	}
-	stdDev = math.Sqrt(sqDiffSum / float64(len(times)))
-	cv = stdDev / mean
-	roboticPct = 100.0 * float64(narrowBandCnt) / float64(len(times))
-	return mean, stdDev, cv, roboticPct
-}
-
-func meanFloat64(vals []float64) float64 {
-	if len(vals) == 0 {
-		return 0
-	}
-	var sum float64
-	for _, v := range vals {
-		sum += v
-	}
-	return sum / float64(len(vals))
-}
-
-func normalizeDateStr(raw string) string {
-	s := strings.TrimSpace(raw)
-	if s == "" || strings.Contains(s, "?") {
-		return "Unknown-Date"
-	}
-	return strings.ReplaceAll(s, ".", "-")
-}
-
-func round1(v float64) float64 {
-	return math.Round(v*10.0) / 10.0
-}
-
-func round2(v float64) float64 {
-	return math.Round(v*100.0) / 100.0
-}

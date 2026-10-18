@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"newscid/pkg/chess"
+	"newscid/pkg/database/scid"
 )
 
 func TestClassifyTimeControl(t *testing.T) {
@@ -176,4 +177,109 @@ func TestAnalyzePlayerFairPlay_SingleGameDatabaseAndPartialEval(t *testing.T) {
 		t.Errorf("expected GameID = 1, got %d", dossier.AllGames[0].GameID)
 	}
 }
+
+func TestUnannotatedHumanGames_NotFalselyFlagged(t *testing.T) {
+	// Regression test for unannotated games (no [%eval] or [%clk] tags):
+	// Previously, evaluateBoardHeuristicWhiteCp only checked raw material after the player's own move,
+	// resulting in 0.8 cp ACPL, 100% Top-1 match, 3010 IPR, and 99/100 Issue Score for every player!
+	pgnText := `
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2026.09.10"]
+[White "QuenyenHighElf"]
+[Black "ClubOpponent1"]
+[Result "0-1"]
+[WhiteElo "1282"]
+[BlackElo "1290"]
+[TimeControl "600"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. Ng5 d5 5. exd5 Nxd5 6. Nxf7 Kxf7 7. Qf3+ Ke6 8. Nc3 Nce7 9. d4 c6 10. Bg5 h6 11. Bxe7 Bxe7 12. O-O-O Rf8 13. Qe4 Rf4 14. Qxe5+ Kf7 15. Nxd5 cxd5 16. Bxd5+ Kf8 17. Qxf4+ Bf6 18. Rhe1 Qxd5 19. Kb1 Be6 20. b3 Rc8 0-1
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2026.09.11"]
+[White "ClubOpponent2"]
+[Black "QuenyenHighElf"]
+[Result "1-0"]
+[WhiteElo "1310"]
+[BlackElo "1278"]
+[TimeControl "180"]
+
+1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Bg5 Be7 5. e3 O-O 6. Nf3 b6 7. cxd5 exd5 8. Bd3 Bb7 9. O-O Nbd7 10. Rc1 c5 11. Qe2 Ne4 12. Bf4 Ndf6 13. Rfd1 Bd6 14. Bxd6 Qxd6 15. dxc5 Nxc5 16. Bb1 Rfd8 17. Nd4 Rac8 18. Qf3 Qe5 19. Qh3 g6 20. Nf3 Qe7 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2026.09.12"]
+[White "QuenyenHighElf"]
+[Black "ClubOpponent3"]
+[Result "1-0"]
+[WhiteElo "1285"]
+[BlackElo "1260"]
+[TimeControl "60"]
+
+1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 6. Be2 e5 7. Nb3 Be7 8. O-O O-O 9. Be3 Be6 10. f3 Nbd7 11. Qd2 b5 12. Rfd1 Nb6 13. Qe1 Qc7 14. Qf2 Nc4 15. Bxc4 bxc4 16. Nd2 Rab8 17. Rab1 Rfc8 18. Nf1 Bf8 19. Bg5 Nd7 20. Ne3 f6 1-0
+`
+	games, err := chess.ParsePGNDatabase(strings.NewReader(pgnText))
+	if err != nil {
+		t.Fatalf("ParsePGNDatabase failed: %v", err)
+	}
+	dossier := BuildPlayerFairPlayDossier("QuenyenHighElf", games, []int{1, 2, 3})
+	if dossier.OverallIssueScore >= 38.0 {
+		t.Errorf("expected unannotated normal human play to have OverallIssueScore < 38.0, got %.1f (%s)",
+			dossier.OverallIssueScore, dossier.OverallClassification)
+	}
+	if dossier.OverallClassification != "Normal Human Variance" {
+		t.Errorf("expected Normal Human Variance, got %q", dossier.OverallClassification)
+	}
+	for _, p := range dossier.TimeControlProfiles {
+		if p.AvgACPL < 10.0 {
+			t.Errorf("expected realistic human ACPL >= 10.0 cp on unannotated games for %s, got %.1f cp", p.Category, p.AvgACPL)
+		}
+		if p.Top1AgreementPct >= 90.0 {
+			t.Errorf("expected Top1AgreementPct < 90%% on unannotated games for %s, got %.1f%%", p.Category, p.Top1AgreementPct)
+		}
+		if p.IntrinsicPerformanceElo > 1700 {
+			t.Errorf("expected realistic IPR <= 1700 for ~1280 player in %s, got %d", p.Category, p.IntrinsicPerformanceElo)
+		}
+	}
+	if dossier.CrossDivergence.HasMultipleControls && dossier.CrossDivergence.BaselineControl == dossier.CrossDivergence.SuspectControl {
+		t.Errorf("expected distinct BaselineControl and SuspectControl when multiple controls exist, got %s vs %s",
+			dossier.CrossDivergence.BaselineControl, dossier.CrossDivergence.SuspectControl)
+	}
+}
+
+func TestChristopherFairDB_IfPresent(t *testing.T) {
+	dbPath := "/home/christopher/ChessDataBases/ChristopherFair/ChristopherFair"
+	db := scid.NewDatabase()
+	if err := db.Open(dbPath); err != nil {
+		t.Skipf("ChristopherFair database not present: %v", err)
+	}
+	defer db.Close()
+
+	if g1, err := db.GetGame(1); err == nil && g1.RootMove != nil {
+		t.Logf("Game 1: White=%s Black=%s PlyCount=%d RootSAN=%s RootClk=%q RootComment=%q",
+			g1.Tag("White"), g1.Tag("Black"), g1.PlyCount, g1.RootMove.SAN, g1.RootMove.Clock, g1.RootMove.Comment)
+	}
+	for _, targetPlayer := range []string{"QuenyenHighElf", "ChristopherFair"} {
+		dossier, err := AnalyzePlayerFairPlay(db, targetPlayer, 300)
+		if err != nil {
+			t.Fatalf("AnalyzePlayerFairPlay(%s) failed: %v", targetPlayer, err)
+		}
+		t.Logf("%s: Games=%d, OverallScore=%.1f (%s), HighestRiskTC=%s (%.1f), CrossDiv=%s vs %s (%.1f)",
+			targetPlayer, dossier.TotalGamesAnalyzed, dossier.OverallIssueScore, dossier.OverallClassification,
+			dossier.HighestRiskTimeControl, dossier.HighestControlIssueScore,
+			dossier.CrossDivergence.BaselineControl, dossier.CrossDivergence.SuspectControl, dossier.CrossDivergence.DivergenceScore)
+		for _, p := range dossier.TimeControlProfiles {
+			t.Logf("  TC=%s Games=%d Win=%.1f%% OfficialElo=%d IPR=%d (%+d, %+.1fσ) ACPL=%.1f Top1=%.1f%% CritAcc=%.1f%% AvgTime=%.1fs CV=%.2f Score=%.1f",
+				p.Category, p.GamesAnalyzed, p.WinRatePct, p.AvgOfficialElo, p.IntrinsicPerformanceElo, p.EloOverperformanceDelta, p.ZScore,
+				p.AvgACPL, p.Top1AgreementPct, p.CriticalAccuracyPct, p.AvgMoveTimeSec, p.AvgMoveTimeCV, p.ConsistentIssueScore)
+		}
+		if dossier.OverallIssueScore >= 40.0 {
+			t.Errorf("expected %s to have normal human score < 40.0, got %.1f (%s)",
+				targetPlayer, dossier.OverallIssueScore, dossier.OverallClassification)
+		}
+	}
+}
+
+
 
