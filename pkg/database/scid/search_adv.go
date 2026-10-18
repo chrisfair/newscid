@@ -179,11 +179,55 @@ func (mc *MaterialCriteria) MatchesBoard(b *chess.Board) bool {
 	return true
 }
 
+// PawnStructureType represents a recognized pawn structure pattern as an integer constant.
+type PawnStructureType uint8
+
+const (
+	PawnStructNone PawnStructureType = iota
+	PawnStructCarlsbad
+	PawnStructIsolani
+	PawnStructFrenchChain
+	PawnStructMaroczy
+	PawnStructHedgehog
+	PawnStructDragon
+	PawnStructStonewall
+	PawnStructUnknown
+)
+
+func parsePawnStructureType(structure string) PawnStructureType {
+	switch strings.ToLower(strings.TrimSpace(structure)) {
+	case "":
+		return PawnStructNone
+	case "carlsbad":
+		return PawnStructCarlsbad
+	case "isolani", "iqp":
+		return PawnStructIsolani
+	case "french_chain", "french":
+		return PawnStructFrenchChain
+	case "maroczy", "maroczy_bind":
+		return PawnStructMaroczy
+	case "hedgehog":
+		return PawnStructHedgehog
+	case "dragon":
+		return PawnStructDragon
+	case "stonewall":
+		return PawnStructStonewall
+	default:
+		return PawnStructUnknown
+	}
+}
+
 // MatchesPawnStructure verifies if a board matches common historical pawn formations.
 func MatchesPawnStructure(b *chess.Board, structure string) bool {
-	clean := strings.ToLower(strings.TrimSpace(structure))
-	if clean == "" {
+	return matchesPawnStructureByType(b, parsePawnStructureType(structure))
+}
+
+func matchesPawnStructureByType(b *chess.Board, pst PawnStructureType) bool {
+	if pst == PawnStructNone {
 		return true
+	}
+	if pst == PawnStructUnknown {
+		return false
 	}
 
 	hasPawn := func(sq chess.Square, c chess.Color) bool {
@@ -208,42 +252,39 @@ func MatchesPawnStructure(b *chess.Board, structure string) bool {
 		return true
 	}
 
-	switch clean {
-	case "carlsbad":
+	switch pst {
+	case PawnStructCarlsbad:
 		// White c3, d4, e3 vs Black c6, d5, e6
 		return hasPawn(chess.C3, chess.White) && hasPawn(chess.D4, chess.White) && hasPawn(chess.E3, chess.White) &&
 			hasPawn(chess.C6, chess.Black) && hasPawn(chess.D5, chess.Black) && hasPawn(chess.E6, chess.Black)
 
-	case "isolani", "iqp":
+	case PawnStructIsolani:
 		// White isolated queen's pawn on d4 (no white c or e pawns)
 		return hasPawn(chess.D4, chess.White) && fileEmptyOfPawns(2, chess.White) && fileEmptyOfPawns(4, chess.White)
 
-	case "french_chain", "french":
+	case PawnStructFrenchChain:
 		// White d4, e5 vs Black d5, e6
 		return hasPawn(chess.D4, chess.White) && hasPawn(chess.E5, chess.White) &&
 			hasPawn(chess.D5, chess.Black) && hasPawn(chess.E6, chess.Black)
 
-	case "maroczy", "maroczy_bind":
+	case PawnStructMaroczy:
 		// White c4, e4 vs Black d6
 		return hasPawn(chess.C4, chess.White) && hasPawn(chess.E4, chess.White) && hasPawn(chess.D6, chess.Black)
 
-	case "hedgehog":
+	case PawnStructHedgehog:
 		// Black pawns on a6, b6, d6, e6 with c file open for Black
 		return hasPawn(chess.A6, chess.Black) && hasPawn(chess.B6, chess.Black) &&
 			hasPawn(chess.D6, chess.Black) && hasPawn(chess.E6, chess.Black) && fileEmptyOfPawns(2, chess.Black)
 
-	case "dragon":
+	case PawnStructDragon:
 		// Black pawns on d6, g6, h7 with c file open for Black
 		return hasPawn(chess.D6, chess.Black) && hasPawn(chess.G6, chess.Black) &&
 			hasPawn(chess.H7, chess.Black) && fileEmptyOfPawns(2, chess.Black)
 
-	case "stonewall":
+	default: // PawnStructStonewall
 		// White c3, d4, e3, f4
 		return hasPawn(chess.C3, chess.White) && hasPawn(chess.D4, chess.White) &&
 			hasPawn(chess.E3, chess.White) && hasPawn(chess.F4, chess.White)
-
-	default:
-		return false
 	}
 }
 

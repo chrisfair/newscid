@@ -171,14 +171,14 @@ func CleanPlayerName(name string) string {
 			name = strings.TrimSpace(name[len(prefix):])
 			break
 		}
-		suffix := " " + t
-		if strings.HasSuffix(strings.ToUpper(name), suffix) {
-			name = strings.TrimSpace(name[:len(name)-len(suffix)])
-			break
-		}
 		commaSuffix := ", " + t
 		if strings.HasSuffix(strings.ToUpper(name), commaSuffix) {
 			name = strings.TrimSpace(name[:len(name)-len(commaSuffix)])
+			break
+		}
+		suffix := " " + t
+		if strings.HasSuffix(strings.ToUpper(name), suffix) {
+			name = strings.TrimSpace(name[:len(name)-len(suffix)])
 			break
 		}
 	}

@@ -26,6 +26,9 @@ func TestParseClockToSeconds(t *testing.T) {
 		{"12.5", 12.5, false},
 		{"", 0, true},
 		{"invalid", 0, true},
+		{"a:b:c", 0, true},
+		{"a:b", 0, true},
+		{"1:2:3:4", 0, true},
 	}
 
 	for _, tc := range tests {
@@ -40,6 +43,9 @@ func TestParseClockToSeconds(t *testing.T) {
 }
 
 func TestParseEvalToCentipawns(t *testing.T) {
+	_, ok := ParseEvalToCentipawns("   ")
+	assert.False(t, ok)
+
 	val, ok := ParseEvalToCentipawns("+1.25")
 	assert.True(t, ok)
 	assert.Equal(t, 125, val)
@@ -58,6 +64,74 @@ func TestParseEvalToCentipawns(t *testing.T) {
 
 	_, ok = ParseEvalToCentipawns("not_an_eval")
 	assert.False(t, ok)
+}
+
+func TestAnalyzeGameTimeManagement_AllBranches(t *testing.T) {
+	// Empty game (nil RootMove)
+	emptyGame := chess.NewGame()
+	emptyRep, err := AnalyzeGameTimeManagement(emptyGame)
+	require.NoError(t, err)
+	assert.Empty(t, emptyRep.Moves)
+
+	// Game with 65 plies covering opening, middlegame, endgame, EMT comments, clock comments, all NAGs, and eval drops
+	g := chess.NewGame()
+	g.SetTag("White", "Alpha")
+	g.SetTag("Black", "Beta")
+
+	var root, prev *chess.MoveNode
+	for ply := 1; ply <= 64; ply++ {
+		node := &chess.MoveNode{
+			SAN: "Nf3",
+			UCI: "g1f3",
+		}
+		switch ply {
+		case 1:
+			node.Comment = "[%clk 0:10:00] [%eval 0.20]"
+			node.NAGs = []int{1} // ! best
+		case 2:
+			node.Comment = "[%clk 0:10:00] [%eval 0.20]"
+			node.NAGs = []int{5} // !? good
+		case 3:
+			node.Comment = "[%clk 0:07:30] [%eval -1.10]" // 150s tank with mistake drop (130cp)
+		case 4:
+			node.Comment = "[%clk 0:07:00] [%eval -0.50]" // 180s tank for Black with 60cp inaccuracy drop (Solid tank outcome)
+		case 5:
+			node.Clock = "0:07:20"
+			node.Comment = "[%emt 0:00:10] [%eval -3.50]" // 300cp blunder drop without NAG
+		case 6:
+			node.Clock = "0:06:50"
+			node.EMT = "0:00:10"
+			node.NAGs = []int{2} // ? mistake
+		case 7:
+			node.Clock = "0:07:10"
+			node.NAGs = []int{6} // ?! inaccuracy
+		case 18:
+			// Black panic move (ply > 16, <= 5s, mistake)
+			node.Clock = "0:06:48"
+			node.EMT = "0:00:02"
+			node.NAGs = []int{4} // ?? blunder
+		default:
+			node.Clock = "0:00:25" // scramble
+			node.EMT = "0:00:03"
+			node.Comment = "[%eval 0.00]"
+		}
+
+		if root == nil {
+			root = node
+		} else {
+			prev.Next = node
+		}
+		prev = node
+	}
+	g.RootMove = root
+
+	rep, err := AnalyzeGameTimeManagement(g)
+	require.NoError(t, err)
+	assert.Len(t, rep.Moves, 64)
+	assert.Greater(t, rep.WhiteStats.EndgameAvgTimeSec, 0.0)
+	assert.Greater(t, rep.BlackStats.MiddlegameAvgTimeSec, 0.0)
+	assert.NotEmpty(t, rep.TankDossier)
+	assert.NotEmpty(t, rep.PanicIncidents)
 }
 
 func TestAnalyzeGameTimeManagement(t *testing.T) {

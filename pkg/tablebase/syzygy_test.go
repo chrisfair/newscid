@@ -57,6 +57,13 @@ func TestSyzygyProbeMock(t *testing.T) {
 			return
 		}
 
+		if fen == "bad_json" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{invalid json`))
+			return
+		}
+
 		http.NotFound(w, r)
 	}))
 	defer server.Close()
@@ -96,6 +103,22 @@ func TestSyzygyProbeMock(t *testing.T) {
 	// 5. Empty FEN
 	_, err = client.Probe("")
 	assert.Error(t, err)
+
+	// 6. HTTP 404
+	_, err = client.Probe("404_fen")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "HTTP 404")
+
+	// 7. Invalid JSON
+	_, err = client.Probe("bad_json")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "decoding tablebase response")
+
+	// 8. Network error (closed server)
+	clientBadURL := NewClient()
+	clientBadURL.baseURL = "http://127.0.0.1:1"
+	_, err = clientBadURL.Probe("4k3/8/8/8/8/8/8/4K3 w - - 0 1")
+	assert.Error(t, err)
 }
 
 func TestFormatSummaryCheckmateAndStalemate(t *testing.T) {
@@ -114,4 +137,23 @@ func TestFormatSummaryCheckmateAndStalemate(t *testing.T) {
 		DTZ:      -10,
 	}
 	assert.Contains(t, formatSummary(lossRes), "Loss in 10 moves (DTZ)")
+
+	lossDTM := &TablebaseResult{
+		Category: "loss",
+		DTM:      -6,
+	}
+	assert.Contains(t, formatSummary(lossDTM), "Loss in 6 (DTM)")
+
+	winDTZ := &TablebaseResult{
+		Category: "win",
+		DTZ:      12,
+	}
+	assert.Contains(t, formatSummary(winDTZ), "Win in 12 moves (DTZ)")
+
+	otherCat := &TablebaseResult{
+		Category: "cursed-win",
+	}
+	assert.Contains(t, formatSummary(otherCat), "Cursed-win")
+
+	assert.Equal(t, 2, CountPieces("   4k3/8/8/8/8/8/8/4K3 w - - 0 1"))
 }

@@ -262,6 +262,17 @@ func parseECO(s string) uint16 {
 	return letterOffset + uint16(num)
 }
 
+func parseYear(date string) int {
+	if len(date) < 4 {
+		return 0
+	}
+	d0, d1, d2, d3 := date[0], date[1], date[2], date[3]
+	if d0 < '0' || d0 > '9' || d1 < '0' || d1 > '9' || d2 < '0' || d2 > '9' || d3 < '0' || d3 > '9' {
+		return 0
+	}
+	return int(d0-'0')*1000 + int(d1-'0')*100 + int(d2-'0')*10 + int(d3-'0')
+}
+
 // matchesCriteria checks if an entry matches the given search criteria.
 func (db *Database) matchesCriteria(gameID int, entry *IndexEntry, criteria *SearchCriteria) bool {
 	// 1. Deleted check
@@ -316,36 +327,37 @@ func (db *Database) matchesCriteria(gameID int, entry *IndexEntry, criteria *Sea
 	}
 
 	// 6. ECO check
-	ecoStr := formatECO(entry.EcoCode)
-	if criteria.ECO != "" {
-		critECO := strings.ToUpper(strings.TrimSpace(criteria.ECO))
-		if !strings.HasPrefix(ecoStr, critECO) {
-			return false
+	if criteria.ECO != "" || criteria.EcoFrom != "" || criteria.EcoTo != "" {
+		ecoStr := formatECO(entry.EcoCode)
+		if criteria.ECO != "" {
+			critECO := strings.ToUpper(strings.TrimSpace(criteria.ECO))
+			if !strings.HasPrefix(ecoStr, critECO) {
+				return false
+			}
 		}
-	}
-	if criteria.EcoFrom != "" {
-		critFrom := strings.ToUpper(strings.TrimSpace(criteria.EcoFrom))
-		if ecoStr < critFrom {
-			return false
+		if criteria.EcoFrom != "" {
+			critFrom := strings.ToUpper(strings.TrimSpace(criteria.EcoFrom))
+			if ecoStr < critFrom {
+				return false
+			}
 		}
-	}
-	if criteria.EcoTo != "" {
-		critTo := strings.ToUpper(strings.TrimSpace(criteria.EcoTo))
-		if ecoStr > critTo {
-			return false
+		if criteria.EcoTo != "" {
+			critTo := strings.ToUpper(strings.TrimSpace(criteria.EcoTo))
+			if ecoStr > critTo {
+				return false
+			}
 		}
 	}
 
 	// 7. Date & Year check
-	var year int
-	if len(entry.Date) >= 4 {
-		fmt.Sscanf(entry.Date[:4], "%d", &year)
-	}
-	if criteria.YearFrom > 0 && (year == 0 || year < criteria.YearFrom) {
-		return false
-	}
-	if criteria.YearTo > 0 && (year == 0 || year > criteria.YearTo) {
-		return false
+	if criteria.YearFrom > 0 || criteria.YearTo > 0 {
+		year := parseYear(entry.Date)
+		if criteria.YearFrom > 0 && (year == 0 || year < criteria.YearFrom) {
+			return false
+		}
+		if criteria.YearTo > 0 && (year == 0 || year > criteria.YearTo) {
+			return false
+		}
 	}
 	if criteria.DateFrom != "" {
 		cleanFrom := strings.TrimSpace(criteria.DateFrom)
@@ -431,7 +443,8 @@ func (db *Database) matchesCriteria(gameID int, entry *IndexEntry, criteria *Sea
 
 		// Material and/or Pawn Structure check
 		hasMat := criteria.Material != nil && criteria.Material.IsActive()
-		hasPawn := strings.TrimSpace(criteria.PawnStructure) != ""
+		pawnType := parsePawnStructureType(criteria.PawnStructure)
+		hasPawn := pawnType != PawnStructNone
 
 		if hasMat || hasPawn {
 			b := chess.NewBoard()
@@ -447,7 +460,7 @@ func (db *Database) matchesCriteria(gameID int, entry *IndexEntry, criteria *Sea
 			// Check starting position
 			if !matchEndOnly {
 				matOk := !hasMat || criteria.Material.MatchesBoard(b)
-				pawnOk := !hasPawn || MatchesPawnStructure(b, criteria.PawnStructure)
+				pawnOk := !hasPawn || matchesPawnStructureByType(b, pawnType)
 				if matOk && pawnOk {
 					matchedAnyPly = true
 				}
@@ -458,7 +471,7 @@ func (db *Database) matchesCriteria(gameID int, entry *IndexEntry, criteria *Sea
 				b.MakeMove(curr.Move)
 				if !matchEndOnly {
 					matOk := !hasMat || criteria.Material.MatchesBoard(b)
-					pawnOk := !hasPawn || MatchesPawnStructure(b, criteria.PawnStructure)
+					pawnOk := !hasPawn || matchesPawnStructureByType(b, pawnType)
 					if matOk && pawnOk {
 						matchedAnyPly = true
 						break
@@ -469,7 +482,7 @@ func (db *Database) matchesCriteria(gameID int, entry *IndexEntry, criteria *Sea
 
 			if matchEndOnly {
 				matOk := !hasMat || criteria.Material.MatchesBoard(b)
-				pawnOk := !hasPawn || MatchesPawnStructure(b, criteria.PawnStructure)
+				pawnOk := !hasPawn || matchesPawnStructureByType(b, pawnType)
 				if matOk && pawnOk {
 					matchedAnyPly = true
 				}

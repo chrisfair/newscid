@@ -1,236 +1,156 @@
-# NewScid: Modern Chess Information Database
+# NewScid: Complete Linux Chess Workstation & `.si4` Database Suite
 
-A fresh, database-compatible rewrite of **Scid vs. PC** featuring a modern, intuitive user interface built with **Wails v2** (Go backend) and **Vue 3** (TypeScript + Vite + Tailwind CSS).
+**NewScid** is an ultra-fast, native **Linux Chess Workstation** and complete rewrite of **Scid vs. PC**, engineered in **Go** (Wails v2 backend + standalone companion CLI utilities) and **Vue 3** (TypeScript + Vite + Tailwind CSS).
 
----
-
-## Highlights & Features
-
-- **Full SCID Database Compatibility**:
-  - Native binary support for **.si4** (Index), **.sn4** (NameBase), and **.sg4** (Game Data) databases.
-  - Tested against real Scid databases (`tactics`, `matein1`, `matein2`, `endings`).
-  - Native front-coding string decoder and custom Huffman/coordinate move-stream decompressor.
-  - Native PGN parser and exporter with full support for variations, NAGs (`$1`, `!`, `?`), and comments.
-
-- **Modern & Intuitive Vue 3 Interface**:
-  - Interactive chessboard with drag-and-drop piece movement and click-to-move.
-  - Legal move hints (subtle destination dots and capture rings).
-  - Last-move indicator, check indicator, and automatic pawn promotion selector.
-  - Formatted tournament scorebook notation with interactive variations and jump-to-move.
-  - Autoplay / replay controls (First, Prev, Play/Pause, Next, Last).
-
-- **Opening Tree Explorer ("Tree Window")**:
-  - Dynamically calculates statistics for the current board position across the database.
-  - Displays Move, Frequency, Score %, White wins, Draws, and Black wins.
-  - Clicking any candidate move immediately plays it and drills deeper into the tree.
-
-- **Real-Time UCI Engine Analysis**:
-  - Live communication with UCI chess engines (`/usr/bin/fruit`, `/usr/bin/phalanx`, Stockfish, etc.).
-  - Visual advantage evaluation bar with centipawn and mate depth indicators.
-  - Live Principal Variation (PV) line display.
-
-- **Piece Sets & Board Themes**:
-  - **All Scid vs. PC Sets + Online Vector Sets**: Merida, Colin Burnett (cburnett), Alpha, Leipzig, Spatial, Fantasy, Staunty, Cardinal, Caliente, Dubrovny, Governor, Tatiana, Fresca, Riohacha, Kosal, Shapes, Letter.
-  - **Board Themes**: Classic Wood, Tournament Green, Blue-White, Brown, Green-SA, M.Thomas, Grey, Rosy, SteelBlue, Walnut, Slate, Dark Wood.
-
-- **Scid System Driver**:
-  - Seamless bridge to `tcscid` on host systems for database verification and legacy batch commands.
+It reads and writes industry-standard **SCID v4 binary databases** (`.si4` index, `.sg4` Huffman-compressed move streams, `.sn4` front-coded namebase tries) capable of searching millions of games in milliseconds, while providing 18+ integrated grandmaster preparation, longitudinal fair-play screening, and cognitive training tools—with **100% local documentation, contextual help (`F1`), and system `man(1)` pages**.
 
 ---
 
-## Architecture Overview
+## Key Workstation Capabilities
+
+### 1. Customizable Workspaces, Detachable Panels & Persistent Config
+- **Every Panel is Relocatable & Detachable**: All workstation panels—including the **Chessboard**, **Scorebook & Move Tree**, **Live UCI Engine & Coach**, **Opening Tree & Tablebase**, **Database Game Browser**, **Evaluation Graph**, and **Database Hub / Live Portal**—can be docked to the Left, Right, or Bottom zones, reordered, hidden, floated as draggable windows, or launched as dedicated multi-screen/Hyprland workspace windows (`--window-panel <id> --workspace <n>`).
+- **Automatic Persistent Preferences**: Every workspace layout change, default startup database, reference opening database, board theme, piece set, UI theme, and notation style is automatically saved to `~/.config/newscid/preferences.json`.
+- **Small-Screen & Responsive Auto-Fit**: Automatically scales the chessboard so 100% of ranks `1–8` and files `a–h` remain visible with zero clipping on compact laptop screens.
+
+### 2. Native `.si4` Databases, Incremental Mega Updates & Online Sync
+- **Full SCID Binary Compatibility**: Reads and writes 47-byte `.si4` index records, `.sg4` Huffman move streams, and `.sn4` front-coded namebases with physical compaction, multi-key sorting, and 17-pattern pawn-structure search (IQP, Carlsbad, Maroczy, Hedgehog, Stonewall, Dragon, etc.).
+- **Incremental Mega Database & Local Merge Updates**: Download or update multi-million-game master archives (**LumbrasGigaBase**, **The Week in Chess / TWIC**) or merge local `.si4` databases incrementally. A 64-bit game-signature hash set (`White | Black | Date | Result | PlyCount | OpeningMoves`) skips existing games in $O(1)$ time without creating duplicates.
+- **Newest-First + Backfill Online Sync (Lichess & Chess.com)**: Syncing any player or **Unified Persona** fetches the newest games since your last sync first, then backfills older historical archives without recounting games already in your database.
+
+### 3. Longitudinal Fair-Play & Time-Control Consistency Inspector
+- **Calibrated Multi-Game Integrity Screening**: Evaluates all games of any database or online player across **Bullet, Blitz, Rapid, and Classical** time controls.
+- **Empirical Move-Quality & ACPL**: Computes per-ply centipawn loss, top-move rank distribution, blunder rates, high-tension complexity correlation, and opponent Elo correlation from engine annotations or NewScid's fast static tactical/positional evaluator on unannotated games, calibrated against realistic human baselines.
+
+### 4. Opponent Preparation, Personas & Calibrated AI Sparring
+- **Multi-Alias Player Personas**: Unify FIDE OTB names, Lichess handles, and Chess.com accounts into consolidated profiles with dedicated `.si4` databases.
+- **Opponent Scouting Dossier & Anti-Persona Opening Exploiter**: Scan an opponent's historical games to uncover high-vulnerability opening nodes and export custom weaponized **Polyglot (`.bin`)** refutation books.
+- **AI Player Simulation Bot**: Spar against any database player or Persona using their real historical opening frequencies followed by a rating-calibrated UCI engine with tactical blunder protection. Both the board evaluation bar and the 6-pillar **Positional & Material Imbalance Bar** use a unified absolute White-perspective sign convention (`+` = White advantage, `-` = Black advantage).
+
+### 5. Cognitive Drills, Blunder Vault & Self-Improvement Telemetry
+- **4 Board Vision & Calculation Drills**:
+  - **Coordinate Speed Trainer**: 60-second square & move-coordinate blitz with an interactive 8×8 per-square accuracy heatmap.
+  - **Piece Safety & Undefended Piece Scanner**: Rapidly identify loose and hanging pieces in complex middlegames.
+  - **Intuition Evaluation Storm**: Rapid positional judgment under countdown pressure.
+  - **Prophylaxis ("What Is Threatening?") Drill**: Detect the opponent's hidden threat and find the calm prophylactic defense.
+- **Personal Blunder Vault (SM-2 Spaced Repetition)** & **Database Puzzle Miner**: Mine tactical turnarounds from your own games and drill them via SuperMemo-2 scheduling.
+- **Time-Trouble & Clock-Management Dossier**: Parses `[%clk]` telemetry to detect "Panic Mode" blunder spikes under 30 seconds and "Premature Instinct" errors.
+- **Tactics, Blindfold Ladders, Solitaire Chess (Guess the Move) & Practical Repertoire Shortener (80/20 Pareto Pruner)**.
+
+### 6. 100% Local Manual, Built-In `man(1)` Viewer & Contextual Help
+- **Zero External Web Dependencies for Help**: Pressing **`F1`** (or selecting **Help → Local Manual & Contextual Help**) opens the built-in offline workstation manual directly to the topic corresponding to your active dialog or workspace.
+- **Built-In System Man Page Viewer**: View the complete `NEWSCID(1)` manual page inside the Help modal (**System Man Page (man 1)** tab) or from any terminal via `man newscid`.
+
+---
+
+## Companion Workstation CLI Programs (`cmd/`)
+
+Following the Unix philosophy and classic Scid's companion tools, NewScid installs four fast binaries:
+
+| Binary | Source | Purpose |
+| :--- | :--- | :--- |
+| **`newscid`** | [`main.go`](file:///home/christopher/Projects/newscid/main.go) | Full graphical Wails v2 / Vue 3 Chess Workstation & multi-screen panel host |
+| **`newscid-import`** | [`cmd/newscid-import/main.go`](file:///home/christopher/Projects/newscid/cmd/newscid-import/main.go) | Standalone high-speed PGN & Online (Lichess/Chess.com) incremental importer, signature deduplicator, and `.si4` compactor |
+| **`newscid-fairplay`** | [`cmd/newscid-fairplay/main.go`](file:///home/christopher/Projects/newscid/cmd/newscid-fairplay/main.go) | Standalone longitudinal Fair-Play & Time-Control Consistency analyzer (Markdown & JSON output) |
+| **`newscid-scout`** | [`cmd/newscid-scout/main.go`](file:///home/christopher/Projects/newscid/cmd/newscid-scout/main.go) | Standalone Opponent Scouting Dossier, Anti-Persona Opening Exploiter (with Polyglot `.bin` export), and Tournament Crosstable generator |
+
+### CLI Usage Examples
+
+```bash
+# 1. Import a PGN archive into a SCID database, skipping existing games, and compact:
+newscid-import -db ~/.local/share/newscid/databases/master.si4 -pgn twic1600.pgn -dedup -compact
+
+# 2. Incrementally sync new Lichess & Chess.com games into a database from the terminal:
+newscid-import -db ~/.local/share/newscid/databases/mygames.si4 -lichess QuenyenHighElf -chesscom ChristopherFair -max 500
+
+# 3. Run a longitudinal Fair-Play & Time-Control Consistency audit on a player:
+newscid-fairplay -db ~/.local/share/newscid/databases/mygames.si4 -player "ChristopherFair"
+
+# 4. Generate an Opponent Scouting Dossier or export a Polyglot (.bin) exploit book:
+newscid-scout -db ~/.local/share/newscid/databases/master.si4 -player "Carlsen, Magnus"
+newscid-scout -db ~/.local/share/newscid/databases/master.si4 -player "Carlsen, Magnus" -exploit-color white -book-out prep_white.bin
+
+# 5. Generate a FIDE Tournament Crosstable (Round-Robin / Swiss with SB, Buchholz & TPR):
+newscid-scout -db ~/.local/share/newscid/databases/master.si4 -crosstable "Tata Steel Masters"
+```
+
+---
+
+## Architecture & Performance Design
+
+Hot-path loops across the Go backend use compact integer constants (`uint8` / `int` `iota` enums such as `chess.Color`, `chess.PieceType`, `scid.PawnStructureType`, `fairplay.TimeControlID`, `fairplay.ClassificationID`, `epd.epdOpcode`, and fixed-size array tables) rather than string allocations or string-keyed maps during board generation, tree aggregation, sorting, and statistical analysis.
 
 ```
 newscid/
-├── app.go                      # Wails App Service & Go-Vue3 IPC Bridge
-├── main.go                     # Desktop window lifecycle & configuration
-├── wails.json                  # Wails configuration & tags
+├── app.go                        # Wails App Service & Go-Vue3 IPC Bridge
+├── main.go                       # Desktop workstation lifecycle & multi-window CLI flags
+├── cmd/
+│   ├── newscid-import/main.go    # Standalone PGN & online incremental importer CLI
+│   ├── newscid-fairplay/main.go  # Standalone longitudinal fair-play analyzer CLI
+│   └── newscid-scout/main.go     # Standalone scouting, exploit book & crosstable CLI
 ├── pkg/
-│   ├── chess/                  # Core chess rules, FEN, SAN, Movegen, PGN
-│   │   ├── board.go            # 64-square board, piece lists, castling, undo
-│   │   ├── fen.go              # FEN parser & generator
-│   │   ├── movegen.go          # Legal move generation & checkmate detection
-│   │   ├── pgn.go              # PGN parser, scanner, & exporter
-│   │   ├── san.go              # SAN parser & disambiguation formatter
-│   │   └── types.go            # Pieces, colors, squares, moves, move tree nodes
+│   ├── blundervault/             # SuperMemo-2 (SM-2) personal blunder vault
+│   ├── chess/                    # Core chess rules, 64-square board, FEN, SAN, 6 notation formats, PGN
 │   ├── database/
-│   │   ├── scid/               # Native SCID database (.si4, .sn4, .sg4)
-│   │   │   ├── database.go     # High-level database manager
-│   │   │   ├── gamedata.go     # .sg4 move compression & tag parser
-│   │   │   ├── index.go        # .si4 47-byte index record parser/writer
-│   │   │   └── names.go        # .sn4 front-coded namebase tree
-│   │   └── sciddriver/         # Driver to execute tcscid scripts directly
-│   │       └── driver.go
-│   ├── eco/                    # Opening classifier (scid.eco compatible)
-│   │   └── eco.go
-│   ├── engine/                 # UCI chess engine runner & real-time parser
-│   │   └── uci.go
-│   ├── sets/                   # Piece sets and board themes catalog
-│   │   └── sets.go
-│   └── tree/                   # Opening Tree statistical aggregator
-│       └── tree.go
-└── frontend/                   # Vue 3 + TypeScript + Tailwind CSS Frontend
-    ├── src/
-    │   ├── components/
-    │   │   ├── Chessboard.vue  # Interactive board with drag & drop
-    │   │   ├── EnginePanel.vue # Live eval bar & PV line display
-    │   │   ├── GameBrowser.vue # Paginated game table with search filters
-    │   │   ├── HeaderBar.vue   # DB menu, sample bases, & settings modal
-    │   │   ├── MoveNotation.vue# Tournament score-sheet & variations tree
-    │   │   └── OpeningTree.vue # Opening stats table & clickable moves
-    │   ├── utils/pieces.ts     # Piece SVG asset resolver
-    │   ├── App.vue             # Main reactive orchestrator
-    │   └── style.css           # Tailwind base styles
+│   │   ├── scid/                 # Native SCID v4 binary engine (.si4, .sg4, .sn4), search, sort, compact
+│   │   └── sciddriver/           # Host tcscid batch script bridge
+│   ├── eco/                      # ECO opening classifier (A00–E99)
+│   ├── engine/                   # UCI engine runner, Multi-PV parser & full-game blunder annotator
+│   ├── epd/                      # Extended Position Description (EPD) parser & formatter
+│   ├── explainer/                # Natural-Language Position Coach & tactical motif detector
+│   ├── fairplay/                 # Longitudinal Fair-Play & Time-Control Consistency Inspector
+│   ├── gameexport/               # Print-ready LaTeX, HTML & SVG diagram scorebook publisher
+│   ├── imbalance/                # 6-pillar Positional & Material Imbalance evaluator
+│   ├── online/                   # Lichess, Chess.com, TWIC & LumbrasGigaBase incremental sync
+│   ├── persona/                  # Multi-alias Player Personas, preferences & Anti-Persona Exploiter
+│   ├── playerbot/                # Historical repertoire + calibrated UCI opponent simulator
+│   ├── polyglot/                 # Binary Polyglot (.bin) Zobrist opening book reader & writer
+│   ├── puzzleminer/              # Automated tactical turnaround puzzle extractor
+│   ├── repertoire/               # Spaced-repetition opening trainer & 80/20 Pareto shortener
+│   ├── scout/                    # Opponent Scouting Dossier generator
+│   ├── server/                   # Headless HTTP/WebSocket workstation server
+│   ├── sets/                     # Piece sets (17 SVG sets) and board themes (12 themes)
+│   ├── stats/                    # Database demographics, Elo tracker & %clk Time Management Dossier
+│   ├── tablebase/                # 7-piece Syzygy / Lichess endgame tablebase client
+│   ├── tournament/               # FIDE Crosstables (SB/Buchholz/TPR) & UCI Engine Tournament runner
+│   ├── training/                 # Solitaire Chess, Blindfold Tactics & 4 Cognitive Board-Vision Drills
+│   ├── tree/                     # Opening Tree statistical aggregator
+│   ├── version/                  # Semantic version & build metadata
+│   └── workstation/              # Companion CLI workstation runner (import, fairplay, scout)
+└── frontend/                     # Vue 3 + TypeScript + Tailwind CSS Workstation UI
 ```
 
 ---
 
-## Testing
+## Testing & Coverage (>= 95% Statement Coverage)
 
-All packages are fully tested using [`testify`](https://github.com/stretchr/testify):
+Every backend package in `pkg/` maintains **>= 95% statement coverage**, complemented by Vitest component specs for the Vue 3 frontend:
 
 ```bash
-# Run all unit tests
-go test -v ./...
+# Run all Go backend unit tests with coverage verification (>= 95% per package)
+go test -count=1 -cover ./pkg/...
 
-# Run without cache
-go test -count=1 ./...
+# Run all Vue 3 / TypeScript frontend component tests
+cd frontend && npm test -- --run
 ```
-
-Tests cover:
-- Chess moves, legal moves, castling through check, en passant, promotions, checkmate, stalemate.
-- Roundtrip FEN and SAN disambiguation.
-- SCID `.si4`, `.sn4`, `.sg4` parsing on real databases (`tactics`, `matein1`, `matein2`, `endings`).
-- New database creation, appending games, deleting games, and index rewriting.
-- `tcscid` direct script execution.
-- Opening tree calculation and move frequency aggregation.
-- UCI engine process communication with `/usr/bin/fruit`.
-- Piece set and theme catalogs.
 
 ---
 
-## Dependency Management & Toolchain
-
-The project uses [**mise**](https://mise.jdx.dev) ([`mise.toml`](file:///home/christopher/Projects/newscid/mise.toml)) to manage Go, Node.js, and Wails CLI tool versions:
+## Building, Installing & Packaging
 
 ```bash
-# Install toolchain and dependencies
-mise install
+# Build main workstation + all 3 companion CLI binaries (build/bin/newscid*)
+make build
+
+# Install to user environment (~/.local/bin and ~/.local/share/man/man1/newscid.1)
+make install-user
+
+# Install system-wide (/usr/local or /usr via DESTDIR/PREFIX)
+sudo make install PREFIX=/usr
+
+# View the local manual page in the terminal
+man newscid
 ```
 
----
-
-## Makefile Automation
-
-A fully documented [`Makefile`](file:///home/christopher/Projects/newscid/Makefile) is provided with an interactive help menu:
-
-```bash
-$ make
-========================================================================
-  NewScid - Modern Chess Information Database (Scid vs. PC Rewrite)
-========================================================================
-Usage: make <target>
-
-Available Targets:
-  help                 Display this help menu with all available targets
-  deps                 Alias for setup (installs all toolchain and library dependencies)
-  setup                Setup toolchain via mise, download Go modules, and install npm packages
-  dev                  Run live development server with hot-reload (Wails Dev)
-  build                Build the standalone production binary (build/bin/newscid)
-  build-frontend       Compile the Vue 3 + Vite frontend assets
-  generate             Regenerate TypeScript bindings from Go App service
-  test                 Run all Go unit and integration tests with testify
-  test-coverage        Run tests with code coverage analysis
-  lint                 Run static analysis and linting on Go and TypeScript code
-  run                  Run the built production application binary
-  appimage             Build standalone Linux AppImage package (.AppImage)
-  snap                 Build Canonical Snap package (.snap)
-  deb                  Build Debian/Ubuntu package (.deb)
-  pacman               Build Arch Linux pacman package (.pkg.tar.*)
-  chocolatey           Build Windows Chocolatey package (.nupkg)
-  brew                 Build macOS Homebrew Cask and Formula (.rb + .zip)
-  flatpak              Build Flatpak bundle or staged export package
-  packages             Build all distribution packages (Linux, Windows, macOS)
-  package-checksums    Generate SHA-256 checksums for all packages in build/dist/
-  clean-dist           Remove all packaged distribution artifacts in build/dist/ and staging
-  clean                Remove build artifacts, coverage outputs, and temporary files
-```
-
-### Common Commands
-
-- **Install all dependencies**:
-  ```bash
-  make deps
-  ```
-- **Run test suite**:
-  ```bash
-  make test
-  ```
-- **Run tests with coverage profile**:
-  ```bash
-  make test-coverage
-  ```
-- **Start development server**:
-  ```bash
-  make dev
-  ```
-- **Build production desktop binary**:
-  ```bash
-  make build
-  ```
-- **Run production binary**:
-  ```bash
-  make run
-  ```
-
----
-
-## Cross-Platform Packaging
-
-NewScid includes complete packaging automation for all major operating systems and package managers from the [`Makefile`](file:///home/christopher/Projects/newscid/Makefile):
-
-| Target | Format / Platform | Output in `build/dist/` |
-|---|---|---|
-| `make appimage` | Standalone Linux AppImage | `NewScid-1.0.0-x86_64.AppImage` |
-| `make snap` | Ubuntu / Canonical Snap | `newscid_1.0.0_amd64.snap` |
-| `make deb` | Debian / Ubuntu / Linux Mint | `newscid_1.0.0-1_amd64.deb` |
-| `make pacman` | Arch Linux / Manjaro / EndeavourOS | `newscid-1.0.0-1-x86_64.pkg.tar.*` |
-| `make chocolatey` | Windows (Chocolatey / NuGet) | `newscid.1.0.0.nupkg` |
-| `make brew` | macOS (Homebrew Cask & Formula) | `newscid.cask.rb`, `newscid.rb`, `NewScid-1.0.0-darwin.zip` |
-| `make flatpak` | Linux Flatpak (Sandboxed) | `org.newscid.NewScid.flatpak` or staging archive |
-| `make packages` | All Formats + SHA-256 Checksums | Generates all 7 packages & `SHA256SUMS` |
-
-Custom versions and release increments can be passed to make:
-```bash
-make packages APP_VERSION=1.1.0 APP_RELEASE=1
-```
-
----
-
-## Versioning System
-
-NewScid follows [Semantic Versioning 2.0.0](https://semver.org) (`MAJOR.MINOR.PATCH`):
-
-- **Single Source of Truth**: The root [`VERSION`](file:///home/christopher/Projects/newscid/VERSION) file.
-- **Build Metadata Injection**: The `Makefile` passes `-ldflags` embedding the semantic version, git commit hash, and build timestamp into [`pkg/version`](file:///home/christopher/Projects/newscid/pkg/version/version.go).
-- **CLI Commands**:
-  ```bash
-  # Check version from compiled binary
-  ./build/bin/newscid --version
-  # NewScid v1.0.0 (commit: 9a87716, built: 2026-10-09T10:18:25Z, linux/amd64)
-
-  # Check version from Makefile
-  make version
-  ```
-- **Automated Version Bumping**:
-  ```bash
-  make bump-patch    # 1.0.0 -> 1.0.1
-  make bump-minor    # 1.0.0 -> 1.1.0
-  make bump-major    # 1.0.0 -> 2.0.0
-  ```
-  Automatically synchronizes versioning across `VERSION`, `wails.json`, `frontend/package.json`, and Go runtime metadata.
-- **Git Tagging**:
-  ```bash
-  make tag-release   # Validates clean working tree and tags v<version>
-  ```
-- **Desktop UI**: Accessible via **Help -> About NewScid** displaying version badge, commit, build date, and platform runtime info.
+### Arch Linux (AUR) & Cross-Platform Packages
+NewScid is published on the **Arch User Repository (AUR)** as `newscid` and supports automated packaging via `make pacman`, `make deb`, `make rpm`, `make appimage`, `make flatpak`, and `make snap`.

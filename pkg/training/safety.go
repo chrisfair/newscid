@@ -10,15 +10,35 @@ import (
 	"newscid/pkg/database/scid"
 )
 
-// Piece values in centipawns for Static Exchange Evaluation (SEE).
-var pieceValues = map[chess.PieceType]int{
-	chess.Pawn:   100,
-	chess.Knight: 320,
-	chess.Bishop: 330,
-	chess.Rook:   500,
-	chess.Queen:  900,
+// Piece values in centipawns for Static Exchange Evaluation (SEE), indexed by chess.PieceType.
+var pieceValues = [7]int{
+	chess.None:   0,
 	chess.King:   20000,
+	chess.Queen:  900,
+	chess.Rook:   500,
+	chess.Bishop: 330,
+	chess.Knight: 320,
+	chess.Pawn:   100,
 }
+
+var colorLower = [2]string{
+	chess.White: "white",
+	chess.Black: "black",
+}
+
+var colorTitle = [2]string{
+	chess.White: "White",
+	chess.Black: "Black",
+}
+
+type safetyStatusID uint8
+
+const (
+	statusIDDefended safetyStatusID = iota
+	statusIDLoose
+	statusIDUnderdefended
+	statusIDHanging
+)
 
 // PieceSafetyStatus classifies the vulnerability of a piece.
 type PieceSafetyStatus string
@@ -29,6 +49,13 @@ const (
 	StatusLoose         PieceSafetyStatus = "loose"         // 0 defenders, not currently attacked (LPDO risk)
 	StatusDefended      PieceSafetyStatus = "defended"      // Adequately protected
 )
+
+var safetyStatusLabels = [4]PieceSafetyStatus{
+	statusIDDefended:      StatusDefended,
+	statusIDLoose:         StatusLoose,
+	statusIDUnderdefended: StatusUnderdefended,
+	statusIDHanging:       StatusHanging,
+}
 
 // PieceSafety represents the safety audit of a single piece on the board.
 type PieceSafety struct {
@@ -48,10 +75,10 @@ type BoardSafetyReport struct {
 	FEN               string        `json:"fen"`
 	Turn              string        `json:"turn"` // "white" or "black"
 	Pieces            []PieceSafety `json:"pieces"`
-	HangingPieces     []PieceSafety `json:"hangingPieces"`     // Pieces with Status == "hanging"
+	HangingPieces     []PieceSafety `json:"hangingPieces"`       // Pieces with Status == "hanging"
 	Underdefended     []PieceSafety `json:"underdefendedPieces"` // Pieces with Status == "underdefended"
-	LoosePieces       []PieceSafety `json:"loosePieces"`       // Pieces with Status == "loose"
-	HangingSquares    []string      `json:"hangingSquares"`    // Direct list of squares with hanging pieces
+	LoosePieces       []PieceSafety `json:"loosePieces"`         // Pieces with Status == "loose"
+	HangingSquares    []string      `json:"hangingSquares"`      // Direct list of squares with hanging pieces
 	TotalHangingWhite int           `json:"totalHangingWhite"`
 	TotalHangingBlack int           `json:"totalHangingBlack"`
 	CriticalThreat    *PieceSafety  `json:"criticalThreat,omitempty"` // Highest value hanging piece
@@ -62,10 +89,10 @@ type BoardSafetyReport struct {
 type SafetyDrillMode string
 
 const (
-	ModeFindAllHanging     SafetyDrillMode = "find_all_hanging"     // Click all hanging pieces on board
-	ModeDefendYourPieces   SafetyDrillMode = "defend_your_pieces"   // Spot your own hanging pieces
-	ModePunishBlunder      SafetyDrillMode = "punish_blunder"      // Spot and click opponent's free pieces
-	ModeCaptureHanging     SafetyDrillMode = "capture_hanging"     // Make the legal move capturing the hanging piece
+	ModeFindAllHanging   SafetyDrillMode = "find_all_hanging"   // Click all hanging pieces on board
+	ModeDefendYourPieces SafetyDrillMode = "defend_your_pieces" // Spot your own hanging pieces
+	ModePunishBlunder    SafetyDrillMode = "punish_blunder"    // Spot and click opponent's free pieces
+	ModeCaptureHanging   SafetyDrillMode = "capture_hanging"   // Make the legal move capturing the hanging piece
 )
 
 // SafetyDrill represents an interactive challenge presented to the user.
@@ -262,7 +289,7 @@ func CalculateSEE(b *chess.Board, fromSq, toSq chess.Square) int {
 	}
 
 	// If there are defenders, and our piece is worth more than captured, it might be a net loss
-	if len(defenders) > 0 && loss > gain {
+	if loss > gain {
 		return gain - loss
 	}
 
@@ -278,7 +305,7 @@ func AnalyzeBoardSafety(fen string) (*BoardSafetyReport, error) {
 
 	report := &BoardSafetyReport{
 		FEN:            fen,
-		Turn:           strings.ToLower(b.Turn.String()),
+		Turn:           colorLower[b.Turn&1],
 		Pieces:         make([]PieceSafety, 0, 32),
 		HangingPieces:  make([]PieceSafety, 0, 8),
 		Underdefended:  make([]PieceSafety, 0, 8),
@@ -294,19 +321,19 @@ func AnalyzeBoardSafety(fen string) (*BoardSafetyReport, error) {
 			continue
 		}
 
-		color := p.Color()
-		colorStr := "white"
-		if color == chess.Black {
-			colorStr = "black"
-		}
 		pieceType := p.Type()
-		val := pieceValues[pieceType]
-		sqStr := sq.String()
-
 		// Kings cannot be "hung" or captured, they can only be checked/mated
 		if pieceType == chess.King {
 			continue
 		}
+
+		color := p.Color()
+		cIdx := color & 1
+		colorStr := colorLower[cIdx]
+		cTitle := colorTitle[cIdx]
+		val := pieceValues[pieceType]
+		sqStr := sq.String()
+		pieceStr := pieceType.String()
 
 		attackers := FindAttackers(b, sq, color.Other())
 		defenders := FindDefenders(b, sq, color)
@@ -320,16 +347,16 @@ func AnalyzeBoardSafety(fen string) (*BoardSafetyReport, error) {
 			defenderSqs = append(defenderSqs, dsq.String())
 		}
 
-		status := StatusDefended
+		statusID := statusIDDefended
 		netLoss := 0
 		explanation := fmt.Sprintf("%s %s on %s is safely defended (%d attackers, %d defenders).",
-			titleCase(colorStr), pieceType.String(), sqStr, len(attackers), len(defenders))
+			cTitle, pieceStr, sqStr, len(attackers), len(defenders))
 
 		if len(attackers) == 0 {
 			if len(defenders) == 0 && pieceType != chess.Pawn {
-				status = StatusLoose
+				statusID = statusIDLoose
 				explanation = fmt.Sprintf("%s %s on %s is loose (0 defenders) — Loose Piece Drops Off (LPDO).",
-					titleCase(colorStr), pieceType.String(), sqStr)
+					cTitle, pieceStr, sqStr)
 			}
 		} else {
 			// Find lowest-value attacker
@@ -346,49 +373,49 @@ func AnalyzeBoardSafety(fen string) (*BoardSafetyReport, error) {
 
 			// Condition 1: 0 defenders (completely free piece)
 			if len(defenders) == 0 {
-				status = StatusHanging
+				statusID = statusIDHanging
 				netLoss = val
 				explanation = fmt.Sprintf("%s %s on %s is completely hanging with 0 defenders! Attacked by %s.",
-					titleCase(colorStr), pieceType.String(), sqStr, bestAttackerSq.String())
+					cTitle, pieceStr, sqStr, bestAttackerSq.String())
 			} else if minAttackerVal < val {
 				// Condition 2: Attacked by a piece of strictly lower value (e.g. Queen by Knight/Bishop, Rook by Minor)
-				status = StatusHanging
+				statusID = statusIDHanging
 				netLoss = val - minAttackerVal
 				explanation = fmt.Sprintf("%s %s on %s is attacked by lower-value %s on %s; capture wins material despite %d defender(s).",
-					titleCase(colorStr), pieceType.String(), sqStr,
+					cTitle, pieceStr, sqStr,
 					b.Squares[bestAttackerSq].Type().String(), bestAttackerSq.String(), len(defenders))
 			} else if len(attackers) > len(defenders) {
 				// Condition 3: Deficit in defenders vs attackers
 				see := CalculateSEE(b, bestAttackerSq, sq)
 				if see > 0 {
-					status = StatusHanging
+					statusID = statusIDHanging
 					netLoss = see
 					explanation = fmt.Sprintf("%s %s on %s has more attackers (%d) than defenders (%d); tactical liquidation wins material.",
-						titleCase(colorStr), pieceType.String(), sqStr, len(attackers), len(defenders))
+						cTitle, pieceStr, sqStr, len(attackers), len(defenders))
 				} else {
-					status = StatusUnderdefended
+					statusID = statusIDUnderdefended
 					explanation = fmt.Sprintf("%s %s on %s is underdefended (%d attackers vs %d defenders).",
-						titleCase(colorStr), pieceType.String(), sqStr, len(attackers), len(defenders))
+						cTitle, pieceStr, sqStr, len(attackers), len(defenders))
 				}
 			}
 		}
 
 		ps := PieceSafety{
 			Square:      sqStr,
-			Piece:       pieceType.String(),
+			Piece:       pieceStr,
 			Color:       colorStr,
 			PieceValue:  val,
 			Attackers:   attackerSqs,
 			Defenders:   defenderSqs,
-			Status:      status,
+			Status:      safetyStatusLabels[statusID],
 			NetLoss:     netLoss,
 			Explanation: explanation,
 		}
 
 		report.Pieces = append(report.Pieces, ps)
 
-		switch status {
-		case StatusHanging:
+		switch statusID {
+		case statusIDHanging:
 			report.HangingPieces = append(report.HangingPieces, ps)
 			report.HangingSquares = append(report.HangingSquares, sqStr)
 			if color == chess.White {
@@ -401,9 +428,9 @@ func AnalyzeBoardSafety(fen string) (*BoardSafetyReport, error) {
 				psCopy := ps
 				report.CriticalThreat = &psCopy
 			}
-		case StatusUnderdefended:
+		case statusIDUnderdefended:
 			report.Underdefended = append(report.Underdefended, ps)
-		case StatusLoose:
+		case statusIDLoose:
 			report.LoosePieces = append(report.LoosePieces, ps)
 		}
 	}
@@ -706,11 +733,4 @@ func EvaluateSafetySubmission(drill *SafetyDrill, selectedSquares []string, move
 		BestMoveUCI:    drill.WinningMoveUCI,
 		BestMoveSAN:    drill.WinningMoveSAN,
 	}
-}
-
-func titleCase(s string) string {
-	if len(s) == 0 {
-		return ""
-	}
-	return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
 }

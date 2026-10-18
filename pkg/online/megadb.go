@@ -297,6 +297,78 @@ func (c *MegaDatabaseClient) FetchLichessFeed(ctx context.Context, feedType stri
 	return urls, scanner.Err()
 }
 
+type archiveFormat uint8
+
+const (
+	formatUnknown archiveFormat = iota
+	formatPGNZst
+	formatPGN
+	formatZipPGN
+	format7zPGN
+	format7zSI4
+)
+
+func parseArchiveFormat(s string) archiveFormat {
+	switch s {
+	case "pgn.zst":
+		return formatPGNZst
+	case "pgn":
+		return formatPGN
+	case "zip-pgn":
+		return formatZipPGN
+	case "7z-pgn":
+		return format7zPGN
+	case "7z-si4":
+		return format7zSI4
+	default:
+		return formatUnknown
+	}
+}
+
+func (f archiveFormat) String() string {
+	switch f {
+	case formatPGNZst:
+		return "pgn.zst"
+	case formatPGN:
+		return "pgn"
+	case formatZipPGN:
+		return "zip-pgn"
+	case format7zPGN:
+		return "7z-pgn"
+	case format7zSI4:
+		return "7z-si4"
+	default:
+		return ""
+	}
+}
+
+type importPhase uint8
+
+const (
+	phaseDownloading importPhase = iota
+	phaseStreaming
+	phaseExtracting
+	phaseImporting
+	phaseCompleted
+)
+
+func (p importPhase) String() string {
+	switch p {
+	case phaseDownloading:
+		return "downloading"
+	case phaseStreaming:
+		return "streaming"
+	case phaseExtracting:
+		return "extracting"
+	case phaseImporting:
+		return "importing"
+	case phaseCompleted:
+		return "completed"
+	default:
+		return ""
+	}
+}
+
 // DownloadAndImport downloads or streams the selected big database and imports it into targetDB
 // (or extracts a native .si4 archive into destDir).
 func (c *MegaDatabaseClient) DownloadAndImport(
@@ -339,10 +411,10 @@ func (c *MegaDatabaseClient) DownloadAndImport(
 		maxGames = 25000
 	}
 
-	emit := func(phase, msg string, bytesDL, totalB int64, scanned, imported, pct int) {
+	emit := func(phase importPhase, msg string, bytesDL, totalB int64, scanned, imported, pct int) {
 		if progressFn != nil {
 			progressFn(MegaImportProgress{
-				Phase:           phase,
+				Phase:           phase.String(),
 				SourceName:      src.Name,
 				BytesDownloaded: bytesDL,
 				TotalBytes:      totalB,
@@ -354,13 +426,14 @@ func (c *MegaDatabaseClient) DownloadAndImport(
 		}
 	}
 
-	switch src.Format {
-	case "pgn.zst":
+	fmtKind := parseArchiveFormat(src.Format)
+	switch fmtKind {
+	case formatPGNZst:
 		// On-the-fly HTTP + Zstandard streaming decompression!
 		if targetDB == nil || !targetDB.IsOpen {
 			return nil, fmt.Errorf("target database is not open")
 		}
-		emit("streaming", fmt.Sprintf("Connecting to %s zstd stream...", src.Name), 0, 0, 0, 0, 5)
+		emit(phaseStreaming, fmt.Sprintf("Connecting to %s zstd stream...", src.Name), 0, 0, 0, 0, 5)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, src.URL, nil)
 		if err != nil {
 			return nil, err
@@ -389,7 +462,7 @@ func (c *MegaDatabaseClient) DownloadAndImport(
 			if maxGames > 0 && imp <= maxGames {
 				pct = 10 + (imp*85)/maxGames
 			}
-			emit("streaming", fmt.Sprintf("Streaming %s: %d games imported (%d scanned)...", src.Name, imp, sc), counter.n, resp.ContentLength, sc, imp, pct)
+			emit(phaseStreaming, fmt.Sprintf("Streaming %s: %d games imported (%d scanned)...", src.Name, imp, sc), counter.n, resp.ContentLength, sc, imp, pct)
 		})
 		res.BytesDownloaded = counter.n
 		res.GamesScanned = scanned
@@ -398,14 +471,14 @@ func (c *MegaDatabaseClient) DownloadAndImport(
 		if err != nil {
 			return res, err
 		}
-		emit("completed", fmt.Sprintf("Successfully imported %d games from %s!", imported, src.Name), counter.n, resp.ContentLength, scanned, imported, 100)
+		emit(phaseCompleted, fmt.Sprintf("Successfully imported %d games from %s!", imported, src.Name), counter.n, resp.ContentLength, scanned, imported, 100)
 		return res, nil
 
-	case "pgn":
+	case formatPGN:
 		if targetDB == nil || !targetDB.IsOpen {
 			return nil, fmt.Errorf("target database is not open")
 		}
-		emit("streaming", fmt.Sprintf("Streaming PGN from %s...", src.Name), 0, 0, 0, 0, 5)
+		emit(phaseStreaming, fmt.Sprintf("Streaming PGN from %s...", src.Name), 0, 0, 0, 0, 5)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, src.URL, nil)
 		if err != nil {
 			return nil, err
@@ -423,7 +496,7 @@ func (c *MegaDatabaseClient) DownloadAndImport(
 
 		counter := &countingReader{r: resp.Body}
 		scanned, imported, err := streamImportPGN(ctx, counter, targetDB, maxGames, opts.MinElo, func(sc, imp int) {
-			emit("streaming", fmt.Sprintf("Importing %s: %d games imported...", src.Name, imp), counter.n, resp.ContentLength, sc, imp, 50)
+			emit(phaseStreaming, fmt.Sprintf("Importing %s: %d games imported...", src.Name, imp), counter.n, resp.ContentLength, sc, imp, 50)
 		})
 		res.BytesDownloaded = counter.n
 		res.GamesScanned = scanned
@@ -432,17 +505,17 @@ func (c *MegaDatabaseClient) DownloadAndImport(
 		if err != nil {
 			return res, err
 		}
-		emit("completed", fmt.Sprintf("Successfully imported %d games from %s!", imported, src.Name), counter.n, resp.ContentLength, scanned, imported, 100)
+		emit(phaseCompleted, fmt.Sprintf("Successfully imported %d games from %s!", imported, src.Name), counter.n, resp.ContentLength, scanned, imported, 100)
 		return res, nil
 
-	case "zip-pgn", "7z-pgn", "7z-si4":
+	case formatZipPGN, format7zPGN, format7zSI4:
 		// Download archive to a temporary file with live byte progress, then extract/stream
 		tmpFile, totalBytes, err := c.downloadToTempFile(ctx, src.URL, func(dl, total int64) {
 			pct := 25
 			if total > 0 {
 				pct = int((dl * 50) / total)
 			}
-			emit("downloading", fmt.Sprintf("Downloading %s (%.1f MB)...", src.Name, float64(dl)/(1024*1024)), dl, total, 0, 0, pct)
+			emit(phaseDownloading, fmt.Sprintf("Downloading %s (%.1f MB)...", src.Name, float64(dl)/(1024*1024)), dl, total, 0, 0, pct)
 		})
 		if err != nil {
 			return nil, err
@@ -450,12 +523,12 @@ func (c *MegaDatabaseClient) DownloadAndImport(
 		defer os.Remove(tmpFile)
 		res.BytesDownloaded = totalBytes
 
-		if src.Format == "zip-pgn" {
+		if fmtKind == formatZipPGN {
 			if targetDB == nil || !targetDB.IsOpen {
 				return nil, fmt.Errorf("target database is not open")
 			}
 			scanned, imported, err := extractAndImportZip(ctx, tmpFile, targetDB, maxGames, opts.MinElo, func(sc, imp int) {
-				emit("importing", fmt.Sprintf("Importing %s: %d games imported (%d scanned)...", src.Name, imp, sc), totalBytes, totalBytes, sc, imp, 75)
+				emit(phaseImporting, fmt.Sprintf("Importing %s: %d games imported (%d scanned)...", src.Name, imp, sc), totalBytes, totalBytes, sc, imp, 75)
 			})
 			res.GamesScanned = scanned
 			res.GamesImported = imported
@@ -463,24 +536,24 @@ func (c *MegaDatabaseClient) DownloadAndImport(
 			if err != nil {
 				return res, err
 			}
-			emit("completed", fmt.Sprintf("Successfully imported %d games from %s!", imported, src.Name), totalBytes, totalBytes, scanned, imported, 100)
+			emit(phaseCompleted, fmt.Sprintf("Successfully imported %d games from %s!", imported, src.Name), totalBytes, totalBytes, scanned, imported, 100)
 			return res, nil
 		}
 
 		// 7z-pgn or 7z-si4
-		if src.Format == "7z-si4" {
+		if fmtKind == format7zSI4 {
 			if strings.TrimSpace(destDir) == "" {
 				home, _ := os.UserHomeDir()
 				destDir = filepath.Join(home, ".local", "share", "newscid", "databases")
 			}
-			emit("extracting", fmt.Sprintf("Extracting native Scid .si4 database from %s...", src.Name), totalBytes, totalBytes, 0, 0, 75)
+			emit(phaseExtracting, fmt.Sprintf("Extracting native Scid .si4 database from %s...", src.Name), totalBytes, totalBytes, 0, 0, 75)
 			si4Path, err := extract7zNativeSI4(tmpFile, destDir)
 			res.DatabasePath = si4Path
 			res.DurationMs = time.Since(start).Milliseconds()
 			if err != nil {
 				return res, err
 			}
-			emit("completed", fmt.Sprintf("Extracted Scid database to %s!", filepath.Base(si4Path)), totalBytes, totalBytes, 0, 0, 100)
+			emit(phaseCompleted, fmt.Sprintf("Extracted Scid database to %s!", filepath.Base(si4Path)), totalBytes, totalBytes, 0, 0, 100)
 			return res, nil
 		}
 
@@ -489,7 +562,7 @@ func (c *MegaDatabaseClient) DownloadAndImport(
 			return nil, fmt.Errorf("target database is not open")
 		}
 		scanned, imported, err := extractAndImport7zPGN(ctx, tmpFile, targetDB, maxGames, opts.MinElo, func(sc, imp int) {
-			emit("importing", fmt.Sprintf("Importing %s: %d games imported (%d scanned)...", src.Name, imp, sc), totalBytes, totalBytes, sc, imp, 80)
+			emit(phaseImporting, fmt.Sprintf("Importing %s: %d games imported (%d scanned)...", src.Name, imp, sc), totalBytes, totalBytes, sc, imp, 80)
 		})
 		res.GamesScanned = scanned
 		res.GamesImported = imported
@@ -497,7 +570,7 @@ func (c *MegaDatabaseClient) DownloadAndImport(
 		if err != nil {
 			return res, err
 		}
-		emit("completed", fmt.Sprintf("Successfully imported %d games from %s!", imported, src.Name), totalBytes, totalBytes, scanned, imported, 100)
+		emit(phaseCompleted, fmt.Sprintf("Successfully imported %d games from %s!", imported, src.Name), totalBytes, totalBytes, scanned, imported, 100)
 		return res, nil
 
 	default:
@@ -505,20 +578,24 @@ func (c *MegaDatabaseClient) DownloadAndImport(
 	}
 }
 
-func detectFormatFromURL(u string) string {
+func detectArchiveFormatFromURL(u string) archiveFormat {
 	lower := strings.ToLower(u)
 	switch {
 	case strings.HasSuffix(lower, ".pgn.zst") || strings.HasSuffix(lower, ".zst"):
-		return "pgn.zst"
+		return formatPGNZst
 	case strings.HasSuffix(lower, ".zip"):
-		return "zip-pgn"
+		return formatZipPGN
 	case strings.HasSuffix(lower, "_si4.7z"):
-		return "7z-si4"
+		return format7zSI4
 	case strings.HasSuffix(lower, ".7z"):
-		return "7z-pgn"
+		return format7zPGN
 	default:
-		return "pgn"
+		return formatPGN
 	}
+}
+
+func detectFormatFromURL(u string) string {
+	return detectArchiveFormatFromURL(u).String()
 }
 
 type countingReader struct {
@@ -778,17 +855,13 @@ func extractAndImportZip(
 		if f.FileInfo().IsDir() || !strings.HasSuffix(strings.ToLower(f.Name), ".pgn") {
 			continue
 		}
-		rc, err := f.Open()
-		if err != nil {
-			return totalScanned, totalImported, err
-		}
 		remaining := 0
 		if maxGames > 0 {
 			remaining = maxGames - totalImported
-			if remaining <= 0 {
-				rc.Close()
-				break
-			}
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return totalScanned, totalImported, err
 		}
 		sc, imp, err := streamImportPGN(ctx, rc, targetDB, remaining, minElo, func(s, i int) {
 			if progressFn != nil {
@@ -829,17 +902,13 @@ func extractAndImport7zPGN(
 		if f.FileInfo().IsDir() || !strings.HasSuffix(strings.ToLower(f.Name), ".pgn") {
 			continue
 		}
-		rc, err := f.Open()
-		if err != nil {
-			return totalScanned, totalImported, err
-		}
 		remaining := 0
 		if maxGames > 0 {
 			remaining = maxGames - totalImported
-			if remaining <= 0 {
-				rc.Close()
-				break
-			}
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return totalScanned, totalImported, err
 		}
 		sc, imp, err := streamImportPGN(ctx, rc, targetDB, remaining, minElo, func(s, i int) {
 			if progressFn != nil {

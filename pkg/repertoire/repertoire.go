@@ -118,24 +118,30 @@ func (m *Manager) ensureStarterRepertoires() {
 	_ = m.SaveRepertoire(repBlack)
 }
 
+func parseRepColor(c string) chess.Color {
+	if len(c) > 0 && (c[0] == 'b' || c[0] == 'B') {
+		return chess.Black
+	}
+	return chess.White
+}
+
 func (m *Manager) populateLine(rep *Repertoire, sanMoves []string, comment string) {
 	b := chess.NewBoard()
-	for i, san := range sanMoves {
-		m, err := b.ParseSAN(san)
+	repColor := parseRepColor(rep.Color)
+	for _, san := range sanMoves {
+		moverColor := b.Turn
+		mv, err := b.ParseSAN(san)
 		if err != nil {
 			break
 		}
 		core := CoreFEN(b.FEN())
-		uci := m.String()
+		uci := mv.String()
 
-		b.MakeMove(m)
+		b.MakeMove(mv)
 		nextCore := CoreFEN(b.FEN())
 
 		// Only add to repertoire if this move was played by the repertoire side
-		isWhiteMove := (i%2 == 0)
-		isRepSide := (rep.Color == "w" && isWhiteMove) || (rep.Color == "b" && !isWhiteMove)
-
-		if isRepSide {
+		if moverColor == repColor {
 			existing := rep.Positions[core]
 			found := false
 			for _, ex := range existing {
@@ -158,11 +164,24 @@ func (m *Manager) populateLine(rep *Repertoire, sanMoves []string, comment strin
 
 // CoreFEN strips clock, fullmove count, and ephemeral en-passant for reliable position lookup.
 func CoreFEN(fen string) string {
-	parts := strings.Split(strings.TrimSpace(fen), " ")
-	if len(parts) >= 3 {
-		return parts[0] + " " + parts[1] + " " + parts[2]
+	start := 0
+	for start < len(fen) && fen[start] == ' ' {
+		start++
 	}
-	return fen
+	end := len(fen)
+	for end > start && fen[end-1] == ' ' {
+		end--
+	}
+	spaces := 0
+	for i := start; i < end; i++ {
+		if fen[i] == ' ' {
+			spaces++
+			if spaces == 3 {
+				return fen[start:i]
+			}
+		}
+	}
+	return fen[start:end]
 }
 
 // ListRepertoires returns summary metadata of all repertoires.
@@ -218,11 +237,7 @@ func (m *Manager) saveRepertoireLocked(rep *Repertoire) error {
 
 	m.inMem[rep.ID] = rep
 
-	data, err := json.MarshalIndent(rep, "", "  ")
-	if err != nil {
-		return err
-	}
-
+	data, _ := json.MarshalIndent(rep, "", "  ")
 	filePath := filepath.Join(m.dir, rep.ID+".json")
 	return os.WriteFile(filePath, data, 0644)
 }

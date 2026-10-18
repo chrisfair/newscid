@@ -5,8 +5,40 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
 )
+
+type gameOutcome uint8
+
+const (
+	outcomeUnknown gameOutcome = iota
+	outcomeWhiteWins
+	outcomeBlackWins
+	outcomeDraw
+)
+
+func classifyResult(res chess.Result) gameOutcome {
+	switch res {
+	case chess.ResultWhiteWins:
+		return outcomeWhiteWins
+	case chess.ResultBlackWins:
+		return outcomeBlackWins
+	case chess.ResultDraw:
+		return outcomeDraw
+	default:
+		switch strings.TrimSpace(string(res)) {
+		case "1-0":
+			return outcomeWhiteWins
+		case "0-1":
+			return outcomeBlackWins
+		case "1/2-1/2":
+			return outcomeDraw
+		default:
+			return outcomeUnknown
+		}
+	}
+}
 
 // GameRecord contains win, draw, loss counters.
 type GameRecord struct {
@@ -70,20 +102,21 @@ func GenerateReport(playerName string, games []*scid.GameSummary) *Report {
 			ecoCode = "A00"
 		}
 
-		res := strings.TrimSpace(string(g.Result))
+		outcome := classifyResult(g.Result)
 
 		if isWhite {
 			report.WhiteRecord.Total++
 			line := getOrCreateLine(whiteLines, ecoCode)
 			line.Games++
 
-			if res == "1-0" {
+			switch outcome {
+			case outcomeWhiteWins:
 				report.WhiteRecord.Wins++
 				line.Wins++
-			} else if res == "0-1" {
+			case outcomeBlackWins:
 				report.WhiteRecord.Losses++
 				line.Losses++
-			} else if res == "1/2-1/2" {
+			case outcomeDraw:
 				report.WhiteRecord.Draws++
 				line.Draws++
 			}
@@ -94,13 +127,14 @@ func GenerateReport(playerName string, games []*scid.GameSummary) *Report {
 			line := getOrCreateLine(blackLines, ecoCode)
 			line.Games++
 
-			if res == "0-1" {
+			switch outcome {
+			case outcomeBlackWins:
 				report.BlackRecord.Wins++
 				line.Wins++
-			} else if res == "1-0" {
+			case outcomeWhiteWins:
 				report.BlackRecord.Losses++
 				line.Losses++
-			} else if res == "1/2-1/2" {
+			case outcomeDraw:
 				report.BlackRecord.Draws++
 				line.Draws++
 			}
@@ -114,47 +148,35 @@ func GenerateReport(playerName string, games []*scid.GameSummary) *Report {
 	report.TopOpeningsAsWhite = sortedLines(whiteLines)
 	report.TopOpeningsAsBlack = sortedLines(blackLines)
 
-	// Combine lines to find sharpest and weakest
-	allLinesMap := make(map[string]*LinePerformance)
-	for k, v := range whiteLines {
-		allLinesMap["White: "+k] = v
-	}
-	for k, v := range blackLines {
-		allLinesMap["Black: "+k] = v
-	}
-
-	allLines := sortedLines(allLinesMap)
-
-	// Filter lines with at least 2 games for sharpest/weakest
-	qualified := []LinePerformance{}
-	for _, l := range allLines {
-		if l.Games >= 1 {
-			qualified = append(qualified, l)
-		}
-	}
-
-	sort.Slice(qualified, func(i, j int) bool {
-		return qualified[i].WinRate > qualified[j].WinRate
-	})
+	// Combine lines to find sharpest and weakest without intermediate string map allocation
+	qualified := make([]LinePerformance, 0, len(report.TopOpeningsAsWhite)+len(report.TopOpeningsAsBlack))
+	qualified = append(qualified, report.TopOpeningsAsWhite...)
+	qualified = append(qualified, report.TopOpeningsAsBlack...)
 
 	if len(qualified) > 0 {
-		end := len(qualified)
+		sharpest := make([]LinePerformance, len(qualified))
+		copy(sharpest, qualified)
+		sort.Slice(sharpest, func(i, j int) bool {
+			if sharpest[i].WinRate != sharpest[j].WinRate {
+				return sharpest[i].WinRate > sharpest[j].WinRate
+			}
+			return sharpest[i].Games > sharpest[j].Games
+		})
+		end := len(sharpest)
 		if end > 3 {
 			end = 3
 		}
-		report.SharpestLines = qualified[:end]
-	}
+		report.SharpestLines = sharpest[:end]
 
-	sort.Slice(qualified, func(i, j int) bool {
-		return qualified[i].WinRate < qualified[j].WinRate
-	})
-
-	if len(qualified) > 0 {
-		end := len(qualified)
-		if end > 3 {
-			end = 3
-		}
-		report.WeakestLines = qualified[:end]
+		weakest := make([]LinePerformance, len(qualified))
+		copy(weakest, qualified)
+		sort.Slice(weakest, func(i, j int) bool {
+			if weakest[i].WinRate != weakest[j].WinRate {
+				return weakest[i].WinRate < weakest[j].WinRate
+			}
+			return weakest[i].Games > weakest[j].Games
+		})
+		report.WeakestLines = weakest[:end]
 	}
 
 	// Generate tactical recommendations

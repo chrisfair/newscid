@@ -75,4 +75,25 @@ func TestSelectTacticalMove_EdgeCases(t *testing.T) {
 	cMove, err := SelectTacticalMove(castleBoard, true)
 	require.NoError(t, err)
 	assert.NotEmpty(t, cMove.String())
+
+	// 6. En-passant and Black development/tactics
+	epBoard, err := chess.ParseFEN("rnbqkbnr/ppp1pppp/8/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 2")
+	require.NoError(t, err)
+	epMove, err := SelectTacticalMove(epBoard, true)
+	require.NoError(t, err)
+	assert.NotEmpty(t, epMove.String())
+
+	// 7. PlayStyle classifier coverage for all enum variants
+	assert.Equal(t, styleTacticalAttacker, classifyPlayStyle(45, 85, 15))
+	assert.Equal(t, styleSolidPositional, classifyPlayStyle(70, 50, 40))
+	assert.Equal(t, styleGrindingEndgame, classifyPlayStyle(95, 75, 25))
+	assert.Equal(t, styleDynamicFighter, classifyPlayStyle(70, 80, 20))
+	assert.Equal(t, styleBalanced, classifyPlayStyle(70, 68, 30))
+
+	for _, st := range []playStyleID{styleTacticalAttacker, styleSolidPositional, styleGrindingEndgame, styleDynamicFighter, styleBalanced} {
+		name, agg, _ := st.profile()
+		assert.NotEmpty(t, name)
+		assert.Greater(t, agg, 0.0)
+	}
 }
+

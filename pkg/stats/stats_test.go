@@ -163,6 +163,23 @@ func TestCalculateRatingTracker(t *testing.T) {
 	assert.Equal(t, "2000.10.20", res.Points[3].Date)
 	assert.Equal(t, 2849, res.Points[3].Rating)
 	assert.Equal(t, "1/2-1/2", res.Points[3].Result)
+
+	// 4. Test rating drop (MinRating), same-date tiebreak, and empty result
+	dropDB := scid.NewDatabase()
+	dropDB.IsOpen = true
+	dropDB.Names = scid.NewNameBase()
+	p1 := dropDB.Names.AddName(scid.NamePlayer, "PlayerOne")
+	p2 := dropDB.Names.AddName(scid.NamePlayer, "PlayerTwo")
+	dropDB.Entries = append(dropDB.Entries,
+		nil,
+		&scid.IndexEntry{WhiteID: p1, BlackID: p2, WhiteElo: 2500, BlackElo: 2400, Date: "2020.01.01", Result: ""},
+		&scid.IndexEntry{WhiteID: p2, BlackID: p1, WhiteElo: 2400, BlackElo: 2450, Date: "2020.01.01", Result: chess.ResultBlackWins},
+	)
+	resDrop, err := CalculateRatingTracker(dropDB, []string{"PlayerOne"})
+	require.NoError(t, err)
+	assert.Equal(t, 2450, resDrop.MinRating)
+	assert.Equal(t, 2500, resDrop.MaxRating)
+	assert.Equal(t, "*", resDrop.Points[0].Result)
 }
 
 func TestCalculateDatabaseDemographics(t *testing.T) {

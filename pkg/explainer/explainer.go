@@ -3,8 +3,75 @@ package explainer
 import (
 	"fmt"
 	"strings"
+
 	"newscid/pkg/chess"
 )
+
+type motifID uint8
+
+const (
+	motifCheckmate motifID = iota
+	motifCheck
+	motifCastling
+	motifCapture
+	motifFavorableExchange
+	motifPromotion
+	motifPassedPawn
+	motifFork
+	motifCount
+)
+
+var motifLabels = [motifCount]string{
+	motifCheckmate:         "Checkmate",
+	motifCheck:             "Check",
+	motifCastling:          "Castling",
+	motifCapture:           "Capture",
+	motifFavorableExchange: "Favorable Exchange",
+	motifPromotion:         "Pawn Promotion",
+	motifPassedPawn:        "Passed Pawn Advance",
+	motifFork:              "Fork / Double Attack",
+}
+
+type assessmentID uint8
+
+const (
+	assessGoodMove assessmentID = iota
+	assessTacticalShot
+	assessPositionalImprovement
+	assessInaccuracyMistake
+)
+
+var assessmentLabels = [4]string{
+	assessGoodMove:              "Good Move",
+	assessTacticalShot:          "Tactical Shot",
+	assessPositionalImprovement: "Positional Improvement",
+	assessInaccuracyMistake:     "Inaccuracy / Mistake",
+}
+
+var pieceValues = [7]int{
+	chess.None:   0,
+	chess.King:   0,
+	chess.Queen:  9,
+	chess.Rook:   5,
+	chess.Bishop: 3,
+	chess.Knight: 3,
+	chess.Pawn:   1,
+}
+
+var pieceNames = [7]string{
+	chess.None:   "piece",
+	chess.King:   "king",
+	chess.Queen:  "queen",
+	chess.Rook:   "rook",
+	chess.Bishop: "bishop",
+	chess.Knight: "knight",
+	chess.Pawn:   "pawn",
+}
+
+var colorNames = [2]string{
+	chess.White: "White",
+	chess.Black: "Black",
+}
 
 // Explanation contains human-readable analysis of a played move.
 type Explanation struct {
@@ -35,37 +102,40 @@ func ExplainMove(beforeFEN, moveUCI string, scoreCp int, bestMove string) (*Expl
 
 	// Format SAN
 	moveSAN := bBefore.MoveToSAN(m)
-	if moveSAN == "" {
-		moveSAN = moveUCI
-	}
 
 	// Make move on a clone to inspect resulting position
-	bAfter, _ := chess.ParseFEN(beforeFEN)
+	bAfter := bBefore.Clone()
 	bAfter.MakeMove(m)
 
-	motifs := []string{}
+	var motifMask uint16
+	motifs := make([]string, 0, 4)
+	addMotif := func(id motifID) {
+		bit := uint16(1) << id
+		if motifMask&bit == 0 {
+			motifMask |= bit
+			motifs = append(motifs, motifLabels[id])
+		}
+	}
+
 	strategic := []string{}
 	explanations := []string{}
 
-	colorName := "White"
-	enemyName := "Black"
-	if movingPiece.Color() == chess.Black {
-		colorName = "Black"
-		enemyName = "White"
-	}
+	moverColor := movingPiece.Color()
+	colorName := colorNames[moverColor&1]
+	enemyName := colorNames[moverColor.Other()&1]
 
 	// 1. Check & Checkmate
 	if bAfter.IsCheckmate() {
-		motifs = append(motifs, "Checkmate")
+		addMotif(motifCheckmate)
 		explanations = append(explanations, fmt.Sprintf("%s delivers checkmate, concluding the game with decisive victory.", colorName))
 	} else if bAfter.InCheck(bAfter.Turn) {
-		motifs = append(motifs, "Check")
+		addMotif(motifCheck)
 		explanations = append(explanations, fmt.Sprintf("%s gives check, forcing the %s king to respond.", colorName, enemyName))
 	}
 
 	// 2. Castling
 	if movingPiece.Type() == chess.King && (m.From == 4 && (m.To == 6 || m.To == 2) || m.From == 60 && (m.To == 62 || m.To == 58)) {
-		motifs = append(motifs, "Castling")
+		addMotif(motifCastling)
 		strategic = append(strategic, "King Safety", "Rook Activation")
 		side := "kingside"
 		if m.To%8 < m.From%8 {
@@ -78,10 +148,10 @@ func ExplainMove(beforeFEN, moveUCI string, scoreCp int, bestMove string) (*Expl
 	if capturedPiece.Type() != chess.None {
 		valFrom := pieceValue(movingPiece.Type())
 		valTo := pieceValue(capturedPiece.Type())
-		motifs = append(motifs, "Capture")
+		addMotif(motifCapture)
 
 		if valTo > valFrom {
-			motifs = append(motifs, "Favorable Exchange")
+			addMotif(motifFavorableExchange)
 			explanations = append(explanations, fmt.Sprintf("%s wins material by taking the %s with a lower-value piece.", colorName, pieceName(capturedPiece.Type())))
 		} else if valTo == valFrom {
 			explanations = append(explanations, fmt.Sprintf("%s trades off the %s, altering the piece coordination.", colorName, pieceName(capturedPiece.Type())))
@@ -92,21 +162,21 @@ func ExplainMove(beforeFEN, moveUCI string, scoreCp int, bestMove string) (*Expl
 
 	// 4. Pawn Promotions & Passed Pawns
 	if m.Promo != chess.None {
-		motifs = append(motifs, "Pawn Promotion")
+		addMotif(motifPromotion)
 		explanations = append(explanations, fmt.Sprintf("%s successfully promotes a pawn to a %s.", colorName, pieceName(m.Promo)))
 	} else if movingPiece.Type() == chess.Pawn {
 		toRank := int(m.To / 8)
-		if (movingPiece.Color() == chess.White && toRank >= 5) || (movingPiece.Color() == chess.Black && toRank <= 2) {
-			motifs = append(motifs, "Passed Pawn Advance")
+		if (moverColor == chess.White && toRank >= 5) || (moverColor == chess.Black && toRank <= 2) {
+			addMotif(motifPassedPawn)
 			strategic = append(strategic, "Promotion Threat")
 			explanations = append(explanations, fmt.Sprintf("%s advances a dangerous passed pawn closer to the promotion rank.", colorName))
 		}
 	}
 
 	// 5. Piece Fork (Attacking 2+ enemy pieces)
-	attackedPieces := countAttackedPieces(bAfter, m.To, movingPiece.Color())
+	attackedPieces := countAttackedPieces(bAfter, m.To, moverColor)
 	if attackedPieces >= 2 {
-		motifs = append(motifs, "Fork / Double Attack")
+		addMotif(motifFork)
 		explanations = append(explanations, fmt.Sprintf("The %s on %s creates a double attack against multiple %s targets.", pieceName(movingPiece.Type()), squareName(m.To), enemyName))
 	}
 
@@ -124,18 +194,18 @@ func ExplainMove(beforeFEN, moveUCI string, scoreCp int, bestMove string) (*Expl
 		explanations = append(explanations, fmt.Sprintf("%s seizes control of the open %c-file with the rook.", colorName, 'a'+(m.To%8)))
 	}
 
-	// Assessment logic
-	assessment := "Good Move"
-	if len(motifs) > 0 && (contains(motifs, "Checkmate") || contains(motifs, "Favorable Exchange") || contains(motifs, "Fork / Double Attack")) {
-		assessment = "Tactical Shot"
+	// Assessment logic using integer bitmask and enum
+	const tacticalShotMask = (1 << motifCheckmate) | (1 << motifFavorableExchange) | (1 << motifFork)
+	assess := assessGoodMove
+	if motifMask&tacticalShotMask != 0 {
+		assess = assessTacticalShot
 	} else if len(strategic) > 0 {
-		assessment = "Positional Improvement"
+		assess = assessPositionalImprovement
 	}
 
 	if bestMove != "" && bestMove != moveUCI && (strings.HasPrefix(bestMove, "e") || len(bestMove) >= 4) {
-		// If played move differed from best move
-		if scoreCp < -150 && movingPiece.Color() == chess.White || scoreCp > 150 && movingPiece.Color() == chess.Black {
-			assessment = "Inaccuracy / Mistake"
+		if (scoreCp < -150 && moverColor == chess.White) || (scoreCp > 150 && moverColor == chess.Black) {
+			assess = assessInaccuracyMistake
 			explanations = append(explanations, fmt.Sprintf("Computer analysis suggests %s was stronger in this position.", bestMove))
 		}
 	}
@@ -153,9 +223,9 @@ func ExplainMove(beforeFEN, moveUCI string, scoreCp int, bestMove string) (*Expl
 	return &Explanation{
 		MoveUCI:           moveUCI,
 		MoveSAN:           moveSAN,
-		Assessment:        assessment,
+		Assessment:        assessmentLabels[assess],
 		Summary:           summary,
-		TacticalMotifs:    unique(motifs),
+		TacticalMotifs:    motifs,
 		StrategicConcepts: unique(strategic),
 		DetailedText:      detailed,
 		BestAlternative:   bestMove,
@@ -163,37 +233,17 @@ func ExplainMove(beforeFEN, moveUCI string, scoreCp int, bestMove string) (*Expl
 }
 
 func pieceValue(pt chess.PieceType) int {
-	switch pt {
-	case chess.Pawn:
-		return 1
-	case chess.Knight, chess.Bishop:
-		return 3
-	case chess.Rook:
-		return 5
-	case chess.Queen:
-		return 9
-	default:
-		return 0
+	if int(pt) < len(pieceValues) {
+		return pieceValues[pt]
 	}
+	return 0
 }
 
 func pieceName(pt chess.PieceType) string {
-	switch pt {
-	case chess.Pawn:
-		return "pawn"
-	case chess.Knight:
-		return "knight"
-	case chess.Bishop:
-		return "bishop"
-	case chess.Rook:
-		return "rook"
-	case chess.Queen:
-		return "queen"
-	case chess.King:
-		return "king"
-	default:
-		return "piece"
+	if int(pt) < len(pieceNames) {
+		return pieceNames[pt]
 	}
+	return "piece"
 }
 
 func squareName(sq chess.Square) string {
@@ -217,17 +267,14 @@ func isOpenFile(b *chess.Board, file int) bool {
 	return true
 }
 
-func countAttackedPieces(b *chess.Board, fromSquare chess.Square, friendlyColor chess.Color) int {
-	enemyColor := chess.Black
-	if friendlyColor == chess.Black {
-		enemyColor = chess.White
-	}
+func countAttackedPieces(b *chess.Board, _ chess.Square, friendlyColor chess.Color) int {
+	enemyColor := friendlyColor.Other()
 
 	count := 0
-	for sq := 0; sq < 64; sq++ {
+	for sq := chess.A1; sq <= chess.H8; sq++ {
 		p := b.Squares[sq]
 		if p.Color() == enemyColor && p.Type() != chess.None && p.Type() != chess.Pawn {
-			if b.IsSquareAttacked(chess.Square(sq), friendlyColor) {
+			if b.IsSquareAttacked(sq, friendlyColor) {
 				count++
 			}
 		}
@@ -235,20 +282,11 @@ func countAttackedPieces(b *chess.Board, fromSquare chess.Square, friendlyColor 
 	return count
 }
 
-func contains(slice []string, val string) bool {
-	for _, s := range slice {
-		if s == val {
-			return true
-		}
-	}
-	return false
-}
-
 func unique(slice []string) []string {
-	keys := make(map[string]bool)
-	list := []string{}
+	keys := make(map[string]bool, len(slice))
+	list := make([]string, 0, len(slice))
 	for _, entry := range slice {
-		if _, value := keys[entry]; !value {
+		if !keys[entry] {
 			keys[entry] = true
 			list = append(list, entry)
 		}

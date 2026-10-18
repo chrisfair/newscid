@@ -97,7 +97,7 @@ func (m *Manager) ShortenRepertoire(opts ShortenerOptions, db *scid.Database) (*
 
 	var initialQueue []queueItem
 
-	if rep.Color == "w" {
+	if parseRepColor(rep.Color) == chess.White {
 		// White repertoire starts at Starting FEN
 		initialQueue = append(initialQueue, queueItem{
 			board:   startBoard,
@@ -120,6 +120,12 @@ func (m *Manager) ShortenRepertoire(opts ShortenerOptions, db *scid.Database) (*
 			}
 		}
 	}
+
+	const (
+		pruneKeep uint8 = iota
+		pruneParetoCutoff
+		pruneLowFrequency
+	)
 
 	visited := make(map[string]bool)
 	reachableCores := make(map[string]bool)
@@ -256,18 +262,23 @@ func (m *Manager) ShortenRepertoire(opts ShortenerOptions, db *scid.Database) (*
 			// Apply Pareto 80/20 pruning on opponent branches
 			cumulativePct := 0.0
 			for idx, oc := range oppCandidates {
-				isBeyondCutoff := (cumulativePct >= opts.TargetCoveragePct && idx > 0)
-				isUnderMinFreq := (oc.pct < opts.MinFrequencyPct && totalOppGames >= 20)
-
-				shouldPrune := isBeyondCutoff || isUnderMinFreq
-				if opts.PreserveAnnotated && oc.comment != "" {
-					shouldPrune = false
+				pruneCode := pruneKeep
+				if oc.pct < opts.MinFrequencyPct && totalOppGames >= 20 {
+					pruneCode = pruneLowFrequency
+				} else if cumulativePct >= opts.TargetCoveragePct && idx > 0 {
+					pruneCode = pruneParetoCutoff
 				}
 
-				if shouldPrune {
-					reason := fmt.Sprintf("Pareto cutoff reached (cumulative coverage %.1f%% met by primary branches)", cumulativePct)
-					if isUnderMinFreq {
+				if opts.PreserveAnnotated && oc.comment != "" {
+					pruneCode = pruneKeep
+				}
+
+				if pruneCode != pruneKeep {
+					var reason string
+					if pruneCode == pruneLowFrequency {
 						reason = fmt.Sprintf("Low-frequency sideline (occurs in only %.1f%% of games)", oc.pct)
+					} else {
+						reason = fmt.Sprintf("Pareto cutoff reached (cumulative coverage %.1f%% met by primary branches)", cumulativePct)
 					}
 					line := strings.Join(append(playerHistory, oc.san), " ")
 					result.PrunedBranches = append(result.PrunedBranches, PrunedBranchSummary{

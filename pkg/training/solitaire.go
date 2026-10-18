@@ -7,15 +7,26 @@ import (
 	"newscid/pkg/chess"
 )
 
+var pieceFullNames = [7]string{
+	chess.None:   "Piece",
+	chess.King:   "King",
+	chess.Queen:  "Queen",
+	chess.Rook:   "Rook",
+	chess.Bishop: "Bishop",
+	chess.Knight: "Knight",
+	chess.Pawn:   "Pawn",
+}
+
 // MoveRecord holds a move and board context in a solitaire game.
 type MoveRecord struct {
-	Ply     int        `json:"ply"`
-	Turn    string     `json:"turn"` // "white" or "black"
-	SAN     string     `json:"san"`
-	UCI     string     `json:"uci"`
-	FEN     string     `json:"fen"`
-	Comment string     `json:"comment,omitempty"`
-	Move    chess.Move `json:"-"`
+	Ply       int         `json:"ply"`
+	Turn      string      `json:"turn"` // "white" or "black"
+	TurnColor chess.Color `json:"-"`
+	SAN       string      `json:"san"`
+	UCI       string      `json:"uci"`
+	FEN       string      `json:"fen"`
+	Comment   string      `json:"comment,omitempty"`
+	Move      chess.Move  `json:"-"`
 }
 
 // PerformanceSummary encapsulates the training session results.
@@ -71,7 +82,7 @@ func NewSolitaireSession(game *chess.Game, userSideStr string) (*SolitaireSessio
 	}
 
 	userSide := chess.White
-	if strings.ToLower(strings.TrimSpace(userSideStr)) == "black" {
+	if strings.EqualFold(strings.TrimSpace(userSideStr), "black") {
 		userSide = chess.Black
 	}
 
@@ -89,20 +100,17 @@ func NewSolitaireSession(game *chess.Game, userSideStr string) (*SolitaireSessio
 	bClone := board.Clone()
 
 	for curr != nil {
-		turnStr := "white"
-		if bClone.Turn == chess.Black {
-			turnStr = "black"
-		}
-
+		turnColor := bClone.Turn
 		fenBefore := bClone.FEN()
 		records = append(records, MoveRecord{
-			Ply:     ply,
-			Turn:    turnStr,
-			SAN:     curr.SAN,
-			UCI:     curr.Move.String(),
-			FEN:     fenBefore,
-			Comment: curr.Comment,
-			Move:    curr.Move,
+			Ply:       ply,
+			Turn:      colorLower[turnColor&1],
+			TurnColor: turnColor,
+			SAN:       curr.SAN,
+			UCI:       curr.Move.String(),
+			FEN:       fenBefore,
+			Comment:   curr.Comment,
+			Move:      curr.Move,
 		})
 
 		bClone.MakeMove(curr.Move)
@@ -114,10 +122,10 @@ func NewSolitaireSession(game *chess.Game, userSideStr string) (*SolitaireSessio
 		return nil, fmt.Errorf("game has no moves")
 	}
 
-	// Calculate total turns user will play
+	// Calculate total turns user will play using integer chess.Color comparison
 	totalTurns := 0
-	for _, r := range records {
-		if (userSide == chess.White && r.Turn == "white") || (userSide == chess.Black && r.Turn == "black") {
+	for i := range records {
+		if records[i].TurnColor == userSide {
 			totalTurns++
 		}
 	}
@@ -137,7 +145,7 @@ func NewSolitaireSession(game *chess.Game, userSideStr string) (*SolitaireSessio
 	}
 
 	// If user is Black, play White's initial move 1 automatically
-	if userSide == chess.Black && len(sess.Moves) > 0 && sess.Moves[0].Turn == "white" {
+	if userSide == chess.Black && len(sess.Moves) > 0 && sess.Moves[0].TurnColor == chess.White {
 		sess.Board.MakeMove(sess.Moves[0].Move)
 		sess.CurrentPlyIdx = 1
 	}
@@ -172,21 +180,7 @@ func (s *SolitaireSession) GetHint() (string, int) {
 	s.HintsUsed++
 
 	movingPiece := s.Board.Squares[rec.Move.From]
-	pieceName := movingPiece.Type().String()
-	switch movingPiece.Type() {
-	case chess.Pawn:
-		pieceName = "Pawn"
-	case chess.Knight:
-		pieceName = "Knight"
-	case chess.Bishop:
-		pieceName = "Bishop"
-	case chess.Rook:
-		pieceName = "Rook"
-	case chess.Queen:
-		pieceName = "Queen"
-	case chess.King:
-		pieceName = "King"
-	}
+	pieceName := pieceFullNames[movingPiece.Type()&7]
 
 	switch s.CurrentHints {
 	case 1:

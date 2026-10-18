@@ -684,24 +684,19 @@ func CalculatePersonaStatistics(db *scid.Database, p *Persona) *PersonaStatistic
 		return stats
 	}
 
-	// Prepare quick lookup structures
-	type idAgg struct {
-		games  int
-		wins   int
-		draws  int
-		losses int
-	}
-	idMap := make(map[string]*idAgg)
-	aliasLookup := make(map[string]string) // lowerName -> exact original identifier
+	idAggs := make([]idAgg, 0, len(p.Identifiers))
+	exactLookup := make(map[string]int, len(p.Identifiers))
 
 	for _, id := range p.Identifiers {
 		orig := strings.TrimSpace(id)
-		idMap[orig] = &idAgg{}
-		aliasLookup[strings.ToLower(orig)] = orig
+		lower := strings.ToLower(orig)
+		idx := len(idAggs)
+		idAggs = append(idAggs, idAgg{ident: orig, lower: lower})
+		exactLookup[lower] = idx
 	}
 
-	whiteECOCounts := make(map[string]int)
-	blackECOCounts := make(map[string]int)
+	whiteECOCounts := make(map[uint16]int)
+	blackECOCounts := make(map[uint16]int)
 	totalEloSum := 0
 	eloCount := 0
 
@@ -715,10 +710,10 @@ func CalculatePersonaStatistics(db *scid.Database, p *Persona) *PersonaStatistic
 		whiteName := db.Names.GetName(scid.NamePlayer, entry.WhiteID)
 		blackName := db.Names.GetName(scid.NamePlayer, entry.BlackID)
 
-		matchedWhite := matchIdentifier(whiteName, aliasLookup)
-		matchedBlack := matchIdentifier(blackName, aliasLookup)
+		whiteIdx := matchIdentifierIdx(whiteName, exactLookup, idAggs)
+		blackIdx := matchIdentifierIdx(blackName, exactLookup, idAggs)
 
-		if matchedWhite == "" && matchedBlack == "" {
+		if whiteIdx < 0 && blackIdx < 0 {
 			continue
 		}
 
@@ -735,9 +730,9 @@ func CalculatePersonaStatistics(db *scid.Database, p *Persona) *PersonaStatistic
 		}
 
 		// As White
-		if matchedWhite != "" {
+		if whiteIdx >= 0 {
 			stats.WhiteGames++
-			agg := idMap[matchedWhite]
+			agg := &idAggs[whiteIdx]
 			agg.games++
 
 			if entry.WhiteElo > 0 {
@@ -748,9 +743,8 @@ func CalculatePersonaStatistics(db *scid.Database, p *Persona) *PersonaStatistic
 				}
 			}
 
-			ecoStr := scid.FormatECO(entry.EcoCode)
-			if ecoStr != "" {
-				whiteECOCounts[ecoStr]++
+			if entry.EcoCode != 0 {
+				whiteECOCounts[entry.EcoCode]++
 			}
 
 			switch entry.Result {
@@ -767,9 +761,9 @@ func CalculatePersonaStatistics(db *scid.Database, p *Persona) *PersonaStatistic
 		}
 
 		// As Black
-		if matchedBlack != "" {
+		if blackIdx >= 0 {
 			stats.BlackGames++
-			agg := idMap[matchedBlack]
+			agg := &idAggs[blackIdx]
 			agg.games++
 
 			if entry.BlackElo > 0 {
@@ -780,9 +774,8 @@ func CalculatePersonaStatistics(db *scid.Database, p *Persona) *PersonaStatistic
 				}
 			}
 
-			ecoStr := scid.FormatECO(entry.EcoCode)
-			if ecoStr != "" {
-				blackECOCounts[ecoStr]++
+			if entry.EcoCode != 0 {
+				blackECOCounts[entry.EcoCode]++
 			}
 
 			switch entry.Result {
@@ -811,15 +804,14 @@ func CalculatePersonaStatistics(db *scid.Database, p *Persona) *PersonaStatistic
 	stats.TopBlackECOs = topECOs(blackECOCounts, 5)
 
 	// Build per-identifier stats
-	for _, id := range p.Identifiers {
-		orig := strings.TrimSpace(id)
-		agg := idMap[orig]
+	for i := range idAggs {
+		agg := &idAggs[i]
 		wr := 0.0
 		if agg.games > 0 {
 			wr = float64(agg.wins) / float64(agg.games) * 100.0
 		}
 		stats.IdentifierStats = append(stats.IdentifierStats, IdentifierStat{
-			Identifier: orig,
+			Identifier: agg.ident,
 			GameCount:  agg.games,
 			Wins:       agg.wins,
 			Draws:      agg.draws,
@@ -831,23 +823,35 @@ func CalculatePersonaStatistics(db *scid.Database, p *Persona) *PersonaStatistic
 	return stats
 }
 
-func matchIdentifier(playerName string, lookup map[string]string) string {
-	lower := strings.ToLower(strings.TrimSpace(playerName))
-	if orig, ok := lookup[lower]; ok {
-		return orig
-	}
-	// Also check substring contains
-	for k, orig := range lookup {
-		if strings.Contains(lower, k) || strings.Contains(k, lower) {
-			return orig
-		}
-	}
-	return ""
+type idAgg struct {
+	ident  string
+	lower  string
+	games  int
+	wins   int
+	draws  int
+	losses int
 }
 
-func topECOs(counts map[string]int, limit int) []string {
+func matchIdentifierIdx(playerName string, exactLookup map[string]int, aggs []idAgg) int {
+	lower := strings.ToLower(strings.TrimSpace(playerName))
+	if lower == "" {
+		return -1
+	}
+	if idx, ok := exactLookup[lower]; ok {
+		return idx
+	}
+	for i := range aggs {
+		k := aggs[i].lower
+		if k != "" && (strings.Contains(lower, k) || strings.Contains(k, lower)) {
+			return i
+		}
+	}
+	return -1
+}
+
+func topECOs(counts map[uint16]int, limit int) []string {
 	type kv struct {
-		eco   string
+		eco   uint16
 		count int
 	}
 	var pairs []kv
@@ -855,11 +859,16 @@ func topECOs(counts map[string]int, limit int) []string {
 		pairs = append(pairs, kv{k, v})
 	}
 	sort.Slice(pairs, func(i, j int) bool {
-		return pairs[i].count > pairs[j].count
+		if pairs[i].count != pairs[j].count {
+			return pairs[i].count > pairs[j].count
+		}
+		return pairs[i].eco < pairs[j].eco
 	})
 	res := make([]string, 0, limit)
 	for i := 0; i < len(pairs) && i < limit; i++ {
-		res = append(res, pairs[i].eco)
+		if ecoStr := scid.FormatECO(pairs[i].eco); ecoStr != "" {
+			res = append(res, ecoStr)
+		}
 	}
 	return res
 }

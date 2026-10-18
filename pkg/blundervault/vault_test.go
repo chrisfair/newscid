@@ -77,26 +77,66 @@ func TestVault_AddAndReviewSM2(t *testing.T) {
 	}
 }
 
-func TestVault_FailReset(t *testing.T) {
+func TestVault_FailResetAndEdgeCases(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "blundervault_test*")
 	defer os.RemoveAll(tmpDir)
 
-	vault, _ := NewVault(filepath.Join(tmpDir, "vault.json"))
+	dbPath := filepath.Join(tmpDir, "vault.json")
+	vault, _ := NewVault(dbPath)
 	p := &Puzzle{ID: "p-fail", NextReview: time.Now()}
 	vault.AddPuzzle(p)
 
-	// First pass
-	vault.RecordReview("p-fail", 4)
-	// Fail (quality 1)
-	updated, err := vault.RecordReview("p-fail", 1)
-	if err != nil {
-		t.Fatalf("review failed: %v", err)
+	// Auto-generated ID puzzle
+	pAuto := &Puzzle{FEN: "8/8/8/8/8/8/8/8 w - - 0 1"}
+	if err := vault.AddPuzzle(pAuto); err != nil {
+		t.Fatalf("AddPuzzle auto ID failed: %v", err)
+	}
+	if pAuto.ID == "" {
+		t.Errorf("expected auto-generated ID")
 	}
 
-	if updated.Repetitions != 0 {
-		t.Errorf("expected repetitions reset to 0, got %d", updated.Repetitions)
+	// Non-existent puzzle review
+	if _, err := vault.RecordReview("does-not-exist", 4); err == nil {
+		t.Errorf("expected error for missing puzzle")
 	}
-	if updated.IntervalDays != 1 {
-		t.Errorf("expected interval reset to 1, got %d", updated.IntervalDays)
+
+	// Progress through 4+ repetitions to reach "mastered" and test quality > 5
+	for i := 0; i < 4; i++ {
+		updated, err := vault.RecordReview("p-fail", 10) // clamped to 5
+		if err != nil {
+			t.Fatalf("review failed: %v", err)
+		}
+		if i == 3 && updated.Status != "mastered" {
+			t.Errorf("expected status mastered, got %s", updated.Status)
+		}
+	}
+
+	// Fail multiple times with quality < 0 to clamp EaseFactor to 1.3
+	for i := 0; i < 6; i++ {
+		updated, err := vault.RecordReview("p-fail", -5) // clamped to 0
+		if err != nil {
+			t.Fatalf("review failed: %v", err)
+		}
+		if updated.Repetitions != 0 {
+			t.Errorf("expected repetitions reset to 0, got %d", updated.Repetitions)
+		}
+		if updated.IntervalDays != 1 {
+			t.Errorf("expected interval reset to 1, got %d", updated.IntervalDays)
+		}
+	}
+	if p.EaseFactor != 1.3 {
+		t.Errorf("expected EaseFactor clamped to 1.3, got %f", p.EaseFactor)
+	}
+
+	// Test NewVault MkdirAll error when parent path is a file
+	if _, err := NewVault(filepath.Join(dbPath, "sub", "vault.json")); err == nil {
+		t.Errorf("expected error when parent directory is a file")
+	}
+
+	// Test save error when filePath is replaced by a directory
+	_ = os.Remove(dbPath)
+	_ = os.MkdirAll(dbPath, 0755)
+	if _, err := vault.RecordReview("p-fail", 4); err == nil {
+		t.Errorf("expected saveLocked error when filePath is a directory")
 	}
 }

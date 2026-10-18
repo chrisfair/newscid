@@ -1174,15 +1174,16 @@ onUnmounted(() => {
           class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('showHelp'))"
         >
-          <span class="flex items-center gap-2.5 whitespace-nowrap"><BookOpen class="w-4 h-4 shrink-0 text-emerald-400" /> Online Help &amp; Guides...</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><BookOpen class="w-4 h-4 shrink-0 text-emerald-400" /> Local Manual &amp; Contextual Help...</span>
           <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">F1</span>
         </button>
         <button
           class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('openWebDocs'))"
         >
-          <span class="flex items-center gap-2.5 whitespace-nowrap"><ExternalLink class="w-4 h-4 shrink-0 text-cyan-400" /> Web Documentation (Online)...</span>
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><FileText class="w-4 h-4 shrink-0 text-cyan-400" /> System Man Page (man 1 newscid)...</span>
         </button>
+
         <div class="h-px bg-zinc-800 my-1 mx-2" />
         <button
           class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"

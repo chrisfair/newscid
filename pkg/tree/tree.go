@@ -28,6 +28,12 @@ type TreeResult struct {
 	Moves      []*MoveStat `json:"moves"`
 }
 
+// boardsMatchCore compares board piece placement, side to move, and castling rights directly
+// without allocating or parsing FEN strings in the per-move hot loop.
+func boardsMatchCore(a, b *chess.Board) bool {
+	return a.Turn == b.Turn && a.Castling == b.Castling && a.Squares == b.Squares
+}
+
 // BuildTreeFromGames generates tree statistics for a position given a set of games.
 func BuildTreeFromGames(fen string, games []*chess.Game) *TreeResult {
 	targetBoard, err := chess.ParseFEN(fen)
@@ -36,12 +42,11 @@ func BuildTreeFromGames(fen string, games []*chess.Game) *TreeResult {
 		fen = targetBoard.FEN()
 	}
 
-	targetFENCore := coreFEN(targetBoard.FEN())
 	moveStatsMap := make(map[string]*MoveStat)
 	totalGamesMatching := 0
 
 	for _, g := range games {
-		// Replay game and check if it reaches targetFENCore
+		// Replay game and check if it reaches targetBoard
 		b := chess.NewBoard()
 		if g.StartFEN != "" && g.StartFEN != chess.StartingFEN {
 			if parsed, err := chess.ParseFEN(g.StartFEN); err == nil {
@@ -52,7 +57,7 @@ func BuildTreeFromGames(fen string, games []*chess.Game) *TreeResult {
 		matched := false
 		curr := g.RootMove
 		for curr != nil {
-			if coreFEN(b.FEN()) == targetFENCore {
+			if boardsMatchCore(b, targetBoard) {
 				matched = true
 				totalGamesMatching++
 
@@ -81,7 +86,7 @@ func BuildTreeFromGames(fen string, games []*chess.Game) *TreeResult {
 			curr = curr.Next
 		}
 
-		if !matched && coreFEN(b.FEN()) == targetFENCore {
+		if !matched && boardsMatchCore(b, targetBoard) {
 			totalGamesMatching++
 		}
 	}
@@ -144,7 +149,6 @@ func SearchPositionInGames(fen string, games []*chess.Game) []int {
 	if err != nil {
 		targetBoard = chess.NewBoard()
 	}
-	targetCore := coreFEN(targetBoard.FEN())
 	var matched []int
 
 	for i, g := range games {
@@ -155,11 +159,11 @@ func SearchPositionInGames(fen string, games []*chess.Game) []int {
 			}
 		}
 
-		isMatch := (coreFEN(b.FEN()) == targetCore)
+		isMatch := boardsMatchCore(b, targetBoard)
 		curr := g.RootMove
 		for !isMatch && curr != nil {
 			b.MakeMove(curr.Move)
-			if coreFEN(b.FEN()) == targetCore {
+			if boardsMatchCore(b, targetBoard) {
 				isMatch = true
 				break
 			}

@@ -32,6 +32,55 @@ type SortCriteria struct {
 	Ascending bool      `json:"ascending"`
 }
 
+type sortKeyID uint8
+
+const (
+	sortKeyDate sortKeyID = iota
+	sortKeyECO
+	sortKeyWhite
+	sortKeyBlack
+	sortKeyPlayer
+	sortKeyWhiteElo
+	sortKeyBlackElo
+	sortKeyMaxElo
+	sortKeyEvent
+	sortKeySite
+	sortKeyRound
+	sortKeyResult
+	sortKeyMoves
+)
+
+func parseSortKeyID(field SortField) sortKeyID {
+	switch strings.ToLower(strings.TrimSpace(string(field))) {
+	case "eco":
+		return sortKeyECO
+	case "white":
+		return sortKeyWhite
+	case "black":
+		return sortKeyBlack
+	case "player":
+		return sortKeyPlayer
+	case "whiteelo":
+		return sortKeyWhiteElo
+	case "blackelo":
+		return sortKeyBlackElo
+	case "maxelo":
+		return sortKeyMaxElo
+	case "event":
+		return sortKeyEvent
+	case "site":
+		return sortKeySite
+	case "round":
+		return sortKeyRound
+	case "result":
+		return sortKeyResult
+	case "moves":
+		return sortKeyMoves
+	default:
+		return sortKeyDate
+	}
+}
+
 // Sort reorders the games in the database index (.si4) according to the specified criteria.
 // Since each index entry contains its absolute byte offset into .sg4, sorting only rewrites
 // the lightweight index file, achieving sub-second sorting across large databases.
@@ -47,12 +96,9 @@ func (db *Database) Sort(criteria SortCriteria) error {
 		return nil
 	}
 
-	field := SortField(strings.ToLower(string(criteria.Field)))
-	if field == "" {
-		field = SortByDate
-	}
+	keyID := parseSortKeyID(criteria.Field)
 
-	// Pre-cache name lookups for fast string comparisons
+	// Pre-cache lowercased name lookups for fast string comparisons without O(N log N) allocations
 	playerNameCache := make(map[uint32]string)
 	eventNameCache := make(map[uint32]string)
 	siteNameCache := make(map[uint32]string)
@@ -62,7 +108,7 @@ func (db *Database) Sort(criteria SortCriteria) error {
 		if s, ok := playerNameCache[id]; ok {
 			return s
 		}
-		s := db.Names.GetName(NamePlayer, id)
+		s := strings.ToLower(db.Names.GetName(NamePlayer, id))
 		playerNameCache[id] = s
 		return s
 	}
@@ -71,7 +117,7 @@ func (db *Database) Sort(criteria SortCriteria) error {
 		if s, ok := eventNameCache[id]; ok {
 			return s
 		}
-		s := db.Names.GetName(NameEvent, id)
+		s := strings.ToLower(db.Names.GetName(NameEvent, id))
 		eventNameCache[id] = s
 		return s
 	}
@@ -80,7 +126,7 @@ func (db *Database) Sort(criteria SortCriteria) error {
 		if s, ok := siteNameCache[id]; ok {
 			return s
 		}
-		s := db.Names.GetName(NameSite, id)
+		s := strings.ToLower(db.Names.GetName(NameSite, id))
 		siteNameCache[id] = s
 		return s
 	}
@@ -89,7 +135,7 @@ func (db *Database) Sort(criteria SortCriteria) error {
 		if s, ok := roundNameCache[id]; ok {
 			return s
 		}
-		s := db.Names.GetName(NameRound, id)
+		s := strings.ToLower(db.Names.GetName(NameRound, id))
 		roundNameCache[id] = s
 		return s
 	}
@@ -106,38 +152,36 @@ func (db *Database) Sort(criteria SortCriteria) error {
 		b := db.Entries[j]
 
 		var less bool
-		switch field {
-		case SortByDate:
-			less = a.Date < b.Date
-		case SortByECO:
+		switch keyID {
+		case sortKeyECO:
 			less = a.EcoCode < b.EcoCode
-		case SortByWhite:
-			less = strings.ToLower(getPlayer(a.WhiteID)) < strings.ToLower(getPlayer(b.WhiteID))
-		case SortByBlack:
-			less = strings.ToLower(getPlayer(a.BlackID)) < strings.ToLower(getPlayer(b.BlackID))
-		case SortByPlayer:
-			pA := strings.ToLower(getPlayer(a.WhiteID))
-			pB := strings.ToLower(getPlayer(b.WhiteID))
+		case sortKeyWhite:
+			less = getPlayer(a.WhiteID) < getPlayer(b.WhiteID)
+		case sortKeyBlack:
+			less = getPlayer(a.BlackID) < getPlayer(b.BlackID)
+		case sortKeyPlayer:
+			pA := getPlayer(a.WhiteID)
+			pB := getPlayer(b.WhiteID)
 			if pA != pB {
 				less = pA < pB
 			} else {
-				less = strings.ToLower(getPlayer(a.BlackID)) < strings.ToLower(getPlayer(b.BlackID))
+				less = getPlayer(a.BlackID) < getPlayer(b.BlackID)
 			}
-		case SortByWhiteElo:
+		case sortKeyWhiteElo:
 			less = a.WhiteElo < b.WhiteElo
-		case SortByBlackElo:
+		case sortKeyBlackElo:
 			less = a.BlackElo < b.BlackElo
-		case SortByMaxElo:
+		case sortKeyMaxElo:
 			less = maxElo(a.WhiteElo, a.BlackElo) < maxElo(b.WhiteElo, b.BlackElo)
-		case SortByEvent:
-			less = strings.ToLower(getEvent(a.EventID)) < strings.ToLower(getEvent(b.EventID))
-		case SortBySite:
-			less = strings.ToLower(getSite(a.SiteID)) < strings.ToLower(getSite(b.SiteID))
-		case SortByRound:
-			less = strings.ToLower(getRound(a.RoundID)) < strings.ToLower(getRound(b.RoundID))
-		case SortByResult:
+		case sortKeyEvent:
+			less = getEvent(a.EventID) < getEvent(b.EventID)
+		case sortKeySite:
+			less = getSite(a.SiteID) < getSite(b.SiteID)
+		case sortKeyRound:
+			less = getRound(a.RoundID) < getRound(b.RoundID)
+		case sortKeyResult:
 			less = a.Result < b.Result
-		case SortByMoves:
+		case sortKeyMoves:
 			less = a.NumHalfMoves < b.NumHalfMoves
 		default:
 			less = a.Date < b.Date

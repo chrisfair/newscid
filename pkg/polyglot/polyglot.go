@@ -187,10 +187,6 @@ func (b *Book) FindMoves(board *chess.Board) ([]BookMove, error) {
 	totalWeight := 0
 
 	legalMoves := board.GenerateLegalMoves()
-	legalMap := make(map[string]chess.Move, len(legalMoves))
-	for _, m := range legalMoves {
-		legalMap[m.String()] = m
-	}
 
 	for i := firstIdx; i < b.entries; i++ {
 		entry := b.getEntry(i)
@@ -202,8 +198,16 @@ func (b *Book) FindMoves(board *chess.Board) ([]BookMove, error) {
 			continue
 		}
 
-		uci := decodeRawMove(board, entry.RawMove)
-		legMove, isLegal := legalMap[uci]
+		decoded := decodeRawMoveToMove(board, entry.RawMove)
+		var legMove chess.Move
+		isLegal := false
+		for _, lm := range legalMoves {
+			if lm.Equals(decoded) {
+				legMove = lm
+				isLegal = true
+				break
+			}
+		}
 		if !isLegal {
 			continue
 		}
@@ -211,7 +215,7 @@ func (b *Book) FindMoves(board *chess.Board) ([]BookMove, error) {
 		san := board.MoveToSAN(legMove)
 
 		bm := BookMove{
-			UCI:    uci,
+			UCI:    legMove.String(),
 			SAN:    san,
 			Weight: int(entry.Weight),
 			Learn:  entry.Learn,
@@ -285,49 +289,51 @@ func (b *Book) getEntry(idx int) BookEntry {
 	}
 }
 
-func decodeRawMove(board *chess.Board, raw uint16) string {
+func decodeRawMoveToMove(board *chess.Board, raw uint16) chess.Move {
 	toFile := int(raw & 0x7)
 	toRank := int((raw >> 3) & 0x7)
 	fromFile := int((raw >> 6) & 0x7)
 	fromRank := int((raw >> 9) & 0x7)
 	promo := int((raw >> 12) & 0x7)
 
-	fromSq := fromRank*8 + fromFile
-	toSq := toRank*8 + toFile
+	fromSq := chess.Square(fromRank*8 + fromFile)
+	toSq := chess.Square(toRank*8 + toFile)
 
 	// Handle Castling:
 	// Polyglot represents White O-O as e1h1, White O-O-O as e1a1, Black O-O as e8h8, Black O-O-O as e8a8
 	if promo == 0 {
-		if fromSq == int(chess.E1) && board.Squares[chess.E1] == chess.WK {
-			if toSq == int(chess.H1) {
-				return "e1g1"
-			} else if toSq == int(chess.A1) {
-				return "e1c1"
+		if fromSq == chess.E1 && board.Squares[chess.E1] == chess.WK {
+			if toSq == chess.H1 {
+				return chess.Move{From: chess.E1, To: chess.G1}
+			} else if toSq == chess.A1 {
+				return chess.Move{From: chess.E1, To: chess.C1}
 			}
-		} else if fromSq == int(chess.E8) && board.Squares[chess.E8] == chess.BK {
-			if toSq == int(chess.H8) {
-				return "e8g8"
-			} else if toSq == int(chess.A8) {
-				return "e8c8"
+		} else if fromSq == chess.E8 && board.Squares[chess.E8] == chess.BK {
+			if toSq == chess.H8 {
+				return chess.Move{From: chess.E8, To: chess.G8}
+			} else if toSq == chess.A8 {
+				return chess.Move{From: chess.E8, To: chess.C8}
 			}
 		}
 	}
 
-	fromName := chess.Square(fromSq).String()
-	toName := chess.Square(toSq).String()
-	promoStr := ""
+	var promoPiece chess.PieceType
 	switch promo {
 	case 1:
-		promoStr = "n"
+		promoPiece = chess.Knight
 	case 2:
-		promoStr = "b"
+		promoPiece = chess.Bishop
 	case 3:
-		promoStr = "r"
+		promoPiece = chess.Rook
 	case 4:
-		promoStr = "q"
+		promoPiece = chess.Queen
 	}
 
-	return fromName + toName + promoStr
+	return chess.Move{From: fromSq, To: toSq, Promo: promoPiece}
+}
+
+func decodeRawMove(board *chess.Board, raw uint16) string {
+	return decodeRawMoveToMove(board, raw).String()
 }
 
 // EncodeRawMove encodes a chess.Move into the standard 16-bit Polyglot move format.

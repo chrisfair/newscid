@@ -52,14 +52,41 @@ func NewClient() *Client {
 	}
 }
 
+type tbCategory uint8
+
+const (
+	tbOther tbCategory = iota
+	tbWin
+	tbLoss
+	tbDraw
+)
+
+func parseTBCategory(s string) tbCategory {
+	switch {
+	case strings.EqualFold(s, "win"):
+		return tbWin
+	case strings.EqualFold(s, "loss"):
+		return tbLoss
+	case strings.EqualFold(s, "draw"):
+		return tbDraw
+	default:
+		return tbOther
+	}
+}
+
 // CountPieces returns the total number of pieces on the board for a FEN.
 func CountPieces(fen string) int {
-	parts := strings.Fields(strings.TrimSpace(fen))
-	if len(parts) == 0 {
-		return 0
-	}
 	count := 0
-	for _, ch := range parts[0] {
+	started := false
+	for i := 0; i < len(fen); i++ {
+		ch := fen[i]
+		if ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' {
+			if started {
+				break
+			}
+			continue
+		}
+		started = true
 		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') {
 			count++
 		}
@@ -68,10 +95,10 @@ func CountPieces(fen string) int {
 }
 
 type apiResponse struct {
-	Checkmate bool `json:"checkmate"`
-	Stalemate bool `json:"stalemate"`
-	DTZ       int  `json:"dtz"`
-	DTM       int  `json:"dtm"`
+	Checkmate bool   `json:"checkmate"`
+	Stalemate bool   `json:"stalemate"`
+	DTZ       int    `json:"dtz"`
+	DTM       int    `json:"dtm"`
 	Category  string `json:"category"`
 	Moves     []struct {
 		UCI      string `json:"uci"`
@@ -159,23 +186,22 @@ func formatSummary(res *TablebaseResult) string {
 	}
 
 	var sb strings.Builder
-	cat := strings.ToLower(res.Category)
-	switch cat {
-	case "win":
+	switch parseTBCategory(res.Category) {
+	case tbWin:
 		sb.WriteString("Win")
 		if res.DTM != 0 {
 			fmt.Fprintf(&sb, " in %d (DTM)", abs(res.DTM))
 		} else if res.DTZ != 0 {
 			fmt.Fprintf(&sb, " in %d moves (DTZ)", abs(res.DTZ))
 		}
-	case "loss":
+	case tbLoss:
 		sb.WriteString("Loss")
 		if res.DTM != 0 {
 			fmt.Fprintf(&sb, " in %d (DTM)", abs(res.DTM))
 		} else if res.DTZ != 0 {
 			fmt.Fprintf(&sb, " in %d moves (DTZ)", abs(res.DTZ))
 		}
-	case "draw":
+	case tbDraw:
 		sb.WriteString("Tablebase Draw")
 	default:
 		if len(res.Category) > 0 {

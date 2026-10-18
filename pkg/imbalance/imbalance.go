@@ -1,9 +1,48 @@
 package imbalance
 
 import (
-	"math"
 	"newscid/pkg/chess"
 )
+
+var piecePointValues = [7]int{
+	chess.None:   0,
+	chess.King:   0,
+	chess.Queen:  9,
+	chess.Rook:   5,
+	chess.Bishop: 3,
+	chess.Knight: 3,
+	chess.Pawn:   1,
+}
+
+type summaryReason uint8
+
+const (
+	summaryEqual summaryReason = iota
+	summaryWhiteDecisiveMaterial
+	summaryBlackDecisiveMaterial
+	summaryWhiteMaterial
+	summaryBlackMaterial
+	summaryWhiteBishopPair
+	summaryBlackBishopPair
+	summaryWhitePassedPawns
+	summaryBlackPassedPawns
+	summaryWhiteKingSafety
+	summaryBlackKingSafety
+)
+
+var summaryMessages = [11]string{
+	summaryEqual:                 "Material is equal; dynamic play revolves around space and activity.",
+	summaryWhiteDecisiveMaterial: "White holds a decisive material advantage.",
+	summaryBlackDecisiveMaterial: "Black holds a decisive material advantage.",
+	summaryWhiteMaterial:         "White holds a material advantage.",
+	summaryBlackMaterial:         "Black holds a material advantage.",
+	summaryWhiteBishopPair:       "White holds the bishop pair advantage on open diagonals.",
+	summaryBlackBishopPair:       "Black holds the bishop pair advantage on open diagonals.",
+	summaryWhitePassedPawns:      "White controls dangerous passed pawn advances.",
+	summaryBlackPassedPawns:      "Black controls dangerous passed pawn advances.",
+	summaryWhiteKingSafety:       "White enjoys significantly greater king shelter safety.",
+	summaryBlackKingSafety:       "Black enjoys significantly greater king shelter safety.",
+}
 
 // PawnStructureStats holds pawn details for one side.
 type PawnStructureStats struct {
@@ -15,12 +54,12 @@ type PawnStructureStats struct {
 
 // SideEvaluation contains detailed positional metrics for one side.
 type SideEvaluation struct {
-	MaterialPoints int                `json:"materialPoints"`
-	HasBishopPair  bool               `json:"hasBishopPair"`
-	PawnStructure  PawnStructureStats `json:"pawnStructure"`
-	KingSafety     int                `json:"kingSafety"`     // 0 - 100
-	ControlledTerritory int           `json:"controlledTerritory"` // squares attacked in enemy half
-	OpenFilesControlled int          `json:"openFilesControlled"`
+	MaterialPoints      int                `json:"materialPoints"`
+	HasBishopPair       bool               `json:"hasBishopPair"`
+	PawnStructure       PawnStructureStats `json:"pawnStructure"`
+	KingSafety          int                `json:"kingSafety"`          // 0 - 100
+	ControlledTerritory int                `json:"controlledTerritory"` // squares attacked in enemy half
+	OpenFilesControlled int                `json:"openFilesControlled"`
 }
 
 // Report holds the comparative positional and material imbalance between White and Black.
@@ -28,8 +67,8 @@ type Report struct {
 	FEN               string         `json:"fen"`
 	White             SideEvaluation `json:"white"`
 	Black             SideEvaluation `json:"black"`
-	MaterialDelta     int            `json:"materialDelta"`     // White - Black (in pawns: Q=9, R=5, B=3, N=3, P=1)
-	EstimatedEvalCp   int            `json:"estimatedEvalCp"`   // White - Black centipawn estimate combining material & positional factors
+	MaterialDelta     int            `json:"materialDelta"`   // White - Black (in pawns: Q=9, R=5, B=3, N=3, P=1)
+	EstimatedEvalCp   int            `json:"estimatedEvalCp"` // White - Black centipawn estimate combining material & positional factors
 	PositionalSummary string         `json:"positionalSummary"`
 }
 
@@ -62,30 +101,13 @@ func analyzeSide(board *chess.Board, color chess.Color) SideEvaluation {
 
 	// 1. Material Points & Bishop Pair
 	bishops := 0
-	rooks := 0
-	queens := 0
-	knights := 0
-	pawns := 0
-
-	for sq := 0; sq < 64; sq++ {
+	for sq := chess.A1; sq <= chess.H8; sq++ {
 		p := board.Squares[sq]
-		if p.Color() == color {
-			switch p.Type() {
-			case chess.Pawn:
-				pawns++
-				eval.MaterialPoints += 1
-			case chess.Knight:
-				knights++
-				eval.MaterialPoints += 3
-			case chess.Bishop:
+		if p != chess.Empty && p.Color() == color {
+			pt := p.Type()
+			eval.MaterialPoints += piecePointValues[pt]
+			if pt == chess.Bishop {
 				bishops++
-				eval.MaterialPoints += 3
-			case chess.Rook:
-				rooks++
-				eval.MaterialPoints += 5
-			case chess.Queen:
-				queens++
-				eval.MaterialPoints += 9
 			}
 		}
 	}
@@ -107,22 +129,23 @@ func analyzeSide(board *chess.Board, color chess.Color) SideEvaluation {
 
 func analyzePawns(board *chess.Board, color chess.Color) PawnStructureStats {
 	var stats PawnStructureStats
-	pawnsPerFile := make([]int, 8)
-	pawnRanks := make([][]int, 8)
+	var pawnsPerFile [8]int
+	var ownPawnRanks [8]uint8
+	var enemyPawnRanks [8]uint8
+	enemyColor := color.Other()
 
 	for sq := 0; sq < 64; sq++ {
 		p := board.Squares[sq]
-		if p.Type() == chess.Pawn && p.Color() == color {
-			f := sq % 8
-			r := sq / 8
-			pawnsPerFile[f]++
-			pawnRanks[f] = append(pawnRanks[f], r)
+		if p.Type() == chess.Pawn {
+			f := sq & 7
+			r := sq >> 3
+			if p.Color() == color {
+				pawnsPerFile[f]++
+				ownPawnRanks[f] |= 1 << uint(r)
+			} else if p.Color() == enemyColor {
+				enemyPawnRanks[f] |= 1 << uint(r)
+			}
 		}
-	}
-
-	enemyColor := chess.Black
-	if color == chess.Black {
-		enemyColor = chess.White
 	}
 
 	// Doubled & Isolated
@@ -132,43 +155,45 @@ func analyzePawns(board *chess.Board, color chess.Color) PawnStructureStats {
 		}
 
 		if pawnsPerFile[f] > 0 {
-			hasNeighbor := false
-			if f > 0 && pawnsPerFile[f-1] > 0 {
-				hasNeighbor = true
-			}
-			if f < 7 && pawnsPerFile[f+1] > 0 {
-				hasNeighbor = true
-			}
+			hasNeighbor := (f > 0 && pawnsPerFile[f-1] > 0) || (f < 7 && pawnsPerFile[f+1] > 0)
 			if !hasNeighbor {
 				stats.IsolatedPawns += pawnsPerFile[f]
 			}
 		}
 	}
 
-	// Passed Pawns
+	// Passed Pawns using rank bitmasks
 	for f := 0; f < 8; f++ {
-		for _, r := range pawnRanks[f] {
+		mask := ownPawnRanks[f]
+		if mask == 0 {
+			continue
+		}
+		minEF := f - 1
+		if minEF < 0 {
+			minEF = 0
+		}
+		maxEF := f + 1
+		if maxEF > 7 {
+			maxEF = 7
+		}
+
+		for r := 0; r < 8; r++ {
+			if mask&(1<<uint(r)) == 0 {
+				continue
+			}
+			var aheadMask uint8
+			if color == chess.White {
+				// ranks r+1..7
+				aheadMask = ^uint8((1 << uint(r+1)) - 1)
+			} else {
+				// ranks 0..r-1
+				aheadMask = uint8((1 << uint(r)) - 1)
+			}
+
 			isPassed := true
-			// Check own file and adjacent files ahead of the pawn for enemy pawns
-			for enemyFile := math.Max(0, float64(f-1)); enemyFile <= math.Min(7, float64(f+1)); enemyFile++ {
-				ef := int(enemyFile)
-				for sq := 0; sq < 64; sq++ {
-					p := board.Squares[sq]
-					if p.Type() == chess.Pawn && p.Color() == enemyColor {
-						sqFile := sq % 8
-						sqRank := sq / 8
-						if sqFile == ef {
-							if color == chess.White && sqRank > r {
-								isPassed = false
-								break
-							} else if color == chess.Black && sqRank < r {
-								isPassed = false
-								break
-							}
-						}
-					}
-				}
-				if !isPassed {
+			for ef := minEF; ef <= maxEF; ef++ {
+				if enemyPawnRanks[ef]&aheadMask != 0 {
+					isPassed = false
 					break
 				}
 			}
@@ -203,8 +228,8 @@ func analyzeKingSafety(board *chess.Board, color chess.Color) int {
 		return 50
 	}
 
-	kf := kingSq % 8
-	kr := kingSq / 8
+	kf := kingSq & 7
+	kr := kingSq >> 3
 
 	safety := 100
 
@@ -228,8 +253,16 @@ func analyzeKingSafety(board *chess.Board, color chess.Color) int {
 	}
 
 	if forwardRank >= 0 && forwardRank < 8 {
-		for f := math.Max(0, float64(kf-1)); f <= math.Min(7, float64(kf+1)); f++ {
-			sq := forwardRank*8 + int(f)
+		minF := kf - 1
+		if minF < 0 {
+			minF = 0
+		}
+		maxF := kf + 1
+		if maxF > 7 {
+			maxF = 7
+		}
+		for f := minF; f <= maxF; f++ {
+			sq := forwardRank*8 + f
 			p := board.Squares[sq]
 			if p.Type() == chess.Pawn && p.Color() == color {
 				shieldPawns++
@@ -242,12 +275,6 @@ func analyzeKingSafety(board *chess.Board, color chess.Color) int {
 		safety -= (2 - shieldPawns) * 18
 	}
 
-	if safety < 10 {
-		safety = 10
-	}
-	if safety > 100 {
-		safety = 100
-	}
 	return safety
 }
 
@@ -308,34 +335,33 @@ func computeEstimatedEvalCp(w, b SideEvaluation, delta int) int {
 	return cp
 }
 
+func classifySummary(w, b SideEvaluation, delta int) summaryReason {
+	switch {
+	case delta > 2:
+		return summaryWhiteDecisiveMaterial
+	case delta < -2:
+		return summaryBlackDecisiveMaterial
+	case delta > 0:
+		return summaryWhiteMaterial
+	case delta < 0:
+		return summaryBlackMaterial
+	case w.HasBishopPair && !b.HasBishopPair:
+		return summaryWhiteBishopPair
+	case b.HasBishopPair && !w.HasBishopPair:
+		return summaryBlackBishopPair
+	case w.PawnStructure.PassedPawns > b.PawnStructure.PassedPawns:
+		return summaryWhitePassedPawns
+	case b.PawnStructure.PassedPawns > w.PawnStructure.PassedPawns:
+		return summaryBlackPassedPawns
+	case w.KingSafety > b.KingSafety+20:
+		return summaryWhiteKingSafety
+	case b.KingSafety > w.KingSafety+20:
+		return summaryBlackKingSafety
+	default:
+		return summaryEqual
+	}
+}
+
 func generateSummary(w, b SideEvaluation, delta int) string {
-	if delta > 2 {
-		return "White holds a decisive material advantage."
-	} else if delta < -2 {
-		return "Black holds a decisive material advantage."
-	} else if delta > 0 {
-		return "White holds a material advantage."
-	} else if delta < 0 {
-		return "Black holds a material advantage."
-	}
-
-	if w.HasBishopPair && !b.HasBishopPair {
-		return "White holds the bishop pair advantage on open diagonals."
-	} else if b.HasBishopPair && !w.HasBishopPair {
-		return "Black holds the bishop pair advantage on open diagonals."
-	}
-
-	if w.PawnStructure.PassedPawns > b.PawnStructure.PassedPawns {
-		return "White controls dangerous passed pawn advances."
-	} else if b.PawnStructure.PassedPawns > w.PawnStructure.PassedPawns {
-		return "Black controls dangerous passed pawn advances."
-	}
-
-	if w.KingSafety > b.KingSafety+20 {
-		return "White enjoys significantly greater king shelter safety."
-	} else if b.KingSafety > w.KingSafety+20 {
-		return "Black enjoys significantly greater king shelter safety."
-	}
-
-	return "Material is equal; dynamic play revolves around space and activity."
+	return summaryMessages[classifySummary(w, b, delta)]
 }

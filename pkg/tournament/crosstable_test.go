@@ -333,3 +333,143 @@ func TestParseRoundNumberAndTitles(t *testing.T) {
 	assert.Equal(t, "", extractTitle("Casual Player"))
 }
 
+func TestTiebreaksAndFormattingEdgeCases(t *testing.T) {
+	// Test tiebreaks:
+	// 1. Sonneborn-Berger tiebreak
+	// 2. Buchholz tiebreak
+	// 3. Wins tiebreak
+	// 4. Name tiebreak
+	// Also test:
+	// - Event/Site/Date auto-population when empty
+	// - Skipping non-matching event names and empty player names
+	// - Updating higher Elo in subsequent games
+	// - ResultUnknown ("*") handling
+	// - Unrated players and incomplete round-robin matrix cell "."
+	games := []*scid.GameSummary{
+		// Ignored game from another event
+		{ID: 99, White: "OtherW", Black: "OtherB", Result: chess.ResultWhiteWins, Event: "Other Event"},
+		// Ignored game with missing player (still first in matchedGames so sets Site/Date)
+		{ID: 98, White: "", Black: "OtherB", Result: chess.ResultWhiteWins, Event: "Club RR", Site: "Clubhouse", Date: "2024.05.01"},
+		// Actual tournament games (4 players, partial pairings so some cells are ".")
+		// P1 vs P3: P1 wins
+		{ID: 1, White: "Alpha", Black: "Gamma", Result: chess.ResultWhiteWins, WhiteElo: 1800, BlackElo: 1800, Round: "2", Event: "Club RR", Site: "Clubhouse", Date: "2024.05.01"},
+		// P1 gets higher Elo in Round 1 game vs Delta (draw)
+		{ID: 2, White: "Delta", Black: "Alpha", Result: chess.ResultDraw, WhiteElo: 0, BlackElo: 1900, Round: "1", Event: "Club RR"},
+		// Beta vs Gamma: Beta draws
+		{ID: 3, White: "Beta", Black: "Gamma", Result: chess.ResultDraw, WhiteElo: 1850, BlackElo: 1850, Round: "1", Event: "Club RR"},
+		// Beta vs Delta: Beta wins as Black
+		{ID: 4, White: "Delta", Black: "Beta", Result: chess.ResultBlackWins, WhiteElo: 0, BlackElo: 1900, Round: "2", Event: "Club RR"},
+		// Unfinished game between Gamma and Delta
+		{ID: 5, White: "Gamma", Black: "Delta", Result: chess.Result("*"), WhiteElo: 1800, BlackElo: 0, Round: "3", Event: "Club RR"},
+	}
+
+	ct := BuildCrosstableFromGames(games, "Club RR", "", "")
+	require.NotNil(t, ct)
+	assert.Equal(t, "Club RR", ct.Event)
+	assert.Equal(t, "Clubhouse", ct.Site)
+	assert.Equal(t, "2024.05.01", ct.Date)
+	assert.Equal(t, 0, ct.Category) // Avg Elo < 2251
+	assert.Contains(t, ct.CrossTableText, "Avg Elo:")
+	assert.Contains(t, ct.CrossTableText, " . ")
+	assert.Contains(t, ct.CrossTableText, "----")
+
+	// Also test empty eventName auto-population from first game
+	ctAuto := BuildCrosstableFromGames(games[2:], "", "", "")
+	assert.Equal(t, "Club RR", ctAuto.Event)
+
+	// Test Buchholz, Wins, and Name tiebreaks in a Swiss tournament (unrated)
+	swissGames := []*scid.GameSummary{
+		{ID: 1, White: "Charlie", Black: "David", Result: chess.ResultDraw, Round: "1", Event: "Unrated Swiss"},
+		{ID: 2, White: "Charlie", Black: "Echo", Result: chess.ResultDraw, Round: "2", Event: "Unrated Swiss"},
+		{ID: 3, White: "David", Black: "Foxtrot", Result: chess.ResultDraw, Round: "2", Event: "Unrated Swiss"},
+		{ID: 4, White: "Echo", Black: "Foxtrot", Result: chess.ResultDraw, Round: "1", Event: "Unrated Swiss"},
+		{ID: 5, White: "Able", Black: "Baker", Result: chess.ResultDraw, Round: "1", Event: "Unrated Swiss"},
+		{ID: 6, White: "Geo", Black: "Hotel", Result: chess.ResultWhiteWins, Round: "1", Event: "Unrated Swiss"},
+	}
+	ctSwiss := BuildCrosstableFromGames(swissGames, "Unrated Swiss", "", "")
+	assert.Equal(t, TypeSwiss, ctSwiss.Type)
+	assert.Equal(t, 0, ctSwiss.AverageElo)
+	assert.Contains(t, ctSwiss.CrossTableText, "Type: Swiss")
+
+	// Specifically test Buchholz tiebreak (equal points, equal direct encounter, equal SB, different Buchholz)
+	bhGames := []*scid.GameSummary{
+		{ID: 1, White: "Winner", Black: "LoserHighBH", Result: chess.ResultWhiteWins, Round: "1"},
+		{ID: 2, White: "Drawer1", Black: "Drawer2", Result: chess.ResultDraw, Round: "1"},
+		{ID: 3, White: "Drawer1", Black: "LoserLowBH", Result: chess.ResultWhiteWins, Round: "2"},
+	}
+	ctBH := BuildCrosstableFromGames(bhGames, "", "", "")
+	var idxLow, idxHigh int
+	for i, s := range ctBH.Standings {
+		if s.PlayerName == "LoserLowBH" {
+			idxLow = i
+		}
+		if s.PlayerName == "LoserHighBH" {
+			idxHigh = i
+		}
+	}
+	assert.Less(t, idxLow, idxHigh)
+
+	// Specifically test Wins tiebreak (equal points, equal direct, equal SB, equal BH, different Wins):
+	winsGames := []*scid.GameSummary{
+		{ID: 1, White: "WinOne", Black: "Opp1", Result: chess.ResultWhiteWins, Round: "1"},
+		{ID: 2, White: "Opp2", Black: "WinOne", Result: chess.ResultWhiteWins, Round: "2"},
+		{ID: 3, White: "Opp1", Black: "Opp2", Result: chess.ResultWhiteWins, Round: "3"},
+		{ID: 4, White: "DrawTwo", Black: "Opp3", Result: chess.ResultDraw, Round: "1"},
+		{ID: 5, White: "DrawTwo", Black: "Opp4", Result: chess.ResultDraw, Round: "2"},
+		{ID: 6, White: "Opp3", Black: "Opp4", Result: chess.ResultDraw, Round: "3"},
+	}
+	ctWins := BuildCrosstableFromGames(winsGames, "", "", "")
+	var idxWinOne, idxDrawTwo int
+	for i, s := range ctWins.Standings {
+		if s.PlayerName == "WinOne" {
+			idxWinOne = i
+		}
+		if s.PlayerName == "DrawTwo" {
+			idxDrawTwo = i
+		}
+	}
+	assert.Less(t, idxWinOne, idxDrawTwo)
+
+	// DetectTournamentType edge cases
+	assert.Equal(t, TypeRoundRobin, DetectTournamentType(0, 0, nil))
+	assert.Equal(t, TypeSwiss, DetectTournamentType(5, 1, []*scid.GameSummary{{White: "", Black: "B"}}))
+}
+
+func TestDiscoverEvents_EdgeCases(t *testing.T) {
+	tmpDir := t.TempDir()
+	basePath := filepath.Join(tmpDir, "discover_edge")
+	db := scid.NewDatabase()
+	require.NoError(t, db.Create(basePath, "Edge DB"))
+	defer db.Close()
+
+	w1 := db.Names.AddName(scid.NamePlayer, "P1")
+	b1 := db.Names.AddName(scid.NamePlayer, "P2")
+	evEmpty := db.Names.AddName(scid.NameEvent, "?")
+	evA := db.Names.AddName(scid.NameEvent, "Alpha Event")
+	evB := db.Names.AddName(scid.NameEvent, "Beta Event")
+	siteReal := db.Names.AddName(scid.NameSite, "London")
+	r1 := db.Names.AddName(scid.NameRound, "1")
+
+	db.Entries = append(db.Entries,
+		// Deleted entry
+		&scid.IndexEntry{Flags: scid.FlagDelete, EventID: evA, WhiteID: w1, BlackID: b1},
+		// "?" event
+		&scid.IndexEntry{EventID: evEmpty, WhiteID: w1, BlackID: b1},
+		// Alpha Event game 1 (later date)
+		&scid.IndexEntry{EventID: evA, SiteID: siteReal, RoundID: r1, Date: "2024.05.10", WhiteID: w1, BlackID: b1},
+		// Alpha Event game 2 (earlier date)
+		&scid.IndexEntry{EventID: evA, SiteID: siteReal, RoundID: r1, Date: "2024.05.01", WhiteID: w1, BlackID: b1},
+		// Beta Event game 1 (same date as Alpha Event earliest date, fewer games)
+		&scid.IndexEntry{EventID: evB, SiteID: siteReal, RoundID: r1, Date: "2024.05.01", WhiteID: w1, BlackID: b1},
+	)
+
+	events, err := DiscoverEvents(db)
+	require.NoError(t, err)
+	require.Len(t, events, 2)
+	assert.Equal(t, "Alpha Event", events[0].Event)
+	assert.Equal(t, "London", events[0].Site)
+	assert.Equal(t, "2024.05.01", events[0].Date)
+	assert.Equal(t, 2, events[0].NumGames)
+}
+
+

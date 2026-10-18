@@ -249,6 +249,45 @@ func TestGetDiagramFEN_EdgeCases(t *testing.T) {
 	fen := getDiagramFEN(gEmpty, 5)
 	assert.Equal(t, chess.StartingFEN, fen)
 
+	// Game with StartFEN and FEN tag
+	gStart := chess.NewGame()
+	gStart.StartFEN = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
+	assert.Equal(t, gStart.StartFEN, getDiagramFEN(gStart, 0))
+
+	gTag := chess.NewGame()
+	gTag.SetTag("FEN", "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq - 0 1")
+	gTag.SetTag("Result", "1-0")
+	m1 := chess.Move{From: chess.D7, To: chess.D5}
+	gTag.RootMove = &chess.MoveNode{
+		Move: m1,
+		SAN:  "", // empty SAN fallback to Move.String()
+		FEN:  "", // empty FEN fallback to b.FEN()
+		Variations: []*chess.MoveNode{
+			{Move: m1, SAN: "e5"},
+		},
+	}
+	assert.NotEmpty(t, getDiagramFEN(gTag, 1))
+	assert.NotEmpty(t, getDiagramFEN(gTag, -1))
+
+	// Node with zero move (From == To) and empty FEN
+	gZeroMove := chess.NewGame()
+	gZeroMove.RootMove = &chess.MoveNode{}
+	assert.Equal(t, chess.StartingFEN, getDiagramFEN(gZeroMove, 1))
+
+	// HTML and LaTeX export with Black variation, empty SAN, empty Result field (fallback to Tag("Result"))
+	htmlOut, err := ExportGameHTML(gTag, HTMLExportOptions{IncludeVariations: true})
+	require.NoError(t, err)
+	assert.Contains(t, htmlOut, "d7d5")
+
+	latexOut, err := ExportGameLaTeX(gTag, LaTeXExportOptions{})
+	require.NoError(t, err)
+	assert.Contains(t, latexOut, "d7d5")
+
+	// LaTeX export with nil RootMove
+	latexEmpty, err := ExportGameLaTeX(gEmpty, LaTeXExportOptions{})
+	require.NoError(t, err)
+	assert.NotEmpty(t, latexEmpty)
+
 	// Game with root move but ply exceeding length
 	g := createSampleGame()
 	fenBeyond := getDiagramFEN(g, 999)

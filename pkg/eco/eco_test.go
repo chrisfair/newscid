@@ -90,3 +90,23 @@ func TestECOSearchAndSections(t *testing.T) {
 	unknown := c.Classify([]string{"a4", "h5", "a5", "h4"})
 	assert.Equal(t, "A00", unknown.Code)
 }
+
+func TestLoadFromFileEdgeCases(t *testing.T) {
+	c := eco.NewClassifier()
+	err := c.LoadFromFile("/nonexistent/path/scid.eco")
+	assert.Error(t, err)
+
+	tmpFile := t.TempDir() + "/custom.eco"
+	content := `# Comment line
+invalid_line_without_space
+A01 NoQuotes 1. b3 *
+A02 "UnclosedQuote 1. f4 *
+A03 "Bird Opening" 1. f4 d5 *
+`
+	require.NoError(t, os.WriteFile(tmpFile, []byte(content), 0644))
+	require.NoError(t, c.LoadFromFile(tmpFile))
+
+	res := c.Classify([]string{"f4", "d5"})
+	assert.Equal(t, "A03", res.Code)
+	assert.Equal(t, "Bird Opening", res.Name)
+}

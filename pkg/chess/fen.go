@@ -21,14 +21,14 @@ func (b *Board) FEN() string {
 				emptyCount++
 			} else {
 				if emptyCount > 0 {
-					sb.WriteString(strconv.Itoa(emptyCount))
+					sb.WriteByte('0' + byte(emptyCount))
 					emptyCount = 0
 				}
-				sb.WriteString(p.String())
+				sb.WriteByte(p.Byte())
 			}
 		}
 		if emptyCount > 0 {
-			sb.WriteString(strconv.Itoa(emptyCount))
+			sb.WriteByte('0' + byte(emptyCount))
 		}
 		if rank > 0 {
 			sb.WriteByte('/')
@@ -45,23 +45,22 @@ func (b *Board) FEN() string {
 
 	// 3. Castling availability
 	sb.WriteByte(' ')
-	castling := ""
-	if (b.Castling & CastlingWhiteKing) != 0 {
-		castling += "K"
+	if b.Castling == 0 {
+		sb.WriteByte('-')
+	} else {
+		if (b.Castling & CastlingWhiteKing) != 0 {
+			sb.WriteByte('K')
+		}
+		if (b.Castling & CastlingWhiteQueen) != 0 {
+			sb.WriteByte('Q')
+		}
+		if (b.Castling & CastlingBlackKing) != 0 {
+			sb.WriteByte('k')
+		}
+		if (b.Castling & CastlingBlackQueen) != 0 {
+			sb.WriteByte('q')
+		}
 	}
-	if (b.Castling & CastlingWhiteQueen) != 0 {
-		castling += "Q"
-	}
-	if (b.Castling & CastlingBlackKing) != 0 {
-		castling += "k"
-	}
-	if (b.Castling & CastlingBlackQueen) != 0 {
-		castling += "q"
-	}
-	if castling == "" {
-		castling = "-"
-	}
-	sb.WriteString(castling)
 
 	// 4. En passant target square
 	sb.WriteByte(' ')
@@ -133,9 +132,9 @@ func ParseFEN(fen string) (*Board, error) {
 
 	// 2. Active color
 	if len(parts) > 1 {
-		if parts[1] == "w" || parts[1] == "W" {
+		if len(parts[1]) == 1 && (parts[1][0] == 'w' || parts[1][0] == 'W') {
 			b.Turn = White
-		} else if parts[1] == "b" || parts[1] == "B" {
+		} else if len(parts[1]) == 1 && (parts[1][0] == 'b' || parts[1][0] == 'B') {
 			b.Turn = Black
 		} else {
 			return nil, fmt.Errorf("invalid turn in FEN: %s", parts[1])

@@ -339,3 +339,168 @@ func TestTWICClient_CheckIssueExistsFallback(t *testing.T) {
 		t.Errorf("expected exists to be true with GET fallback")
 	}
 }
+
+func TestTWICClient_AdditionalEdgeCases(t *testing.T) {
+	// 1. ImportIssue with empty PGN zip (0 games) and duplicate game skipping, plus DownloadIssue failure
+	emptyPgnZip := createTestZip(t, "empty.pgn", "")
+	validZip := createTestZip(t, "games.pgn", sampleTWICPGN)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/twic10g.zip":
+			w.WriteHeader(http.StatusOK)
+			w.Write(emptyPgnZip)
+		case "/twic11g.zip":
+			w.WriteHeader(http.StatusOK)
+			w.Write(validZip)
+		case "/twic12g.zip":
+			w.WriteHeader(http.StatusNotFound)
+		case "/twic500g.zip":
+			if r.Method == http.MethodHead {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+		case "/twic501g.zip":
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := &TWICClient{
+		BaseURLTemplate: server.URL + "/twic%dg.zip",
+		HTTPClient:      server.Client(),
+		UserAgent:       "NewScidTest/1.0",
+	}
+
+	tmpDir := t.TempDir()
+	db := scid.NewDatabase()
+	if err := db.Create(filepath.Join(tmpDir, "twic_edge"), "TWIC Edge"); err != nil {
+		t.Fatalf("create db: %v", err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+
+	// Empty PGN zip -> 0 games downloaded
+	resEmpty, err := client.ImportIssue(ctx, 10, db)
+	if err != nil || resEmpty.GamesDownloaded != 0 {
+		t.Fatalf("expected 0 games, got %+v, err=%v", resEmpty, err)
+	}
+
+	// Valid import then duplicate import
+	_, err = client.ImportIssue(ctx, 11, db)
+	if err != nil {
+		t.Fatalf("expected success on issue 11: %v", err)
+	}
+	resDup, err := client.ImportIssue(ctx, 11, db)
+	if err != nil || resDup.GamesImported != 0 {
+		t.Fatalf("expected 0 games imported on duplicate, got %+v, err=%v", resDup, err)
+	}
+
+	// ImportRange with a failing issue (12 is 404) and valid issues (10, 11)
+	batch, err := client.ImportRange(ctx, 10, 12, db, nil)
+	if err != nil {
+		t.Fatalf("unexpected error in ImportRange: %v", err)
+	}
+	if len(batch.Issues) != 3 || batch.Issues[2].Error == "" {
+		t.Errorf("expected error recorded on issue 12, got %+v", batch.Issues)
+	}
+
+	// ImportRange with cancelled context
+	ctxCancel, cancel := context.WithCancel(ctx)
+	cancel()
+	_, err = client.ImportRange(ctxCancel, 10, 12, db, nil)
+	if err == nil {
+		t.Errorf("expected context cancelled error")
+	}
+
+	// CheckIssueExists fallback GET 500 -> false, nil, and HEAD 501 -> false, nil
+	exists500, err := client.CheckIssueExists(ctx, 500)
+	if err != nil || exists500 {
+		t.Errorf("expected false, nil for fallback GET 500, got %v, %v", exists500, err)
+	}
+	exists501, err := client.CheckIssueExists(ctx, 501)
+	if err != nil || exists501 {
+		t.Errorf("expected false, nil for HEAD 501, got %v, %v", exists501, err)
+	}
+
+	// FindLatestIssue with probeStart <= 0 (defaults to 1500, binary searches downwards)
+	latest, err := client.FindLatestIssue(ctx, 0)
+	if err != nil || latest < 1 {
+		t.Errorf("expected latest >= 1, got %d, err=%v", latest, err)
+	}
+
+	// FindLatestIssue with cancelled context returns error
+	_, err = client.FindLatestIssue(ctxCancel, 10)
+	if err == nil {
+		t.Errorf("expected error for cancelled context in FindLatestIssue")
+	}
+
+	// Invalid URL template and transport errors
+	badClient := &TWICClient{
+		BaseURLTemplate: "://bad/%d",
+		HTTPClient:      server.Client(),
+	}
+	if _, err := badClient.DownloadIssue(ctx, 1); err == nil {
+		t.Errorf("expected error for bad URL in DownloadIssue")
+	}
+	if _, err := badClient.CheckIssueExists(ctx, 1); err == nil {
+		t.Errorf("expected error for bad URL in CheckIssueExists")
+	}
+	if _, err := client.DownloadIssue(ctxCancel, 11); err == nil {
+		t.Errorf("expected error for cancelled ctx in DownloadIssue")
+	}
+
+	// FindLatestIssue where probeStart exists (10) and context cancels during forward probe or binary search
+	ctxProbeCancel, cancelProbe := context.WithCancel(ctx)
+	probeCalls := 0
+	cancelSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		probeCalls++
+		if probeCalls == 1 {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		cancelProbe()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer cancelSrv.Close()
+
+	cancelClient := &TWICClient{
+		BaseURLTemplate: cancelSrv.URL + "/twic%dg.zip",
+		HTTPClient:      cancelSrv.Client(),
+	}
+	_, err = cancelClient.FindLatestIssue(ctxProbeCancel, 10)
+	if err == nil {
+		t.Errorf("expected error when ctx cancels during FindLatestIssue probe")
+	}
+
+	// FindLatestIssue where probeStart does not exist (404) and ctx cancels or errors during binary search
+	ctxBinCancel, cancelBin := context.WithCancel(ctx)
+	binCalls := 0
+	binSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		binCalls++
+		if binCalls == 1 {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		cancelBin()
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer binSrv.Close()
+
+	binClient := &TWICClient{
+		BaseURLTemplate: binSrv.URL + "/twic%dg.zip",
+		HTTPClient:      binSrv.Client(),
+	}
+	_, err = binClient.FindLatestIssue(ctxBinCancel, 10)
+	if err == nil {
+		t.Errorf("expected error when ctx cancels during binary search")
+	}
+}
+
+
+
+
