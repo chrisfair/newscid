@@ -207,6 +207,37 @@ func GetIntuitionDrillBatch(count int) []IntuitionChallenge {
 	return all[:count]
 }
 
+type intuitionCatID uint8
+
+const (
+	intCatEqual intuitionCatID = iota
+	intCatWhiteWinning
+	intCatBlackWinning
+)
+
+var intuitionCatValues = [3]IntuitionCategory{
+	intCatEqual:        IntuitionEqual,
+	intCatWhiteWinning: IntuitionWhiteWinning,
+	intCatBlackWinning: IntuitionBlackWinning,
+}
+
+var intuitionCatDisplayNames = [3]string{
+	intCatEqual:        "Equal (=)",
+	intCatWhiteWinning: "White is Winning (+)",
+	intCatBlackWinning: "Black is Winning (-)",
+}
+
+func parseIntuitionCatID(c IntuitionCategory) intuitionCatID {
+	switch c {
+	case IntuitionWhiteWinning:
+		return intCatWhiteWinning
+	case IntuitionBlackWinning:
+		return intCatBlackWinning
+	default:
+		return intCatEqual
+	}
+}
+
 // SubmitIntuitionAnswer evaluates a user's speed assessment and awards points based on accuracy and reaction time.
 func SubmitIntuitionAnswer(challengeID string, userChoice string, elapsedMs int) (*IntuitionResult, error) {
 	ch, found := GetIntuitionChallenge(challengeID)
@@ -244,12 +275,7 @@ func SubmitIntuitionAnswer(challengeID string, userChoice string, elapsedMs int)
 	if isCorrect {
 		explanation = fmt.Sprintf("🎯 Spot on! Evaluated in %dms (%s). %s", elapsedMs, scoreFormatted, ch.KeyFeature)
 	} else {
-		actualName := "Equal (=)"
-		if ch.Category == IntuitionWhiteWinning {
-			actualName = "White is Winning (+)"
-		} else if ch.Category == IntuitionBlackWinning {
-			actualName = "Black is Winning (-)"
-		}
+		actualName := intuitionCatDisplayNames[parseIntuitionCatID(ch.Category)]
 		explanation = fmt.Sprintf("❌ Misjudgment. The correct assessment is %s (%s). %s", actualName, scoreFormatted, ch.KeyFeature)
 	}
 
@@ -291,10 +317,6 @@ func GenerateIntuitionDrillsFromDatabase(db *scid.Database, count int) ([]Intuit
 		}
 
 		db.RLock()
-		if gIdx < 0 || gIdx >= len(db.Entries) {
-			db.RUnlock()
-			continue
-		}
 		entry := db.Entries[gIdx]
 		if entry == nil || (entry.Flags&scid.FlagDelete) != 0 {
 			db.RUnlock()
@@ -352,17 +374,16 @@ func GenerateIntuitionDrillsFromDatabase(db *scid.Database, count int) ([]Intuit
 
 		matDelta := matWhite - matBlack
 
-		var cat IntuitionCategory
+		catID := intCatEqual
 		var keyFeature string
 
 		if matDelta >= 250 {
-			cat = IntuitionWhiteWinning
+			catID = intCatWhiteWinning
 			keyFeature = fmt.Sprintf("White has clear material superiority (+%d cp).", matDelta)
 		} else if matDelta <= -250 {
-			cat = IntuitionBlackWinning
+			catID = intCatBlackWinning
 			keyFeature = fmt.Sprintf("Black has clear material superiority (%d cp).", matDelta)
 		} else {
-			cat = IntuitionEqual
 			keyFeature = "Material is approximately level in this dynamic middlegame."
 		}
 
@@ -373,7 +394,7 @@ func GenerateIntuitionDrillsFromDatabase(db *scid.Database, count int) ([]Intuit
 			BlackPlayer:   blackName,
 			Event:         event,
 			EvaluationCp:  matDelta,
-			Category:      cat,
+			Category:      intuitionCatValues[catID],
 			KeyFeature:    keyFeature,
 			MaterialDelta: matDelta,
 			TimeLimitSec:  5,

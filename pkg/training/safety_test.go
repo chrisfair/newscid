@@ -144,28 +144,52 @@ func TestExtractSafetyDrillsFromDatabase(t *testing.T) {
 	fb2 := ExtractSafetyDrillsFromDatabase(db, 2)
 	assert.Len(t, fb2, 2)
 
-	// Add game with hanging blunder
-	g := chess.NewGame()
-	g.SetTag("White", "Player A")
-	g.SetTag("Black", "Player B")
-	b := chess.NewBoard()
-	moves := []string{"e4", "e5", "Nf3", "Nc6", "Bc4", "Nf6", "d3", "d5", "exd5", "Nxd5", "O-O", "Be7"}
-	var prev *chess.MoveNode
-	for _, san := range moves {
-		m, err := b.ParseSAN(san)
-		require.NoError(t, err)
-		node := &chess.MoveNode{Move: m, SAN: san, UCI: m.String()}
-		b.MakeMove(m)
-		if g.RootMove == nil {
-			g.RootMove = node
-		} else {
-			prev.Next = node
-		}
-		prev = node
-	}
-	_, err = db.SaveGame(g)
+	// Add game with hanging blunder at ply >= 8 and test > 100 games in DB
+	g, err := chess.ParsePGN("1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. d3 Nf6 5. Nc3 Nxe4 6. O-O O-O 1-0")
 	require.NoError(t, err)
+	g.StartFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 1 1"
+	for i := 0; i < 105; i++ {
+		_, err = db.SaveGame(g)
+		require.NoError(t, err)
+	}
 
 	drills := ExtractSafetyDrillsFromDatabase(db, 5)
 	assert.NotEmpty(t, drills)
+
+	// Additional coverage for FindAttackers/FindDefenders out-of-bounds, SEE edge cases, AnalyzeBoardSafety conditions
+	b := chess.NewBoard()
+	assert.Nil(t, FindAttackers(b, chess.Square(64), chess.White))
+	assert.Nil(t, FindDefenders(b, chess.Square(64), chess.White))
+	assert.Equal(t, 0, CalculateSEE(b, chess.E2, chess.E4)) // empty target square
+
+	// SEE where attacker is Queen (900) and target is defended Pawn (100) -> negative SEE (100 - 900 = -800)
+	bSEE, _ := chess.ParseFEN("4k3/3p4/2p5/8/8/2Q5/8/4K3 w - - 0 1")
+	assert.Less(t, CalculateSEE(bSEE, chess.C3, chess.C6), 0)
+
+	// AnalyzeBoardSafety invalid FEN
+	_, err = AnalyzeBoardSafety("invalid-fen")
+	assert.Error(t, err)
+
+	// AnalyzeBoardSafety:
+	// - Queen on d4 (900) defended by d1 Rook, attacked by e6 Pawn (100) -> minAttackerVal < val
+	// - Knight on f4 (320) defended once by g2 Pawn, attacked twice by f6 Rook (500) and d6 Bishop (330) -> len(attackers) > len(defenders)
+	// - Queen on b4 (900) defended once by a3 Pawn, attacked twice by b7 Queen (900) and b8 Rook (500), where bestAttacker is Rook (500 < 900)
+	// - Pawn on h4 (100) defended once by g3 Pawn, attacked twice by h6 Rook (500) and f6 Bishop (330) -> see < 0 -> StatusUnderdefended!
+	complexFEN := "1r2k3/1q6/2pb1b1r/8/1Q1Q1N1P/P5P1/6P1/3R2K1 w - - 0 1"
+	compRep, err := AnalyzeBoardSafety(complexFEN)
+	require.NoError(t, err)
+	assert.NotEmpty(t, compRep.HangingPieces)
+	assert.NotEmpty(t, compRep.Underdefended)
+
+	// Also test Condition 3 where len(attackers) > len(defenders) and minAttackerVal == val (e.g. Pawn attacked by 2 Pawns, defended by 1 Pawn -> see > 0!)
+	pawnLiquidationFEN := "4k3/8/8/3p1p2/4P3/3P4/8/4K3 w - - 0 1"
+	pawnRep, err := AnalyzeBoardSafety(pawnLiquidationFEN)
+	require.NoError(t, err)
+	assert.NotEmpty(t, pawnRep.HangingPieces)
+
+	// EvaluateSafetySubmission nil drill & negative score clamping
+	assert.False(t, EvaluateSafetySubmission(nil, nil, "").IsCorrect)
+	drill := &SafetyDrill{CorrectSquares: []string{"e4"}}
+	fbNeg := EvaluateSafetySubmission(drill, []string{"a1", "a2", "a3", "a4", "a5", "a6"}, "")
+	assert.Equal(t, 0, fbNeg.Score)
 }

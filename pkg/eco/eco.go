@@ -161,20 +161,22 @@ func (c *Classifier) GetSections() []SectionSummary {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	counts := make(map[string]int)
+	var counts [5]int
 	for _, e := range c.entries {
 		if len(e.Code) > 0 {
-			letter := string(e.Code[0])
-			counts[letter]++
+			ch := e.Code[0]
+			if ch >= 'A' && ch <= 'E' {
+				counts[ch-'A']++
+			}
 		}
 	}
 
 	return []SectionSummary{
-		{Letter: "A", Title: "Flank Openings & Irregular", Description: "English, Reti, Bird, Benoni, Dutch, King's Indian Attack", Count: counts["A"]},
-		{Letter: "B", Title: "Semi-Open Games (excl. French)", Description: "Sicilian, Caro-Kann, Pirc, Modern, Scandinavian, Alekhine", Count: counts["B"]},
-		{Letter: "C", Title: "Open Games & French Defense", Description: "1.e4 e5 (Ruy Lopez, Italian, Petrov, King's Gambit) and French Defense", Count: counts["C"]},
-		{Letter: "D", Title: "Closed & Semi-Closed Games", Description: "1.d4 d5 (Queen's Gambit, Slav), Gruenfeld Defense", Count: counts["D"]},
-		{Letter: "E", Title: "Indian Defenses", Description: "King's Indian, Nimzo-Indian, Queen's Indian, Catalan, Bogo-Indian", Count: counts["E"]},
+		{Letter: "A", Title: "Flank Openings & Irregular", Description: "English, Reti, Bird, Benoni, Dutch, King's Indian Attack", Count: counts[0]},
+		{Letter: "B", Title: "Semi-Open Games (excl. French)", Description: "Sicilian, Caro-Kann, Pirc, Modern, Scandinavian, Alekhine", Count: counts[1]},
+		{Letter: "C", Title: "Open Games & French Defense", Description: "1.e4 e5 (Ruy Lopez, Italian, Petrov, King's Gambit) and French Defense", Count: counts[2]},
+		{Letter: "D", Title: "Closed & Semi-Closed Games", Description: "1.d4 d5 (Queen's Gambit, Slav), Gruenfeld Defense", Count: counts[3]},
+		{Letter: "E", Title: "Indian Defenses", Description: "King's Indian, Nimzo-Indian, Queen's Indian, Catalan, Bogo-Indian", Count: counts[4]},
 	}
 }
 
@@ -184,12 +186,16 @@ func (c *Classifier) Search(section string, query string, limit int) []*Entry {
 	defer c.mu.RUnlock()
 
 	section = strings.ToUpper(strings.TrimSpace(section))
+	var sectionByte byte
+	if section != "" && section != "ALL" {
+		sectionByte = section[0]
+	}
 	query = strings.ToLower(strings.TrimSpace(query))
 
 	var results []*Entry
 	for _, e := range c.entries {
-		if section != "" && section != "ALL" {
-			if len(e.Code) == 0 || string(e.Code[0]) != section {
+		if sectionByte != 0 {
+			if len(e.Code) == 0 || e.Code[0] != sectionByte {
 				continue
 			}
 		}

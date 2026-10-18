@@ -208,6 +208,67 @@ func CalculateRatingTracker(db *scid.Database, playerAliases []string) (*RatingT
 	}, nil
 }
 
+type eloBracket uint8
+
+const (
+	eloUnder1600 eloBracket = iota
+	elo1600To1799
+	elo1800To1999
+	elo2000To2199
+	elo2200To2399
+	elo2400To2599
+	elo2600Plus
+	numEloBrackets
+)
+
+var orderedEloLabels = [numEloBrackets]string{
+	eloUnder1600:  "< 1600",
+	elo1600To1799: "1600 - 1799",
+	elo1800To1999: "1800 - 1999",
+	elo2000To2199: "2000 - 2199",
+	elo2200To2399: "2200 - 2399",
+	elo2400To2599: "2400 - 2599",
+	elo2600Plus:   "2600+",
+}
+
+type moveBracket uint8
+
+const (
+	moveBracket1To20 moveBracket = iota
+	moveBracket21To40
+	moveBracket41To60
+	moveBracket61To80
+	moveBracket81Plus
+	numMoveBrackets
+)
+
+var orderedMoveLabels = [numMoveBrackets]string{
+	moveBracket1To20:  "1 - 20",
+	moveBracket21To40: "21 - 40",
+	moveBracket41To60: "41 - 60",
+	moveBracket61To80: "61 - 80",
+	moveBracket81Plus: "81+",
+}
+
+type ecoSection uint8
+
+const (
+	ecoSectionA ecoSection = iota
+	ecoSectionB
+	ecoSectionC
+	ecoSectionD
+	ecoSectionE
+	numECOSections
+)
+
+var orderedECOSections = [numECOSections]string{
+	ecoSectionA: "A (Flank)",
+	ecoSectionB: "B (Semi-Open)",
+	ecoSectionC: "C (Open & French)",
+	ecoSectionD: "D (Closed)",
+	ecoSectionE: "E (Indian)",
+}
+
 // CalculateDatabaseDemographics scans the database and calculates distributions.
 func CalculateDatabaseDemographics(db *scid.Database) (*DatabaseDemographics, error) {
 	if db == nil || !db.IsOpen {
@@ -223,39 +284,21 @@ func CalculateDatabaseDemographics(db *scid.Database) (*DatabaseDemographics, er
 	}
 
 	var (
-		ratedCount    int
-		totalEloSum   int64
+		ratedCount     int
+		totalEloSum    int64
 		totalHalfMoves int64
-		whiteWins     int
-		draws         int
-		blackWins     int
+		whiteWins      int
+		draws          int
+		blackWins      int
 	)
 
-	// Bins
-	decadeCounts := make(map[string]int)
+	// Integer-keyed bins and fixed-size arrays for zero-allocation hot loop counting
+	decadeCounts := make(map[int]int)
 	yearCounts := make(map[int]int)
-	ecoSectionCounts := make(map[string]int)
+	var ecoSectionCounts [numECOSections]int
 	ecoSpecificCounts := make(map[string]int)
-
-	// Elo brackets: <1600, 1600-1799, 1800-1999, 2000-2199, 2200-2399, 2400-2599, 2600+
-	eloBrackets := map[string]int{
-		"< 1600":      0,
-		"1600 - 1799": 0,
-		"1800 - 1999": 0,
-		"2000 - 2199": 0,
-		"2200 - 2399": 0,
-		"2400 - 2599": 0,
-		"2600+":       0,
-	}
-
-	// Move lengths: 1-20, 21-40, 41-60, 61-80, 81+
-	moveBrackets := map[string]int{
-		"1 - 20":  0,
-		"21 - 40": 0,
-		"41 - 60": 0,
-		"61 - 80": 0,
-		"81+":     0,
-	}
+	var eloBrackets [numEloBrackets]int
+	var moveBrackets [numMoveBrackets]int
 
 	activeGames := 0
 
@@ -281,15 +324,15 @@ func CalculateDatabaseDemographics(db *scid.Database) (*DatabaseDemographics, er
 
 		switch {
 		case moves <= 20:
-			moveBrackets["1 - 20"]++
+			moveBrackets[moveBracket1To20]++
 		case moves <= 40:
-			moveBrackets["21 - 40"]++
+			moveBrackets[moveBracket21To40]++
 		case moves <= 60:
-			moveBrackets["41 - 60"]++
+			moveBrackets[moveBracket41To60]++
 		case moves <= 80:
-			moveBrackets["61 - 80"]++
+			moveBrackets[moveBracket61To80]++
 		default:
-			moveBrackets["81+"]++
+			moveBrackets[moveBracket81Plus]++
 		}
 
 		// Elo
@@ -309,19 +352,19 @@ func CalculateDatabaseDemographics(db *scid.Database) (*DatabaseDemographics, er
 			totalEloSum += int64(avgEntryElo)
 			switch {
 			case avgEntryElo < 1600:
-				eloBrackets["< 1600"]++
+				eloBrackets[eloUnder1600]++
 			case avgEntryElo < 1800:
-				eloBrackets["1600 - 1799"]++
+				eloBrackets[elo1600To1799]++
 			case avgEntryElo < 2000:
-				eloBrackets["1800 - 1999"]++
+				eloBrackets[elo1800To1999]++
 			case avgEntryElo < 2200:
-				eloBrackets["2000 - 2199"]++
+				eloBrackets[elo2000To2199]++
 			case avgEntryElo < 2400:
-				eloBrackets["2200 - 2399"]++
+				eloBrackets[elo2200To2399]++
 			case avgEntryElo < 2600:
-				eloBrackets["2400 - 2599"]++
+				eloBrackets[elo2400To2599]++
 			default:
-				eloBrackets["2600+"]++
+				eloBrackets[elo2600Plus]++
 			}
 		}
 
@@ -330,26 +373,24 @@ func CalculateDatabaseDemographics(db *scid.Database) (*DatabaseDemographics, er
 			if yr, err := strconv.Atoi(entry.Date[:4]); err == nil && yr > 1400 && yr < 2100 {
 				yearCounts[yr]++
 				decade := (yr / 10) * 10
-				decadeLabel := fmt.Sprintf("%ds", decade)
-				decadeCounts[decadeLabel]++
+				decadeCounts[decade]++
 			}
 		}
 
 		// ECO
 		ecoStr := scid.FormatECO(entry.EcoCode)
 		if len(ecoStr) >= 1 {
-			sec := string(ecoStr[0])
-			switch sec {
-			case "A":
-				ecoSectionCounts["A (Flank)"]++
-			case "B":
-				ecoSectionCounts["B (Semi-Open)"]++
-			case "C":
-				ecoSectionCounts["C (Open & French)"]++
-			case "D":
-				ecoSectionCounts["D (Closed)"]++
-			case "E":
-				ecoSectionCounts["E (Indian)"]++
+			switch ecoStr[0] {
+			case 'A':
+				ecoSectionCounts[ecoSectionA]++
+			case 'B':
+				ecoSectionCounts[ecoSectionB]++
+			case 'C':
+				ecoSectionCounts[ecoSectionC]++
+			case 'D':
+				ecoSectionCounts[ecoSectionD]++
+			case 'E':
+				ecoSectionCounts[ecoSectionE]++
 			}
 			ecoSpecificCounts[ecoStr]++
 		}
@@ -371,21 +412,21 @@ func CalculateDatabaseDemographics(db *scid.Database) (*DatabaseDemographics, er
 
 	// Format Decade Dist
 	var decadeBins []HistogramBin
-	var decades []string
+	decades := make([]int, 0, len(decadeCounts))
 	for d := range decadeCounts {
 		decades = append(decades, d)
 	}
-	sort.Strings(decades)
+	sort.Ints(decades)
 	for _, d := range decades {
 		c := decadeCounts[d]
 		decadeBins = append(decadeBins, HistogramBin{
-			Label: d,
+			Label: fmt.Sprintf("%ds", d),
 			Count: c,
 			Pct:   float64(c) / float64(activeGames) * 100,
 		})
 	}
 
-	// Format Top Years (up to 15 top years)
+	// Format Top Years
 	type yrPair struct {
 		yr int
 		c  int
@@ -407,28 +448,26 @@ func CalculateDatabaseDemographics(db *scid.Database) (*DatabaseDemographics, er
 	}
 
 	// Format Elo Dist
-	orderedEloLabels := []string{"< 1600", "1600 - 1799", "1800 - 1999", "2000 - 2199", "2200 - 2399", "2400 - 2599", "2600+"}
-	var eloBins []HistogramBin
-	for _, lbl := range orderedEloLabels {
-		c := eloBrackets[lbl]
+	eloBins := make([]HistogramBin, 0, numEloBrackets)
+	for b := eloBracket(0); b < numEloBrackets; b++ {
+		c := eloBrackets[b]
 		pct := 0.0
 		if ratedCount > 0 {
 			pct = float64(c) / float64(ratedCount) * 100
 		}
 		eloBins = append(eloBins, HistogramBin{
-			Label: lbl,
+			Label: orderedEloLabels[b],
 			Count: c,
 			Pct:   pct,
 		})
 	}
 
 	// Format ECO Section Dist
-	orderedECOSections := []string{"A (Flank)", "B (Semi-Open)", "C (Open & French)", "D (Closed)", "E (Indian)"}
-	var ecoSectionBins []HistogramBin
-	for _, sec := range orderedECOSections {
-		c := ecoSectionCounts[sec]
+	ecoSectionBins := make([]HistogramBin, 0, numECOSections)
+	for s := ecoSection(0); s < numECOSections; s++ {
+		c := ecoSectionCounts[s]
 		ecoSectionBins = append(ecoSectionBins, HistogramBin{
-			Label: sec,
+			Label: orderedECOSections[s],
 			Count: c,
 			Pct:   float64(c) / float64(activeGames) * 100,
 		})
@@ -459,12 +498,11 @@ func CalculateDatabaseDemographics(db *scid.Database) (*DatabaseDemographics, er
 	}
 
 	// Format Move Length Dist
-	orderedMoveLabels := []string{"1 - 20", "21 - 40", "41 - 60", "61 - 80", "81+"}
-	var moveBins []HistogramBin
-	for _, lbl := range orderedMoveLabels {
-		c := moveBrackets[lbl]
+	moveBins := make([]HistogramBin, 0, numMoveBrackets)
+	for b := moveBracket(0); b < numMoveBrackets; b++ {
+		c := moveBrackets[b]
 		moveBins = append(moveBins, HistogramBin{
-			Label: lbl,
+			Label: orderedMoveLabels[b],
 			Count: c,
 			Pct:   float64(c) / float64(activeGames) * 100,
 		})
@@ -489,3 +527,4 @@ func CalculateDatabaseDemographics(db *scid.Database) (*DatabaseDemographics, er
 		MoveLengthDist: moveBins,
 	}, nil
 }
+

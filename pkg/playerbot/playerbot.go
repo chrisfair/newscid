@@ -93,8 +93,8 @@ func BuildPersonalityFromIdentifiers(db *scid.Database, displayName string, iden
 	totalPlies := 0
 	gamesWithPlies := 0
 
-	whiteECOCounts := make(map[string]int)
-	blackECOCounts := make(map[string]int)
+	whiteECOCounts := make(map[uint16]int)
+	blackECOCounts := make(map[uint16]int)
 
 	numGames := db.NumGames()
 	for i := 0; i < numGames; i++ {
@@ -150,9 +150,8 @@ func BuildPersonalityFromIdentifiers(db *scid.Database, displayName string, iden
 			case chess.ResultBlackWins:
 				p.Losses++
 			}
-			ecoStr := scid.FormatECO(entryEcoCode)
-			if ecoStr != "" {
-				whiteECOCounts[ecoStr]++
+			if entryEcoCode != 0 {
+				whiteECOCounts[entryEcoCode]++
 			}
 		} else {
 			p.BlackGames++
@@ -171,9 +170,8 @@ func BuildPersonalityFromIdentifiers(db *scid.Database, displayName string, iden
 			case chess.ResultWhiteWins:
 				p.Losses++
 			}
-			ecoStr := scid.FormatECO(entryEcoCode)
-			if ecoStr != "" {
-				blackECOCounts[ecoStr]++
+			if entryEcoCode != 0 {
+				blackECOCounts[entryEcoCode]++
 			}
 		}
 
@@ -194,15 +192,15 @@ func BuildPersonalityFromIdentifiers(db *scid.Database, displayName string, iden
 
 		for curr != nil && ply < 250 {
 			posKey := normalizeFEN(board.FEN())
-			moverIsWhite := (board.Turn == chess.White)
+			moverColor := board.Turn
 
-			if (moverIsWhite && isWhite) || (!moverIsWhite && isBlack) {
+			if (moverColor == chess.White && isWhite) || (moverColor == chess.Black && isBlack) {
 				bookMap := p.WhiteBook
-				if !moverIsWhite {
+				if moverColor == chess.Black {
 					bookMap = p.BlackBook
 				}
 
-				recordBookMove(bookMap, posKey, curr.UCI, curr.SAN, entryResult, moverIsWhite)
+				recordBookMove(bookMap, posKey, curr.UCI, curr.SAN, entryResult, moverColor)
 			}
 
 			m, err := board.ParseUCI(curr.UCI)
@@ -236,40 +234,62 @@ func BuildPersonalityFromIdentifiers(db *scid.Database, displayName string, iden
 		p.AvgGamePlies = float64(totalPlies) / float64(gamesWithPlies)
 	}
 
-	// Classify play style, aggression, and calibrated contempt
+	// Classify play style, aggression, and calibrated contempt using integer enum
 	decisiveRate := float64(p.Wins+p.Losses) / float64(p.TotalGames) * 100.0
 	drawRate := float64(p.Draws) / float64(p.TotalGames) * 100.0
 
-	if p.AvgGamePlies > 0 && p.AvgGamePlies < 60 && decisiveRate > 80 {
-		p.PlayStyle = "Tactical Attacker"
-		p.AggressionRating = 85.0
-		p.ContemptValue = 40
-	} else if drawRate > 35 || (p.AvgGamePlies > 80 && decisiveRate < 70) {
-		p.PlayStyle = "Solid Positional"
-		p.AggressionRating = 30.0
-		p.ContemptValue = -10
-	} else if p.AvgGamePlies > 85 {
-		p.PlayStyle = "Grinding Endgame Specialist"
-		p.AggressionRating = 45.0
-		p.ContemptValue = 10
-	} else if decisiveRate > 75 {
-		p.PlayStyle = "Dynamic Fighter"
-		p.AggressionRating = 70.0
-		p.ContemptValue = 25
-	} else {
-		p.PlayStyle = "Balanced All-Rounder"
-		p.AggressionRating = 50.0
-		p.ContemptValue = 15
-	}
+	styleID := classifyPlayStyle(p.AvgGamePlies, decisiveRate, drawRate)
+	p.PlayStyle, p.AggressionRating, p.ContemptValue = styleID.profile()
 
 	// Sort and aggregate top ECOs
-	p.TopWhiteECOs = topKeys(whiteECOCounts, 5)
-	p.TopBlackECOs = topKeys(blackECOCounts, 5)
+	p.TopWhiteECOs = topECOCodes(whiteECOCounts, 5)
+	p.TopBlackECOs = topECOCodes(blackECOCounts, 5)
 
 	return p, nil
 }
 
-func recordBookMove(book map[string][]BookMove, posKey, uci, san string, res chess.Result, moverIsWhite bool) {
+type playStyleID uint8
+
+const (
+	styleBalanced playStyleID = iota
+	styleTacticalAttacker
+	styleSolidPositional
+	styleGrindingEndgame
+	styleDynamicFighter
+)
+
+func classifyPlayStyle(avgPlies, decisiveRate, drawRate float64) playStyleID {
+	if avgPlies > 0 && avgPlies < 60 && decisiveRate > 80 {
+		return styleTacticalAttacker
+	}
+	if drawRate > 35 || (avgPlies > 80 && decisiveRate < 70) {
+		return styleSolidPositional
+	}
+	if avgPlies > 85 {
+		return styleGrindingEndgame
+	}
+	if decisiveRate > 75 {
+		return styleDynamicFighter
+	}
+	return styleBalanced
+}
+
+func (s playStyleID) profile() (name string, aggression float64, contempt int) {
+	switch s {
+	case styleTacticalAttacker:
+		return "Tactical Attacker", 85.0, 40
+	case styleSolidPositional:
+		return "Solid Positional", 30.0, -10
+	case styleGrindingEndgame:
+		return "Grinding Endgame Specialist", 45.0, 10
+	case styleDynamicFighter:
+		return "Dynamic Fighter", 70.0, 25
+	default:
+		return "Balanced All-Rounder", 50.0, 15
+	}
+}
+
+func recordBookMove(book map[string][]BookMove, posKey, uci, san string, res chess.Result, moverColor chess.Color) {
 	moves := book[posKey]
 	foundIdx := -1
 	for i, m := range moves {
@@ -289,13 +309,13 @@ func recordBookMove(book map[string][]BookMove, posKey, uci, san string, res che
 	bm.PlayedCount++
 	switch res {
 	case chess.ResultWhiteWins:
-		if moverIsWhite {
+		if moverColor == chess.White {
 			bm.Wins++
 		} else {
 			bm.Losses++
 		}
 	case chess.ResultBlackWins:
-		if !moverIsWhite {
+		if moverColor == chess.Black {
 			bm.Wins++
 		} else {
 			bm.Losses++
@@ -414,9 +434,9 @@ func normalizeFEN(fen string) string {
 	return fen
 }
 
-func topKeys(counts map[string]int, limit int) []string {
+func topECOCodes(counts map[uint16]int, limit int) []string {
 	type kv struct {
-		k string
+		k uint16
 		v int
 	}
 	var pairs []kv
@@ -424,11 +444,17 @@ func topKeys(counts map[string]int, limit int) []string {
 		pairs = append(pairs, kv{k, v})
 	}
 	sort.Slice(pairs, func(i, j int) bool {
-		return pairs[i].v > pairs[j].v
+		if pairs[i].v != pairs[j].v {
+			return pairs[i].v > pairs[j].v
+		}
+		return pairs[i].k < pairs[j].k
 	})
 	var res []string
 	for i := 0; i < len(pairs) && i < limit; i++ {
-		res = append(res, pairs[i].k)
+		if ecoStr := scid.FormatECO(pairs[i].k); ecoStr != "" {
+			res = append(res, ecoStr)
+		}
 	}
 	return res
 }
+

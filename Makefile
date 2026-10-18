@@ -77,7 +77,7 @@ dev: ## Run live development server with hot-reload (Wails Dev)
 	@printf "$(BOLD)$(BLUE)==> Starting Wails development server...$(RESET)\n"
 	@wails dev
 
-build: ## Build the standalone production binary (build/bin/newscid)
+build: ## Build the standalone production binary and companion CLI workstation tools (build/bin/newscid*)
 	@printf "$(BOLD)$(BLUE)==> Building NewScid production desktop application (v$(APP_VERSION), commit $(GIT_COMMIT))...$(RESET)\n"
 	@mkdir -p $(BIN_DIR)
 	@if command -v wails >/dev/null 2>&1; then \
@@ -85,7 +85,11 @@ build: ## Build the standalone production binary (build/bin/newscid)
 	else \
 		$(MAKE) build-frontend && go build -tags "desktop,production,webkit2_41" -ldflags "$(LDFLAGS)" -o $(BINARY) .; \
 	fi
-	@printf "$(BOLD)$(GREEN)✔ Binary built at $(BINARY)$(RESET)\n"
+	@printf "$(BOLD)$(BLUE)==> Building companion workstation CLI binaries (newscid-import, newscid-fairplay, newscid-scout)...$(RESET)\n"
+	@go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/newscid-import ./cmd/newscid-import
+	@go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/newscid-fairplay ./cmd/newscid-fairplay
+	@go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/newscid-scout ./cmd/newscid-scout
+	@printf "$(BOLD)$(GREEN)✔ Binaries built at $(BIN_DIR)/newscid{,-import,-fairplay,-scout}$(RESET)\n"
 
 
 build-frontend: ## Compile the Vue 3 + Vite frontend assets
@@ -258,10 +262,13 @@ release-local: packages ## Build all packages locally and publish/upload release
 # Installation Targets
 # ==============================================================================
 
-install: build ## Install NewScid to system (supports DESTDIR and PREFIX)
+install: build ## Install NewScid and companion CLI tools to system (supports DESTDIR and PREFIX)
 	@printf "$(BOLD)$(BLUE)==> Installing NewScid to $(DESTDIR)$(PREFIX)...$(RESET)\n"
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin $(DESTDIR)$(PREFIX)/share/applications $(DESTDIR)$(PREFIX)/share/metainfo $(DESTDIR)$(PREFIX)/share/mime/packages $(DESTDIR)$(PREFIX)/share/man/man1 $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps
 	@install -Dm755 $(BINARY) $(DESTDIR)$(PREFIX)/bin/$(APP_NAME)
+	@install -Dm755 $(BIN_DIR)/newscid-import $(DESTDIR)$(PREFIX)/bin/newscid-import
+	@install -Dm755 $(BIN_DIR)/newscid-fairplay $(DESTDIR)$(PREFIX)/bin/newscid-fairplay
+	@install -Dm755 $(BIN_DIR)/newscid-scout $(DESTDIR)$(PREFIX)/bin/newscid-scout
 	@install -Dm644 packaging/desktop/newscid.desktop $(DESTDIR)$(PREFIX)/share/applications/newscid.desktop
 	@install -Dm644 packaging/desktop/org.newscid.NewScid.metainfo.xml $(DESTDIR)$(PREFIX)/share/metainfo/org.newscid.NewScid.metainfo.xml
 	@install -Dm644 packaging/desktop/newscid.mime.xml $(DESTDIR)$(PREFIX)/share/mime/packages/newscid.xml
@@ -283,7 +290,7 @@ install: build ## Install NewScid to system (supports DESTDIR and PREFIX)
 		update-mime-database $(PREFIX)/share/mime 2>/dev/null || true; \
 		gtk-update-icon-cache -q -t -f $(PREFIX)/share/icons/hicolor 2>/dev/null || true; \
 	fi
-	@printf "$(BOLD)$(GREEN)✔ NewScid v$(APP_VERSION) successfully installed to $(DESTDIR)$(PREFIX)/bin/$(APP_NAME)$(RESET)\n"
+	@printf "$(BOLD)$(GREEN)✔ NewScid v$(APP_VERSION) and companion CLI tools installed to $(DESTDIR)$(PREFIX)/bin/$(RESET)\n"
 
 install-user: ## Install NewScid to user local environment (~/.local)
 	@$(MAKE) install PREFIX=$(HOME)/.local DESTDIR=
@@ -291,6 +298,9 @@ install-user: ## Install NewScid to user local environment (~/.local)
 uninstall: ## Remove NewScid from user local environment (~/.local)
 	@printf "$(BOLD)$(YELLOW)==> Uninstalling NewScid from $(HOME)/.local...$(RESET)\n"
 	@rm -f $(HOME)/.local/bin/$(APP_NAME)
+	@rm -f $(HOME)/.local/bin/newscid-import
+	@rm -f $(HOME)/.local/bin/newscid-fairplay
+	@rm -f $(HOME)/.local/bin/newscid-scout
 	@rm -f $(HOME)/.local/share/applications/newscid.desktop
 	@rm -f $(HOME)/.local/share/metainfo/org.newscid.NewScid.metainfo.xml
 	@rm -f $(HOME)/.local/share/mime/packages/newscid.xml

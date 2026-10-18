@@ -240,6 +240,36 @@ func SubmitProphylaxisAnswer(drillID string, moveUCI string) (*ProphylaxisFeedba
 	}, nil
 }
 
+type prophylaxisMoveKind uint8
+
+const (
+	propMoveNone prophylaxisMoveKind = iota
+	propMovePawnRestraint
+	propMoveQuietKing
+)
+
+func classifyProphylacticMove(b *chess.Board, m chess.Move) prophylaxisMoveKind {
+	if b.Squares[m.To] != chess.Empty {
+		return propMoveNone
+	}
+	switch b.Squares[m.From].Type() {
+	case chess.King:
+		// Exclude castling (2-file jump)
+		df := m.To.File() - m.From.File()
+		if df < -1 || df > 1 {
+			return propMoveNone
+		}
+		if m.To == chess.H1 || m.To == chess.H8 || m.To == chess.G1 || m.To == chess.G8 || m.To == chess.F1 {
+			return propMoveQuietKing
+		}
+	case chess.Pawn:
+		if m.To == chess.A3 || m.To == chess.H3 || m.To == chess.A6 || m.To == chess.H6 {
+			return propMovePawnRestraint
+		}
+	}
+	return propMoveNone
+}
+
 // GenerateProphylaxisDrillsFromDatabase mines quiet masterstroke positions from the active database.
 func GenerateProphylaxisDrillsFromDatabase(db *scid.Database, count int) ([]ProphylaxisDrill, error) {
 	if db == nil || !db.IsOpen {
@@ -264,10 +294,6 @@ func GenerateProphylaxisDrillsFromDatabase(db *scid.Database, count int) ([]Prop
 		}
 
 		db.RLock()
-		if gIdx < 0 || gIdx >= len(db.Entries) {
-			db.RUnlock()
-			continue
-		}
 		entry := db.Entries[gIdx]
 		if entry == nil || (entry.Flags&scid.FlagDelete) != 0 {
 			db.RUnlock()
@@ -299,43 +325,38 @@ func GenerateProphylaxisDrillsFromDatabase(db *scid.Database, count int) ([]Prop
 				break
 			}
 
-			// Check if this move is a quiet prophylactic move
-			san := curr.SAN
-			isQuietKing := (san == "Kh1" || san == "Kh8" || san == "Kg1" || san == "Kg8" || san == "Kf1")
-			isPawnRestraint := (san == "a3" || san == "h3" || san == "a6" || san == "h6")
+			if ply >= 14 {
+				kind := classifyProphylacticMove(b, m)
+				if kind != propMoveNone {
+					cat := CategoryPieceRestraint
+					catLabel := "Pawn Restraint"
+					prompt := "White to move. Calmly restrict enemy counterplay."
+					if kind == propMoveQuietKing {
+						cat = CategoryKingSafety
+						catLabel = "King Safety Unpin"
+						prompt = "Step your king into safety, preempting potential checks or diagonal pins."
+					}
 
-			if (isQuietKing || isPawnRestraint) && ply >= 14 {
-				cat := CategoryPieceRestraint
-				catLabel := "Pawn Restraint"
-				prompt := "White to move. Calmly restrict enemy counterplay."
-				if isQuietKing {
-					cat = CategoryKingSafety
-					catLabel = "King Safety Unpin"
-					prompt = "Step your king into safety, preempting potential checks or diagonal pins."
-				}
+					d := ProphylaxisDrill{
+						ID:             fmt.Sprintf("db-pro-%d-%d", gIdx+1, ply+1),
+						Title:          fmt.Sprintf("Prophylaxis: %s vs %s", whiteName, blackName),
+						FEN:            b.FEN(),
+						Turn:           colorLower[b.Turn&1],
+						Category:       cat,
+						CategoryLabel:  catLabel,
+						Prompt:         prompt,
+						WinningMoveUCI: curr.UCI,
+						WinningMoveSAN: curr.SAN,
+						OpponentThreat: "Opponent prepares tactical counterplay on active diagonals.",
+						Explanation:    fmt.Sprintf("%s was played by %s in %s to restrict counterplay and ensure positional stability.", curr.SAN, whiteName, event),
+						Source:         fmt.Sprintf("%s vs %s (%s)", whiteName, blackName, event),
+						Difficulty:     "advanced",
+					}
 
-				d := ProphylaxisDrill{
-					ID:             fmt.Sprintf("db-pro-%d-%d", gIdx+1, ply+1),
-					Title:          fmt.Sprintf("Prophylaxis: %s vs %s", whiteName, blackName),
-					FEN:            b.FEN(),
-					Turn:           "white",
-					Category:       cat,
-					CategoryLabel:  catLabel,
-					Prompt:         prompt,
-					WinningMoveUCI: curr.UCI,
-					WinningMoveSAN: curr.SAN,
-					OpponentThreat: "Opponent prepares tactical counterplay on active diagonals.",
-					Explanation:    fmt.Sprintf("%s was played by %s in %s to restrict counterplay and ensure positional stability.", curr.SAN, whiteName, event),
-					Source:         fmt.Sprintf("%s vs %s (%s)", whiteName, blackName, event),
-					Difficulty:     "advanced",
+					RegisterProphylaxisDrill(d)
+					drills = append(drills, d)
+					break
 				}
-				if b.Turn == chess.Black {
-					d.Turn = "black"
-				}
-
-				RegisterProphylaxisDrill(d)
-				drills = append(drills, d)
-				break
 			}
 
 			b.MakeMove(m)

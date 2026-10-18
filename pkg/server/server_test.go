@@ -253,4 +253,96 @@ func TestServerLifecycleFileUploadAndSPA(t *testing.T) {
 	_ = srv.Stop(ctx)
 }
 
+type nonFlusherWriter struct {
+	http.ResponseWriter
+}
+
+func TestServerSSEAndEdgeCases(t *testing.T) {
+	tmpDir := t.TempDir()
+	mock := &mockDispatcher{}
+	srv := New(ServerConfig{Port: 9999, DataDir: tmpDir}, mock)
+
+	// Before Start: Port, Addr, Stop
+	if srv.Port() != 9999 {
+		t.Errorf("Expected Port 9999 before Start, got %d", srv.Port())
+	}
+	if srv.Addr() != "127.0.0.1:9999" {
+		t.Errorf("Expected Addr 127.0.0.1:9999 before Start, got %s", srv.Addr())
+	}
+	if err := srv.Stop(context.Background()); err != nil {
+		t.Errorf("Expected nil Stop error before Start, got %v", err)
+	}
+
+	// SSE with non-Flusher ResponseWriter
+	reqNonFlush := httptest.NewRequest(http.MethodGet, "/api/events", nil)
+	wNonFlush := &nonFlusherWriter{ResponseWriter: httptest.NewRecorder()}
+	srv.handleEvents(wNonFlush, reqNonFlush)
+
+	// SSE streaming with active client and broadcastEvent
+	ctx, cancel := context.WithCancel(context.Background())
+	reqSSE := httptest.NewRequest(http.MethodGet, "/api/events", nil).WithContext(ctx)
+	wSSE := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		srv.Handler().ServeHTTP(wSSE, reqSSE)
+		close(done)
+	}()
+
+	time.Sleep(25 * time.Millisecond)
+	mock.listener("gameUpdated", map[string]int{"ply": 10})
+	// Also test unmarshalable broadcast payload (channel)
+	mock.listener("badPayload", make(chan int))
+	time.Sleep(25 * time.Millisecond)
+	cancel()
+	<-done
+
+	if !bytes.Contains(wSSE.Body.Bytes(), []byte("event: connected")) || !bytes.Contains(wSSE.Body.Bytes(), []byte("gameUpdated")) {
+		t.Errorf("Expected SSE events in body, got: %s", wSSE.Body.String())
+	}
+
+	// Upload error cases: invalid multipart form & missing 'file' field
+	reqBadForm := httptest.NewRequest(http.MethodPost, "/api/upload", bytes.NewReader([]byte("not-multipart")))
+	reqBadForm.Header.Set("Content-Type", "multipart/form-data; boundary=xyz")
+	wBadForm := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(wBadForm, reqBadForm)
+	if wBadForm.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400 for invalid multipart form, got %d", wBadForm.Code)
+	}
+
+	var emptyForm bytes.Buffer
+	mw := multipart.NewWriter(&emptyForm)
+	_ = mw.WriteField("other", "val")
+	_ = mw.Close()
+	reqNoFile := httptest.NewRequest(http.MethodPost, "/api/upload", &emptyForm)
+	reqNoFile.Header.Set("Content-Type", mw.FormDataContentType())
+	wNoFile := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(wNoFile, reqNoFile)
+	if wNoFile.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400 for missing file field, got %d", wNoFile.Code)
+	}
+
+	// SPA 404 when no index.html exists in AssetsFS
+	emptyFS := fstest.MapFS{}
+	srvEmptyFS := New(ServerConfig{AssetsFS: emptyFS}, nil)
+	req404 := httptest.NewRequest(http.MethodGet, "/missing.js", nil)
+	w404 := httptest.NewRecorder()
+	srvEmptyFS.Handler().ServeHTTP(w404, req404)
+	if w404.Code != http.StatusNotFound {
+		t.Errorf("Expected 404 when index.html missing, got %d", w404.Code)
+	}
+
+	// Root request on SPA
+	rootFS := fstest.MapFS{
+		"frontend/dist/index.html": &fstest.MapFile{Data: []byte("root index")},
+	}
+	srvRootFS := New(ServerConfig{AssetsFS: rootFS}, nil)
+	reqRoot := httptest.NewRequest(http.MethodGet, "/", nil)
+	wRoot := httptest.NewRecorder()
+	srvRootFS.Handler().ServeHTTP(wRoot, reqRoot)
+	if wRoot.Code != http.StatusOK && wRoot.Code != http.StatusMovedPermanently {
+		t.Errorf("Expected 200 or 301 for root index.html, got %d", wRoot.Code)
+	}
+}
+
+
 

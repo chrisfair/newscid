@@ -261,6 +261,46 @@ func TestPersonaStatisticsAndSuggestions(t *testing.T) {
 	allSuggestions := SuggestIdentifiers(db, "", []string{})
 	assert.GreaterOrEqual(t, len(allSuggestions), 3)
 
+	// Tokenized query ("Last, First" where second token matches)
+	tokenSuggestions := SuggestIdentifiers(db, "Nonmatching, Kasparov", []string{})
+	assert.Contains(t, tokenSuggestions, "Kasparov, Garry")
+
+	// Add losses for White and Black to test all result branches in CalculatePersonaStatistics
+	game4 := &chess.Game{
+		Tags: map[string]string{
+			"White":  "Fair, Christopher",
+			"Black":  "EngineBot",
+			"Result": "0-1",
+			"Date":   "2021.01.01",
+			"ECO":    "A00",
+		},
+	}
+	_, _ = db.SaveGame(game4)
+	game5 := &chess.Game{
+		Tags: map[string]string{
+			"White":  "EngineBot",
+			"Black":  "Fair, Christopher",
+			"Result": "1-0",
+			"Date":   "2025.01.01",
+			"ECO":    "D00",
+		},
+	}
+	_, _ = db.SaveGame(game5)
+	game6 := &chess.Game{
+		Tags: map[string]string{
+			"White":  "Fair, Christopher",
+			"Black":  "EngineBot",
+			"Result": "1/2-1/2",
+			"Date":   "????.??.??",
+		},
+	}
+	_, _ = db.SaveGame(game6)
+	statsWithLosses := CalculatePersonaStatistics(db, persona)
+	assert.Equal(t, 2, statsWithLosses.Losses)
+	assert.Equal(t, 2, statsWithLosses.Draws)
+	assert.Equal(t, "2021.01.01", statsWithLosses.EarliestDate)
+	assert.Equal(t, "2025.01.01", statsWithLosses.LatestDate)
+
 	// Nil database or nil persona handling
 	nilStats := CalculatePersonaStatistics(nil, persona)
 	assert.Empty(t, nilStats.DisplayName)
@@ -418,4 +458,42 @@ func TestPersonaOnlineUsernamesAutoIncluded(t *testing.T) {
 	updated, err := pm.SavePersona(p)
 	require.NoError(t, err)
 	assert.Len(t, updated.Identifiers, 2)
+
+	// SavePersona with preset CreatedAt and ID, and AggregateGames with empty Identifiers + deleted source game
+	pPreset, err := pm.SavePersona(&Persona{
+		ID:           "preset-id",
+		DisplayName:  "Karpov",
+		CreatedAt:    123456,
+		DatabasePath: filepath.Join(tempDir, "karpov_db"),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(123456), pPreset.CreatedAt)
+	// Clear identifiers on stored persona to test DisplayName fallback in AggregateGames
+	pm.personas[pPreset.ID].Identifiers = nil
+
+	srcDB := &scid.Database{}
+	require.NoError(t, srcDB.Create(filepath.Join(tempDir, "src2"), "Src2"))
+	defer srcDB.Close()
+	gK1 := chess.NewGame()
+	gK1.SetTag("White", "Karpov, Anatoly")
+	gK1.SetTag("Black", "Someone")
+	_, _ = srcDB.SaveGame(gK1)
+	gK2 := chess.NewGame()
+	gK2.SetTag("White", "Deleted")
+	gK2.SetTag("Black", "Player")
+	_, _ = srcDB.SaveGame(gK2)
+	srcDB.Entries[1].Flags |= scid.FlagDelete
+
+	aggRes, err := pm.AggregateGames(srcDB, pPreset.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, aggRes.NewlyAdded)
+
+	// Substring match and deleted entry in CalculatePersonaStatistics
+	statsK := CalculatePersonaStatistics(srcDB, &Persona{
+		ID:          "k",
+		DisplayName: "Karpov",
+		Identifiers: []string{"Karpov"},
+	})
+	assert.Equal(t, 1, statsK.TotalGames)
 }
+

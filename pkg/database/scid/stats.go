@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"sort"
+
+	"newscid/pkg/chess"
 )
 
 // NameCountPair represents an item and its frequency in a ranking.
@@ -77,8 +79,8 @@ func (db *Database) GetStatistics() (*DatabaseStatistics, error) {
 	earliestYear := 9999
 	latestYear := 0
 
-	ecoCounts := make(map[string]int)
-	playerCounts := make(map[string]int)
+	ecoCounts := make(map[uint16]int)
+	playerIDCounts := make(map[uint32]int)
 
 	for _, entry := range db.Entries {
 		if (entry.Flags & FlagDelete) != 0 {
@@ -88,12 +90,12 @@ func (db *Database) GetStatistics() (*DatabaseStatistics, error) {
 		}
 
 		// Results
-		switch string(entry.Result) {
-		case "1-0":
+		switch entry.Result {
+		case chess.ResultWhiteWins:
 			stats.WhiteWins++
-		case "0-1":
+		case chess.ResultBlackWins:
 			stats.BlackWins++
-		case "1/2-1/2":
+		case chess.ResultDraw:
 			stats.Draws++
 		default:
 			stats.UnknownResults++
@@ -125,35 +127,23 @@ func (db *Database) GetStatistics() (*DatabaseStatistics, error) {
 		}
 
 		// Years
-		if len(entry.Date) >= 4 {
-			var y int
-			if _, err := fmt.Sscanf(entry.Date[:4], "%d", &y); err == nil && y > 1000 && y < 3000 {
-				if y < earliestYear {
-					earliestYear = y
-				}
-				if y > latestYear {
-					latestYear = y
-				}
+		if y := parseYear(entry.Date); y > 1000 && y < 3000 {
+			if y < earliestYear {
+				earliestYear = y
+			}
+			if y > latestYear {
+				latestYear = y
 			}
 		}
 
-		// ECO Openings
-		ecoStr := formatECO(entry.EcoCode)
-		if ecoStr != "" {
-			ecoCounts[ecoStr]++
+		// ECO Openings (accumulated by uint16 code in hot loop)
+		if entry.EcoCode != 0 {
+			ecoCounts[entry.EcoCode]++
 		}
 
-		// Players
-		if db.Names != nil {
-			wName := db.Names.GetName(NamePlayer, entry.WhiteID)
-			bName := db.Names.GetName(NamePlayer, entry.BlackID)
-			if wName != "" && wName != "?" {
-				playerCounts[wName]++
-			}
-			if bName != "" && bName != "?" {
-				playerCounts[bName]++
-			}
-		}
+		// Players (accumulated by uint32 ID in hot loop)
+		playerIDCounts[entry.WhiteID]++
+		playerIDCounts[entry.BlackID]++
 	}
 
 	if eloCount > 0 {
@@ -168,8 +158,8 @@ func (db *Database) GetStatistics() (*DatabaseStatistics, error) {
 
 	// Top ECOs
 	var ecoList []NameCountPair
-	for eco, count := range ecoCounts {
-		ecoList = append(ecoList, NameCountPair{Name: eco, Count: count})
+	for ecoCode, count := range ecoCounts {
+		ecoList = append(ecoList, NameCountPair{Name: formatECO(ecoCode), Count: count})
 	}
 	sort.Slice(ecoList, func(i, j int) bool {
 		return ecoList[i].Count > ecoList[j].Count
@@ -180,6 +170,15 @@ func (db *Database) GetStatistics() (*DatabaseStatistics, error) {
 	stats.TopOpenings = ecoList
 
 	// Top Players
+	playerCounts := make(map[string]int, len(playerIDCounts))
+	if db.Names != nil {
+		for pid, count := range playerIDCounts {
+			name := db.Names.GetName(NamePlayer, pid)
+			if name != "" && name != "?" {
+				playerCounts[name] += count
+			}
+		}
+	}
 	var playerList []NameCountPair
 	for player, count := range playerCounts {
 		playerList = append(playerList, NameCountPair{Name: player, Count: count})

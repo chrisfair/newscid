@@ -131,14 +131,14 @@ func (b *Board) ParseSAN(san string) (Move, error) {
 	promo := None
 	if idx := strings.IndexAny(clean, "=QRBNqrbn"); idx != -1 {
 		lastChar := clean[len(clean)-1]
-		switch strings.ToUpper(string(lastChar)) {
-		case "Q":
+		switch lastChar {
+		case 'Q', 'q':
 			promo = Queen
-		case "R":
+		case 'R', 'r':
 			promo = Rook
-		case "B":
+		case 'B', 'b':
 			promo = Bishop
-		case "N":
+		case 'N', 'n':
 			promo = Knight
 		}
 		clean = strings.TrimRight(clean, "=QRBNqrbn")

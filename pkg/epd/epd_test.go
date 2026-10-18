@@ -50,4 +50,19 @@ func TestFormatEPD(t *testing.T) {
 	assert.Contains(t, res, "1k1r4/pp1b1R2/1q1bp2p/3p4/8/1NBQ4/PPP3PP/7K w - -")
 	assert.Contains(t, res, "bm Bd4;")
 	assert.Contains(t, res, "id \"Tactics-01\";")
+
+	// Empty opcodes & bare opcode without operand & am opcode
+	assert.Equal(t, "1k1r4/pp1b1R2/1q1bp2p/3p4/8/1NBQ4/PPP3PP/7K w - -", Format(fen, nil))
+
+	rec2, err := Parse(`rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - am h4; flagonly;`)
+	require.NoError(t, err)
+	assert.Equal(t, "h4", rec2.AvoidMove)
+	assert.Equal(t, "", rec2.Opcodes["flagonly"])
+
+	formatted2 := Format("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -", map[string]string{
+		"flagonly": "",
+		"c0":       "comment text",
+	})
+	assert.Contains(t, formatted2, "flagonly;")
+	assert.Contains(t, formatted2, `c0 "comment text";`)
 }

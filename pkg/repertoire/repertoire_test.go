@@ -78,4 +78,26 @@ func TestRepertoireManager(t *testing.T) {
 	require.NoError(t, err)
 	_, err = mgr2.GetRepertoire("custom-caro-kann")
 	assert.Error(t, err)
+
+	// Test auto-slug ID and nil Positions on SaveRepertoire
+	autoRep := &repertoire.Repertoire{
+		Name:  "My Sicilian Lines",
+		Color: "b",
+	}
+	require.NoError(t, mgr2.SaveRepertoire(autoRep))
+	assert.Equal(t, "b-my-sicilian-lines", autoRep.ID)
+	assert.NotNil(t, autoRep.Positions)
+
+	// VerifyMove and RecordPractice on missing ID
+	_, _, _, err = mgr2.VerifyMove("missing-id", chess.StartingFEN, "e2e4")
+	assert.Error(t, err)
+	mgr2.RecordPractice("missing-id", chess.StartingFEN, "e2e4", false)
+
+	// CoreFEN with short string and leading/trailing spaces
+	assert.Equal(t, "short fen", repertoire.CoreFEN("  short fen  "))
+
+	// Test NewManager with empty storageDir (using temporary HOME)
+	t.Setenv("HOME", t.TempDir())
+	mgrDefault := repertoire.NewManager("")
+	assert.NotEmpty(t, mgrDefault.ListRepertoires())
 }

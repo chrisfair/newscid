@@ -120,51 +120,109 @@ type PlayerFairPlayDossier struct {
 	ReportMarkdown           string                    `json:"reportMarkdown"`
 }
 
-// ClassifyTimeControl maps PGN TimeControl headers and Event tags to "Bullet", "Blitz", "Rapid", or "Classical".
-func ClassifyTimeControl(tcHeader, eventHeader string) string {
+// TimeControlID is a compact integer constant representing time control buckets in hot paths.
+type TimeControlID uint8
+
+const (
+	TCBullet TimeControlID = iota
+	TCBlitz
+	TCRapid
+	TCClassical
+	tcCount = 4
+)
+
+var tcNames = [tcCount]string{"Bullet", "Blitz", "Rapid", "Classical"}
+
+func (tc TimeControlID) String() string {
+	if tc < tcCount {
+		return tcNames[tc]
+	}
+	return "Classical"
+}
+
+// ParseTimeControlID converts a category name to its integer constant.
+func ParseTimeControlID(cat string) TimeControlID {
+	switch cat {
+	case "Bullet":
+		return TCBullet
+	case "Blitz":
+		return TCBlitz
+	case "Rapid":
+		return TCRapid
+	default:
+		return TCClassical
+	}
+}
+
+// ClassificationID is an integer constant for statistical anomaly classification levels.
+type ClassificationID uint8
+
+const (
+	ClassNormal ClassificationID = iota
+	ClassMild
+	ClassElevated
+	ClassHighAnomaly
+)
+
+var classNames = [4]string{
+	"Normal Human Variance",
+	"Mild / Situational Anomaly",
+	"Elevated Consistent Issue",
+	"High Consistent Time-Control Anomaly",
+}
+
+func (c ClassificationID) String() string {
+	if int(c) < len(classNames) {
+		return classNames[c]
+	}
+	return classNames[0]
+}
+
+// ClassifyTimeControlID maps PGN TimeControl headers and Event tags to an integer TimeControlID constant.
+func ClassifyTimeControlID(tcHeader, eventHeader string) TimeControlID {
 	evLower := strings.ToLower(eventHeader)
 	if strings.Contains(evLower, "bullet") || strings.Contains(evLower, "ultrabullet") || strings.Contains(evLower, "hyperbullet") {
-		return "Bullet"
+		return TCBullet
 	}
 	if strings.Contains(evLower, "blitz") {
-		return "Blitz"
+		return TCBlitz
 	}
 	if strings.Contains(evLower, "rapid") {
-		return "Rapid"
+		return TCRapid
 	}
 	if strings.Contains(evLower, "classical") || strings.Contains(evLower, "correspondence") || strings.Contains(evLower, "daily") {
-		return "Classical"
+		return TCClassical
 	}
 
 	tc := strings.TrimSpace(tcHeader)
-	if tc == "" || tc == "-" || tc == "?" {
-		return "Classical"
-	}
-	// Handle formats like "180+2", "600", "1/86400", "40/5400+30"
-	if strings.Contains(tc, "/") {
-		return "Classical"
+	if tc == "" || tc == "-" || tc == "?" || strings.Contains(tc, "/") {
+		return TCClassical
 	}
 	parts := strings.Split(tc, "+")
 	baseSec, err := strconv.Atoi(strings.TrimSpace(parts[0]))
 	if err != nil {
-		return "Blitz"
+		return TCBlitz
 	}
 	incSec := 0
 	if len(parts) > 1 {
 		incSec, _ = strconv.Atoi(strings.TrimSpace(parts[1]))
 	}
-	// FIDE / Lichess estimated game duration: base + 40 * increment
 	estTotalSec := baseSec + 40*incSec
 	switch {
 	case estTotalSec < 180:
-		return "Bullet"
+		return TCBullet
 	case estTotalSec < 480:
-		return "Blitz"
+		return TCBlitz
 	case estTotalSec <= 1500:
-		return "Rapid"
+		return TCRapid
 	default:
-		return "Classical"
+		return TCClassical
 	}
+}
+
+// ClassifyTimeControl maps PGN TimeControl headers and Event tags to "Bullet", "Blitz", "Rapid", or "Classical".
+func ClassifyTimeControl(tcHeader, eventHeader string) string {
+	return ClassifyTimeControlID(tcHeader, eventHeader).String()
 }
 
 // AnalyzePlayerFairPlay scans up to maxGames for playerName in db and builds a full longitudinal dossier
@@ -261,20 +319,20 @@ func BuildPlayerFairPlayDossier(playerName string, games []*chess.Game, gameIDs 
 	dossier.DailyTimeline = dailyList
 	dossier.TotalDaysActive = len(dailyList)
 
-	// 2. Group by Time Control Category ("Bullet", "Blitz", "Rapid", "Classical")
-	tcOrder := []string{"Bullet", "Blitz", "Rapid", "Classical"}
-	byTC := make(map[string][]GameFairPlayRecord)
+	// 2. Group by Time Control using integer TimeControlID array indexing (TCBullet..TCClassical)
+	var byTC [tcCount][]GameFairPlayRecord
 	for _, r := range records {
-		byTC[r.TimeControlCategory] = append(byTC[r.TimeControlCategory], r)
+		tcID := ParseTimeControlID(r.TimeControlCategory)
+		byTC[tcID] = append(byTC[tcID], r)
 	}
 
-	profiles := make([]TimeControlIssueProfile, 0, len(byTC))
-	for _, cat := range tcOrder {
-		tcGames := byTC[cat]
+	profiles := make([]TimeControlIssueProfile, 0, int(tcCount))
+	for tcID := TimeControlID(0); tcID < tcCount; tcID++ {
+		tcGames := byTC[tcID]
 		if len(tcGames) == 0 {
 			continue
 		}
-		prof := buildTimeControlProfile(cat, tcGames)
+		prof := buildTimeControlProfile(tcID.String(), tcGames)
 		profiles = append(profiles, prof)
 	}
 
@@ -359,12 +417,14 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 		return GameFairPlayRecord{}, false
 	}
 
-	playerColor := "white"
+	playerColor := chess.White
+	playerColorStr := "white"
 	opponentName := blackName
 	playerElo, _ := strconv.Atoi(g.Tag("WhiteElo"))
 	opponentElo, _ := strconv.Atoi(g.Tag("BlackElo"))
 	if !isWhite && isBlack {
-		playerColor = "black"
+		playerColor = chess.Black
+		playerColorStr = "black"
 		opponentName = whiteName
 		playerElo, _ = strconv.Atoi(g.Tag("BlackElo"))
 		opponentElo, _ = strconv.Atoi(g.Tag("WhiteElo"))
@@ -380,13 +440,13 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 	playerScore := 0.5
 	switch resStr {
 	case "1-0":
-		if playerColor == "white" {
+		if playerColor == chess.White {
 			playerScore = 1.0
 		} else {
 			playerScore = 0.0
 		}
 	case "0-1":
-		if playerColor == "black" {
+		if playerColor == chess.Black {
 			playerScore = 1.0
 		} else {
 			playerScore = 0.0
@@ -432,10 +492,7 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 
 	for node != nil {
 		ply++
-		turnColor := "white"
-		if board.Turn == chess.Black {
-			turnColor = "black"
-		}
+		turnColor := board.Turn
 
 		isCapture := strings.Contains(node.SAN, "x")
 		complexity := estimateBoardComplexity(board)
@@ -461,7 +518,7 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 			}
 			if okClk {
 				hasClock = true
-				if turnColor == "white" {
+				if turnColor == chess.White {
 					if prevWhiteClk >= 0 {
 						spentSec = prevWhiteClk - clk + float64(incSec)
 					}
@@ -506,7 +563,7 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 			var lossCp float64
 			var isTop1 bool
 			if currHasEval && prevHasEval {
-				if turnColor == "white" {
+				if turnColor == chess.White {
 					lossCp = prevEvalWhiteCp - currEvalWhiteCp
 				} else {
 					lossCp = currEvalWhiteCp - prevEvalWhiteCp
@@ -596,7 +653,7 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 		Site:                    g.Tag("Site"),
 		TimeControlRaw:          tcRaw,
 		TimeControlCategory:     tcCat,
-		PlayerColor:             playerColor,
+		PlayerColor:             playerColorStr,
 		PlayerElo:               playerElo,
 		OpponentName:            opponentName,
 		OpponentElo:             opponentElo,
@@ -1271,17 +1328,22 @@ func round2(v float64) float64 {
 	return math.Round(v*100.0) / 100.0
 }
 
-func classifyIssueScore(score float64) string {
+// ClassifyIssueScoreID returns the compact integer ClassificationID for a 0-100 issue score.
+func ClassifyIssueScoreID(score float64) ClassificationID {
 	switch {
 	case score >= 75.0:
-		return "High Consistent Time-Control Anomaly"
+		return ClassHighAnomaly
 	case score >= 55.0:
-		return "Elevated Consistent Issue"
+		return ClassElevated
 	case score >= 38.0:
-		return "Mild / Situational Anomaly"
+		return ClassMild
 	default:
-		return "Normal Human Variance"
+		return ClassNormal
 	}
+}
+
+func classifyIssueScore(score float64) string {
+	return ClassifyIssueScoreID(score).String()
 }
 
 func buildKeyFindings(d *PlayerFairPlayDossier) []string {

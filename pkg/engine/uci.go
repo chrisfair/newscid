@@ -160,9 +160,6 @@ func (e *Engine) SetMultiPV(n int) error {
 func (e *Engine) GetMultiPV() int {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.multiPV <= 0 {
-		return 1
-	}
 	return e.multiPV
 }
 
@@ -554,8 +551,62 @@ func FormatPV(fen string, pvMoves []string) (candidateSAN string, formattedPV st
 }
 
 func isBlackToMove(fen string) bool {
-	fields := strings.Fields(fen)
-	return len(fields) >= 2 && fields[1] == "b"
+	for i := 0; i+1 < len(fen); i++ {
+		if fen[i] == ' ' {
+			return fen[i+1] == 'b'
+		}
+	}
+	return false
+}
+
+type uciTokenID uint8
+
+const (
+	uciTokOther uciTokenID = iota
+	uciTokDepth
+	uciTokMultiPV
+	uciTokScore
+	uciTokNPS
+	uciTokNodes
+	uciTokPV
+)
+
+func classifyUCIToken(t string) uciTokenID {
+	switch t {
+	case "depth":
+		return uciTokDepth
+	case "multipv":
+		return uciTokMultiPV
+	case "score":
+		return uciTokScore
+	case "nps":
+		return uciTokNPS
+	case "nodes":
+		return uciTokNodes
+	case "pv":
+		return uciTokPV
+	default:
+		return uciTokOther
+	}
+}
+
+type uciScoreKind uint8
+
+const (
+	scoreKindNone uciScoreKind = iota
+	scoreKindCP
+	scoreKindMate
+)
+
+func classifyScoreKind(s string) uciScoreKind {
+	switch s {
+	case "cp":
+		return scoreKindCP
+	case "mate":
+		return scoreKindMate
+	default:
+		return scoreKindNone
+	}
 }
 
 // ParseInfoLine parses a UCI 'info' line and returns the PVLine and whether it contained a PV.
@@ -569,41 +620,40 @@ func ParseInfoLine(line string, currentFEN string) (PVLine, bool) {
 	blackTurn := isBlackToMove(currentFEN)
 
 	for i := 0; i < len(tokens); i++ {
-		t := tokens[i]
-		switch t {
-		case "depth":
+		switch classifyUCIToken(tokens[i]) {
+		case uciTokDepth:
 			if i+1 < len(tokens) {
 				pvLine.Depth, _ = strconv.Atoi(tokens[i+1])
 			}
-		case "multipv":
+		case uciTokMultiPV:
 			if i+1 < len(tokens) {
 				mpv, err := strconv.Atoi(tokens[i+1])
 				if err == nil && mpv > 0 {
 					pvLine.MultiPV = mpv
 				}
 			}
-		case "score":
+		case uciTokScore:
 			if i+2 < len(tokens) {
-				typ := tokens[i+1]
+				kind := classifyScoreKind(tokens[i+1])
 				val, _ := strconv.Atoi(tokens[i+2])
 				if blackTurn {
 					val = -val
 				}
-				if typ == "cp" {
+				if kind == scoreKindCP {
 					pvLine.ScoreCp = val
-				} else if typ == "mate" {
+				} else if kind == scoreKindMate {
 					pvLine.MateIn = val
 				}
 			}
-		case "nps":
+		case uciTokNPS:
 			if i+1 < len(tokens) {
 				pvLine.NPS, _ = strconv.ParseInt(tokens[i+1], 10, 64)
 			}
-		case "nodes":
+		case uciTokNodes:
 			if i+1 < len(tokens) {
 				pvLine.Nodes, _ = strconv.ParseInt(tokens[i+1], 10, 64)
 			}
-		case "pv":
+		case uciTokPV:
 			pvLine.PV = tokens[i+1:]
 			if len(pvLine.PV) > 0 {
 				pvLine.MoveUCI = pvLine.PV[0]

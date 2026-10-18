@@ -26,6 +26,25 @@ type LaTeXExportOptions struct {
 	DiagramPly     int    `json:"diagramPly"`
 }
 
+type htmlTheme uint8
+
+const (
+	themeDark htmlTheme = iota
+	themeLight
+)
+
+func parseHTMLTheme(s string) htmlTheme {
+	if s == "" || s == "dark" {
+		return themeDark
+	}
+	return themeLight
+}
+
+var svgPieceEntities = [128]string{
+	'K': "&#9812;", 'Q': "&#9813;", 'R': "&#9814;", 'B': "&#9815;", 'N': "&#9816;", 'P': "&#9817;",
+	'k': "&#9818;", 'q': "&#9819;", 'r': "&#9820;", 'b': "&#9821;", 'n': "&#9822;", 'p': "&#9823;",
+}
+
 // ExportGameHTML exports a chess game into a self-contained, beautifully styled HTML document.
 func ExportGameHTML(g *chess.Game, opts HTMLExportOptions) (string, error) {
 	if g == nil {
@@ -41,10 +60,7 @@ func ExportGamesHTML(games []*chess.Game, opts HTMLExportOptions) (string, error
 		return "", fmt.Errorf("no games to export")
 	}
 
-	theme := opts.Theme
-	if theme == "" {
-		theme = "dark"
-	}
+	theme := parseHTMLTheme(opts.Theme)
 
 	title := opts.Title
 	if title == "" {
@@ -225,50 +241,21 @@ func getDiagramFEN(g *chess.Game, ply int) string {
 		}
 	}
 
-	// Default: final position
-	if ply < 0 {
-		curr := g.RootMove
-		for curr != nil {
-			if curr.Move.From != curr.Move.To {
-				b.MakeMove(curr.Move)
-			}
-			if curr.Next == nil {
-				if curr.FEN != "" {
-					return curr.FEN
-				}
-				if curr.Move.From != curr.Move.To {
-					return b.FEN()
-				}
-				return startFEN
-			}
-			curr = curr.Next
-		}
-		return startFEN
-	}
-
-	// Move forward to ply
 	currPly := 1
 	curr := g.RootMove
 	for curr != nil {
-		if curr.Move.From != curr.Move.To {
+		hasMove := curr.Move.From != curr.Move.To
+		if hasMove {
 			b.MakeMove(curr.Move)
 		}
-		if currPly == ply {
+		if (ply > 0 && currPly == ply) || curr.Next == nil {
 			if curr.FEN != "" {
 				return curr.FEN
 			}
-			if curr.Move.From != curr.Move.To {
+			if hasMove {
 				return b.FEN()
 			}
-		}
-		if curr.Next == nil {
-			if curr.FEN != "" {
-				return curr.FEN
-			}
-			if curr.Move.From != curr.Move.To {
-				return b.FEN()
-			}
-			break
+			return startFEN
 		}
 		curr = curr.Next
 		currPly++
@@ -302,30 +289,25 @@ func GenerateSVGChessboard(fen string, size int) string {
 		for f := 0; f < 8; f++ {
 			x := f * sqSize
 			y := r * sqSize
-			isLight := (r+f)%2 == 0
 			fill := "#f0d9b5"
-			if !isLight {
+			if (r+f)&1 != 0 {
 				fill = "#b58863"
 			}
 			sb.WriteString(fmt.Sprintf("  <rect x=\"%d\" y=\"%d\" width=\"%d\" height=\"%d\" fill=\"%s\" />\n", x, y, sqSize, sqSize, fill))
 		}
 	}
 
-	// Piece unicode symbols map
-	pieceUnicode := map[rune]string{
-		'K': "&#9812;", 'Q': "&#9813;", 'R': "&#9814;", 'B': "&#9815;", 'N': "&#9816;", 'P': "&#9817;",
-		'k': "&#9818;", 'q': "&#9819;", 'r': "&#9820;", 'b': "&#9821;", 'n': "&#9822;", 'p': "&#9823;",
-	}
-
 	fontSize := int(float64(sqSize) * 0.8)
 
-	// Draw pieces
+	// Draw pieces using integer ASCII lookup table
 	for r := 0; r < 8 && r < len(ranks); r++ {
 		f := 0
-		for _, ch := range ranks[r] {
+		for i := 0; i < len(ranks[r]); i++ {
+			ch := ranks[r][i]
 			if ch >= '1' && ch <= '8' {
 				f += int(ch - '0')
-			} else if symbol, ok := pieceUnicode[ch]; ok {
+			} else if ch < 128 && svgPieceEntities[ch] != "" {
+				symbol := svgPieceEntities[ch]
 				x := f*sqSize + sqSize/2
 				y := r*sqSize + int(float64(sqSize)*0.78)
 				color := "#18181b"
@@ -343,8 +325,8 @@ func GenerateSVGChessboard(fen string, size int) string {
 	return sb.String()
 }
 
-func getHTMLStyles(theme string) string {
-	isDark := theme == "dark"
+func getHTMLStyles(theme htmlTheme) string {
+	isDark := theme == themeDark
 	bg := "#ffffff"
 	cardBg := "#f8fafc"
 	text := "#0f172a"

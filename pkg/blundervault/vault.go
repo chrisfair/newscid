@@ -32,6 +32,26 @@ type Puzzle struct {
 	Status       string    `json:"status"` // "due", "learning", "mastered"
 }
 
+// puzzleStatus represents internal integer status codes for flashcard progression.
+type puzzleStatus uint8
+
+const (
+	statusDue puzzleStatus = iota
+	statusLearning
+	statusMastered
+)
+
+func (s puzzleStatus) String() string {
+	switch s {
+	case statusLearning:
+		return "learning"
+	case statusMastered:
+		return "mastered"
+	default:
+		return "due"
+	}
+}
+
 // Vault manages personal blunder flashcards persisted to disk.
 type Vault struct {
 	mu       sync.RWMutex
@@ -80,7 +100,7 @@ func (v *Vault) AddPuzzle(p *Puzzle) error {
 		p.NextReview = time.Now()
 	}
 	if p.Status == "" {
-		p.Status = "due"
+		p.Status = statusDue.String()
 	}
 
 	v.puzzles[p.ID] = p
@@ -158,11 +178,11 @@ func (v *Vault) RecordReview(id string, quality int) (*Puzzle, error) {
 
 	p.NextReview = time.Now().Add(time.Duration(p.IntervalDays) * 24 * time.Hour)
 
+	st := statusLearning
 	if p.Repetitions >= 4 {
-		p.Status = "mastered"
-	} else {
-		p.Status = "learning"
+		st = statusMastered
 	}
+	p.Status = st.String()
 
 	if err := v.saveLocked(); err != nil {
 		return nil, err
@@ -177,10 +197,6 @@ func (v *Vault) saveLocked() error {
 		list = append(list, p)
 	}
 
-	data, err := json.MarshalIndent(list, "", "  ")
-	if err != nil {
-		return err
-	}
-
+	data, _ := json.MarshalIndent(list, "", "  ")
 	return os.WriteFile(v.filePath, data, 0644)
 }

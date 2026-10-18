@@ -104,6 +104,40 @@ func TestBuildTreeFromDatabaseAndCoreFEN(t *testing.T) {
 	assert.Equal(t, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq", core)
 	shortFEN := "rnbqkbnr/pppppppp"
 	assert.Equal(t, shortFEN, tree.CoreFEN(shortFEN))
+
+	// 5. Populated database with maxGames limit + Custom StartFEN + Terminal position match
+	tmpBase := t.TempDir() + "/treetest"
+	realDB := scid.NewDatabase()
+	require.NoError(t, realDB.Create(tmpBase, "Tree Test"))
+	defer realDB.Close()
+
+	customFEN := "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
+	g1, err := chess.ParsePGN("[FEN \"" + customFEN + "\"]\n[Result \"1-0\"]\n\n1... e5 1-0")
+	require.NoError(t, err)
+	g2, err := chess.ParsePGN("[White \"A\"]\n[Black \"B\"]\n[Result \"0-1\"]\n\n1. e4 c5 0-1")
+	require.NoError(t, err)
+
+	_, err = realDB.SaveGame(g1)
+	require.NoError(t, err)
+	_, err = realDB.SaveGame(g2)
+	require.NoError(t, err)
+
+	dbTree, err := tree.BuildTreeFromDatabase(realDB, customFEN, 1)
+	require.NoError(t, err)
+	assert.Equal(t, 1, dbTree.TotalGames)
+	require.Len(t, dbTree.Moves, 1)
+	assert.Equal(t, "e5", dbTree.Moves[0].Move)
+
+	// Terminal position match (after 1... e5 in g1)
+	bEnd, _ := chess.ParseFEN(customFEN)
+	mE5, _ := bEnd.ParseSAN("e5")
+	bEnd.MakeMove(mE5)
+	endTree := tree.BuildTreeFromGames(bEnd.FEN(), []*chess.Game{g1})
+	assert.Equal(t, 1, endTree.TotalGames)
+	assert.Empty(t, endTree.Moves)
+
+	foundIndices := tree.SearchPositionInGames(customFEN, []*chess.Game{g1, g2})
+	assert.Equal(t, []int{0, 1}, foundIndices)
 }
 
 

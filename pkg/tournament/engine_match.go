@@ -306,6 +306,27 @@ func (r *EngineMatchRunner) Run(
 	return summary, nil
 }
 
+type evalSide int8
+
+const (
+	evalSideNeutral evalSide = 0
+	evalSideWhite   evalSide = 1
+	evalSideBlack   evalSide = -1
+)
+
+func outcomeToPGNString(r gameOutcome) string {
+	switch r {
+	case outcomeWhiteWins:
+		return "1-0"
+	case outcomeBlackWins:
+		return "0-1"
+	case outcomeDraw:
+		return "1/2-1/2"
+	default:
+		return "*"
+	}
+}
+
 func (r *EngineMatchRunner) playSingleGame(
 	ctx context.Context,
 	round int,
@@ -321,11 +342,12 @@ func (r *EngineMatchRunner) playSingleGame(
 	}
 
 	gameStart := time.Now()
+	outcome := outcomeUnknown
 	res := &EngineGameResult{
 		Round:       round,
 		WhiteEngine: whitePlayer.GetName(),
 		BlackEngine: blackPlayer.GetName(),
-		Result:      "*",
+		Result:      outcomeToPGNString(outcome),
 		MovesUCI:    make([]string, 0),
 		MovesSAN:    make([]string, 0),
 	}
@@ -335,13 +357,13 @@ func (r *EngineMatchRunner) playSingleGame(
 
 	ply := 0
 	consecutiveEvalCount := 0
-	lastEvalSide := 0 // 1 for white, -1 for black
+	lastEvalSide := evalSideNeutral
 
 	for ply < r.Config.MaxPlies {
 		select {
 		case <-ctx.Done():
 			res.Termination = "cancelled"
-			res.Result = "*"
+			res.Result = outcomeToPGNString(outcomeUnknown)
 			res.FinalFEN = board.FEN()
 			res.DurationMs = time.Since(gameStart).Milliseconds()
 			res.Plies = ply
@@ -354,22 +376,22 @@ func (r *EngineMatchRunner) playSingleGame(
 		if board.IsCheckmate() {
 			res.Termination = "checkmate"
 			if board.Turn == chess.White {
-				res.Result = "0-1"
+				outcome = outcomeBlackWins
 			} else {
-				res.Result = "1-0"
+				outcome = outcomeWhiteWins
 			}
 			break
 		}
 		if board.IsStalemate() {
 			res.Termination = "stalemate"
-			res.Result = "1/2-1/2"
+			outcome = outcomeDraw
 			break
 		}
 
 		// 2. 50-move rule
 		if board.HalfMove >= 100 {
 			res.Termination = "50-move rule"
-			res.Result = "1/2-1/2"
+			outcome = outcomeDraw
 			break
 		}
 
@@ -386,9 +408,9 @@ func (r *EngineMatchRunner) playSingleGame(
 		if err != nil {
 			res.Termination = fmt.Sprintf("engine error: %v", err)
 			if board.Turn == chess.White {
-				res.Result = "0-1"
+				outcome = outcomeBlackWins
 			} else {
-				res.Result = "1-0"
+				outcome = outcomeWhiteWins
 			}
 			break
 		}
@@ -397,9 +419,9 @@ func (r *EngineMatchRunner) playSingleGame(
 		if moveUCI == "" {
 			res.Termination = "engine forfeited (empty move)"
 			if board.Turn == chess.White {
-				res.Result = "0-1"
+				outcome = outcomeBlackWins
 			} else {
-				res.Result = "1-0"
+				outcome = outcomeWhiteWins
 			}
 			break
 		}
@@ -409,9 +431,9 @@ func (r *EngineMatchRunner) playSingleGame(
 		if err != nil {
 			res.Termination = fmt.Sprintf("engine illegal move %s: %v", moveUCI, err)
 			if board.Turn == chess.White {
-				res.Result = "0-1"
+				outcome = outcomeBlackWins
 			} else {
-				res.Result = "1-0"
+				outcome = outcomeWhiteWins
 			}
 			break
 		}
@@ -428,7 +450,7 @@ func (r *EngineMatchRunner) playSingleGame(
 		seenPositions[repKey]++
 		if seenPositions[repKey] >= 3 {
 			res.Termination = "3-fold repetition"
-			res.Result = "1/2-1/2"
+			outcome = outcomeDraw
 			break
 		}
 
@@ -436,31 +458,31 @@ func (r *EngineMatchRunner) playSingleGame(
 		if r.Config.AdjudicateEvalCp > 0 && evalInfo.Depth >= 6 {
 			score := evalInfo.ScoreCp
 			if score >= r.Config.AdjudicateEvalCp {
-				if lastEvalSide == 1 {
+				if lastEvalSide == evalSideWhite {
 					consecutiveEvalCount++
 				} else {
-					lastEvalSide = 1
+					lastEvalSide = evalSideWhite
 					consecutiveEvalCount = 1
 				}
 			} else if score <= -r.Config.AdjudicateEvalCp {
-				if lastEvalSide == -1 {
+				if lastEvalSide == evalSideBlack {
 					consecutiveEvalCount++
 				} else {
-					lastEvalSide = -1
+					lastEvalSide = evalSideBlack
 					consecutiveEvalCount = 1
 				}
 			} else {
 				consecutiveEvalCount = 0
-				lastEvalSide = 0
+				lastEvalSide = evalSideNeutral
 			}
 
 			if consecutiveEvalCount >= 4 {
-				if lastEvalSide == 1 {
+				if lastEvalSide == evalSideWhite {
 					res.Termination = fmt.Sprintf("adjudication (+%d cp for White)", r.Config.AdjudicateEvalCp)
-					res.Result = "1-0"
+					outcome = outcomeWhiteWins
 				} else {
 					res.Termination = fmt.Sprintf("adjudication (+%d cp for Black)", r.Config.AdjudicateEvalCp)
-					res.Result = "0-1"
+					outcome = outcomeBlackWins
 				}
 				break
 			}
@@ -486,11 +508,12 @@ func (r *EngineMatchRunner) playSingleGame(
 		}
 	}
 
-	if res.Result == "*" {
+	if outcome == outcomeUnknown {
 		res.Termination = fmt.Sprintf("max plies reached (%d)", r.Config.MaxPlies)
-		res.Result = "1/2-1/2"
+		outcome = outcomeDraw
 	}
 
+	res.Result = outcomeToPGNString(outcome)
 	res.Plies = ply
 	res.FinalFEN = board.FEN()
 	res.DurationMs = time.Since(gameStart).Milliseconds()

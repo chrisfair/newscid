@@ -113,6 +113,12 @@ func TestGenerateProphylaxisDrillsFromDatabase(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, drills)
 
+	// Alternative UCI answer ("pro-03-nimzowitsch-blockade" accepts "a2a3")
+	resAlt, err := SubmitProphylaxisAnswer("pro-03-nimzowitsch-blockade", "a2a3")
+	require.NoError(t, err)
+	assert.True(t, resAlt.IsCorrect)
+	assert.Equal(t, 150, resAlt.PointsAwarded)
+
 	// 3. Empty DB falls back to batch
 	emptyDir := t.TempDir()
 	emptyDB := scid.NewDatabase()
@@ -122,5 +128,27 @@ func TestGenerateProphylaxisDrillsFromDatabase(t *testing.T) {
 	fallbackDrills, err := GenerateProphylaxisDrillsFromDatabase(emptyDB, 2)
 	require.NoError(t, err)
 	assert.NotEmpty(t, fallbackDrills)
+
+	// 4. DB with quiet king move (Kh8 by Black at ply >= 14) and custom StartFEN
+	kingDB := scid.NewDatabase()
+	require.NoError(t, kingDB.Create(filepath.Join(t.TempDir(), "pro_king"), "Pro King"))
+	gKing, err := chess.ParsePGN("1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. O-O Nf6 5. d3 O-O 6. c3 d6 7. b4 Bb6 8. a4 a6 9. Kh1 Kh8 1-0")
+	require.NoError(t, err)
+	gKing.StartFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 1 1"
+	_, err = kingDB.SaveGame(gKing)
+	require.NoError(t, err)
+
+	kingDrills, err := GenerateProphylaxisDrillsFromDatabase(kingDB, 5)
+	require.NoError(t, err)
+	assert.NotEmpty(t, kingDrills)
+
+	// 5. DB with short game (<14 plies) that yields 0 drills -> fallback to batch
+	shortDB := scid.NewDatabase()
+	require.NoError(t, shortDB.Create(filepath.Join(t.TempDir(), "pro_short"), "Pro Short"))
+	gShort, _ := chess.ParsePGN("1. e4 e5 1-0")
+	_, _ = shortDB.SaveGame(gShort)
+	fbShort, err := GenerateProphylaxisDrillsFromDatabase(shortDB, 2)
+	require.NoError(t, err)
+	assert.NotEmpty(t, fbShort)
 }
 

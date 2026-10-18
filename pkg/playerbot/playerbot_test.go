@@ -209,3 +209,85 @@ func TestBuildPersonalityFromIdentifiers(t *testing.T) {
 	assert.True(t, skill >= 0)
 	assert.Equal(t, personality.ContemptValue, contempt)
 }
+
+func TestBuildPersonality_PlayStylesAndEdgeCases(t *testing.T) {
+	tmpDir := t.TempDir()
+	basePath := filepath.Join(tmpDir, "styles_base")
+	db := scid.NewDatabase()
+	require.NoError(t, db.Create(basePath, "Styles Test"))
+	defer db.Close()
+
+	pgns := []string{
+		// SolidPlayer: high draw rate (>35%) and no Elo (tests default 1500 Elo, black draw, white loss)
+		`[Event "Solid"]
+[White "SolidPlayer"]
+[Black "Other"]
+[Result "1/2-1/2"]
+
+1. d4 d5 2. c4 e6 1/2-1/2`,
+		`[Event "Solid"]
+[White "Other"]
+[Black "SolidPlayer"]
+[Result "1/2-1/2"]
+
+1. e4 c6 2. d4 d5 1/2-1/2`,
+		`[Event "Solid"]
+[White "SolidPlayer"]
+[Black "Other"]
+[Result "0-1"]
+
+1. d4 Nf6 0-1`,
+		`[Event "Solid"]
+[White "Other"]
+[Black "SolidPlayer"]
+[Result "1-0"]
+
+1. e4 e5 1-0`,
+
+		// CustomFENPlayer: starts from custom FEN, short decisive game
+		`[Event "Custom"]
+[White "CustomFENPlayer"]
+[Black "Victim"]
+[SetUp "1"]
+[FEN "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"]
+[Result "1-0"]
+
+2... Nc6 3. Bb5 a6 1-0`,
+	}
+
+	for _, p := range pgns {
+		g, err := chess.ParsePGN(p)
+		require.NoError(t, err)
+		_, err = db.SaveGame(g)
+		require.NoError(t, err)
+	}
+
+	// Mark one game deleted to test deleted-entry skip
+	db.Entries[0].Flags |= scid.FlagDelete
+
+	pSolid, err := playerbot.BuildPersonality(db, "SolidPlayer")
+	require.NoError(t, err)
+	assert.Equal(t, 1500, pSolid.EstimatedElo)
+	assert.Equal(t, "Balanced All-Rounder", pSolid.PlayStyle)
+	assert.Equal(t, 1, pSolid.Draws)
+	assert.Equal(t, 2, pSolid.Losses)
+
+	// Un-delete game 1 so SolidPlayer has 50% draws (>35% -> Solid Positional)
+	db.Entries[0].Flags &^= scid.FlagDelete
+	pSolid2, err := playerbot.BuildPersonality(db, "SolidPlayer")
+	require.NoError(t, err)
+	assert.Equal(t, "Solid Positional", pSolid2.PlayStyle)
+
+	pCustom, err := playerbot.BuildPersonality(db, "CustomFENPlayer")
+	require.NoError(t, err)
+	assert.Equal(t, "Tactical Attacker", pCustom.PlayStyle)
+
+	// Test short FEN normalization and emptyUCI candidate fallback
+	_, ok := pCustom.SelectSimulatedMove("shortfen", true)
+	assert.False(t, ok)
+	pCustom.WhiteBook["shortfen"] = []playerbot.BookMove{{UCI: "", SAN: "e4", PlayedCount: 0}}
+	sim, ok := pCustom.SelectSimulatedMove("shortfen", true)
+	assert.True(t, ok)
+	assert.Equal(t, "e4", sim.SAN)
+}
+

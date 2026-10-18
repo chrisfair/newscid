@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"newscid/pkg/chess"
@@ -1183,6 +1184,469 @@ func TestDatabaseUpdateGameTagsAndSpellcheck(t *testing.T) {
 	spellSummary, err := db.StandardizePlayerNames()
 	require.NoError(t, err)
 	assert.NotNil(t, spellSummary)
+
+	// Database with already-canonical names has 0 corrections needed
+	cleanDB, _ := createTestDatabase(t, 0)
+	defer cleanDB.Close()
+	cleanDB.Names.AddName(NamePlayer, "Carlsen, Magnus")
+	cleanSummary, err := cleanDB.StandardizePlayerNames()
+	require.NoError(t, err)
+	assert.Equal(t, 0, cleanSummary.CorrectionsMade)
+
+	// Nil Names in StandardizeDatabase
+	cleanDB.Names = nil
+	nilNamesSummary, err := cleanDB.StandardizePlayerNames()
+	require.NoError(t, err)
+	assert.Equal(t, 0, nilNamesSummary.CorrectionsMade)
+}
+
+func TestSignatureSetAndMergeEdgeCases(t *testing.T) {
+	var nilSet *GameSignatureSet
+	assert.Equal(t, 0, nilSet.Count())
+	nilSet.AddEntry("W", "B", "S", "2024.01.01", "1-0", 40)
+	assert.False(t, nilSet.ContainsEntry("W", "B", "S", "2024.01.01", "1-0", 40))
+	assert.False(t, nilSet.ContainsGame(nil))
+	nilSet.AddGame(nil)
+	gamesIn := []*chess.Game{chess.NewGame()}
+	filteredNil, skippedNil := nilSet.FilterNewGames(gamesIn)
+	assert.Len(t, filteredNil, 1)
+	assert.Equal(t, 0, skippedNil)
+
+	var nilDB *Database
+	emptySet := nilDB.BuildGameSignatureSet()
+	assert.Equal(t, 0, emptySet.Count())
+
+	set := &GameSignatureSet{} // uninitialized map
+	set.AddEntry("Carlsen", "Nakamura", "https://lichess.org/abc", "2024-05-01", "1-0", 60)
+	assert.Equal(t, 1, set.Count())
+	assert.True(t, set.ContainsEntry("Carlsen", "Nakamura", "Local", "2024.05.01", "1-0", 60))
+	assert.True(t, set.ContainsEntry("Other", "Player", "https://lichess.org/abc", "2020.01.01", "*", 10))
+
+	gLink := chess.NewGame()
+	gLink.SetTag("White", "Player1")
+	gLink.SetTag("Black", "Player2")
+	gLink.SetTag("Date", "????.??.??")
+	gLink.SetTag("UTCDate", "2024.06.01")
+	gLink.SetTag("Link", "https://chess.com/game/123")
+	gLink.Result = ""
+	gLink.SetTag("Result", "0-1")
+	gLink.Result = "" // test fallback to Tag("Result")
+
+	gDup := chess.NewGame()
+	gDup.SetTag("Link", "https://chess.com/game/123")
+
+	accepted, skipped := set.FilterNewGames([]*chess.Game{nil, gLink, gDup})
+	assert.Len(t, accepted, 1)
+	assert.Equal(t, 1, skipped)
+	assert.True(t, set.ContainsGame(gLink))
+
+	// MergeFromDatabases edge cases
+	closedDB := NewDatabase()
+	_, err := closedDB.MergeFromDatabases([]string{"a"}, nil)
+	assert.Error(t, err)
+
+	db, _ := createTestDatabase(t, 2)
+	defer db.Close()
+	_ = db.DeleteGame(2, true) // cover deleted entry in BuildGameSignatureSet
+	db.Lock()
+	db.Unlock()
+
+	srcDir := t.TempDir()
+	srcSi4 := filepath.Join(srcDir, "srcbase")
+	sDB := NewDatabase()
+	require.NoError(t, sDB.Create(srcSi4, "Src"))
+	gNew, _ := chess.ParsePGN("[White \"NewW\"]\n[Black \"NewB\"]\n[WhiteElo \"2500\"]\n[BlackElo \"2400\"]\n[Result \"1-0\"]\n\n1. d4 d5 1-0")
+	_, _ = sDB.SaveGame(gNew)
+	_ = sDB.Close()
+
+	srcPgn := filepath.Join(srcDir, "src.pgn")
+	require.NoError(t, os.WriteFile(srcPgn, []byte("[White \"PgnW\"]\n[Black \"PgnB\"]\n[WhiteElo \"2600\"]\n[BlackElo \"2550\"]\n[Result \"0-1\"]\n\n1. c4 e5 0-1\n"), 0644))
+
+	progressCalled := 0
+	badPgn := filepath.Join(srcDir, "nonexistent.pgn")
+	ms, err := db.MergeFromDatabases([]string{"   ", badPgn, "/nonexistent/base.si4", srcSi4, srcPgn}, func(src string, sc, imp, sk int) {
+		progressCalled++
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, ms.Errors)
+	assert.Equal(t, 2, ms.Imported)
+	assert.Greater(t, progressCalled, 0)
+}
+
+func TestGamedataAllPieceMovesAndComments(t *testing.T) {
+	db, _ := createTestDatabase(t, 0)
+	defer db.Close()
+
+	// Build a game exercising Queen horiz/vert/diag, Rook horiz/vert, Bishop both diags,
+	// King moves, Knight moves, Black pawn moves, Clock/EMT comments, long tags, and PlyCount=0 calculation
+	g, err := chess.ParsePGN(`[Event "All Piece Moves"]
+[White "Alpha"]
+[Black "Beta"]
+[WhiteElo "2800"]
+[BlackElo "2750"]
+[Result "1/2-1/2"]
+
+1. e4 {[%clk 0:05:00] [%emt 0:00:02] Opening} 1... e5 2. d4 exd4 3. Qxd4 Nc6 4. Qd1 Bc5 5. Qd3 Qe7 6. Be3 Bb4+ 7. Ke2 Qe5 8. Nf3 Qxb2 9. Nbd2 Bxd2 10. Rb1 Qc3 11. Rb3 Qa5 1/2-1/2`)
+	require.NoError(t, err)
+	g.PlyCount = 0 // Force SaveGame to count RootMove plies
+	g.Tags[""] = "skip_empty_key"
+	g.Tags[strings.Repeat("K", 250)] = strings.Repeat("V", 260)
+
+	id, err := db.SaveGame(g)
+	require.NoError(t, err)
+	assert.Equal(t, 1, id)
+
+	decoded, err := db.GetGame(1)
+	require.NoError(t, err)
+	assert.Equal(t, "0:05:00", decoded.RootMove.Clock)
+	assert.Equal(t, "0:00:02", decoded.RootMove.EMT)
+	assert.Contains(t, decoded.RootMove.Comment, "Opening")
+
+	// Test DecodeGameData truncation at every byte offset
+	rawBytes, err := EncodeGameData(g)
+	require.NoError(t, err)
+	for cut := 0; cut < len(rawBytes); cut++ {
+		_, _ = DecodeGameData(rawBytes[:cut], db.Entries[0], db.Names)
+	}
+
+	// Test ReadIndexHeader truncation at every byte offset
+	var hdrBuf bytes.Buffer
+	require.NoError(t, WriteIndexHeader(&hdrBuf, db.Header))
+	hdrBytes := hdrBuf.Bytes()
+	for cut := 0; cut < len(hdrBytes); cut++ {
+		_, _ = ReadIndexHeader(bytes.NewReader(hdrBytes[:cut]))
+	}
+
+	// Test NameBase.Read truncation at every byte offset
+	var nbBuf bytes.Buffer
+	require.NoError(t, db.Names.Write(&nbBuf))
+	nbBytes := nbBuf.Bytes()
+	for cut := 0; cut < len(nbBytes); cut++ {
+		tmpNB := NewNameBase()
+		_ = tmpNB.Read(bytes.NewReader(nbBytes[:cut]))
+	}
+
+	// Test gameResult helper branches
+	assert.Equal(t, chess.ResultUnderway, gameResult(nil))
+	gRes := chess.NewGame()
+	gRes.Result = ""
+	gRes.Tags["Result"] = "1-0"
+	assert.Equal(t, chess.ResultWhiteWins, gameResult(gRes))
+	gRes.Tags["Result"] = "*"
+	assert.Equal(t, chess.ResultUnderway, gameResult(gRes))
+
+	// GetGameSummaries offset >= total
+	sums, total, err := db.GetGameSummaries(10, 5, SearchCriteria{})
+	require.NoError(t, err)
+	assert.Empty(t, sums)
+	assert.Equal(t, 1, total)
+}
+
+func TestSearchAdvAndSpellCheckRemainingBranches(t *testing.T) {
+	// MaterialCriteria branches
+	var nilMC *MaterialCriteria
+	assert.False(t, nilMC.IsActive())
+
+	b := chess.NewBoard()
+	mcBlack := DefaultMaterialCriteria()
+	mcBlack.BlackQ = 1
+	assert.True(t, mcBlack.IsActive())
+
+	mcDiff := DefaultMaterialCriteria()
+	mcDiff.DiffRooks = 0
+	assert.True(t, mcDiff.IsActive())
+
+	// Individual mismatch checks
+	for _, fn := range []func(*MaterialCriteria){
+		func(m *MaterialCriteria) { m.WhiteB = 9 },
+		func(m *MaterialCriteria) { m.WhiteN = 9 },
+		func(m *MaterialCriteria) { m.WhiteP = 9 },
+		func(m *MaterialCriteria) { m.BlackB = 9 },
+		func(m *MaterialCriteria) { m.BlackN = 9 },
+		func(m *MaterialCriteria) { m.BlackP = 9 },
+		func(m *MaterialCriteria) { m.DiffRooks = 5 },
+		func(m *MaterialCriteria) { m.DiffBishops = 5 },
+		func(m *MaterialCriteria) { m.DiffKnights = 5 },
+		func(m *MaterialCriteria) { m.DiffPawns = 5 },
+	} {
+		mc := DefaultMaterialCriteria()
+		fn(&mc)
+		assert.False(t, mc.MatchesBoard(b))
+	}
+
+	// OppositeBishops with no bishops
+	emptyB := chess.NewBoard()
+	emptyB.Clear()
+	mcOpp := DefaultMaterialCriteria()
+	mcOpp.OppositeBishops = true
+	assert.True(t, mcOpp.IsActive())
+	assert.False(t, mcOpp.MatchesBoard(emptyB))
+
+	// Hedgehog and Dragon pawn structures
+	bHedge := chess.NewBoard()
+	bHedge.Clear()
+	for _, sq := range []chess.Square{chess.A6, chess.B6, chess.D6, chess.E6} {
+		bHedge.SetPiece(sq, chess.BP)
+	}
+	assert.True(t, MatchesPawnStructure(bHedge, "hedgehog"))
+	bHedge.SetPiece(chess.C7, chess.BP) // block c-file
+	assert.False(t, MatchesPawnStructure(bHedge, "hedgehog"))
+
+	bDragon := chess.NewBoard()
+	bDragon.Clear()
+	for _, sq := range []chess.Square{chess.D6, chess.G6, chess.H7} {
+		bDragon.SetPiece(sq, chess.BP)
+	}
+	assert.True(t, MatchesPawnStructure(bDragon, "dragon"))
+
+	// MatchesGameAnnotation variations & empty
+	g := chess.NewGame()
+	assert.True(t, MatchesGameAnnotation(g, "", ""))
+	g.RootMove = &chess.MoveNode{
+		SAN: "e4",
+		Variations: []*chess.MoveNode{
+			{SAN: "d4", Comment: "secret variation note"},
+		},
+	}
+	assert.True(t, MatchesGameAnnotation(g, "secret variation", ""))
+
+	// MatchEndOnly in database search
+	db, _ := createTestDatabase(t, 1)
+	defer db.Close()
+	mcEnd := DefaultMaterialCriteria()
+	mcEnd.WhiteQ = 1
+	mcEnd.MatchEndOnly = true
+	assert.Equal(t, 1, db.CountMatches(SearchCriteria{Material: &mcEnd}))
+
+	// Verify WARNING status (version mismatch, no errors)
+	db.Header.Version = 300
+	rep, err := db.Verify()
+	require.NoError(t, err)
+	assert.Equal(t, "WARNING", rep.Status)
+
+	// SpellChecker edge cases
+	sc := NewSpellChecker()
+	sc.AddCanonical("")
+	sc.AddCanonical("Doe, Jane", "Doe, Jane")
+	assert.Equal(t, "Doe, Jane", sc.StandardizeName("Jane Doe"))
+	assert.Equal(t, "Garry Kasparov", CleanPlayerName("Garry Kasparov GM"))
+	assert.Equal(t, "", CleanPlayerName("   "))
+	assert.Equal(t, "   ", sc.StandardizeName("   "))
+	assert.Nil(t, sc.FindSuggestions("", 0))
+	assert.NotEmpty(t, sc.FindSuggestions("Kasparov, Garry", 1))
+	assert.Equal(t, 3, LevenshteinDistance("", "abc"))
+	assert.Equal(t, 3, LevenshteinDistance("abc", ""))
+	_, err = sc.StandardizeDatabase(nil)
+	assert.Error(t, err)
+	_, err = sc.StandardizeDatabase(NewDatabase())
+	assert.Error(t, err)
+}
+
+func TestAdditionalErrorAndEdgeBranches(t *testing.T) {
+	// 1. NameBase low/mid/high frequency & long name > 255 write/read & stepFailWriter
+	nbLow := NewNameBase()
+	nbLow.AddName(NamePlayer, strings.Repeat("A", 260))
+	nbLow.AddName(NamePlayer, "SecondPlayer")
+	for maxW := 0; maxW <= 20; maxW++ {
+		_ = nbLow.Write(&stepFailWriter{maxWrites: maxW})
+	}
+
+	nbMid := NewNameBase()
+	nbMid.Counts[NamePlayer] = 1
+	nbMid.MaxFreq[NamePlayer] = 500
+	nbMid.NamesByID[NamePlayer][0] = "Mid"
+	nbMid.Frequencies[NamePlayer][0] = 500
+	for maxW := 0; maxW <= 15; maxW++ {
+		_ = nbMid.Write(&stepFailWriter{maxWrites: maxW})
+	}
+	var midBuf bytes.Buffer
+	require.NoError(t, nbMid.Write(&midBuf))
+	for cut := 0; cut < midBuf.Len(); cut++ {
+		_ = NewNameBase().Read(bytes.NewReader(midBuf.Bytes()[:cut]))
+	}
+
+	nbHigh := NewNameBase()
+	nbHigh.Counts[NamePlayer] = 65536
+	nbHigh.MaxFreq[NamePlayer] = 70000
+	nbHigh.NamesByID[NamePlayer][0] = "H"
+	nbHigh.Frequencies[NamePlayer][0] = 70000
+	for maxW := 0; maxW <= 15; maxW++ {
+		_ = nbHigh.Write(&stepFailWriter{maxWrites: maxW})
+	}
+	var highBuf bytes.Buffer
+	_ = nbHigh.Write(&highBuf)
+	for cut := 30; cut <= 45 && cut < highBuf.Len(); cut++ {
+		_ = NewNameBase().Read(bytes.NewReader(highBuf.Bytes()[:cut]))
+	}
+
+	// 2. MaterialCriteria WhiteR and BlackQ mismatches
+	b := chess.NewBoard()
+	mcWR := DefaultMaterialCriteria()
+	mcWR.WhiteR = 9
+	assert.False(t, mcWR.MatchesBoard(b))
+	mcBQ := DefaultMaterialCriteria()
+	mcBQ.BlackQ = 9
+	assert.False(t, mcBQ.MatchesBoard(b))
+
+	// 3. Statistics with > 8 ECOs and > 8 Players, plus invalid short date for parseYear
+	dbStats, _ := createTestDatabase(t, 10)
+	defer dbStats.Close()
+	for i := 0; i < 10; i++ {
+		pName := "Player_" + string(rune('A'+i))
+		pid := dbStats.Names.AddName(NamePlayer, pName)
+		dbStats.Entries[i].WhiteID = pid
+		dbStats.Entries[i].EcoCode = uint16(100 + i)
+	}
+	dbStats.Entries[0].Date = "99"
+	st, err := dbStats.GetStatistics()
+	require.NoError(t, err)
+	assert.Len(t, st.TopOpenings, 8)
+	assert.Len(t, st.TopPlayers, 8)
+	assert.Equal(t, 0, dbStats.CountMatches(SearchCriteria{YearFrom: 2000, ECO: "A00"}))
+
+	// 4. Verify with invalid BlackID, size mismatch, and missing si4/sn4
+	dbVer, verPath := createTestDatabase(t, 2)
+	defer dbVer.Close()
+	dbVer.Entries[0].BlackID = 999999
+	fSiAppend, err := os.OpenFile(verPath+".si4", os.O_WRONLY|os.O_APPEND, 0644)
+	require.NoError(t, err)
+	_, _ = fSiAppend.Write([]byte{1, 2, 3})
+	_ = fSiAppend.Close()
+	rep1, err := dbVer.Verify()
+	require.NoError(t, err)
+	assert.NotEmpty(t, rep1.Warnings)
+	assert.NotEmpty(t, rep1.Errors)
+
+	_ = os.Remove(verPath + ".si4")
+	_ = os.Remove(verPath + ".sn4")
+	rep2, err := dbVer.Verify()
+	require.NoError(t, err)
+	assert.Equal(t, "CORRUPTED", rep2.Status)
+
+	// 5. InspectDatabase fallback when si4 header is invalid but size > IndexHeaderSize
+	corruptSiDir := t.TempDir()
+	corruptSiBase := filepath.Join(corruptSiDir, "badhdr")
+	require.NoError(t, os.WriteFile(corruptSiBase+".si4", make([]byte, IndexHeaderSize+IndexEntrySize*3), 0644))
+	require.NoError(t, os.WriteFile(corruptSiBase+".sn4", []byte("bad"), 0644))
+	require.NoError(t, os.WriteFile(corruptSiBase+".sg4", []byte("bad"), 0644))
+	insp := InspectDatabase(corruptSiBase, "User")
+	assert.True(t, insp.Exists)
+	assert.Equal(t, 3, insp.NumGames)
+
+	// 6. Open with corrupt .sn4 and corrupt .si4
+	require.Error(t, NewDatabase().Open(corruptSiBase))
+	validNB := NewNameBase()
+	require.NoError(t, validNB.WriteToFile(corruptSiBase+".sn4"))
+	require.Error(t, NewDatabase().Open(corruptSiBase))
+
+	// 7. File I/O error branches when BasePath points to invalid path on open DB
+	dbBadIO, _ := createTestDatabase(t, 2)
+	defer dbBadIO.Close()
+	_ = dbBadIO.DeleteGame(1, true)
+	dbBadIO.BasePath = "/proc/invalid_scid_dir/db"
+
+	_, err = dbBadIO.SaveGame(chess.NewGame())
+	assert.Error(t, err)
+	assert.Error(t, dbBadIO.DeleteGame(1, false))
+	assert.Error(t, dbBadIO.UpdateGameTags(1, map[string]string{"White": "New Name"}))
+	assert.Error(t, dbBadIO.UpdateGameTags(1, map[string]string{"Date": "2025.01.01"}))
+	assert.Error(t, dbBadIO.Sort(SortCriteria{Field: SortByDate}))
+	_, err = dbBadIO.ImportGames([]*chess.Game{chess.NewGame()})
+	assert.Error(t, err)
+	_, err = dbBadIO.MergeFromDatabases([]string{"src"}, nil)
+	assert.Error(t, err)
+	_, err = dbBadIO.FindDuplicates(DuplicateCriteria{ExactMoves: true})
+	assert.Error(t, err)
+	_, err = dbBadIO.DeleteDuplicates(DuplicateCriteria{ExactMoves: false})
+	assert.Error(t, err)
+
+	dbBadIO.Names.AddName(NamePlayer, "Kasparov, G.")
+	dbBadIO.Entries[1].WhiteID = 0
+	_, err = dbBadIO.StandardizePlayerNames()
+	assert.Error(t, err)
+
+	// 8. DecodeGameData with non-standard start FEN (valid & invalid)
+	gCustomFEN := chess.NewGame()
+	gCustomFEN.StartFEN = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
+	rawCustom, err := EncodeGameData(gCustomFEN)
+	require.NoError(t, err)
+	for cut := 0; cut < len(rawCustom); cut++ {
+		_, _ = DecodeGameData(rawCustom[:cut], &IndexEntry{}, NewNameBase())
+	}
+	// Corrupt start FEN inside encoded bytes
+	badFENBytes := append([]byte{0, 1}, []byte("invalid_fen\x00")...)
+	_, err = DecodeGameData(badFENBytes, &IndexEntry{}, NewNameBase())
+	assert.Error(t, err)
+
+	// 9. decodePieceMove invalid King code & empty square, Queen horizontal move, dual EncodeComment
+	bKing := chess.NewBoard()
+	_, err = decodePieceMove(bytes.NewReader(nil), bKing, 0x0B) // King code 11 out of bounds
+	assert.Error(t, err)
+	bKing.Squares[bKing.PieceList[chess.White][0]] = chess.Empty
+	_, err = decodePieceMove(bytes.NewReader(nil), bKing, 0x01) // Empty square at From
+	assert.Error(t, err)
+
+	// Queen horizontal move (Qd4-a4)
+	gQHoriz, err := chess.ParsePGN("[White \"W\"]\n[Black \"B\"]\n\n1. d4 d5 2. Qd3 Nc6 3. Qa3 *")
+	require.NoError(t, err)
+	rawQH, err := EncodeGameData(gQHoriz)
+	require.NoError(t, err)
+	_, err = DecodeGameData(rawQH, &IndexEntry{}, NewNameBase())
+	require.NoError(t, err)
+
+	// Dual EncodeComment on same move in raw stream: 0 tags, 0 flags, e2e4 (0xC1), EncodeComment, EncodeComment, EncodeEndGame, "c1\x00c2\x00"
+	dualCommBytes := append([]byte{0, 0, 0xC1, EncodeComment, EncodeComment, EncodeEndGame}, []byte("c1\x00c2\x00")...)
+	gDual, err := DecodeGameData(dualCommBytes, &IndexEntry{}, NewNameBase())
+	require.NoError(t, err)
+	assert.Equal(t, "c1 c2", gDual.RootMove.Comment)
+
+	// 10. Missing .si4 error paths while .sg4/.sn4 exist
+	dbNoSi, noSiBase := createTestDatabase(t, 2)
+	defer dbNoSi.Close()
+	// Save a custom FEN game for matchesCriteria custom FEN + bad offset
+	_, _ = dbNoSi.SaveGame(gCustomFEN)
+	mcAny := DefaultMaterialCriteria()
+	mcAny.WhiteQ = 1
+	assert.Equal(t, 3, dbNoSi.CountMatches(SearchCriteria{Material: &mcAny}))
+
+	// Bad offset on entry 1: covers FindDuplicates ReadAt fallback and matchesCriteria getGameLocked error
+	dbNoSi.Entries[0].Offset = 99999999
+	_, err = dbNoSi.FindDuplicates(DuplicateCriteria{ExactMoves: true})
+	require.NoError(t, err)
+	assert.Equal(t, 0, dbNoSi.CountMatches(SearchCriteria{CommentText: "missing"}))
+
+	// Remove .si4 and test SaveGame, ImportGames, MergeFromDatabases, StandardizePlayerNames
+	_ = os.Remove(noSiBase + ".si4")
+	_, err = dbNoSi.SaveGame(chess.NewGame())
+	assert.Error(t, err)
+	_, err = dbNoSi.ImportGames([]*chess.Game{chess.NewGame()})
+	assert.Error(t, err)
+	_, err = dbNoSi.MergeFromDatabases([]string{"src"}, nil)
+	assert.Error(t, err)
+	dbNoSi.Names.AddName(NamePlayer, "Kasparov, G.")
+	_, err = dbNoSi.StandardizePlayerNames()
+	assert.Error(t, err)
+
+	// 11. MergeFromDatabases with corrupt .si4 source and source with deleted + bad-offset entries
+	dbMergeTarget, _ := createTestDatabase(t, 1)
+	defer dbMergeTarget.Close()
+	dbSrcWithErrs, srcErrBase := createTestDatabase(t, 2)
+	_ = dbSrcWithErrs.DeleteGame(1, true)
+	dbSrcWithErrs.Entries[1].Offset = 99999999
+	// Rewrite entry 2 with bad offset to disk so reopened srcDB has bad offset
+	fSiSrc, err := os.OpenFile(srcErrBase+".si4", os.O_RDWR, 0644)
+	require.NoError(t, err)
+	_, _ = fSiSrc.Seek(int64(IndexHeaderSize+IndexEntrySize), 0)
+	_ = WriteIndexEntry(fSiSrc, dbSrcWithErrs.Entries[1])
+	_ = fSiSrc.Close()
+	_ = dbSrcWithErrs.Close()
+
+	ms2, err := dbMergeTarget.MergeFromDatabases([]string{corruptSiBase, srcErrBase}, nil)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, ms2.Errors, 2)
+
+	// BuildGameSignatureSet on closed DB
+	assert.Equal(t, 0, NewDatabase().BuildGameSignatureSet().Count())
 }
 
 

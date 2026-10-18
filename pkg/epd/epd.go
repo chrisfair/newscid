@@ -50,6 +50,34 @@ func Parse(epdLine string) (*EPDRecord, error) {
 	return rec, nil
 }
 
+type epdOpcode uint8
+
+const (
+	opOther epdOpcode = iota
+	opBM
+	opAM
+	opID
+	opC0
+	opCE
+)
+
+func classifyOpcode(op string) epdOpcode {
+	switch op {
+	case "bm":
+		return opBM
+	case "am":
+		return opAM
+	case "id":
+		return opID
+	case "c0":
+		return opC0
+	case "ce":
+		return opCE
+	default:
+		return opOther
+	}
+}
+
 // parseOpcodes extracts opcode value pairs separated by semicolons.
 func parseOpcodes(s string, rec *EPDRecord) {
 	rawOps := strings.Split(s, ";")
@@ -59,7 +87,7 @@ func parseOpcodes(s string, rec *EPDRecord) {
 			continue
 		}
 
-		spaceIdx := strings.Index(op, " ")
+		spaceIdx := strings.IndexByte(op, ' ')
 		var opcode, operand string
 		if spaceIdx == -1 {
 			opcode = op
@@ -75,16 +103,16 @@ func parseOpcodes(s string, rec *EPDRecord) {
 
 		rec.Opcodes[opcode] = operand
 
-		switch opcode {
-		case "bm":
+		switch classifyOpcode(opcode) {
+		case opBM:
 			rec.BestMove = operand
-		case "am":
+		case opAM:
 			rec.AvoidMove = operand
-		case "id":
+		case opID:
 			rec.ID = operand
-		case "c0":
+		case opC0:
 			rec.Comment = operand
-		case "ce":
+		case opCE:
 			if cp, err := strconv.Atoi(operand); err == nil {
 				rec.EvalCP = &cp
 			}
@@ -108,19 +136,19 @@ func Format(fen string, opcodes map[string]string) string {
 	sb.WriteString(fenCore)
 
 	for op, val := range opcodes {
-		sb.WriteString(" ")
+		sb.WriteByte(' ')
 		sb.WriteString(op)
 		if val != "" {
-			sb.WriteString(" ")
-			if strings.Contains(val, " ") || op == "id" || strings.HasPrefix(op, "c") {
-				sb.WriteString("\"")
+			sb.WriteByte(' ')
+			if strings.IndexByte(val, ' ') != -1 || classifyOpcode(op) == opID || (len(op) > 0 && op[0] == 'c') {
+				sb.WriteByte('"')
 				sb.WriteString(val)
-				sb.WriteString("\"")
+				sb.WriteByte('"')
 			} else {
 				sb.WriteString(val)
 			}
 		}
-		sb.WriteString(";")
+		sb.WriteByte(';')
 	}
 
 	return sb.String()

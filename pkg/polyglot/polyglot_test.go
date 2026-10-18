@@ -291,17 +291,37 @@ func TestEncodeRawMoveAndWriteBook(t *testing.T) {
 	rawPromoN := EncodeRawMove(bPromo, mPromoN)
 	assert.Equal(t, "e7e8n", decodeRawMove(bPromo, rawPromoN))
 
-	// 4. Test WriteBook and OpenBook round-trip
+	mPromoB, err := bPromo.ParseSAN("e8=B")
+	require.NoError(t, err)
+	rawPromoB := EncodeRawMove(bPromo, mPromoB)
+	assert.Equal(t, "e7e8b", decodeRawMove(bPromo, rawPromoB))
+
+	mPromoR, err := bPromo.ParseSAN("e8=R")
+	require.NoError(t, err)
+	rawPromoR := EncodeRawMove(bPromo, mPromoR)
+	assert.Equal(t, "e7e8r", decodeRawMove(bPromo, rawPromoR))
+
+	// 4. Test WriteBook, NumEntries, EncodeBook sorting, and OpenBook round-trip
+	var nilBook *Book
+	assert.Equal(t, 0, nilBook.NumEntries())
+
 	tmpDir := t.TempDir()
 	outBookPath := filepath.Join(tmpDir, "written_book.bin")
 
+	mD4, err := b.ParseSAN("d4")
+	require.NoError(t, err)
+	rawD4 := EncodeRawMove(b, mD4)
+	mNf3, err := b.ParseSAN("Nf3")
+	require.NoError(t, err)
+	rawNf3 := EncodeRawMove(b, mNf3)
+
 	entries := []BookEntry{
-		{
-			Key:     HashBoard(b),
-			RawMove: rawE4,
-			Weight:  500,
-			Learn:   0,
-		},
+		{Key: HashBoard(b) + 10, RawMove: rawE4, Weight: 100},
+		{Key: HashBoard(b), RawMove: rawD4, Weight: 200},
+		{Key: HashBoard(b), RawMove: rawE4, Weight: 500},
+		{Key: HashBoard(b), RawMove: rawNf3, Weight: 200},
+		{Key: HashBoard(b), RawMove: rawNf3, Weight: 0},    // 0 weight skipped
+		{Key: HashBoard(b), RawMove: 0x0000, Weight: 100}, // illegal move skipped
 	}
 
 	err = WriteBook(outBookPath, entries)
@@ -309,12 +329,15 @@ func TestEncodeRawMoveAndWriteBook(t *testing.T) {
 
 	loadedBook, err := OpenBook(outBookPath)
 	require.NoError(t, err)
-	assert.Equal(t, 1, loadedBook.entries)
+	assert.Equal(t, 6, loadedBook.NumEntries())
 
 	foundMoves, err := loadedBook.FindMoves(b)
 	require.NoError(t, err)
-	require.Len(t, foundMoves, 1)
+	require.Len(t, foundMoves, 3)
 	assert.Equal(t, "e2e4", foundMoves[0].UCI)
 	assert.Equal(t, 500, foundMoves[0].Weight)
+
+	// DiscoverBooks with blank extra dir
+	_ = DiscoverBooks("   ", tmpDir)
 }
 

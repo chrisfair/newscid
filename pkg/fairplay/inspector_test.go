@@ -281,5 +281,174 @@ func TestChristopherFairDB_IfPresent(t *testing.T) {
 	}
 }
 
+func TestFairPlayHelpersAndEdgeCases(t *testing.T) {
+	// Test TimeControlID and ClassificationID integer constants and String() methods
+	if TCBullet.String() != "Bullet" || TCBlitz.String() != "Blitz" || TCRapid.String() != "Rapid" || TCClassical.String() != "Classical" {
+		t.Errorf("unexpected TimeControlID strings")
+	}
+	if TimeControlID(99).String() != "Classical" {
+		t.Errorf("expected out-of-bounds TimeControlID to default to Classical")
+	}
+	if ParseTimeControlID("Bullet") != TCBullet || ParseTimeControlID("Blitz") != TCBlitz || ParseTimeControlID("Rapid") != TCRapid || ParseTimeControlID("Unknown") != TCClassical {
+		t.Errorf("unexpected ParseTimeControlID mapping")
+	}
+	if ClassifyTimeControl("40/5400+30", "OTB") != "Classical" {
+		t.Errorf("expected 40/5400+30 to be Classical")
+	}
+	if ClassifyTimeControl("invalid", "Casual") != "Blitz" {
+		t.Errorf("expected non-numeric time control to default to Blitz")
+	}
+	if ClassifyTimeControl("300", "Bullet Arena") != "Bullet" || ClassifyTimeControl("300", "Blitz Arena") != "Blitz" || ClassifyTimeControl("300", "Correspondence") != "Classical" {
+		t.Errorf("expected Event header keywords to override time control")
+	}
+
+	if ClassifyIssueScoreID(80).String() != "High Consistent Time-Control Anomaly" ||
+		ClassifyIssueScoreID(60).String() != "Elevated Consistent Issue" ||
+		ClassifyIssueScoreID(42).String() != "Mild / Situational Anomaly" ||
+		ClassifyIssueScoreID(15).String() != "Normal Human Variance" ||
+		ClassificationID(99).String() != "Normal Human Variance" {
+		t.Errorf("unexpected ClassificationID string mappings")
+	}
+
+	// Test parseRawClockSeconds
+	if sec, ok := parseRawClockSeconds("1:02:03"); !ok || sec != 3723 {
+		t.Errorf("expected 3723s, got %v, %v", sec, ok)
+	}
+	if sec, ok := parseRawClockSeconds("05:30"); !ok || sec != 330 {
+		t.Errorf("expected 330s, got %v, %v", sec, ok)
+	}
+	if sec, ok := parseRawClockSeconds("4.5s"); !ok || sec != 4.5 {
+		t.Errorf("expected 4.5s, got %v, %v", sec, ok)
+	}
+	if _, ok := parseRawClockSeconds(""); ok {
+		t.Errorf("expected empty clock string to fail")
+	}
+	if _, ok := parseRawClockSeconds("1:2:3:4"); ok {
+		t.Errorf("expected 4-part clock string to fail")
+	}
+
+	// Test parseEvalWhiteCp
+	if cp, ok := parseEvalWhiteCp("[%eval #3]"); !ok || cp != 900.0 {
+		t.Errorf("expected +900 for #3, got %v, %v", cp, ok)
+	}
+	if cp, ok := parseEvalWhiteCp("[%eval #-2]"); !ok || cp != -900.0 {
+		t.Errorf("expected -900 for #-2, got %v, %v", cp, ok)
+	}
+	if cp, ok := parseEvalWhiteCp("[%eval 15.2,24]"); !ok || cp != 900.0 {
+		t.Errorf("expected +900 clamped, got %v, %v", cp, ok)
+	}
+	if cp, ok := parseEvalWhiteCp("[%eval -15.2]"); !ok || cp != -900.0 {
+		t.Errorf("expected -900 clamped, got %v, %v", cp, ok)
+	}
+	if _, ok := parseEvalWhiteCp("[%eval bad]"); ok {
+		t.Errorf("expected invalid eval to return false")
+	}
+	if _, ok := parseEvalWhiteCp(""); ok {
+		t.Errorf("expected empty comment to return false")
+	}
+
+	// Test AnalyzePlayerFairPlay error paths and temporary DB
+	if _, err := AnalyzePlayerFairPlay(nil, "Anyone", 10); err == nil {
+		t.Errorf("expected error for nil database")
+	}
+	tmpDir := t.TempDir()
+	db := scid.NewDatabase()
+	if err := db.Create(tmpDir+"/testfp", "Test FairPlay DB"); err != nil {
+		t.Fatalf("db.Create failed: %v", err)
+	}
+	defer db.Close()
+
+	if _, err := AnalyzePlayerFairPlay(db, "   ", 10); err == nil {
+		t.Errorf("expected error for empty player name")
+	}
+	if _, err := AnalyzePlayerFairPlay(db, "MissingPlayer", 0); err == nil {
+		t.Errorf("expected error when player has no games in db")
+	}
+
+	// Save a game with EMT tags, delayed recaptures, and custom FEN into db and analyze with maxGames=0
+	pgnEMT := `
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/emt1"]
+[Date "????.??.??"]
+[White "OpponentZ"]
+[Black "EMTPlayer"]
+[Result "0-1"]
+[WhiteElo "?"]
+[BlackElo "?"]
+[TimeControl "180+2"]
+
+1. e4 { [%emt 0:00:01] } e5 { [%emt 0:00:04] } 2. Nf3 { [%emt 0:00:01] } Nc6 { [%emt 0:00:04] } 3. d4 { [%emt 0:00:01] } exd4 { [%emt 0:00:04] } 4. Nxd4 { [%emt 0:00:01] } Nxd4 { [%emt 0:00:04] } 5. Qxd4 { [%emt 0:00:01] } d6 { [%emt 0:00:04] } 6. Nc3 { [%emt 0:00:01] } Nf6 { [%emt 0:00:04] } 7. Bc4 { [%emt 0:00:01] } Be7 { [%emt 0:00:04] } 8. O-O { [%emt 0:00:01] } O-O { [%emt 0:00:04] } 9. Bg5 { [%emt 0:00:01] } Be6 { [%emt 0:00:04] } 10. Bxe6 { [%emt 0:00:01] } fxe6 { [%emt 0:00:05] } 11. Qc4 { [%emt 0:00:01] } Qd7 { [%emt 0:00:04] } 12. Rad1 { [%emt 0:00:01] } Bxf6 { [%emt 0:00:04] } 13. Bxf6 { [%emt 0:00:01] } Rxf6 { [%emt 0:00:05] } 14. e5 { [%emt 0:00:01] } dxe5 { [%emt 0:00:05] } 0-1
+`
+	parsedGames, err := chess.ParsePGNDatabase(strings.NewReader(pgnEMT))
+	if err != nil || len(parsedGames) == 0 {
+		t.Fatalf("ParsePGNDatabase failed: %v", err)
+	}
+	if _, err := db.SaveGame(parsedGames[0]); err != nil {
+		t.Fatalf("SaveGame failed: %v", err)
+	}
+	dossierEMT, err := AnalyzePlayerFairPlay(db, "EMTPlayer", 0)
+	if err != nil {
+		t.Fatalf("AnalyzePlayerFairPlay(EMTPlayer) failed: %v", err)
+	}
+	if dossierEMT.TotalGamesAnalyzed != 1 {
+		t.Errorf("expected 1 game analyzed for EMTPlayer, got %d", dossierEMT.TotalGamesAnalyzed)
+	}
+
+	// Test BuildPlayerFairPlayDossier with nil/short games
+	emptyDossier := BuildPlayerFairPlayDossier("ShortPlayer", []*chess.Game{nil}, nil)
+	if emptyDossier.OverallClassification != "Insufficient Non-Book Games" {
+		t.Errorf("expected Insufficient Non-Book Games, got %q", emptyDossier.OverallClassification)
+	}
+
+	// Direct edge-case tests for evaluateMoveLossHeuristic, evaluateBoardHeuristicWhiteCp, estimateBoardComplexity, computeCadenceStats
+	if loss, top1 := evaluateMoveLossHeuristic(nil, nil, 12, 1500, 0.5); loss != 25.0 || top1 {
+		t.Errorf("expected nil board/node fallback (25.0, false), got (%v, %v)", loss, top1)
+	}
+	if evaluateBoardHeuristicWhiteCp(nil) != 0 {
+		t.Errorf("expected nil board heuristic to be 0")
+	}
+	if estimateBoardComplexity(nil) != 8 {
+		t.Errorf("expected nil board complexity to be 8")
+	}
+	if mean, _, cv, _ := computeCadenceStats([]float64{0.01, 0.01}); mean <= 0 || cv != 0.85 {
+		t.Errorf("expected near-zero mean cadence fallback")
+	}
+	if meanFloat64(nil) != 0 {
+		t.Errorf("expected meanFloat64(nil) == 0")
+	}
+
+	// Test scoreSingleGameAnomaly and estimateIPR branches
+	sc1, fl1 := scoreSingleGameAnomaly("Rapid", 1400, 2200, 1.0, 11.0, 85.0, 92.0, 0, 26, true, true, 5.0, 0.28, 80.0, 3)
+	if sc1 < 80 || len(fl1) == 0 {
+		t.Errorf("expected high anomaly score and flags, got %v, %v", sc1, fl1)
+	}
+	sc2, _ := scoreSingleGameAnomaly("Blitz", 1500, 1650, 0.5, 19.0, 60.0, 65.0, 0, 18, true, true, 4.0, 0.41, 70.0, 0)
+	if sc2 <= 8.0 {
+		t.Errorf("expected moderate score, got %v", sc2)
+	}
+	sc3, _ := scoreSingleGameAnomaly("Rapid", 1300, 1900, 1.0, 12.0, 80.0, 85.0, 0, 20, false, false, 0, 0, 0, 0)
+	if sc3 <= 8.0 {
+		t.Errorf("expected elevated heuristic score, got %v", sc3)
+	}
+	sc4, _ := scoreSingleGameAnomaly("Rapid", 1300, 1500, 1.0, 19.0, 60.0, 65.0, 0, 20, false, false, 0, 0, 0, 0)
+	if sc4 <= 8.0 {
+		t.Errorf("expected mild heuristic score, got %v", sc4)
+	}
+
+	_ = estimateIPR(0.0, 100.0, 0, 1.0, 0, true, 0, 20)
+	_ = estimateIPR(120.0, 0.0, 1200, 0.0, 1200, true, 5, 20)
+	_ = estimateIPR(2.0, 98.0, 2800, 1.0, 2900, false, 0, 30)
+	_ = estimateIPR(180.0, 10.0, 800, 0.0, 800, false, 8, 30)
+
+	if pieceValueCp(chess.King) != 20000 || pieceValueCp(chess.None) != 0 {
+		t.Errorf("unexpected pieceValueCp for King or None")
+	}
+	if _, ok := parseTagSeconds(clkTagRegex, ""); ok {
+		t.Errorf("expected empty comment to return false")
+	}
+}
+
+
+
 
 

@@ -23,15 +23,57 @@ type rawPlayer struct {
 	scoresAgainst map[string]float64
 }
 
+type gameOutcome uint8
+
+const (
+	outcomeUnknown gameOutcome = iota
+	outcomeWhiteWins
+	outcomeBlackWins
+	outcomeDraw
+)
+
 type playerGame struct {
-	opponent     string
-	opponentElo  int
-	color        string // "w" or "b"
-	resultStr    string // "1", "0", "½", "*"
-	score        float64
-	round        string
-	roundNum     int
-	gameID       int
+	opponent    string
+	opponentElo int
+	color       chess.Color
+	result      gameOutcome
+	score       float64
+	round       string
+	roundNum    int
+	gameID      int
+}
+
+func colorToCode(c chess.Color) string {
+	if c == chess.White {
+		return "w"
+	}
+	return "b"
+}
+
+func resultToSymbol(r gameOutcome) string {
+	switch r {
+	case outcomeWhiteWins:
+		return "1"
+	case outcomeBlackWins:
+		return "0"
+	case outcomeDraw:
+		return "½"
+	default:
+		return "*"
+	}
+}
+
+func parseResultOutcome(r chess.Result) gameOutcome {
+	switch r {
+	case chess.ResultWhiteWins:
+		return outcomeWhiteWins
+	case chess.ResultBlackWins:
+		return outcomeBlackWins
+	case chess.ResultDraw:
+		return outcomeDraw
+	default:
+		return outcomeUnknown
+	}
 }
 
 // DiscoverEvents scans the database index and aggregates games into tournament event summaries.
@@ -260,21 +302,28 @@ func BuildCrosstableFromGames(games []*scid.GameSummary, eventName, site, date s
 		}
 
 		var wScore, bScore float64
-		var wRes, bRes string
+		var wRes, bRes gameOutcome
 
-		switch g.Result {
-		case chess.ResultWhiteWins:
+		out := parseResultOutcome(g.Result)
+		switch out {
+		case outcomeWhiteWins:
 			wScore, bScore = 1.0, 0.0
-			wRes, bRes = "1", "0"
-		case chess.ResultBlackWins:
+			wRes, bRes = outcomeWhiteWins, outcomeBlackWins
+			playersMap[wName].wins++
+			playersMap[bName].losses++
+		case outcomeBlackWins:
 			wScore, bScore = 0.0, 1.0
-			wRes, bRes = "0", "1"
-		case chess.ResultDraw:
+			wRes, bRes = outcomeBlackWins, outcomeWhiteWins
+			playersMap[bName].wins++
+			playersMap[wName].losses++
+		case outcomeDraw:
 			wScore, bScore = 0.5, 0.5
-			wRes, bRes = "½", "½"
+			wRes, bRes = outcomeDraw, outcomeDraw
+			playersMap[wName].draws++
+			playersMap[bName].draws++
 		default:
 			wScore, bScore = 0.0, 0.0
-			wRes, bRes = "*", "*"
+			wRes, bRes = outcomeUnknown, outcomeUnknown
 		}
 
 		wp := playersMap[wName]
@@ -285,8 +334,8 @@ func BuildCrosstableFromGames(games []*scid.GameSummary, eventName, site, date s
 		wp.games = append(wp.games, playerGame{
 			opponent:    bName,
 			opponentElo: g.BlackElo,
-			color:       "w",
-			resultStr:   wRes,
+			color:       chess.White,
+			result:      wRes,
 			score:       wScore,
 			round:       g.Round,
 			roundNum:    rNum,
@@ -298,24 +347,13 @@ func BuildCrosstableFromGames(games []*scid.GameSummary, eventName, site, date s
 		bp.games = append(bp.games, playerGame{
 			opponent:    wName,
 			opponentElo: g.WhiteElo,
-			color:       "b",
-			resultStr:   bRes,
+			color:       chess.Black,
+			result:      bRes,
 			score:       bScore,
 			round:       g.Round,
 			roundNum:    rNum,
 			gameID:      g.ID,
 		})
-
-		if g.Result == chess.ResultWhiteWins {
-			wp.wins++
-			bp.losses++
-		} else if g.Result == chess.ResultBlackWins {
-			bp.wins++
-			wp.losses++
-		} else if g.Result == chess.ResultDraw {
-			wp.draws++
-			bp.draws++
-		}
 	}
 
 	ct.NumPlayers = len(playersMap)
@@ -456,8 +494,8 @@ func BuildCrosstableFromGames(games []*scid.GameSummary, eventName, site, date s
 				Round:        pg.round,
 				OpponentRank: nameToRank[pg.opponent],
 				OpponentName: pg.opponent,
-				Color:        pg.color,
-				Result:       pg.resultStr,
+				Color:        colorToCode(pg.color),
+				Result:       resultToSymbol(pg.result),
 				Score:        pg.score,
 				GameID:       pg.gameID,
 			})
@@ -504,51 +542,53 @@ func BuildCrosstableFromGames(games []*scid.GameSummary, eventName, site, date s
 			var resList []string
 			var totalScore float64
 			var primaryGameID int
-			var primaryColor string
+			var primaryColor chess.Color
+			var hasPrimaryGame bool
 
 			for _, g := range matchedGames {
+				out := parseResultOutcome(g.Result)
 				if strings.EqualFold(g.White, playerA) && strings.EqualFold(g.Black, playerB) {
-					if primaryGameID == 0 {
+					if !hasPrimaryGame {
 						primaryGameID = g.ID
-						primaryColor = "w"
+						primaryColor = chess.White
+						hasPrimaryGame = true
 					}
-					switch g.Result {
-					case chess.ResultWhiteWins:
-						resList = append(resList, "1")
+					resList = append(resList, resultToSymbol(out))
+					if out == outcomeWhiteWins {
 						totalScore += 1.0
-					case chess.ResultBlackWins:
-						resList = append(resList, "0")
-					case chess.ResultDraw:
-						resList = append(resList, "½")
+					} else if out == outcomeDraw {
 						totalScore += 0.5
-					default:
-						resList = append(resList, "*")
 					}
 				} else if strings.EqualFold(g.Black, playerA) && strings.EqualFold(g.White, playerB) {
-					if primaryGameID == 0 {
+					if !hasPrimaryGame {
 						primaryGameID = g.ID
-						primaryColor = "b"
+						primaryColor = chess.Black
+						hasPrimaryGame = true
 					}
-					switch g.Result {
-					case chess.ResultWhiteWins:
-						resList = append(resList, "0")
-					case chess.ResultBlackWins:
-						resList = append(resList, "1")
+					switch out {
+					case outcomeWhiteWins:
+						resList = append(resList, resultToSymbol(outcomeBlackWins))
+					case outcomeBlackWins:
+						resList = append(resList, resultToSymbol(outcomeWhiteWins))
 						totalScore += 1.0
-					case chess.ResultDraw:
-						resList = append(resList, "½")
+					case outcomeDraw:
+						resList = append(resList, resultToSymbol(outcomeDraw))
 						totalScore += 0.5
 					default:
-						resList = append(resList, "*")
+						resList = append(resList, resultToSymbol(outcomeUnknown))
 					}
 				}
 			}
 
+			var colorCode string
+			if hasPrimaryGame {
+				colorCode = colorToCode(primaryColor)
+			}
 			resultStr := strings.Join(resList, " ")
 			matrix[i][j] = CrosstableCell{
 				Result: resultStr,
 				Score:  totalScore,
-				Color:  primaryColor,
+				Color:  colorCode,
 				GameID: primaryGameID,
 			}
 		}

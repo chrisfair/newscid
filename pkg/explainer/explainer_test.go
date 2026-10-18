@@ -3,6 +3,8 @@ package explainer
 import (
 	"strings"
 	"testing"
+
+	"newscid/pkg/chess"
 )
 
 func TestExplainMove_Castling(t *testing.T) {
@@ -116,5 +118,57 @@ func TestExplainMove_ForkPromotionAndOpenFiles(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected error for invalid move")
 	}
+
+	// 7. Equal trade, lower-value capture, Check, Passed Pawn, Central Outpost, Closed File Rook
+	fenCheckTrade := "4k3/8/8/3n4/8/5N2/8/4K2R w - - 0 1"
+	expEqual, err := ExplainMove(fenCheckTrade, "f3d4", 0, "f3d4") // Knight to central outpost d4
+	if err != nil || !strings.Contains(expEqual.DetailedText, "central outpost") {
+		t.Errorf("expected central outpost explanation, got %v / %v", expEqual, err)
+	}
+
+	// Equal capture: Nxd5 where d5 is knight from c3
+	fenEqualCap := "4k3/8/8/3n4/8/2N5/8/4K3 w - - 0 1"
+	expEqCap, err := ExplainMove(fenEqualCap, "c3d5", 0, "c3d5")
+	if err != nil || !strings.Contains(expEqCap.DetailedText, "trades off") {
+		t.Errorf("expected trades off, got %v", expEqCap)
+	}
+
+	// Higher value piece captures lower value piece + Check
+	fenHighCap := "4k3/4p3/8/8/8/8/8/4Q2K w - - 0 1"
+	expHighCap, err := ExplainMove(fenHighCap, "e1e7", 100, "e1e7")
+	if err != nil || !contains(expHighCap.TacticalMotifs, "Check") || !strings.Contains(expHighCap.DetailedText, "eliminates") {
+		t.Errorf("expected Check and eliminates, got %v", expHighCap)
+	}
+
+	// Passed pawn advance to rank >= 5 (e.g. e5->e6, index 5)
+	fenPassed := "4k3/8/8/4P3/8/8/8/4K3 w - - 0 1"
+	expPassed, err := ExplainMove(fenPassed, "e5e6", 150, "e5e6")
+	if err != nil || !contains(expPassed.TacticalMotifs, "Passed Pawn Advance") {
+		t.Errorf("expected Passed Pawn Advance, got %v", expPassed)
+	}
+
+	// Rook on closed file (pawn present)
+	fenClosedRook := "4k3/3p4/8/8/8/8/8/R3K3 w - - 0 1"
+	expClosedRook, err := ExplainMove(fenClosedRook, "a1d1", 0, "a1d1")
+	if err != nil || contains(expClosedRook.StrategicConcepts, "Open File Control") {
+		t.Errorf("did not expect Open File Control on file with pawn")
+	}
+
+	// Out-of-bounds pieceType helper fallback
+	if pieceValue(chess.PieceType(99)) != 0 {
+		t.Errorf("expected 0 for unknown piece type")
+	}
+	if pieceName(chess.PieceType(99)) != "piece" {
+		t.Errorf("expected 'piece' for unknown piece type")
+	}
+}
+
+func contains(slice []string, val string) bool {
+	for _, s := range slice {
+		if s == val {
+			return true
+		}
+	}
+	return false
 }
 

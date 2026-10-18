@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import {
   HelpCircle,
   X,
-  ExternalLink,
   Search,
   BookOpen,
   Database,
@@ -15,11 +14,23 @@ import {
   Award,
   Trophy,
   Keyboard,
-  ChevronRight,
   Sparkles,
-  CheckCircle2
+  LayoutGrid,
+  ShieldAlert,
+  Crosshair,
+  Eye,
+  Clock,
+  Terminal,
+  FileText
 } from '@lucide/vue'
-import { BrowserOpenURL } from '../../wailsjs/runtime/runtime'
+
+const props = withDefaults(defineProps<{
+  initialTopic?: string
+  initialTab?: 'manual' | 'manpage'
+}>(), {
+  initialTopic: 'getting-started',
+  initialTab: 'manual'
+})
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -27,7 +38,21 @@ const emit = defineEmits<{
 }>()
 
 const searchFilter = ref('')
-const activeSectionId = ref('getting-started')
+const activeTab = ref<'manual' | 'manpage'>(props.initialTab || 'manual')
+const activeSectionId = ref(props.initialTopic || 'getting-started')
+
+watch(() => props.initialTopic, (newTopic) => {
+  if (newTopic) {
+    activeSectionId.value = newTopic
+    activeTab.value = 'manual'
+  }
+})
+
+watch(() => props.initialTab, (newTab) => {
+  if (newTab) {
+    activeTab.value = newTab
+  }
+})
 
 interface HelpTopic {
   id: string
@@ -38,7 +63,7 @@ interface HelpTopic {
   content: {
     heading: string
     subheading?: string
-    paragraphs: string[]
+    paragraphs?: string[]
     bullets?: string[]
     tip?: string
   }[]
@@ -49,57 +74,75 @@ const HELP_TOPICS: HelpTopic[] = [
     id: 'getting-started',
     title: 'Getting Started',
     icon: BookOpen,
-    summary: 'Essential navigation, board controls, and core concepts.',
-    tags: ['start', 'basics', 'board', 'move', 'trial', 'flip'],
+    summary: 'Essential navigation, board controls, contextual help, and core workstation concepts.',
+    tags: ['start', 'basics', 'board', 'move', 'trial', 'flip', 'help', 'f1'],
     content: [
       {
-        heading: 'Welcome to NewScid',
-        subheading: 'Modern, high-performance chess information database and analysis workbench.',
+        heading: 'Welcome to the NewScid Chess Workstation',
+        subheading: '100% local, ultra-fast chess information database, analysis workbench, and training suite.',
         paragraphs: [
-          'NewScid is engineered in pure Go and Vue 3 to provide modern, blisteringly fast database management, tournament analysis, and interactive training.',
-          'The application interface consists of the Menu Bar, Interactive Board, Scorebook & Move Tree on the left, and the Database Game Browser on the bottom panel.'
+          'NewScid is engineered in pure Go and Vue 3 to provide blisteringly fast native SCID (.si4) database management, grandmaster preparation, longitudinal fair-play inspection, and interactive training.',
+          'All documentation, manuals, man pages, and contextual help are stored 100% locally on your machine—no internet connection is ever required to consult the manual.'
         ],
         bullets: [
-          'Play Moves: Click or drag pieces to make moves on the board.',
-          'Flip Board: Press F or use Options → Flip Board to switch player perspectives.',
-          'Trial Mode: Press Ctrl+Space to enter sandbox mode where you can experiment with variations without altering the active game.',
-          'Board Setup / FEN Editor: Press Ctrl+B to design custom board positions, set castling rights, or paste FEN strings.'
+          'Play Moves: Click or drag pieces on the board, or use the Left/Right arrow keys to step through moves.',
+          'Contextual Help (F1): Press F1 at any time to open this local manual directly to the topic matching your currently active dialog or workspace.',
+          'Flip Board: Press F or use Options → Flip Board to switch White/Black board orientation.',
+          'Trial Mode: Press Ctrl+Space to enter sandbox mode where you can test variations without altering the scorebook.',
+          'Board Setup / FEN Editor: Press Ctrl+B to construct custom positions, configure castling rights, or paste FEN strings.'
         ],
-        tip: 'Press Space at any time to start or pause autoplay move replay.'
+        tip: 'Press Ctrl+K anywhere in the workstation to open the Command Palette and launch any tool by name.'
+      }
+    ]
+  },
+  {
+    id: 'workspaces-panels',
+    title: 'Workspaces & Detachable Panels',
+    icon: LayoutGrid,
+    summary: 'Relocate, dock, float, or hide any panel—including the Chessboard—per workspace.',
+    tags: ['workspace', 'panel', 'detach', 'float', 'dock', 'layout', 'preferences', 'config', 'theme'],
+    content: [
+      {
+        heading: 'Customizable Workspaces (Ctrl+1 – Ctrl+4)',
+        subheading: 'Switch instantly between Database, Analysis, Training, and Opening Prep layouts.',
+        paragraphs: [
+          'Every workspace maintains its own independent panel arrangement. You can customize which panels are visible, which dock zone they inhabit, or whether they float as detached windows.'
+        ],
+        bullets: [
+          'Every Panel is Relocatable: All 7 workstation panels—Chessboard, Scorebook & Move Notation, Engine & Coach, Opening Tree & Tablebase, Database Game List, Eval Graph, and Study/Filter—can be moved freely.',
+          'Dock Zones (L / R / B): Use the Panels popover in the top header bar to move any panel (including the Chessboard) between the Left, Right, or Bottom dock zones and reorder them with ↑ / ↓.',
+          'Detached Floating Windows: Click the Float (↗) button on any panel header or in the Panels manager to pop that panel into a draggable, resizable floating window over the workstation.',
+          'Quick Re-Dock: Click "Dock" on any floating window header to snap it right back into its workspace dock slot.'
+        ],
+        tip: 'All workspace layouts, default startup database, board/piece themes, notation style, and UI preferences are saved automatically to ~/.config/newscid/preferences.json.'
       }
     ]
   },
   {
     id: 'databases',
-    title: 'Databases & PGN',
+    title: 'Databases, PGN & Mega Updates',
     icon: Database,
-    summary: 'Native .si4 binary databases, PGN imports, compacting, and sorting.',
-    tags: ['database', 'si4', 'pgn', 'import', 'export', 'sort', 'compact', 'maintenance'],
+    summary: 'Native .si4 binary databases, incremental Mega DB updates, TWIC, and maintenance.',
+    tags: ['database', 'si4', 'pgn', 'import', 'export', 'sort', 'compact', 'maintenance', 'mega', 'twic'],
     content: [
       {
         heading: 'SCID Binary Format (.si4, .sg4, .sn4)',
-        subheading: 'High-speed storage format capable of handling millions of games.',
+        subheading: 'High-speed binary format capable of searching millions of games in milliseconds.',
         paragraphs: [
-          'NewScid natively reads and writes the industry-standard SCID format:',
-          '• .si4 (Index file): Contains 47-byte records storing metadata, player IDs, ECO, dates, ratings, and file offsets.',
-          '• .sg4 (Game file): Stores game moves using compact Huffman compression.',
-          '• .sn4 (Namebase file): Efficient front-coded trie storing player, event, site, and annotator names.'
+          'NewScid natively reads and writes SCID v4 databases:',
+          '• .si4 (Index file): 47-byte binary records storing game metadata, player IDs, ECO codes, dates, ratings, and offsets.',
+          '• .sg4 (Game file): Stores game moves and variations using compact 1-byte Huffman encoding.',
+          '• .sn4 (Namebase file): Front-coded trie storing player, event, site, and round names.'
         ]
       },
       {
-        heading: 'PGN Import & Export',
+        heading: 'Incremental Mega Database & TWIC Updates',
         paragraphs: [
-          'Import single games or multi-game PGN batches via File → Import PGN Game (Ctrl+I).',
-          'Export games to PGN via File → Export PGN Game (Ctrl+E) or copy FEN to clipboard with Ctrl+C.'
-        ]
-      },
-      {
-        heading: 'Compacting & Maintenance',
-        paragraphs: [
-          'Deleted games remain marked until physically compacted.',
-          'Open File → Database Maintenance (Ctrl+M) to run physical compaction, sort databases by date/rating/ECO, or run signature-based duplicate detection.'
+          'Open File → Download Free Mega Database (4M+ Games) to download or incrementally update master OTB and online archives (LumbrasGigaBase) directly into a native .si4 database.',
+          'If you already have a large database on disk, choose "Update Existing .si4 Database (Skip Existing Games)" or "Update Currently Open Database". NewScid builds an in-memory game signature hash set (White, Black, Date, Result, PlyCount, and opening ply signature) and appends only brand-new games without duplicating existing records.',
+          'Use File → Download TWIC Weekly Games to fetch recent weekly tournament issues from The Week in Chess.'
         ],
-        tip: 'Compacting creates automatic safety backups before rewriting database files.'
+        tip: 'Use File → Database Maintenance (Ctrl+M) to physically compact deleted records, sort by Date/Elo/ECO, or set your current database as the automatic startup default.'
       }
     ]
   },
@@ -107,29 +150,22 @@ const HELP_TOPICS: HelpTopic[] = [
     id: 'personas',
     title: 'Player Personas & Aliases',
     icon: Users,
-    summary: 'Consolidating multiple usernames into unified profiles with dedicated database sync.',
+    summary: 'Unify OTB and online aliases into consolidated profiles with incremental sync.',
     tags: ['persona', 'alias', 'merge', 'profile', 'designator', 'stats', 'archive'],
     content: [
       {
         heading: 'Multi-Alias Consolidation',
-        subheading: 'Unify all your chess identities into a single master Persona.',
+        subheading: 'Combine FIDE OTB names, Lichess handles, and Chess.com accounts into one identity.',
         paragraphs: [
-          'Players often appear under different names across platforms (e.g. FIDE OTB format "Fair, Christopher", Chess.com "ChristopherFair", and Lichess "QuenyenHighElf").',
-          'Personas allow you to link all aliases under one unified identity to aggregate games, opening repertoires, and statistics.'
-        ]
-      },
-      {
-        heading: 'Dedicated Persona Databases (.si4)',
-        paragraphs: [
-          'Every Persona can have its own dedicated autonomous SCID database (.si4).',
-          'Click "Sync from Active Base" in Tools → Player Personas to scan any active database and extract all games matching any of the persona\'s aliases with automated deduplication.'
+          'Players frequently appear under different names across platforms (e.g. OTB "Fair, Christopher", Chess.com "ChristopherFair", and Lichess "QuenyenHighElf").',
+          'Personas link all aliases under one profile to aggregate career statistics, opening repertoires, sparring bots, and dedicated .si4 databases.'
         ],
         bullets: [
-          'Candidate Name Suggestions: NewScid searches the active database and suggests spelling matches.',
-          'Consolidated Statistics: View career win/draw/loss rates, peak Elo, and per-alias breakdowns.',
-          '1-Click Sparring: Practice against an AI bot simulating the persona\'s unified repertoire.'
+          'Incremental + Backfill Online Sync: Syncing a Persona fetches the newest games first since your last sync and automatically backfills older historical archives until the requested count of new, unimported games is reached.',
+          'Sync from Active Base: Extract all games matching any alias from a multi-million-game master database into the persona\'s dedicated .si4 base with zero duplicates.',
+          '1-Click Sparring & Exploiter: Launch a calibrated sparring bot or run the Anti-Persona Opening Exploiter directly from any persona card.'
         ],
-        tip: 'Persona profiles are persistently stored in ~/.config/newscid/personas.json.'
+        tip: 'Persona profiles are stored locally in ~/.config/newscid/personas.json.'
       }
     ]
   },
@@ -137,174 +173,343 @@ const HELP_TOPICS: HelpTopic[] = [
     id: 'online-sync',
     title: 'Online Account Sync',
     icon: Globe,
-    summary: 'Direct integration with Chess.com and Lichess.org public APIs.',
-    tags: ['online', 'sync', 'chesscom', 'lichess', 'download', 'profile', 'api'],
+    summary: 'Incremental newest-first + historical backfill sync from Lichess and Chess.com.',
+    tags: ['online', 'sync', 'chesscom', 'lichess', 'download', 'profile', 'api', 'update'],
     content: [
       {
-        heading: 'Direct Platform Integration',
-        subheading: 'Import your recent online games without manual PGN downloads.',
+        heading: 'Incremental & Backfill Game Synchronization',
+        subheading: 'Update any player or persona without recounting games already in your database.',
         paragraphs: [
-          'Access Tools → Online Account Sync to fetch games directly from Chess.com and Lichess.org.',
-          'You can configure multiple account profiles and choose where games are routed:'
+          'Access Tools → Online Account Sync to import games from Lichess.org and Chess.com public APIs.',
+          'Whenever you sync a player—whether for yourself, a Persona, or an opponent—NewScid inspects the target database first to find your newest and oldest existing game timestamps and builds a signature set of all existing games.'
         ],
         bullets: [
-          'Active Database: Merge downloaded games directly into whichever database is currently open.',
-          'Dedicated Database: Store games in an isolated, standalone .si4 repository.',
-          'Blended Strategy: Maintain both an isolated online archive and an integrated master database.'
+          'Phase 1 (Newest Games): Fetches all recent games played after your latest recorded game timestamp.',
+          'Phase 2 (Historical Backfill): If additional games are requested, automatically queries older archives prior to your earliest recorded game without wasting quota on games you already have.',
+          'Exact Signature Deduplication: Games already present in the database are skipped and never counted toward your requested new-game limit.'
         ],
-        tip: 'Signature-based deduplication guarantees that games already imported will never create duplicates.'
+        tip: 'You can also sync from the command line using newscid-import -db <base.si4> -lichess <user> -chesscom <user>.'
+      }
+    ]
+  },
+  {
+    id: 'fairplay',
+    title: 'Fair-Play & Integrity Inspector',
+    icon: ShieldAlert,
+    summary: 'Longitudinal statistical anomaly detection across Bullet, Blitz, Rapid, and Classical.',
+    tags: ['fairplay', 'cheat', 'inspector', 'acpl', 'anomaly', 'zscore', 'integrity', 'consistency'],
+    content: [
+      {
+        heading: 'Longitudinal Statistical & Time-Control Consistency Analyzer',
+        subheading: 'Multi-game mathematical screening with calibrated human baselines.',
+        paragraphs: [
+          'Open Tools → Fair-Play & Integrity Inspector to evaluate all games of any player in the active database (or fetch & analyze any Lichess/Chess.com player on the fly).',
+          'Single-game accuracy spikes happen naturally in short tactical games. Genuine fair-play analysis requires examining longitudinal metrics across dozens or hundreds of games:'
+        ],
+        bullets: [
+          'Empirical Move-Quality & ACPL: Evaluates every non-book ply (from ply 13 onward) using engine annotations when present or NewScid\'s fast static tactical/positional evaluator on unannotated games.',
+          'Time-Control Consistency (Bullet / Blitz / Rapid / Classical): Compares accuracy and blunder rates across time controls. Humans naturally play less accurately in Bullet/Blitz than Rapid/Classical; inverted gaps or near-zero blunder rates in fast time controls are flagged.',
+          'Complexity & Elo Correlation: Measures whether move quality remains suspiciously flat in high-tension positions or against much stronger opponents.',
+          'Calibrated Human Baselines: Normal club and titled human play scores 0–34 (Normal Human Variance), ensuring honest players are never falsely flagged.'
+        ],
+        tip: 'Export a complete Markdown dossier for tournament arbiters with one click, or run newscid-fairplay from the terminal.'
+      }
+    ]
+  },
+  {
+    id: 'scouting-exploiter',
+    title: 'Opponent Scouting & Opening Exploiter',
+    icon: Crosshair,
+    summary: 'Pre-game scouting dossiers, weak opening node detection, and Polyglot .bin export.',
+    tags: ['scout', 'opponent', 'exploit', 'anti-persona', 'polyglot', 'book', 'prep', 'vulnerability'],
+    content: [
+      {
+        heading: 'Opponent Scouting Dossier',
+        subheading: 'Comprehensive breakdown of an opponent\'s habits, ECO distribution, and phase stamina.',
+        paragraphs: [
+          'Select Tools → Opponent Scouting Report to scan the active database for all games played by your upcoming opponent.',
+          'The report summarizes their White and Black win/draw/loss rates, top ECO openings, game-length distribution (short tactical vs. long endgame grinds), rating performance trend, and tailored preparation recommendations.'
+        ]
+      },
+      {
+        heading: 'Anti-Persona Opening Exploiter & Polyglot Book Generator',
+        paragraphs: [
+          'Select Tools → Anti-Persona Opening Exploiter to build a move-by-move opening tree of a target player or Persona and automatically pinpoint statistical vulnerabilities—positions where the opponent frequently loses or scores poorly.',
+          'Click "Export Polyglot (.bin)" to compile those refutation lines into a standard binary Polyglot opening book that you can load into the Opening Tree or use for targeted sparring.'
+        ],
+        tip: 'Both scouting dossiers and Polyglot exploit books can also be generated headlessly via the newscid-scout CLI binary.'
       }
     ]
   },
   {
     id: 'player-sparring',
-    title: 'AI Player Simulation Bot',
+    title: 'AI Player Simulation & Sparring',
     icon: Bot,
-    summary: 'Spar against opponents simulating their real opening repertoire and rating.',
-    tags: ['spar', 'bot', 'simulation', 'ai', 'grandmaster', 'train', 'opponent'],
+    summary: 'Spar against calibrated UCI engines or historical database player personas.',
+    tags: ['spar', 'bot', 'simulation', 'ai', 'grandmaster', 'train', 'opponent', 'engine'],
     content: [
       {
-        heading: 'Historical Repertoire & Strength Modeling',
-        subheading: 'Train against grandmasters, club rivals, or yourself.',
+        heading: 'Simulate Database Player or Unified Persona',
+        subheading: 'Play against an opponent\'s actual opening book and rating-calibrated midgame.',
         paragraphs: [
-          'The Player Simulation module (Play → Simulate Database Player) analyzes all games played by a chosen player across your databases.',
-          'It extracts opening book trees for White and Black and plays historical opening moves probabilistically according to their real-world frequency.'
-        ]
-      },
-      {
-        heading: 'Calibrated Midgame AI',
-        paragraphs: [
-          'Once out of their opening book, the bot transitions to a calibrated UCI engine (Stockfish) with Elo and Skill Level dialed in to match the opponent\'s historical rating.'
+          'Open Play → Simulate Database Player to spar against any player in your database or any configured Unified Persona.',
+          'In the opening, the bot selects moves weighted by the player\'s real-world historical frequencies. Once out of book, Stockfish plays at a calibrated Elo and Skill Level matching the opponent, with a tactical safety guard so it avoids unnatural random piece giveaways.'
         ],
         bullets: [
-          'Unified Personas Sparring: Switch to the "Unified Personas" tab to spar against consolidated multi-alias profiles.',
-          'Time Controls: Play untimed casual games or timed blitz/rapid games (3m, 5m, 10m).',
-          'Post-Match Review: Completed sparring matches can be annotated or saved directly to your database.'
+          'Consistent Advantage Indicators: Both the vertical evaluation bar beside the board and the Positional & Material Imbalance bar use an absolute White-perspective sign convention (+ = White advantage, - = Black advantage).',
+          'Live Sparring Telemetry: After each bot move, the status banner reports whether the move came from the player\'s historical repertoire or calibrated engine evaluation.'
         ]
       }
     ]
   },
   {
     id: 'engine-analysis',
-    title: 'Engine & Multi-PV Analysis',
+    title: 'Engine, Coach & Blunder Radar',
     icon: Cpu,
-    summary: 'Live evaluation, multi-candidate lines, eval graphs, and automated blunder annotations.',
-    tags: ['engine', 'uci', 'stockfish', 'analysis', 'multipv', 'graph', 'eval'],
+    summary: 'Multi-PV UCI analysis, Natural-Language Position Coach, Imbalance Bar, and Tablebases.',
+    tags: ['engine', 'uci', 'stockfish', 'analysis', 'multipv', 'coach', 'imbalance', 'tablebase', 'radar'],
     content: [
       {
-        heading: 'UCI Engine Support',
-        subheading: 'Real-time analysis powered by Stockfish and modern UCI engines.',
+        heading: 'UCI Multi-PV Analysis & Full-Game Annotation',
+        subheading: 'Real-time evaluation powered by Stockfish and UCI-compatible chess engines.',
         paragraphs: [
-          'Press F2 or click Tools → Start Live Analysis to begin engine evaluation.',
-          'NewScid auto-discovers engines from system paths (/usr/bin, /usr/games) and legacy Scid configurations (~/.scidvspc/engines.options).'
+          'Press F2 to toggle live engine analysis. Configure 1–5 Multi-PV candidate lines, or open Tools → Full Game Analysis to automatically annotate an entire game with blunders (??), mistakes (?), inaccuracies (?!), and player accuracy percentages.'
         ]
       },
       {
-        heading: 'Multi-PV Candidate Lines',
-        paragraphs: [
-          'Analyze 1 to 5 candidate moves simultaneously.',
-          'Candidate moves are displayed with rank badges, centipawn evaluations, and can be hovered to preview move arrows on the board.'
-        ]
-      },
-      {
-        heading: 'Full Game Blunder Annotation',
-        paragraphs: [
-          'Select Tools → Full Game Analysis to scan an entire game with the engine.',
-          'The engine evaluates every move, flags blunders (??), mistakes (?), and inaccuracies (?!), and calculates player accuracy percentages.'
+        heading: 'Natural-Language Coach, Imbalance Engine & Blunder Radar',
+        bullets: [
+          'Natural-Language Position Coach: Explains the best move\'s strategic and tactical motifs (forks, pins, outposts, king safety, passed pawns) in plain English.',
+          'Positional & Material Imbalance Bar: Breaks down static evaluation into 6 classical pillars: Material, Pawn Structure, Piece Mobility, King Safety, Center Control, and Space.',
+          'Real-Time Blunder Radar: Highlights hanging pieces, undefended targets, and tactical danger squares directly on the board.',
+          'Endgame Tablebase Explorer: Queries 7-piece Syzygy/Lichess tablebases for exact WDL (Win/Draw/Loss) and DTZ (Distance to Zeroing) in positions with ≤ 7 pieces.'
         ]
       }
     ]
   },
   {
     id: 'scorebook-notation',
-    title: 'Scorebook & Notation Styles',
+    title: 'Scorebook, Notation & Publishing',
     icon: Edit3,
-    summary: 'Universal notation switcher, 16-NAG scorebook palette, and variations.',
-    tags: ['scorebook', 'notation', 'nag', 'fan', 'descriptive', 'variation', 'comment'],
+    summary: '6 live notation formats, 16-NAG palette, variations, and LaTeX/HTML/PDF publishing.',
+    tags: ['scorebook', 'notation', 'nag', 'fan', 'descriptive', 'variation', 'comment', 'export', 'latex', 'pdf'],
     content: [
       {
-        heading: 'Universal Notation Styles',
-        subheading: 'Switch move notation universally across the entire interface on the fly.',
+        heading: 'Universal Notation Styles (6 Formats)',
+        subheading: 'Switch move notation across the entire workstation on the fly.',
         paragraphs: [
-          'Use the Style dropdown in the Move Notation header or Options → Notation Style to select:',
-          '• Standard Algebraic (SAN): Standard FIDE notation (Nf3, e4, Bxf7+).',
-          '• Figurine Algebraic (FAN): Symbol-based notation using Unicode glyphs (♘f3, ♗xf7+).',
-          '• Long Algebraic (LAN): Start and destination coordinates (Ng1-f3, Bf1xf7+).',
-          '• Classical Descriptive: Traditional English descriptive notation (N-KB3, P-K4, BxP+).',
-          '• Computer Syntax (UCI): Engine coordinate format (g1f3, e2e4, f1f7).',
-          '• ICCF Numeric: Telegraphic numeric correspondence notation (7163, 5254).'
+          'Use Options → Notation Style or the Scorebook dropdown to switch between Standard Algebraic (SAN: Nf3), Figurine Algebraic (FAN: ♘f3), Long Algebraic (LAN: Ng1-f3), Classical Descriptive (N-KB3), Computer UCI (g1f3), and ICCF Numeric (7163).'
         ]
       },
       {
-        heading: 'Scorebook Annotation Palette & NAGs',
+        heading: '16-NAG Annotation Palette & Print-Ready Publishing',
         paragraphs: [
-          'The collapsible annotation toolbar provides 1-click access to 16 FIDE Numeric Annotation Glyphs (NAGs):',
-          '• Move Quality: ! (Good), ? (Mistake), !! (Brilliant), ?? (Blunder), !? (Interesting), ?! (Dubious)',
-          '• Position Evaluation: = (Equal), ⩲ (White slightly better), ⩱ (Black slightly better), ± (White better), ∓ (Black better), +- (White winning), -+ (Black winning), ∞ (Unclear), ⯹ (With compensation)'
-        ]
-      },
-      {
-        heading: 'Variations & Move Commentary',
-        paragraphs: [
-          'Click the comment button or double-click any move to add strategic notes.',
-          'Sub-variations can be promoted to the main line or deleted with one click.'
+          'Annotate moves with 16 standard FIDE Numeric Annotation Glyphs (!, ?, !!, ??, !?, ?!, =, ±, +-, etc.), add text commentary, and promote or delete sub-variations.',
+          'Use File → Publish Annotated Game (PDF / LaTeX / HTML) to export publication-grade double-column magazine layouts with embedded vector chessboard diagrams at key moments.'
         ]
       }
     ]
   },
   {
     id: 'training',
-    title: 'Training Modules',
+    title: 'Tactics, Solitaire Chess & Repertoire',
     icon: Award,
-    summary: 'Tactics trainers, spaced-repetition repertoire builders, and puzzle mining.',
-    tags: ['tactics', 'repertoire', 'miner', 'puzzle', 'practice', 'training'],
+    summary: 'Tactics puzzles, Blindfold ladders, Guess-the-Move, and Spaced-Repetition openings.',
+    tags: ['tactics', 'repertoire', 'miner', 'puzzle', 'practice', 'training', 'solitaire', 'blindfold', 'shortener'],
     content: [
       {
-        heading: 'Tactics Puzzle Trainer',
+        heading: 'Interactive Chess Training Suite',
+        subheading: 'Deliberate practice tools built directly into your database workstation.',
         paragraphs: [
-          'Solve curated tactical puzzles from system bases (tactics, matein1, endings) with instant move validation and hint capabilities.'
+          'Access the Play menu to launch structured training modes powered by your databases and UCI engine:'
+        ],
+        bullets: [
+          'Tactics Puzzle Trainer & Progressive Blindfold Tactics: Solve tactical puzzles or train visualization as pieces progressively fade into invisible coordinates across 4 blindfold tiers.',
+          'Solitaire Chess (Guess the Move): Step through master games concealing the winner\'s moves; earn points for finding the master move or engine top choices.',
+          'Spaced-Repetition Opening Repertoire & Repertoire Shortener: Build White/Black repertoire trees with SM-2 flashcard scheduling, or use the Practical Repertoire Shortener to prune low-probability sidelines while preserving >90% practical coverage.',
+          'Database Puzzle Miner: Automatically extract tactical turnaround puzzles from your own database games.'
+        ]
+      }
+    ]
+  },
+  {
+    id: 'cognitive-drills',
+    title: 'Board Vision & Cognitive Drills',
+    icon: Eye,
+    summary: 'Coordinate speed trainer, Piece Safety scanner, Intuition Storm, and Prophylaxis drills.',
+    tags: ['coordinate', 'vision', 'safety', 'undefended', 'intuition', 'prophylaxis', 'threat', 'drill'],
+    content: [
+      {
+        heading: '4 High-Speed Board Vision & Calculation Drills',
+        subheading: 'Eliminate one-move blunders and sharpen pattern recognition.',
+        paragraphs: [
+          'All four cognitive drills are available under the Play menu:'
+        ],
+        bullets: [
+          'Coordinate Speed Trainer: 60-second timed square & move-coordinate blitz with an interactive 8×8 per-square accuracy heatmap.',
+          'Piece Safety & Undefended Piece Scanner: Tap every loose (undefended) or hanging piece on complex middlegame boards under time pressure.',
+          'Intuition Evaluation Storm: View rich middlegame positions for a few seconds and classify who stands better (White Winning, Slight Edge, Equal, Black Winning) from pure positional judgment.',
+          'Prophylaxis ("What Is Threatening?") Drill: Identify the opponent\'s hidden tactical threat if they were given a free move, then play the accurate prophylactic defense.'
+        ]
+      }
+    ]
+  },
+  {
+    id: 'self-improvement',
+    title: 'Blunder Vault & Time Management',
+    icon: Clock,
+    summary: 'Personal SRS Blunder Vault and %clk Time-Trouble & Clock-Management Dossier.',
+    tags: ['blunder', 'vault', 'srs', 'clock', 'time', 'trouble', 'management', 'telemetry'],
+    content: [
+      {
+        heading: 'Personal Blunder Vault (Spaced-Repetition)',
+        paragraphs: [
+          'Open Play → Personal Blunder Vault (SRS) to review mistakes extracted from your own games. Positions are scheduled using the SuperMemo-2 (SM-2) algorithm so recurring tactical blind spots are drilled until mastered.'
         ]
       },
       {
-        heading: 'Opening Repertoire Builder',
+        heading: 'Time-Trouble & Clock-Management Dossier',
         paragraphs: [
-          'Construct White and Black opening trees with spaced-repetition flashcard drills to memorize theoretical lines.'
-        ]
-      },
-      {
-        heading: 'Database Puzzle Miner',
-        paragraphs: [
-          'Scan your own database games with Stockfish to automatically detect major blunder turnarounds and generate personalized tactical puzzles from your own games.'
+          'Open Tools → Time Management Dossier to parse [%clk] annotations across your database games. The analyzer computes your move-time profiles by phase, detects "Panic Mode" blunder spikes under 30 seconds, and flags "Premature Instinct" errors where critical positions were played too quickly.'
         ]
       }
     ]
   },
   {
     id: 'tournaments',
-    title: 'Tournaments & Crosstables',
+    title: 'Tournaments & Engine Shootouts',
     icon: Trophy,
-    summary: 'Round-Robin matrices, Swiss pairings, Sonneborn-Berger, and Buchholz tiebreaks.',
+    summary: 'F7 Round-Robin/Swiss Crosstables, FIDE tiebreaks, and automated Engine Tournaments.',
     tags: ['tournament', 'crosstable', 'round-robin', 'swiss', 'standings', 'sonneborn-berger', 'buchholz', 'tpr'],
     content: [
       {
         heading: 'Tournament Crosstables & Standings (F7)',
-        subheading: 'Instant standings calculation and cross-table matrices for any event in the database.',
+        subheading: 'Instant standings, NxN matrices, and FIDE tiebreaks for any database event.',
         paragraphs: [
-          'NewScid scans all games in the open database to discover tournament events, detect whether the event was played as a Round-Robin, Swiss, or Match, and calculate official FIDE metrics.',
-          'Press F7 or choose Tools → Tournament Crosstables & Standings to open the cross-table modal.'
+          'Press F7 or select Tools → Tournament Crosstables & Standings to generate Round-Robin or Swiss crosstables with Sonneborn-Berger (SB), Buchholz, Buchholz Cut-1, and Tournament Performance Rating (TPR). Click any cell to load that game onto the board.'
+        ]
+      },
+      {
+        heading: 'Automated UCI Engine Tournament Manager',
+        paragraphs: [
+          'Select Tools → Engine Tournament Manager to pit multiple UCI engines or configurations against each other in automated Round-Robin or Gauntlet matches with live PGN recording.'
+        ]
+      }
+    ]
+  },
+  {
+    id: 'cli-workstation',
+    title: 'Companion Workstation CLI Tools',
+    icon: Terminal,
+    summary: 'Standalone high-speed binaries: newscid-import, newscid-fairplay, and newscid-scout.',
+    tags: ['cli', 'terminal', 'command', 'newscid-import', 'newscid-fairplay', 'newscid-scout', 'headless', 'batch'],
+    content: [
+      {
+        heading: 'Unix Philosophy Chess Workstation Utilities',
+        subheading: 'Run heavy batch imports, fair-play audits, and opponent scouting directly from the terminal.',
+        paragraphs: [
+          'Alongside the main newscid GUI binary, NewScid installs three dedicated, zero-GUI companion command-line programs for ultra-fast batch scripting and headless operation:'
         ],
         bullets: [
-          'Round-Robin Matrix: View head-to-head outcomes (1, ½, 0, *) in an NxN grid with row/column highlights and color-coded results.',
-          'Swiss Pairings: View round-by-round encounters with opponent rank, color (w/b), and individual game outcomes.',
-          'Tiebreak Calculations: Computes Sonneborn-Berger (SB), Buchholz, Buchholz Cut 1, direct encounters, and Tournament Performance Rating (TPR).',
-          'Interactive Jump-to-Game: Click any match result cell to immediately load that game into the board and scorebook.',
-          'Export & Copy: Instantly export or copy formatted plain-text ASCII cross-tables to the system clipboard.'
+          'newscid-import: High-speed PGN and Online (Lichess/Chess.com) incremental importer, signature deduplicator, and physical database compactor. Example: newscid-import -db master.si4 -pgn twic.pgn -dedup -compact',
+          'newscid-fairplay: Standalone longitudinal Fair-Play & Time-Control Consistency analyzer outputting Markdown or JSON dossiers. Example: newscid-fairplay -db games.si4 -player "AlphaPlayer"',
+          'newscid-scout: Standalone Opponent Scouting Dossier, Anti-Persona Opening Exploiter (with Polyglot .bin export), and Tournament Crosstable generator. Example: newscid-scout -db games.si4 -player "Opponent" -exploit-color white -book-out prep.bin'
         ],
-        tip: 'The FIDE Tournament Category is automatically determined from the average Elo rating of all competitors.'
+        tip: 'Switch to the "System Man Page (man 1)" tab at the top of this window to read the complete command-line manual.'
       }
     ]
   }
 ]
+
+const LOCAL_MAN_PAGE = `NEWSCID(1)                   NewScid Chess Manual                   NEWSCID(1)
+
+NAME
+       newscid - Modern high-performance chess workstation and .si4 database suite
+       newscid-import - Standalone PGN & online incremental database importer
+       newscid-fairplay - Standalone longitudinal fair-play & consistency analyzer
+       newscid-scout - Standalone opponent scouting, exploit book & crosstable tool
+
+SYNOPSIS
+       newscid [options] [file.si4 | file.pgn]
+       newscid-import -db <base.si4> [-pgn <file.pgn>] [-lichess <u1>] [-chesscom <u2>] [-dedup] [-compact]
+       newscid-fairplay -db <base.si4> -player <Name> [-max 300] [-json]
+       newscid-scout -db <base.si4> [-player <Name>] [-exploit-color white|black] [-book-out <out.bin>] [-crosstable <Event>] [-json]
+
+DESCRIPTION
+       NewScid is a complete, 100% local Linux chess workstation engineered in
+       Go and Vue 3. It reads and writes native SCID v4 binary databases (.si4,
+       .sg4, .sn4) capable of searching millions of games in milliseconds, while
+       integrating UCI multi-PV analysis, natural-language coaching, longitudinal
+       fair-play inspection, opponent preparation, and cognitive training drills.
+
+       All documentation is stored locally via the interactive manual (F1),
+       contextual help buttons (?), and this system manual page (man newscid).
+
+WORKSPACES & DETACHABLE PANELS
+       Every workspace (Database Ctrl+1, Analysis Ctrl+2, Training Ctrl+3,
+       Opening Prep Ctrl+4) supports full panel customization:
+       • All 7 panels (including the Chessboard) can be docked Left, Right, or
+         Bottom, reordered, hidden, or detached into floating windows.
+       • All workspace layouts, startup database, board/piece themes, and
+         notation styles persist automatically in ~/.config/newscid/preferences.json.
+
+COMPANION WORKSTATION PROGRAMS
+       newscid-import
+              Imports PGN archives or incrementally syncs Lichess/Chess.com
+              accounts into a target .si4 database using 64-bit game-signature
+              hashing so existing games are never duplicated or recounted.
+
+       newscid-fairplay
+              Executes longitudinal statistical fair-play screening across
+              Bullet, Blitz, Rapid, and Classical time controls, outputting a
+              Markdown or JSON integrity dossier.
+
+       newscid-scout
+              Generates Opponent Scouting Dossiers, Anti-Persona Opening Exploit
+              trees (with binary Polyglot .bin book export), and FIDE Tournament
+              Crosstables from the command line.
+
+OPTIONS (newscid)
+       --headless
+              Run NewScid as a local HTTP/WebSocket server without launching a
+              desktop window.
+
+       --addr <host:port>
+              Listen address when running in --headless mode (default 127.0.0.1:8088).
+
+       --version
+              Display version information and exit.
+
+KEYBOARD SHORTCUTS
+       F1            Open local contextual help for the active tool or workspace
+       F2            Start / Stop live UCI engine analysis
+       F6            Open Classic Book Window
+       F7            Open Tournament Crosstables & Standings
+       Ctrl+1..4     Switch between Database, Analysis, Training, and Prep workspaces
+       Ctrl+K        Open Command Palette
+       Ctrl+O / N    Open / Create SCID (.si4) database
+       Ctrl+I / E    Import / Export PGN games
+       Ctrl+F        Advanced Header, Material & Pattern Search
+       Ctrl+M        Database Maintenance, Compaction & Sorting
+       Ctrl+B        Board Setup & FEN Editor
+       Ctrl+Space    Toggle Trial (Sandbox) Variation Mode
+       Space         Toggle Autoplay Move Replay
+       F             Flip Board Perspective
+
+FILES
+       ~/.config/newscid/preferences.json
+              Persistent workstation layout, floating panel geometry, default
+              startup database, and visual theme settings.
+
+       ~/.config/newscid/personas.json
+              Multi-alias player persona definitions and sync metadata.
+
+       ~/.local/share/newscid/databases/
+              Default directory for local SCID (.si4/.sg4/.sn4) databases.
+
+AUTHOR
+       Written by Christopher Patrick Fair.
+`
 
 const filteredTopics = computed(() => {
   const q = searchFilter.value.toLowerCase().trim()
@@ -315,7 +520,8 @@ const filteredTopics = computed(() => {
     t.tags.some(tag => tag.includes(q)) ||
     t.content.some(c =>
       c.heading.toLowerCase().includes(q) ||
-      c.paragraphs.some(p => p.toLowerCase().includes(q))
+      (c.paragraphs && c.paragraphs.some(p => p.toLowerCase().includes(q))) ||
+      (c.bullets && c.bullets.some(b => b.toLowerCase().includes(q)))
     )
   )
 })
@@ -326,20 +532,13 @@ const activeTopic = computed(() => {
 
 function selectTopic(id: string) {
   activeSectionId.value = id
-}
-
-function openOnlineRepo() {
-  try {
-    BrowserOpenURL('https://github.com/christopherpatrickfair/newscid#readme')
-  } catch (err) {
-    window.open('https://github.com/christopherpatrickfair/newscid#readme', '_blank')
-  }
+  activeTab.value = 'manual'
 }
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="modal-card bg-zinc-900 border border-zinc-700/80 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+  <div class="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="modal-card bg-zinc-900 border border-zinc-700/80 rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
       <!-- Modal Header -->
       <div class="flex items-center justify-between p-4 bg-zinc-950 border-b border-zinc-800">
         <div class="flex items-center gap-2.5">
@@ -348,26 +547,36 @@ function openOnlineRepo() {
           </div>
           <div>
             <h2 class="text-base font-bold text-zinc-100 flex items-center gap-2">
-              <span>NewScid User Guide & Online Help</span>
+              <span>NewScid Local Workstation Manual & Contextual Help</span>
               <span class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-950/80 border border-emerald-800/60 text-emerald-300">
-                Documentation
+                100% Offline Local Docs
               </span>
             </h2>
             <p class="text-xs text-zinc-400">
-              Interactive manual, guides, feature walkthroughs, and keyboard shortcuts.
+              Complete local manual, contextual feature guides, companion CLI reference, and built-in man(1) page.
             </p>
           </div>
         </div>
 
         <div class="flex items-center gap-2">
-          <button
-            class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-zinc-700"
-            title="Open online GitHub documentation in your web browser"
-            @click="openOnlineRepo"
-          >
-            <ExternalLink class="w-3.5 h-3.5 text-emerald-400" />
-            <span>Web Documentation</span>
-          </button>
+          <div class="flex items-center bg-zinc-900 border border-zinc-800 rounded-lg p-0.5">
+            <button
+              class="px-3 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              :class="activeTab === 'manual' ? 'bg-emerald-600 text-white' : 'text-zinc-400 hover:text-zinc-200'"
+              @click="activeTab = 'manual'"
+            >
+              <BookOpen class="w-3.5 h-3.5" />
+              <span>Interactive Manual</span>
+            </button>
+            <button
+              class="px-3 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              :class="activeTab === 'manpage' ? 'bg-emerald-600 text-white' : 'text-zinc-400 hover:text-zinc-200'"
+              @click="activeTab = 'manpage'"
+            >
+              <FileText class="w-3.5 h-3.5" />
+              <span>System Man Page (man 1)</span>
+            </button>
+          </div>
           <button
             class="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors cursor-pointer"
             @click="emit('close')"
@@ -378,7 +587,7 @@ function openOnlineRepo() {
       </div>
 
       <!-- Main Layout: Sidebar & Content -->
-      <div class="flex-1 flex overflow-hidden">
+      <div v-if="activeTab === 'manual'" class="flex-1 flex overflow-hidden">
         <!-- Sidebar Navigation -->
         <div class="w-72 bg-zinc-950/60 border-r border-zinc-800 flex flex-col shrink-0">
           <!-- Search Input -->
@@ -388,7 +597,7 @@ function openOnlineRepo() {
               <input
                 v-model="searchFilter"
                 type="text"
-                placeholder="Search help topics..."
+                placeholder="Search local manual..."
                 class="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-hidden focus:border-emerald-500"
               />
             </div>
@@ -442,12 +651,17 @@ function openOnlineRepo() {
 
         <!-- Topic Details Body -->
         <div class="flex-1 overflow-y-auto p-6 space-y-6 bg-zinc-900/40">
-          <div class="space-y-1 border-b border-zinc-800 pb-3">
-            <h1 class="text-lg font-bold text-zinc-100 flex items-center gap-2">
-              <component :is="activeTopic.icon" class="w-5 h-5 text-emerald-400" />
-              <span>{{ activeTopic.title }}</span>
-            </h1>
-            <p class="text-xs text-zinc-400">{{ activeTopic.summary }}</p>
+          <div class="space-y-1 border-b border-zinc-800 pb-3 flex items-center justify-between">
+            <div>
+              <h1 class="text-lg font-bold text-zinc-100 flex items-center gap-2">
+                <component :is="activeTopic.icon" class="w-5 h-5 text-emerald-400" />
+                <span>{{ activeTopic.title }}</span>
+              </h1>
+              <p class="text-xs text-zinc-400">{{ activeTopic.summary }}</p>
+            </div>
+            <span class="px-2.5 py-1 rounded-md bg-zinc-800/90 border border-zinc-700 text-[11px] font-mono text-zinc-300">
+              Topic ID: {{ activeTopic.id }}
+            </span>
           </div>
 
           <!-- Content Sections -->
@@ -464,7 +678,7 @@ function openOnlineRepo() {
                 </p>
               </div>
 
-              <div class="space-y-2 text-xs text-zinc-300 leading-relaxed font-sans">
+              <div v-if="section.paragraphs && section.paragraphs.length > 0" class="space-y-2 text-xs text-zinc-300 leading-relaxed font-sans">
                 <p v-for="(p, pIdx) in section.paragraphs" :key="pIdx">
                   {{ p }}
                 </p>
@@ -488,6 +702,22 @@ function openOnlineRepo() {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Built-in Local System Man Page Viewer -->
+      <div v-else class="flex-1 overflow-y-auto p-6 bg-zinc-950">
+        <div class="max-w-3xl mx-auto space-y-3">
+          <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+            <div class="flex items-center gap-2 text-xs text-emerald-400 font-mono">
+              <Terminal class="w-4 h-4" />
+              <span>Local System Manual Page — man 1 newscid</span>
+            </div>
+            <span class="text-[11px] text-zinc-400 font-mono">
+              Installed at /usr/share/man/man1/newscid.1.gz
+            </span>
+          </div>
+          <pre class="text-xs font-mono text-zinc-200 leading-relaxed whitespace-pre-wrap bg-zinc-900/90 border border-zinc-800 rounded-xl p-5 select-text">{{ LOCAL_MAN_PAGE }}</pre>
         </div>
       </div>
     </div>

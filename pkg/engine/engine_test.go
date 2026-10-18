@@ -1,6 +1,7 @@
 package engine_test
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -414,4 +415,141 @@ func TestParseInfoLinePerspectiveNormalization(t *testing.T) {
 	lineBMate, okBMate := engine.ParseInfoLine("info depth 20 multipv 1 score mate 3 nodes 50000 nps 250000 pv d8h4", blackTurnFEN)
 	require.True(t, okBMate)
 	assert.Equal(t, -3, lineBMate.MateIn, "Black-to-move mate 3 must be negated to -3 (Black mates White)")
+
+	// 5. Long PV (>12 moves) and unknown score kind
+	longPV := "info depth 10 score unknown 10 pv e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 c2c3 g8f6 d2d4 e5d4 c3d4 f8b4 b1c3 f6e4"
+	pvLong, okLong := engine.ParseInfoLine(longPV, whiteTurnFEN)
+	require.True(t, okLong)
+	assert.NotEmpty(t, pvLong.PVFormatted)
+	_, _ = engine.ParseInfoLine("info depth 5", "invalid-fen-no-turn")
+}
+
+func TestMockEngineAllBranches(t *testing.T) {
+	tmpDir := t.TempDir()
+	scriptPath := tmpDir + "/mock_uci.sh"
+	// Script that returns sequentially varying scores so AnnotateGame hits blunder, mistake, inaccuracy, mate, etc.
+	script := `#!/bin/sh
+count=0
+while IFS= read -r line; do
+  case "$line" in
+    uci)
+      echo "id name MockEngine"
+      echo "id author MockAuthor"
+      echo "uciok"
+      ;;
+    isready)
+      echo "readyok"
+      ;;
+    go*)
+      count=$((count + 1))
+      if [ "$count" -eq 1 ]; then
+        echo "info depth 8 multipv 2 score cp 10 nodes 100 nps 1000 pv d2d4"
+        echo "info depth 10 multipv 1 score cp 100 nodes 100 nps 1000 pv a2a3"
+      elif [ "$count" -eq 2 ]; then
+        echo "info depth 10 multipv 1 score cp 20 nodes 100 nps 1000 pv a7a6"
+      elif [ "$count" -eq 3 ]; then
+        echo "info depth 10 multipv 1 score cp 100 nodes 100 nps 1000 pv a2a4"
+      elif [ "$count" -eq 4 ]; then
+        echo "info depth 10 multipv 1 score cp -30 nodes 100 nps 1000 pv a7a5"
+      elif [ "$count" -eq 5 ]; then
+        echo "info depth 10 multipv 1 score cp 100 nodes 100 nps 1000 pv h2h3"
+      elif [ "$count" -eq 6 ]; then
+        echo "info depth 10 multipv 1 score mate 2 nodes 100 nps 1000 pv h7h6"
+      elif [ "$count" -eq 7 ]; then
+        echo "info depth 10 multipv 1 score mate 2 nodes 100 nps 1000 pv h2h4"
+      else
+        echo "info depth 10 multipv 1 score cp 0 nodes 100 nps 1000 pv e2e4"
+      fi
+      echo "bestmove a2a3"
+      ;;
+    quit)
+      exit 0
+      ;;
+  esac
+done
+`
+	require.NoError(t, os.WriteFile(scriptPath, []byte(script), 0755))
+
+	eng := engine.NewEngine(scriptPath)
+	require.NoError(t, eng.Start())
+	defer eng.Quit()
+
+	require.NoError(t, eng.ResetStrengthOptions())
+
+	// Annotate game with custom StartFEN, nil Tags, and 8 plies to hit all NAGs for White & Black + mate scores
+	game, err := chess.ParsePGN("1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 1-0")
+	require.NoError(t, err)
+	game.Tags = nil
+	game.StartFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 1 1"
+
+	analysis, err := engine.AnnotateGame(game, eng, 10)
+	require.NoError(t, err)
+	assert.NotNil(t, analysis)
+	assert.NotNil(t, game.Tags)
+	assert.Equal(t, 1, analysis.WhiteMistakes)
+	assert.Equal(t, 1, analysis.BlackMistakes)
+	assert.Equal(t, 1, analysis.WhiteInaccs)
+	assert.Equal(t, 1, analysis.BlackInaccs)
+
+	// Analyze with moves list (covers effectiveSearchFEN with valid moves, invalid moves, invalid FEN)
+	require.NoError(t, eng.Analyze(chess.StartingFEN, []string{"e2e4", "e7e5", "invalid"}, 4))
+	require.NoError(t, eng.Analyze("invalid-fen", []string{"e2e4"}, 0))
+	require.NoError(t, eng.StopAndSync())
+
+	// SearchBestMove with moves list and movetimeMs <= 0
+	best, _, err := eng.SearchBestMove(chess.StartingFEN, []string{"e2e4"}, 0)
+	require.NoError(t, err)
+	assert.Equal(t, "a2a3", best)
+
+	// Unstarted engine fallback in AnnotateGame (covers evalPositionWhitePOV err != nil and bestMove == "")
+	unstartedEng := engine.NewEngine("/nonexistent")
+	shortGame, _ := chess.ParsePGN("1. e4 1-0")
+	_, err = engine.AnnotateGame(shortGame, unstartedEng, 10)
+	require.NoError(t, err)
+
+	// Also test White checkmated (Fool's mate) & Stalemate in AnnotateGame
+	foolsMate, err := chess.ParsePGN("1. f3 e5 2. g4 Qh4# 0-1")
+	require.NoError(t, err)
+	_, err = engine.AnnotateGame(foolsMate, eng, 10)
+	require.NoError(t, err)
+
+	// Stalemate after 1 move from custom FEN: Black king on h8, White Q on f6, K on f7, White plays Kg6 stalemate
+	staleGame := chess.NewGame()
+	staleGame.StartFEN = "7k/5K2/5Q2/8/8/8/8/8 w - - 0 1"
+	bStale, _ := chess.ParseFEN(staleGame.StartFEN)
+	mStale, _ := bStale.ParseUCI("f7g6")
+	staleGame.RootMove = &chess.MoveNode{Move: mStale, UCI: "f7g6", SAN: "Kg6"}
+	_, err = engine.AnnotateGame(staleGame, eng, 10)
+	require.NoError(t, err)
+
+	// Test home directory Scid config discovery and tilde binary availability
+	fakeHome := t.TempDir()
+	t.Setenv("HOME", fakeHome)
+	binInHome := fakeHome + "/my_engine.sh"
+	require.NoError(t, os.WriteFile(binInHome, []byte("#!/bin/sh\n"), 0755))
+
+	cfgTilde := &engine.EngineConfig{Cmd: "~/my_engine.sh"}
+	engine.CheckEngineAvailability(cfgTilde)
+	assert.True(t, cfgTilde.Available)
+
+	cfgAbs := &engine.EngineConfig{Cmd: binInHome}
+	engine.CheckEngineAvailability(cfgAbs)
+	assert.True(t, cfgAbs.Available)
+
+	scidCfgDir := fakeHome + "/.scidvspc/config"
+	require.NoError(t, os.MkdirAll(scidCfgDir, 0755))
+	datContent := `
+engine {
+  Name HomeEngine
+  Cmd ~/my_engine.sh
+  UCI 1
+}
+engine {
+  Name NoCmdEngine
+  Cmd {}
+}
+`
+	require.NoError(t, os.WriteFile(scidCfgDir+"/engines.dat", []byte(datContent), 0644))
+	discovered := engine.DiscoverScidEngines()
+	assert.NotEmpty(t, discovered)
 }

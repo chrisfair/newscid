@@ -2,10 +2,14 @@ package repertoire
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"newscid/pkg/chess"
+	"newscid/pkg/database/scid"
 )
 
 func TestShortenRepertoire_Pareto(t *testing.T) {
@@ -103,4 +107,55 @@ func TestShortenRepertoire_ErrorsAndEdgeCases(t *testing.T) {
 	}, nil)
 	require.NoError(t, err)
 	assert.NotNil(t, res)
+
+	// MaxDepth with PreserveAnnotated = true
+	resPreserved, err := mgr.ShortenRepertoire(ShortenerOptions{
+		RepertoireID:      "white-openings-italian",
+		TargetCoveragePct: 50,
+		MaxDepth:          2,
+		PreserveAnnotated: true,
+	}, nil)
+	require.NoError(t, err)
+	assert.NotNil(t, resPreserved)
+}
+
+func TestShortenRepertoire_WithDatabaseAndUnannotatedPrune(t *testing.T) {
+	tempDir := t.TempDir()
+	mgr := NewManager(tempDir)
+
+	// Create custom repertoire with unannotated low-frequency sidelines
+	rep := &Repertoire{
+		ID:        "white-custom-prune",
+		Name:      "Custom Prune Test",
+		Color:     "w",
+		Positions: make(map[string][]RepertoireMove),
+	}
+	// Populate unannotated branches for Black's 1st move responses to 1.e4: e5, c5, e6, c6, d5, g6
+	mgr.populateLine(rep, []string{"e4", "e5", "Nf3"}, "")
+	mgr.populateLine(rep, []string{"e4", "c5", "Nf3"}, "")
+	mgr.populateLine(rep, []string{"e4", "e6", "d4"}, "")
+	mgr.populateLine(rep, []string{"e4", "c6", "d4"}, "")
+	mgr.populateLine(rep, []string{"e4", "d5", "exd5"}, "")
+	mgr.populateLine(rep, []string{"e4", "g6", "d4"}, "")
+	require.NoError(t, mgr.SaveRepertoire(rep))
+
+	// Create SCID database with >= 25 games mostly playing 1.e4 e5 so other responses are < 5%
+	db := scid.NewDatabase()
+	require.NoError(t, db.Create(filepath.Join(tempDir, "testdb"), "Test DB"))
+
+	for i := 0; i < 25; i++ {
+		g, err := chess.ParsePGN("1. e4 e5 2. Nf3 Nc6 1-0")
+		require.NoError(t, err)
+		_, err = db.SaveGame(g)
+		require.NoError(t, err)
+	}
+
+	res, err := mgr.ShortenRepertoire(ShortenerOptions{
+		RepertoireID:      "white-custom-prune",
+		TargetCoveragePct: 60.0,
+		MinFrequencyPct:   10.0,
+		PreserveAnnotated: false,
+	}, db)
+	require.NoError(t, err)
+	assert.NotEmpty(t, res.PrunedBranches)
 }

@@ -1,163 +1,189 @@
-.TH NEWSCID 1 "October 2026" "NewScid 1.3.21" "User Commands"
+.TH NEWSCID 1 "October 2026" "NewScid 1.3.22" "User Commands"
 .SH NAME
-newscid \- Modern Chess Information Database and analysis workbench
+newscid \- Modern Chess Workstation and .si4 Information Database
+.br
+newscid-import \- High-speed standalone PGN & online incremental database importer
+.br
+newscid-fairplay \- Standalone longitudinal fair-play & time-control consistency analyzer
+.br
+newscid-scout \- Standalone opponent scouting dossier, opening exploiter & crosstable generator
 .SH SYNOPSIS
 .B newscid
 [\fIOPTIONS\fR] [\fIFILE\fR]
+.br
+.B newscid-import
+\fB\-db\fR \fIDATABASE.si4\fR [\fB\-pgn\fR \fIFILE.pgn\fR] [\fB\-lichess\fR \fIUSER\fR] [\fB\-chesscom\fR \fIUSER\fR] [\fB\-max\fR \fIN\fR] [\fB\-dedup\fR] [\fB\-compact\fR]
+.br
+.B newscid-fairplay
+\fB\-db\fR \fIDATABASE.si4\fR \fB\-player\fR \fINAME\fR [\fB\-max\fR \fI300\fR] [\fB\-json\fR]
+.br
+.B newscid-scout
+\fB\-db\fR \fIDATABASE.si4\fR [\fB\-player\fR \fINAME\fR] [\fB\-exploit-color\fR \fIwhite|black\fR] [\fB\-book-out\fR \fIFILE.bin\fR] [\fB\-crosstable\fR \fIEVENT\fR] [\fB\-json\fR]
 .SH DESCRIPTION
 .B NewScid
-is a modern, high-performance chess information database and graphical analysis workbench designed as a pure Go and Vue 3 rewrite of Scid vs. PC.
-It provides native reading and writing support for high-capacity SCID databases (.si4 index, .sg4 games, .sn4 namebase), multi-game PGN streams, and live UCI chess engine analysis.
+is a complete, ultra-fast Linux chess workstation and graphical analysis suite engineered in Go and Vue 3.
+It provides native reading and writing support for high-capacity SCID v4 binary databases (\fB.si4\fR index, \fB.sg4\fR Huffman-compressed games, \fB.sn4\fR front-coded namebase tries), multi-million-game PGN/Zstandard streams, and real-time UCI chess engine analysis.
 .PP
-NewScid introduces advanced modern features including multi-alias Player Personas with dedicated database synchronization, AI player simulation sparring bots, online account integration (Chess.com and Lichess.org), universal notation styling, a 16-NAG scorebook annotation palette, and spaced-repetition training modules.
-.SH OPTIONS
+All user documentation, interactive guides, contextual feature help (\fBF1\fR), and system manual pages (\fBman 1 newscid\fR) are stored 100% locally on your machine with zero external web dependencies.
+.PP
+Alongside the main graphical workstation (\fBnewscid\fR), three standalone companion CLI programs (\fBnewscid-import\fR, \fBnewscid-fairplay\fR, and \fBnewscid-scout\fR) are installed for high-speed batch database maintenance, fair-play screening, and tournament preparation from the terminal.
+.SH OPTIONS (newscid)
 .TP
 .BR \-h ", " \-\-help
 Display command-line options and exit.
 .TP
 .BR \-v ", " \-\-version
-Output version, git commit, build date, and runtime information, then exit.
+Output version, git commit, build date, and runtime architecture, then exit.
 .TP
 .BR \-\-db " \fIPATH\fR"
-Open the specified database (.si4 or .pgn) upon startup.
-.SH MAJOR FEATURES
-.SS 1. Native SCID Binary Database Engine
-NewScid contains a ground-up Go implementation of the SCID database format. It supports reading and writing 47-byte index records (.si4), Huffman-compressed move streams (.sg4), and front-coded namebase tries (.sn4) with sub-second query performance across databases containing millions of games.
-Database tools include physical compaction, custom multi-criteria sorting (Date, Elo, Event, ECO, Player), and signature-based duplicate detection.
-.SS 2. Player Personas & Multi-Alias Consolidation
-Unifies disparate database identifiers (e.g. FIDE OTB designator, Chess.com username, Lichess handle) under a single consolidated Persona profile.
-Features include:
+Open the specified database (\fB.si4\fR or \fB.pgn\fR) upon startup.
+.TP
+.BR \-\-window\-panel " \fIPANEL_ID\fR"
+Launch a dedicated multi-screen/Hyprland window rendering a specific detached workstation panel (\fBboard\fR, \fBtree\fR, \fBengine\fR, \fBgames\fR, \fBnotation\fR, \fBportal\fR, or \fBdb-roles\fR).
+.TP
+.BR \-\-workspace " \fIID\fR"
+Target compositor workspace when launching a detached screen panel window.
+.SH COMPANION WORKSTATION CLI PROGRAMS
+.SS newscid-import
+Standalone high-speed PGN and online game importer, signature deduplicator, and physical compactor:
+.TP
+.BI \-db " PATH"
+Target SCID database path (\fB.si4\fR). Created automatically if it does not exist.
+.TP
+.BI \-pgn " FILE"
+Import games from a PGN file into the target database, skipping games whose 64-bit signature already exists.
+.TP
+.BI \-lichess " USERNAME"
+Incrementally sync newest and historical backfill games from Lichess.org without recounting existing games.
+.TP
+.BI \-chesscom " USERNAME"
+Incrementally sync newest and historical backfill games from Chess.com without recounting existing games.
+.TP
+.BI \-max " N"
+Maximum number of new unimported online games to fetch (default: 250).
+.TP
+.B \-dedup
+Run signature-based duplicate removal (default: true).
+.TP
+.B \-compact
+Physically compact deleted records from the \fB.si4\fR/\fB.sg4\fR files after import.
+.SS newscid-fairplay
+Standalone longitudinal statistical fair-play and time-control consistency analyzer:
+.TP
+.BI \-db " PATH"
+SCID database path (\fB.si4\fR) to inspect.
+.TP
+.BI \-player " NAME"
+Player name or handle to evaluate across all matching games in the database.
+.TP
+.BI \-max " N"
+Maximum number of games to analyze (default: 300).
+.TP
+.B \-json
+Emit the full statistical dossier as formatted JSON instead of Markdown.
+.SS newscid-scout
+Standalone opponent scouting dossier, opening vulnerability exploiter, and crosstable utility:
+.TP
+.BI \-db " PATH"
+SCID database path (\fB.si4\fR) to scan.
+.TP
+.BI \-player " NAME"
+Opponent name for scouting dossier or opening vulnerability analysis.
+.TP
+.BI \-exploit-color " white|black"
+Build an Anti-Persona opening exploit tree targeting the opponent's repertoire as White or Black.
+.TP
+.BI \-book-out " FILE.bin"
+Compile and export the generated opening refutation lines to a binary Polyglot (\fB.bin\fR) opening book.
+.TP
+.BI \-crosstable " EVENT"
+Calculate a Round-Robin or Swiss tournament crosstable with Sonneborn-Berger, Buchholz, and TPR for the specified event name.
+.TP
+.B \-json
+Emit output as formatted JSON.
+.SH WORKSPACES, DETACHABLE PANELS & PERSISTENT CONFIG
 .IP \(bu 2
-Automatic candidate suggestion matching names in the currently active database.
+\fBAll Panels Relocatable & Detachable\fR: Every workstation panel—including the \fBChessboard\fR, \fBScorebook\fR, \fBUCI Engine & Coach\fR, \fBOpening Tree & Tablebase\fR, \fBDatabase Game Browser\fR, \fBEval Graph\fR, and \fBStudy/Filter\fR—can be docked Left, Right, or Bottom, reordered, hidden, or detached into a draggable floating window or dedicated Hyprland workspace window.
 .IP \(bu 2
-Consolidated career record and per-alias win/draw/loss breakdown statistics.
-.IP \(bu 2
-Dedicated autonomous .si4 database provisioning per persona with one-click extraction and deduplication of matching games from any opened database.
-.SS 3. Online Account Synchronization & Blended Databases
-Direct API integration with Chess.com and Lichess.org. Download and merge games directly into the active database, a dedicated persona archive, or a blended dual-mode repository with automatic signature deduplication.
-.SS 4. AI Player Simulation Sparring Bot
-Simulate and spar against any human opponent found in any database (or any unified Persona) at their calibrated playlevel.
-The sparring bot extracts historical opening trees to play the opponent's true repertoire probabilistically, then calibrates Stockfish midgame skill (UCI_Elo / Skill Level) to match their historical rating.
-.SS 5. Universal Notation Styles
-Dynamically switches move notation across the entire interface without reloading:
-.TP
-.B SAN
-Standard Algebraic Notation (e.g., Nf3, e4, Bxf7+).
-.TP
-.B FAN
-Figurine Algebraic Notation using Unicode chess glyphs (e.g., ♘f3, e4, ♗xf7+).
-.TP
-.B LAN
-Long Algebraic Notation with coordinate squares (e.g., Ng1-f3, e2-e4, Bf1xf7+).
-.TP
-.B Descriptive
-Classical English Descriptive notation (e.g., N-KB3, P-K4, BxP+).
-.TP
-.B UCI
-Universal Chess Interface engine coordinates (e.g., g1f3, e2e4, f1f7).
-.TP
-.B ICCF
-Numeric telegraphic correspondence notation (e.g., 7163, 5254, 6167).
-.SS 6. Tournament Scorebook & Annotation Palette
-Full variation tree support with collapsible sub-variations, variation promotion to main line, and deletion. Includes a 16-NAG scorebook palette (!, ?, !!, ??, !?, ?!, =, ⩲, ⩱, ±, ∓, +-, -+, ∞, ⯹) and rich inline move comments.
-.SS 7. Live UCI Engine Analysis & Multi-PV
-Integrates with any UCI-compliant chess engine (such as Stockfish). Supports multi-PV candidate lines (1 to 5 lines simultaneously), interactive candidate line highlighting on the board, live evaluation graphs, and automated blunder detection.
-.SS 8. Training Modules
-Includes interactive Tactics Puzzle Trainer, Spaced-Repetition Opening Repertoire Builder, Progressive Tactics Challenge, and Database Puzzle Miner.
-.SS 9. Tournament Crosstables & Standings
-Calculates Round-Robin cross-table matrices, Swiss round-by-round pairings, Sonneborn-Berger, Buchholz, and Buchholz Cut 1 tiebreaks, and Tournament Performance Ratings (TPR) from any event in the database. Clicking any match cell immediately loads that encounter on the board. Supports ASCII text crosstable export to system clipboard.
+\fBPersistent User Configuration\fR: Any change to panel docking/floating geometry, default startup database, reference database, board theme, piece set, UI theme, or notation style is immediately persisted to \fI~/.config/newscid/preferences.json\fR.
+.SH MAJOR WORKSTATION MODULES
+.SS 1. Native SCID Binary Database Engine & Incremental Mega Updates
+Reads and writes 47-byte index records (\fB.si4\fR), Huffman-compressed move streams (\fB.sg4\fR), and front-coded namebase tries (\fB.sn4\fR). Supports one-click downloading and incremental updating of multi-million-game master archives (LumbrasGigaBase, TWIC) and local database merging without duplicating existing games.
+.SS 2. Player Personas & Incremental Online Synchronization
+Unifies disparate database identifiers (FIDE OTB name, Chess.com username, Lichess handle) under a single consolidated Persona profile with its own dedicated \fB.si4\fR database. Syncing any player or persona fetches the newest games since the last sync first, then backfills older historical games while skipping all games already present in the database.
+.SS 3. Longitudinal Fair-Play & Time-Control Consistency Inspector
+Evaluates player move quality, Average Centipawn Loss (ACPL), top-move rank distribution, blunder rates, and consistency across Bullet, Blitz, Rapid, and Classical time controls using calibrated human baselines so normal human variance is accurately distinguished from statistical anomalies.
+.SS 4. Opponent Scouting & Anti-Persona Opening Exploiter
+Generates pre-game scouting dossiers and scans an opponent's opening tree to identify statistically weak nodes where they score poorly, exporting custom weaponized Polyglot (\fB.bin\fR) opening books.
+.SS 5. AI Player Simulation Bot & Engine Sparring
+Simulates any database player or Unified Persona by playing their historical opening repertoire probabilistically and transitioning to a rating-calibrated UCI engine with tactical blunder protection. Both the board evaluation bar and the 6-pillar Positional & Material Imbalance bar report from an absolute White perspective (+ = White advantage, \- = Black advantage).
+.SS 6. Natural-Language Coach, Blunder Radar & 7-Piece Tablebases
+Explains the strategic and tactical rationale behind moves in plain English, highlights undefended/hanging pieces in real time via the Blunder Radar, and probes 7-piece Syzygy/Lichess endgame tablebases for exact WDL and DTZ.
+.SS 7. Cognitive Drills, Blunder Vault & Time Management Dossier
+Includes the Coordinate Speed Trainer (with 8x8 accuracy heatmap), Piece Safety Scanner, Intuition Evaluation Storm, Prophylaxis ("What Is Threatening?") Drill, Progressive Blindfold Tactics, Solitaire Chess (Guess the Move), Practical Repertoire Shortener, SM-2 Personal Blunder Vault, and \fB%clk\fR Time-Trouble & Clock-Management Dossier.
+.SS 8. Universal Notation Styles & Print-Ready Publishing
+Dynamically switches across 6 notation formats (\fBSAN\fR, \fBFAN\fR, \fBLAN\fR, \fBDescriptive\fR, \fBUCI\fR, \fBICCF\fR), provides a 16-NAG annotation palette, and exports annotated games to print-ready \fBLaTeX\fR, \fBHTML\fR, and \fBPDF\fR scorebooks.
 .SH KEYBOARD SHORTCUTS
 .TP
 .B F1
-Open Online Help and User Documentation.
+Open 100% Local Manual & Contextual Help for the active dialog or workspace.
 .TP
 .B F2
 Toggle live UCI engine analysis.
 .TP
+.B F3
+Open Opening Tree & Polyglot Book Explorer.
+.TP
+.B F6
+Open ECO Opening Classification Browser.
+.TP
 .B F7
 Open Tournament Crosstables & Standings dialog.
 .TP
-.B Ctrl+O
-Open database dialog.
+.B Ctrl+1 .. Ctrl+4
+Switch between Database, Analysis, Training, and Opening Prep workspaces.
 .TP
-.B Ctrl+N
-Start a new game.
+.B Ctrl+K
+Open Universal Command Palette.
 .TP
-.B Ctrl+S
-Save current game into database.
+.B Ctrl+,
+Open Workstation Preferences & Multi-Screen Panel Configuration.
 .TP
-.B Ctrl+Del
-Mark or delete current game.
+.B Ctrl+O / Ctrl+N / Ctrl+S
+Open database / New game / Save current game.
+.TP
+.B Ctrl+M
+Open Database Maintenance, Compaction & Sorting dialog.
+.TP
+.B Ctrl+H
+Open Header, Material & Pawn-Structure Search dialog.
 .TP
 .B Ctrl+B
 Open Setup Board / FEN Editor.
 .TP
-.B Ctrl+M
-Open Database Maintenance & Compaction dialog.
-.TP
-.B Ctrl+H
-Open Header / General Search dialog.
-.TP
-.B Ctrl+I
-Import PGN game from text or file.
-.TP
-.B Ctrl+E
-Export current game to PGN format.
-.TP
-.B Ctrl+C / Ctrl+V
-Copy / Paste FEN position to or from system clipboard.
-.TP
 .B Ctrl+Space
-Toggle Trial Mode (board sandbox).
+Toggle Trial Mode (sandbox variation testing).
 .TP
-.B Ctrl+Z / Ctrl+Y
-Undo / Redo board move.
-.TP
-.B F
-Flip board orientation.
-.TP
-.B Space
-Toggle autoplay / game replay.
-.TP
-.B Left / Right
-Step backward / forward one half-move.
-.TP
-.B Home / End
-Jump to starting position / final position of game.
-.TP
-.B Ctrl+Home / Ctrl+End
-Jump to first / last game in database.
+.B F / Space / Z
+Flip board orientation / Toggle autoplay / Toggle Zen Mode.
 .TP
 .B ?
-Display Keyboard Shortcuts dialog.
+Display Keyboard Shortcuts reference.
 .SH FILES
 .TP
-.I ~/.config/newscid/
-User configuration directory.
+.I ~/.config/newscid/preferences.json
+Persistent workstation panel layout, floating geometry, default database, and visual theme configuration.
 .TP
 .I ~/.config/newscid/personas.json
-Saved multi-alias Player Personas and profile definitions.
+Saved multi-alias Player Personas and sync metadata.
 .TP
 .I ~/.local/share/newscid/
-Default directory for user persona databases (.si4) and training repertoires.
-.TP
-.I ~/.scidvspc/
-Scid vs. PC legacy directory automatically scanned for databases, engine options, and piece sets.
-.TP
-.I /usr/share/scid/bases/
-System-wide reference, tutorial, and tactics databases.
+Default directory for user databases (\fB.si4\fR), blunder vault, and training repertoires.
 .SH SEE ALSO
 .BR stockfish (6),
-.BR scid (1),
-.BR xboard (6)
+.BR scid (1)
 .SH AUTHORS
 NewScid is created and maintained by Christopher Patrick Fair <christopherpatrickfair@gmail.com>.
-.SH BUGS
-Report bugs and submit feature requests at:
-.UR https://github.com/christopherpatrickfair/newscid/issues
-.UE
 .SH COPYRIGHT
 Copyright \(co 2026 Christopher Patrick Fair.
 License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.
-This is free software: you are free to change and redistribute it.
-There is NO WARRANTY, to the extent permitted by law.

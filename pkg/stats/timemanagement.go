@@ -18,24 +18,134 @@ var (
 	evalRegex = regexp.MustCompile(`(?i)\[%eval\s+([^\]]+)\]`)
 )
 
+type gamePhase uint8
+
+const (
+	phaseOpening gamePhase = iota
+	phaseMiddlegame
+	phaseEndgame
+)
+
+func (p gamePhase) String() string {
+	switch p {
+	case phaseMiddlegame:
+		return "middlegame"
+	case phaseEndgame:
+		return "endgame"
+	default:
+		return "opening"
+	}
+}
+
+type evalClass uint8
+
+const (
+	evalUnknown evalClass = iota
+	evalBest
+	evalGood
+	evalInaccuracy
+	evalMistake
+	evalBlunder
+)
+
+func (e evalClass) String() string {
+	switch e {
+	case evalBest:
+		return "best"
+	case evalGood:
+		return "good"
+	case evalInaccuracy:
+		return "inaccuracy"
+	case evalMistake:
+		return "mistake"
+	case evalBlunder:
+		return "blunder"
+	default:
+		return "unknown"
+	}
+}
+
+func (e evalClass) isSevereError() bool {
+	return e == evalBlunder || e == evalMistake
+}
+
+type moveTimeFlag uint8
+
+const (
+	flagNormal moveTimeFlag = iota
+	flagTankSuccess
+	flagTankBlunder
+	flagPanicBlunder
+	flagScrambleBlunder
+)
+
+func (f moveTimeFlag) String() string {
+	switch f {
+	case flagTankSuccess:
+		return "tank_success"
+	case flagTankBlunder:
+		return "tank_blunder"
+	case flagPanicBlunder:
+		return "panic_blunder"
+	case flagScrambleBlunder:
+		return "scramble_blunder"
+	default:
+		return "normal"
+	}
+}
+
+type tankOutcome uint8
+
+const (
+	tankSolid tankOutcome = iota
+	tankMasterstroke
+	tankInaccuracy
+	tankBlunder
+)
+
+func (o tankOutcome) String() string {
+	switch o {
+	case tankMasterstroke:
+		return "Masterstroke"
+	case tankInaccuracy:
+		return "Inaccuracy"
+	case tankBlunder:
+		return "Blunder"
+	default:
+		return "Solid"
+	}
+}
+
+func colorName(c chess.Color) string {
+	if c == chess.Black {
+		return "black"
+	}
+	return "white"
+}
+
 // MoveTimeRecord captures clock and evaluation data for a single ply.
 type MoveTimeRecord struct {
-	Ply                        int     `json:"ply"`
-	MoveNumber                 int     `json:"moveNumber"`
-	Turn                       string  `json:"turn"` // "white" | "black"
-	SAN                        string  `json:"san"`
-	UCI                        string  `json:"uci"`
-	ClockRemainingSec          float64 `json:"clockRemainingSec"`
-	TimeSpentSec               float64 `json:"timeSpentSec"`
-	ClockStr                   string  `json:"clockStr"`
-	Phase                      string  `json:"phase"` // "opening" | "middlegame" | "endgame"
-	IsTank                     bool    `json:"isTank"`
-	IsPanic                    bool    `json:"isPanic"`
-	IsScramble                 bool    `json:"isScramble"`
-	EvalCp                     int     `json:"evalCp"`
-	EvalDropCp                 int     `json:"evalDropCp"`
-	EvaluationClassification   string  `json:"evaluationClassification"` // "best" | "good" | "inaccuracy" | "mistake" | "blunder" | "unknown"
-	Flag                       string  `json:"flag"`                     // "tank_success" | "tank_blunder" | "panic_blunder" | "scramble_blunder" | "normal"
+	Ply                      int     `json:"ply"`
+	MoveNumber               int     `json:"moveNumber"`
+	Turn                     string  `json:"turn"` // "white" | "black"
+	SAN                      string  `json:"san"`
+	UCI                      string  `json:"uci"`
+	ClockRemainingSec        float64 `json:"clockRemainingSec"`
+	TimeSpentSec             float64 `json:"timeSpentSec"`
+	ClockStr                 string  `json:"clockStr"`
+	Phase                    string  `json:"phase"` // "opening" | "middlegame" | "endgame"
+	IsTank                   bool    `json:"isTank"`
+	IsPanic                  bool    `json:"isPanic"`
+	IsScramble               bool    `json:"isScramble"`
+	EvalCp                   int     `json:"evalCp"`
+	EvalDropCp               int     `json:"evalDropCp"`
+	EvaluationClassification string  `json:"evaluationClassification"` // "best" | "good" | "inaccuracy" | "mistake" | "blunder" | "unknown"
+	Flag                     string  `json:"flag"`                     // "tank_success" | "tank_blunder" | "panic_blunder" | "scramble_blunder" | "normal"
+
+	turnColor   chess.Color
+	phaseID     gamePhase
+	evalClassID evalClass
+	flagID      moveTimeFlag
 }
 
 // SideTimeStats summarizes time management metrics for one color.
@@ -213,7 +323,7 @@ func AnalyzeGameTimeManagement(game *chess.Game) (*GameTimeManagementReport, err
 	type rawPly struct {
 		ply      int
 		moveNum  int
-		turn     string
+		turn     chess.Color
 		san      string
 		uci      string
 		clockSec float64
@@ -234,9 +344,9 @@ func AnalyzeGameTimeManagement(game *chess.Game) (*GameTimeManagementReport, err
 
 	for curr != nil {
 		moveNum := (plyIdx + 1) / 2
-		turn := "white"
+		turn := chess.White
 		if plyIdx%2 == 0 {
-			turn = "black"
+			turn = chess.Black
 		}
 
 		rp := rawPly{
@@ -261,7 +371,7 @@ func AnalyzeGameTimeManagement(game *chess.Game) (*GameTimeManagementReport, err
 			if sec, err := ParseClockToSeconds(clkStr); err == nil {
 				rp.clockSec = sec
 				rp.hasClock = true
-				if turn == "white" {
+				if turn == chess.White {
 					report.WhiteHasClock = true
 				} else {
 					report.BlackHasClock = true
@@ -298,24 +408,23 @@ func AnalyzeGameTimeManagement(game *chess.Game) (*GameTimeManagementReport, err
 		plyIdx++
 	}
 
-	totalPlies := len(rawPlies)
 	var prevWhiteClock, prevBlackClock float64
 	var hadPrevWhiteClock, hadPrevBlackClock bool
 
-	for i, rp := range rawPlies {
+	for _, rp := range rawPlies {
 		// Determine phase
-		phase := "opening"
+		phase := phaseOpening
 		if rp.ply > 24 && rp.ply <= 60 {
-			phase = "middlegame"
+			phase = phaseMiddlegame
 		} else if rp.ply > 60 {
-			phase = "endgame"
+			phase = phaseEndgame
 		}
 
 		var timeSpent float64
 		if rp.hasEMT {
 			timeSpent = rp.emtSec
 		} else if rp.hasClock {
-			if rp.turn == "white" {
+			if rp.turn == chess.White {
 				if hadPrevWhiteClock {
 					// Time spent = previous white clock - current white clock
 					diff := prevWhiteClock - rp.clockSec
@@ -339,9 +448,9 @@ func AnalyzeGameTimeManagement(game *chess.Game) (*GameTimeManagementReport, err
 
 		// Determine Eval Drop
 		evalDrop := 0
-		classification := "unknown"
+		classification := evalUnknown
 		if rp.hasEval && hadPrevEval {
-			if rp.turn == "white" {
+			if rp.turn == chess.White {
 				// For white, drop is previous eval - current eval
 				drop := prevEvalCp - rp.evalCp
 				if drop > 0 {
@@ -360,36 +469,36 @@ func AnalyzeGameTimeManagement(game *chess.Game) (*GameTimeManagementReport, err
 		for _, nag := range rp.nags {
 			switch nag {
 			case 1: // !
-				classification = "best"
+				classification = evalBest
 			case 2: // ?
-				classification = "mistake"
+				classification = evalMistake
 				if evalDrop < 100 {
 					evalDrop = 150
 				}
 			case 4: // ??
-				classification = "blunder"
+				classification = evalBlunder
 				if evalDrop < 250 {
 					evalDrop = 300
 				}
 			case 5: // !?
-				classification = "good"
+				classification = evalGood
 			case 6: // ?!
-				classification = "inaccuracy"
+				classification = evalInaccuracy
 				if evalDrop < 50 {
 					evalDrop = 60
 				}
 			}
 		}
 
-		if classification == "unknown" && rp.hasEval {
+		if classification == evalUnknown && rp.hasEval {
 			if evalDrop >= 250 {
-				classification = "blunder"
+				classification = evalBlunder
 			} else if evalDrop >= 120 {
-				classification = "mistake"
+				classification = evalMistake
 			} else if evalDrop >= 50 {
-				classification = "inaccuracy"
+				classification = evalInaccuracy
 			} else {
-				classification = "good"
+				classification = evalGood
 			}
 		}
 
@@ -406,7 +515,7 @@ func AnalyzeGameTimeManagement(game *chess.Game) (*GameTimeManagementReport, err
 
 		// Flag Panic Moves: <= 5s in non-opening with significant blunder
 		isPanic := false
-		if timeSpent > 0 && timeSpent <= 5.0 && rp.ply > 16 && (classification == "blunder" || classification == "mistake" || evalDrop >= 150) {
+		if timeSpent > 0 && timeSpent <= 5.0 && rp.ply > 16 && (classification.isSevereError() || evalDrop >= 150) {
 			isPanic = true
 		}
 
@@ -416,82 +525,89 @@ func AnalyzeGameTimeManagement(game *chess.Game) (*GameTimeManagementReport, err
 			isScramble = true
 		}
 
-		flag := "normal"
+		flag := flagNormal
 		if isTank {
-			if classification == "blunder" || classification == "mistake" || evalDrop >= 150 {
-				flag = "tank_blunder"
+			if classification.isSevereError() || evalDrop >= 150 {
+				flag = flagTankBlunder
 			} else {
-				flag = "tank_success"
+				flag = flagTankSuccess
 			}
 		} else if isPanic {
-			flag = "panic_blunder"
-		} else if isScramble && (classification == "blunder" || classification == "mistake") {
-			flag = "scramble_blunder"
+			flag = flagPanicBlunder
+		} else if isScramble && classification.isSevereError() {
+			flag = flagScrambleBlunder
 		}
+
+		turnStr := colorName(rp.turn)
 
 		rec := MoveTimeRecord{
 			Ply:                      rp.ply,
 			MoveNumber:               rp.moveNum,
-			Turn:                     rp.turn,
+			Turn:                     turnStr,
 			SAN:                      rp.san,
 			UCI:                      rp.uci,
 			ClockRemainingSec:        rp.clockSec,
 			TimeSpentSec:             timeSpent,
 			ClockStr:                 rp.clockStr,
-			Phase:                    phase,
+			Phase:                    phase.String(),
 			IsTank:                   isTank,
 			IsPanic:                  isPanic,
 			IsScramble:               isScramble,
 			EvalCp:                   rp.evalCp,
 			EvalDropCp:               evalDrop,
-			EvaluationClassification: classification,
-			Flag:                     flag,
+			EvaluationClassification: classification.String(),
+			Flag:                     flag.String(),
+			turnColor:                rp.turn,
+			phaseID:                  phase,
+			evalClassID:              classification,
+			flagID:                   flag,
 		}
 
 		report.Moves = append(report.Moves, rec)
 
 		// Record incidents
 		if isTank {
-			outcome := "Solid"
-			if classification == "best" || (evalDrop == 0 && rp.hasEval) {
-				outcome = "Masterstroke"
-			} else if classification == "blunder" || evalDrop >= 250 {
-				outcome = "Blunder"
-			} else if classification == "mistake" || evalDrop >= 120 {
-				outcome = "Inaccuracy"
+			outcome := tankSolid
+			if classification == evalBest || (evalDrop == 0 && rp.hasEval) {
+				outcome = tankMasterstroke
+			} else if classification == evalBlunder || evalDrop >= 250 {
+				outcome = tankBlunder
+			} else if classification == evalMistake || evalDrop >= 120 {
+				outcome = tankInaccuracy
 			}
 
 			playerName := report.WhitePlayer
-			if rp.turn == "black" {
+			if rp.turn == chess.Black {
 				playerName = report.BlackPlayer
 			}
+			outcomeStr := outcome.String()
 
 			tankInc := TankIncident{
 				Ply:            rp.ply,
 				MoveNumber:     rp.moveNum,
 				Player:         playerName,
-				Color:          rp.turn,
+				Color:          turnStr,
 				SAN:            rp.san,
 				TimeSpentSec:   timeSpent,
 				ClockBeforeSec: rp.clockSec + timeSpent,
 				ClockAfterSec:  rp.clockSec,
 				EvalDropCp:     evalDrop,
-				Outcome:        outcome,
-				Description:    fmt.Sprintf("%s spent %.1fs (%s) on move %d...%s. Outcome: %s.", playerName, timeSpent, formatSeconds(timeSpent), rp.moveNum, rp.san, outcome),
+				Outcome:        outcomeStr,
+				Description:    fmt.Sprintf("%s spent %.1fs (%s) on move %d...%s. Outcome: %s.", playerName, timeSpent, formatSeconds(timeSpent), rp.moveNum, rp.san, outcomeStr),
 			}
 			report.TankDossier = append(report.TankDossier, tankInc)
 		}
 
 		if isPanic {
 			playerName := report.WhitePlayer
-			if rp.turn == "black" {
+			if rp.turn == chess.Black {
 				playerName = report.BlackPlayer
 			}
 			panicInc := PanicIncident{
 				Ply:               rp.ply,
 				MoveNumber:        rp.moveNum,
 				Player:            playerName,
-				Color:             rp.turn,
+				Color:             turnStr,
 				SAN:               rp.san,
 				TimeSpentSec:      timeSpent,
 				ClockRemainingSec: rp.clockSec,
@@ -503,12 +619,12 @@ func AnalyzeGameTimeManagement(game *chess.Game) (*GameTimeManagementReport, err
 
 		// Track Scramble entry
 		if isScramble {
-			if rp.turn == "white" {
+			if rp.turn == chess.White {
 				report.ScrambleSummary.WhiteScrambleMoves++
 				if report.ScrambleSummary.WhiteEnteredScramblePly == 0 {
 					report.ScrambleSummary.WhiteEnteredScramblePly = rp.ply
 				}
-				if classification == "blunder" || classification == "mistake" || evalDrop >= 150 {
+				if classification.isSevereError() || evalDrop >= 150 {
 					report.ScrambleSummary.WhiteScrambleBlunders++
 				}
 			} else {
@@ -516,18 +632,16 @@ func AnalyzeGameTimeManagement(game *chess.Game) (*GameTimeManagementReport, err
 				if report.ScrambleSummary.BlackEnteredScramblePly == 0 {
 					report.ScrambleSummary.BlackEnteredScramblePly = rp.ply
 				}
-				if classification == "blunder" || classification == "mistake" || evalDrop >= 150 {
+				if classification.isSevereError() || evalDrop >= 150 {
 					report.ScrambleSummary.BlackScrambleBlunders++
 				}
 			}
 		}
-		_ = totalPlies
-		_ = i
 	}
 
 	// Compute side stats
-	report.WhiteStats = computeSideStats(report.Moves, "white")
-	report.BlackStats = computeSideStats(report.Moves, "black")
+	report.WhiteStats = computeSideStats(report.Moves, chess.White)
+	report.BlackStats = computeSideStats(report.Moves, chess.Black)
 
 	// Generate tactical and practical coaching recommendations
 	generateRecommendations(report)
@@ -535,26 +649,26 @@ func AnalyzeGameTimeManagement(game *chess.Game) (*GameTimeManagementReport, err
 	return report, nil
 }
 
-func computeSideStats(moves []MoveTimeRecord, side string) SideTimeStats {
+func computeSideStats(moves []MoveTimeRecord, side chess.Color) SideTimeStats {
 	var stats SideTimeStats
 	var times []float64
 	var openingTimes, middlegameTimes, endgameTimes []float64
 	var timeLossPairs [][2]float64
 
 	for _, m := range moves {
-		if m.Turn != side {
+		if m.turnColor != side {
 			continue
 		}
 		stats.TotalMoves++
 		stats.TotalTimeSpentSec += m.TimeSpentSec
 		times = append(times, m.TimeSpentSec)
 
-		switch m.Phase {
-		case "opening":
+		switch m.phaseID {
+		case phaseOpening:
 			openingTimes = append(openingTimes, m.TimeSpentSec)
-		case "middlegame":
+		case phaseMiddlegame:
 			middlegameTimes = append(middlegameTimes, m.TimeSpentSec)
-		case "endgame":
+		case phaseEndgame:
 			endgameTimes = append(endgameTimes, m.TimeSpentSec)
 		}
 
@@ -565,7 +679,7 @@ func computeSideStats(moves []MoveTimeRecord, side string) SideTimeStats {
 
 		if m.IsTank {
 			stats.TankCount++
-			if m.Flag == "tank_blunder" {
+			if m.flagID == flagTankBlunder {
 				stats.TankBlunderCount++
 			}
 		}
@@ -576,12 +690,12 @@ func computeSideStats(moves []MoveTimeRecord, side string) SideTimeStats {
 
 		if m.IsScramble {
 			stats.TimeTroubleMoves++
-			if m.EvaluationClassification == "blunder" || m.EvaluationClassification == "mistake" || m.EvalDropCp >= 150 {
+			if m.evalClassID.isSevereError() || m.EvalDropCp >= 150 {
 				stats.TimeTroubleBlunders++
 			}
 		}
 
-		if m.EvalDropCp > 0 || m.EvaluationClassification != "unknown" {
+		if m.EvalDropCp > 0 || m.evalClassID != evalUnknown {
 			timeLossPairs = append(timeLossPairs, [2]float64{m.TimeSpentSec, float64(m.EvalDropCp)})
 		}
 	}
@@ -780,19 +894,19 @@ func AnalyzePlayerTimeManagement(db *scid.Database, playerName string, maxGames 
 			continue
 		}
 
-		targetColor := "white"
+		targetColor := chess.White
 		if isBlack {
-			targetColor = "black"
+			targetColor = chess.Black
 		}
 
-		hasClock := (targetColor == "white" && report.WhiteHasClock) || (targetColor == "black" && report.BlackHasClock)
+		hasClock := (targetColor == chess.White && report.WhiteHasClock) || (targetColor == chess.Black && report.BlackHasClock)
 		if !hasClock {
 			continue
 		}
 
 		dossier.GamesWithClock++
 		sideStats := report.WhiteStats
-		if targetColor == "black" {
+		if targetColor == chess.Black {
 			sideStats = report.BlackStats
 		}
 
@@ -803,24 +917,24 @@ func AnalyzePlayerTimeManagement(db *scid.Database, playerName string, maxGames 
 		panicCountAll += sideStats.PanicMoveCount
 
 		for _, m := range report.Moves {
-			if m.Turn != targetColor {
+			if m.turnColor != targetColor {
 				continue
 			}
-			switch m.Phase {
-			case "opening":
+			switch m.phaseID {
+			case phaseOpening:
 				openingTimesAll = append(openingTimesAll, m.TimeSpentSec)
-			case "middlegame":
+			case phaseMiddlegame:
 				middlegameTimesAll = append(middlegameTimesAll, m.TimeSpentSec)
-			case "endgame":
+			case phaseEndgame:
 				endgameTimesAll = append(endgameTimesAll, m.TimeSpentSec)
 			}
 		}
 
-		inScramble := (targetColor == "white" && report.ScrambleSummary.WhiteEnteredScramblePly > 0) ||
-			(targetColor == "black" && report.ScrambleSummary.BlackEnteredScramblePly > 0)
+		inScramble := (targetColor == chess.White && report.ScrambleSummary.WhiteEnteredScramblePly > 0) ||
+			(targetColor == chess.Black && report.ScrambleSummary.BlackEnteredScramblePly > 0)
 		if inScramble {
 			scrambleGames++
-			if targetColor == "white" {
+			if targetColor == chess.White {
 				scrambleBlundersAll += report.ScrambleSummary.WhiteScrambleBlunders
 			} else {
 				scrambleBlundersAll += report.ScrambleSummary.BlackScrambleBlunders

@@ -331,6 +331,8 @@ const showPuzzleMinerModal = ref(false)
 const showShortcutsModal = ref(false)
 const showAboutModal = ref(false)
 const showHelpModal = ref(false)
+const helpInitialTopic = ref('getting-started')
+const helpInitialTab = ref<'manual' | 'manpage'>('manual')
 const showSearchModal = ref(false)
 const showMaintenanceModal = ref(false)
 const showOnlineSyncModal = ref(false)
@@ -1660,7 +1662,7 @@ function handleKeydown(e: KeyboardEvent) {
   // Single Keys
   if (e.key === 'F1') {
     e.preventDefault()
-    showHelpModal.value = true
+    openContextualHelp()
     return
   } else if (e.key === 'F2') {
     e.preventDefault()
@@ -2659,13 +2661,60 @@ function handleTrainAntiRepertoire() {
   showOpeningTrainerModal.value = true
 }
 
-function handleOpenWebDocs() {
-  try {
-    BrowserOpenURL('https://github.com/christopherpatrickfair/newscid#readme')
-  } catch (err) {
-    window.open('https://github.com/christopherpatrickfair/newscid#readme', '_blank')
+function resolveActiveContextualHelpTopic(): string {
+  if (showFairPlayModal.value) return 'fairplay'
+  if (showPersonaModal.value) return 'personas'
+  if (showOnlineSyncModal.value) return 'online-sync'
+  if (showAntiPersonaModal.value || showOpponentScoutModal.value) return 'scouting-exploiter'
+  if (showPlayerSimulationModal.value || showPlayEngineModal.value || activeSimulation.value) return 'player-sparring'
+  if (showTournamentCrosstableModal.value || showEngineMatchModal.value) return 'tournaments'
+  if (
+    showCoordinateTrainerModal.value ||
+    showPieceSafetyModal.value ||
+    showIntuitionStormModal.value ||
+    showProphylaxisModal.value
+  ) {
+    return 'cognitive-drills'
   }
+  if (showBlunderVaultModal.value || showTimeManagementModal.value) return 'self-improvement'
+  if (
+    showTacticsModal.value ||
+    showProgressiveTacticsModal.value ||
+    showGuessTheMoveModal.value ||
+    showOpeningTrainerModal.value ||
+    showRepertoireShortenerModal.value ||
+    showPuzzleMinerModal.value
+  ) {
+    return 'training'
+  }
+  if (
+    showMegaDatabaseModal.value ||
+    showTwicModal.value ||
+    showMaintenanceModal.value ||
+    showDatabaseStatsModal.value ||
+    showSearchModal.value
+  ) {
+    return 'databases'
+  }
+  if (showExportGameModal.value || showEditTagsModal.value) return 'scorebook-notation'
+  if (showExplainMoveModal.value) return 'engine-analysis'
+  if (showPreferencesModal.value) return 'workspaces-panels'
+  if (activeTab.value === 'engine') return 'engine-analysis'
+  if (activeTab.value === 'tree') return 'scouting-exploiter'
+  if (activeTab.value === 'games' || activeTab.value === 'db-roles') return 'databases'
+  return 'getting-started'
 }
+
+function openContextualHelp(topic?: string, tab: 'manual' | 'manpage' = 'manual') {
+  helpInitialTopic.value = topic || resolveActiveContextualHelpTopic()
+  helpInitialTab.value = tab
+  showHelpModal.value = true
+}
+
+function handleOpenWebDocs() {
+  openContextualHelp('cli-workstation', 'manpage')
+}
+
 
 function handleOpenEditTags() {
   if (!activeGameId.value && totalGames.value > 0) {
@@ -3411,7 +3460,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         @detach-panel-screen="handleDetachPanelScreen"
         @show-shortcuts="showShortcutsModal = true"
         @show-about="showAboutModal = true"
-        @show-help="showHelpModal = true"
+        @show-help="openContextualHelp()"
         @open-web-docs="handleOpenWebDocs"
         @database-maintenance="showMaintenanceModal = true"
         @online-sync="showOnlineSyncModal = true"
@@ -4503,9 +4552,11 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       @close="showSupportModal = false"
     />
 
-    <!-- Online Help & User Documentation Modal (F1) -->
+    <!-- Local Workstation Manual & Contextual Help Modal (F1) -->
     <HelpModal
       v-if="showHelpModal"
+      :initial-topic="helpInitialTopic"
+      :initial-tab="helpInitialTab"
       @close="showHelpModal = false"
       @open-shortcuts="showHelpModal = false; showShortcutsModal = true"
     />

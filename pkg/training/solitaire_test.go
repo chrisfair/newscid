@@ -186,4 +186,18 @@ func TestSolitaireEdgeCases(t *testing.T) {
 
 	sTiers.Score = 20
 	assert.Contains(t, sTiers.GetSummary().RatingTitle, "Developing Player")
+
+	// Test 2 hints -> 4 points, and RevealAndSkip on final move
+	gShort, err := chess.ParsePGN("1. e4 e5 2. Nf3 1-0")
+	require.NoError(t, err)
+	sShort, err := NewSolitaireSession(gShort, "white")
+	require.NoError(t, err)
+	_, _ = sShort.GetHint()
+	_, _ = sShort.GetHint()
+	fb2Hints := sShort.SubmitGuess("e4")
+	assert.Equal(t, 4, fb2Hints.PointsEarned)
+	// Final move (2. Nf3) skipped via RevealAndSkip -> finishes session
+	fbSkipFinal := sShort.RevealAndSkip()
+	assert.True(t, fbSkipFinal.IsFinished)
+	assert.NotNil(t, fbSkipFinal.Summary)
 }

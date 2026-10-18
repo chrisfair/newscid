@@ -55,3 +55,46 @@ func TestGenerateReport(t *testing.T) {
 		t.Errorf("expected recommendations, got none")
 	}
 }
+
+func TestGenerateReport_Comprehensive(t *testing.T) {
+	// 1. Empty games list
+	emptyReport := GenerateReport("Carlsen", nil)
+	if emptyReport.TotalGames != 0 {
+		t.Errorf("expected 0 games, got %d", emptyReport.TotalGames)
+	}
+	if len(emptyReport.RepertoireRecommendations) != 1 {
+		t.Errorf("expected insufficient games recommendation, got %v", emptyReport.RepertoireRecommendations)
+	}
+
+	// 2. Diverse games with nil entries, non-matching players, empty ECO, losses, draws, >3 lines, and padded results
+	games := []*scid.GameSummary{
+		nil,
+		{ID: 1, White: "Other1", Black: "Other2", Result: "1-0", ECO: "A00"},
+		{ID: 2, White: "Carlsen, Magnus", Black: "PlayerA", Result: " 1-0 ", ECO: ""},
+		{ID: 3, White: "Carlsen, Magnus", Black: "PlayerB", Result: " 0-1 ", ECO: "C50"},
+		{ID: 4, White: "Carlsen, Magnus", Black: "PlayerC", Result: " 1/2-1/2 ", ECO: "D30"},
+		{ID: 5, White: "PlayerD", Black: "Carlsen, Magnus", Result: " 1-0 ", ECO: "B12"},
+		{ID: 6, White: "PlayerE", Black: "Carlsen, Magnus", Result: " 1/2-1/2 ", ECO: "E60"},
+		{ID: 7, White: "PlayerF", Black: "Carlsen, Magnus", Result: "*", ECO: "A45"},
+		{ID: 8, White: "Carlsen, Magnus", Black: "PlayerG", Result: "1-0", ECO: "C65"},
+		{ID: 9, White: "Carlsen, Magnus", Black: "PlayerH", Result: "1-0", ECO: "C65"},
+	}
+
+	rep := GenerateReport("Carlsen", games)
+	if rep.TotalGames != 8 {
+		t.Errorf("expected 8 games, got %d", rep.TotalGames)
+	}
+	if rep.WhiteRecord.Wins != 3 || rep.WhiteRecord.Losses != 1 || rep.WhiteRecord.Draws != 1 {
+		t.Errorf("unexpected white record: %+v", rep.WhiteRecord)
+	}
+	if rep.BlackRecord.Wins != 0 || rep.BlackRecord.Losses != 1 || rep.BlackRecord.Draws != 1 {
+		t.Errorf("unexpected black record: %+v", rep.BlackRecord)
+	}
+	if len(rep.SharpestLines) != 3 || len(rep.WeakestLines) != 3 {
+		t.Errorf("expected 3 sharpest and 3 weakest lines, got %d and %d", len(rep.SharpestLines), len(rep.WeakestLines))
+	}
+	if len(rep.RepertoireRecommendations) < 3 {
+		t.Errorf("expected at least 3 recommendations (including black dip), got %v", rep.RepertoireRecommendations)
+	}
+}
+

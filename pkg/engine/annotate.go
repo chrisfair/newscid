@@ -7,6 +7,14 @@ import (
 	"newscid/pkg/chess"
 )
 
+const (
+	nagNone       = 0
+	nagGoodMove   = 1 // !
+	nagMistake    = 2 // ?
+	nagBlunder    = 4 // ??
+	nagInaccuracy = 6 // ?!
+)
+
 // MoveAnalysis contains analysis data for an individual ply.
 type MoveAnalysis struct {
 	Ply      int    `json:"ply"`
@@ -74,7 +82,7 @@ func AnnotateGame(game *chess.Game, eng *Engine, movetimeMs int, progressCb ...f
 	bestMoveBefore, scoreBefore, _ := evalPositionWhitePOV(eng, board, movetimeMs)
 
 	for curr != nil {
-		isWhite := (board.Turn == chess.White)
+		moverColor := board.Turn
 		bestMove := bestMoveBefore
 		if bestMove == "" {
 			bestMove = curr.UCI
@@ -89,7 +97,7 @@ func AnnotateGame(game *chess.Game, eng *Engine, movetimeMs int, progressCb ...f
 		// Calculate centipawn loss from mover's perspective
 		var loss int
 		if curr.UCI != bestMove {
-			if isWhite {
+			if moverColor == chess.White {
 				// White wants White-perspective score to stay high
 				loss = scoreBefore - scoreAfter
 			} else {
@@ -104,49 +112,49 @@ func AnnotateGame(game *chess.Game, eng *Engine, movetimeMs int, progressCb ...f
 			loss = 1000
 		}
 
-		if isWhite {
+		if moverColor == chess.White {
 			whiteLosses = append(whiteLosses, float64(loss))
 		} else {
 			blackLosses = append(blackLosses, float64(loss))
 		}
 
 		// Classify move with NAG and comment
-		var nag int
+		nag := nagNone
 		var comment string
 
 		if loss >= 200 {
-			nag = 4 // ?? Blunder
-			if isWhite {
+			nag = nagBlunder
+			if moverColor == chess.White {
 				analysis.WhiteBlunders++
 			} else {
 				analysis.BlackBlunders++
 			}
 			comment = fmt.Sprintf("%.2f (blunder, best was %s)", float64(scoreAfter)/100.0, bestMove)
 		} else if loss >= 100 {
-			nag = 2 // ? Mistake
-			if isWhite {
+			nag = nagMistake
+			if moverColor == chess.White {
 				analysis.WhiteMistakes++
 			} else {
 				analysis.BlackMistakes++
 			}
 			comment = fmt.Sprintf("%.2f (mistake, better was %s)", float64(scoreAfter)/100.0, bestMove)
 		} else if loss >= 50 {
-			nag = 6 // ?! Inaccuracy
-			if isWhite {
+			nag = nagInaccuracy
+			if moverColor == chess.White {
 				analysis.WhiteInaccs++
 			} else {
 				analysis.BlackInaccs++
 			}
 			comment = fmt.Sprintf("%.2f (inaccuracy, better was %s)", float64(scoreAfter)/100.0, bestMove)
 		} else if curr.UCI == bestMove && (loss == 0) && math.Abs(float64(scoreAfter)) < 500 {
-			nag = 1 // ! Good move
+			nag = nagGoodMove
 			comment = fmt.Sprintf("%.2f (best)", float64(scoreAfter)/100.0)
 		} else {
 			comment = fmt.Sprintf("%.2f", float64(scoreAfter)/100.0)
 		}
 
 		// Apply NAG and comment to game node
-		if nag > 0 {
+		if nag > nagNone {
 			curr.NAGs = []int{nag}
 		}
 		curr.Comment = comment

@@ -37,6 +37,25 @@ type MiningFilter struct {
 	OnlyCheckmate bool
 }
 
+type puzzleThemeID uint8
+
+const (
+	themeCheckmate puzzleThemeID = iota
+	themeTacticalAdvantage
+	themeDecisiveAdvantage
+	themeMateInN
+)
+
+var turnLabels = [2]string{
+	chess.White: "w",
+	chess.Black: "b",
+}
+
+var defaultColorNames = [2]string{
+	chess.White: "White",
+	chess.Black: "Black",
+}
+
 // MineFromGames extracts tactical puzzles from a slice of games.
 func MineFromGames(games []*chess.Game, eng *engine.Engine, filter MiningFilter) []MinedPuzzle {
 	var puzzles []MinedPuzzle
@@ -46,6 +65,8 @@ func MineFromGames(games []*chess.Game, eng *engine.Engine, filter MiningFilter)
 		maxGames = len(games)
 	}
 
+	nameLower := strings.ToLower(filter.PlayerName)
+
 	for i := 0; i < maxGames; i++ {
 		g := games[i]
 		if g == nil {
@@ -53,8 +74,7 @@ func MineFromGames(games []*chess.Game, eng *engine.Engine, filter MiningFilter)
 		}
 
 		// Filter by player name if specified
-		if filter.PlayerName != "" {
-			nameLower := strings.ToLower(filter.PlayerName)
+		if nameLower != "" {
 			whiteLower := strings.ToLower(g.Tag("White"))
 			blackLower := strings.ToLower(g.Tag("Black"))
 			if !strings.Contains(whiteLower, nameLower) && !strings.Contains(blackLower, nameLower) {
@@ -99,6 +119,19 @@ func MineFromDatabase(db *scid.Database, eng *engine.Engine, filter MiningFilter
 	return MineFromGames(sampledGames, eng, filter), nil
 }
 
+func formatTheme(id puzzleThemeID, mateIn int) string {
+	switch id {
+	case themeCheckmate:
+		return "Checkmate"
+	case themeMateInN:
+		return fmt.Sprintf("Mate in %d", mateIn)
+	case themeDecisiveAdvantage:
+		return "Decisive Advantage (+5.0)"
+	default:
+		return "Tactical Advantage"
+	}
+}
+
 func mineGame(g *chess.Game, eng *engine.Engine, filter MiningFilter) []MinedPuzzle {
 	var results []MinedPuzzle
 	b := chess.NewBoard()
@@ -112,12 +145,7 @@ func mineGame(g *chess.Game, eng *engine.Engine, filter MiningFilter) []MinedPuz
 	ply := 1
 
 	for curr != nil {
-		fenBefore := b.FEN()
-		isWhite := (b.Turn == chess.White)
-		turnStr := "w"
-		if !isWhite {
-			turnStr = "b"
-		}
+		turnColor := b.Turn
 
 		// Check for checkmate finish in game
 		if curr.Next == nil && (strings.HasSuffix(curr.SAN, "#") || isCheckmatingMove(b, curr.Move)) {
@@ -129,35 +157,36 @@ func mineGame(g *chess.Game, eng *engine.Engine, filter MiningFilter) []MinedPuz
 				Date:        g.Tag("Date"),
 				Event:       g.Tag("Event"),
 				Ply:         ply,
-				StartFEN:    fenBefore,
-				Turn:        turnStr,
+				StartFEN:    b.FEN(),
+				Turn:        turnLabels[turnColor&1],
 				BestMoveUCI: curr.UCI,
 				BestMoveSAN: curr.SAN,
 				Solution:    []string{curr.UCI},
-				Theme:       "Checkmate",
+				Theme:       formatTheme(themeCheckmate, 0),
 				EvalDeltaCp: 1000,
-				Description: fmt.Sprintf("%s found checkmate with %s!", getMoverName(g, isWhite), curr.SAN),
+				Description: fmt.Sprintf("%s found checkmate with %s!", getMoverName(g, turnColor), curr.SAN),
 			})
 			break
 		}
 
 		// If engine is available and game has tactical blunders/punishments
 		if eng != nil && ply > 6 && !filter.OnlyCheckmate {
+			fenBefore := b.FEN()
 			// Check if current position has a decisive tactical move for the side to move
 			bestMove, eval, err := eng.SearchBestMove(fenBefore, nil, 80)
 			moverScoreCp := eval.ScoreCp
 			moverMateIn := eval.MateIn
-			if !isWhite {
+			if turnColor == chess.Black {
 				moverScoreCp = -moverScoreCp
 				moverMateIn = -moverMateIn
 			}
 			if err == nil && (moverScoreCp >= 300 || moverMateIn > 0) {
 				// Significant advantage detected!
-				theme := "Tactical Advantage"
+				themeID := themeTacticalAdvantage
 				if moverMateIn > 0 {
-					theme = fmt.Sprintf("Mate in %d", moverMateIn)
+					themeID = themeMateInN
 				} else if moverScoreCp >= 500 {
-					theme = "Decisive Advantage (+5.0)"
+					themeID = themeDecisiveAdvantage
 				}
 
 				results = append(results, MinedPuzzle{
@@ -169,13 +198,13 @@ func mineGame(g *chess.Game, eng *engine.Engine, filter MiningFilter) []MinedPuz
 					Event:       g.Tag("Event"),
 					Ply:         ply,
 					StartFEN:    fenBefore,
-					Turn:        turnStr,
+					Turn:        turnLabels[turnColor&1],
 					BestMoveUCI: bestMove,
 					BestMoveSAN: curr.SAN,
 					Solution:    []string{bestMove},
-					Theme:       theme,
+					Theme:       formatTheme(themeID, moverMateIn),
 					EvalDeltaCp: int(math.Abs(float64(eval.ScoreCp))),
-					Description: fmt.Sprintf("%s has a winning tactic in %s vs %s.", getMoverName(g, isWhite), g.Tag("White"), g.Tag("Black")),
+					Description: fmt.Sprintf("%s has a winning tactic in %s vs %s.", getMoverName(g, turnColor), g.Tag("White"), g.Tag("Black")),
 				})
 
 				// Skip ahead 4 plies to avoid clustering puzzles in the same game
@@ -202,17 +231,14 @@ func isCheckmatingMove(b *chess.Board, m chess.Move) bool {
 	return copyB.IsCheckmate()
 }
 
-func getMoverName(g *chess.Game, isWhite bool) string {
-	if isWhite {
-		w := g.Tag("White")
-		if w != "?" && w != "" {
-			return w
-		}
-		return "White"
+func getMoverName(g *chess.Game, color chess.Color) string {
+	tagKey := "White"
+	if color == chess.Black {
+		tagKey = "Black"
 	}
-	bl := g.Tag("Black")
-	if bl != "?" && bl != "" {
-		return bl
+	name := g.Tag(tagKey)
+	if name != "?" && name != "" {
+		return name
 	}
-	return "Black"
+	return defaultColorNames[color&1]
 }

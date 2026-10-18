@@ -18,31 +18,59 @@ const (
 	NotationICCF        NotationStyle = "iccf"        // Numeric Correspondence: 7163, 5254, 6167
 )
 
+type notationStyleID uint8
+
+const (
+	styleInvalid notationStyleID = iota
+	styleSAN
+	styleFAN
+	styleLAN
+	styleDescriptive
+	styleUCI
+	styleICCF
+)
+
+func parseNotationStyleID(s NotationStyle) notationStyleID {
+	switch NotationStyle(strings.ToLower(string(s))) {
+	case NotationSAN:
+		return styleSAN
+	case NotationFAN:
+		return styleFAN
+	case NotationLAN:
+		return styleLAN
+	case NotationDescriptive:
+		return styleDescriptive
+	case NotationUCI:
+		return styleUCI
+	case NotationICCF:
+		return styleICCF
+	default:
+		return styleInvalid
+	}
+}
+
 // ValidNotationStyle returns whether the given string is a valid notation style.
 func ValidNotationStyle(s string) bool {
-	switch NotationStyle(strings.ToLower(s)) {
-	case NotationSAN, NotationFAN, NotationLAN, NotationDescriptive, NotationUCI, NotationICCF:
-		return true
-	default:
-		return false
-	}
+	return parseNotationStyleID(NotationStyle(s)) != styleInvalid
 }
 
 // MoveToNotation formats a legal move according to the specified notation style.
 func (b *Board) MoveToNotation(m Move, style NotationStyle) string {
-	switch style {
-	case NotationFAN:
+	return b.moveToNotationByID(m, parseNotationStyleID(style))
+}
+
+func (b *Board) moveToNotationByID(m Move, id notationStyleID) string {
+	switch id {
+	case styleFAN:
 		return b.MoveToFAN(m)
-	case NotationLAN:
+	case styleLAN:
 		return b.MoveToLAN(m)
-	case NotationDescriptive:
+	case styleDescriptive:
 		return b.MoveToDescriptive(m)
-	case NotationUCI:
+	case styleUCI:
 		return m.String()
-	case NotationICCF:
+	case styleICCF:
 		return b.MoveToICCF(m)
-	case NotationSAN:
-		fallthrough
 	default:
 		return b.MoveToSAN(m)
 	}
@@ -197,7 +225,7 @@ func (b *Board) MoveToDescriptive(m Move) string {
 			}
 			if candPawns > 1 {
 				fromFile := fileDescs[m.From.File()]
-				sb.WriteString(string(fromFile[0]))
+				sb.WriteByte(fromFile[0])
 			}
 			sb.WriteString("PxP")
 			if pt == Pawn && m.To == b.EPSquare {
@@ -212,11 +240,11 @@ func (b *Board) MoveToDescriptive(m Move) string {
 				}
 			}
 			if candPieces > 1 {
-				side := "K"
+				side := byte('K')
 				if m.From.File() < 4 {
-					side = "Q"
+					side = 'Q'
 				}
-				sb.WriteString(side)
+				sb.WriteByte(side)
 			}
 			sb.WriteString(pt.String())
 			sb.WriteByte('x')
@@ -234,11 +262,11 @@ func (b *Board) MoveToDescriptive(m Move) string {
 				}
 			}
 			if candPieces > 1 {
-				side := "K"
+				side := byte('K')
 				if m.From.File() < 4 {
-					side = "Q"
+					side = 'Q'
 				}
-				sb.WriteString(side)
+				sb.WriteByte(side)
 			}
 			sb.WriteString(pt.String())
 			sb.WriteByte('-')
@@ -279,6 +307,7 @@ func FormatPVWithStyle(startFEN string, pvMoves []string, style NotationStyle) s
 		return strings.Join(pvMoves, " ")
 	}
 
+	styleID := parseNotationStyleID(style)
 	var sb strings.Builder
 	moveNum := b.FullMove
 	isWhite := b.Turn == White
@@ -304,7 +333,7 @@ func FormatPVWithStyle(startFEN string, pvMoves []string, style NotationStyle) s
 			fmt.Fprintf(&sb, "%d... ", moveNum)
 		}
 
-		notated := b.MoveToNotation(m, style)
+		notated := b.moveToNotationByID(m, styleID)
 		sb.WriteString(notated)
 
 		b.MakeMove(m)

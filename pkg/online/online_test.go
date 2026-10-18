@@ -2,6 +2,7 @@ package online
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -811,3 +812,294 @@ func TestIncrementalBackfillWithoutCountingExisting(t *testing.T) {
 	defer db.Close()
 	assert.Equal(t, 3, db.NumGames())
 }
+
+func TestChessComIncrementalAndProgress(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if strings.HasSuffix(path, "/archives") {
+			w.Header().Set("Content-Type", "application/json")
+			resp := ChessComArchivesResponse{
+				Archives: []string{
+					"http://" + r.Host + "/pub/player/u/games/2026/01",
+					"http://" + r.Host + "/pub/player/u/games/2026/02",
+					"http://" + r.Host + "/pub/player/u/games/2026/03",
+				},
+			}
+			_ = json.NewEncoder(w).Encode(resp)
+			return
+		}
+		if strings.Contains(path, "2026/03/pgn") {
+			// Empty month
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("   "))
+			return
+		}
+		if strings.Contains(path, "2026/02/pgn") {
+			w.Header().Set("Content-Type", "application/x-chess-pgn")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("[Event \"Test\"]\n[White \"A\"]\n[Black \"B\"]\n[Result \"1-0\"]\n\n1. e4 e5 1-0"))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	cc := NewChessComClient()
+	cc.BaseURL = server.URL
+
+	// 1. FetchUserGamesWithProgress with sinceYear=2026, sinceMonth=2 (skips 2026/01)
+	combined, err := cc.FetchUserGamesWithProgress("u", 2026, 2, 0, nil)
+	require.NoError(t, err)
+	assert.Contains(t, combined, "1. e4 e5")
+
+	// 2. FetchUserGamesIncremental with progressFn and maxNewGames > 0
+	var stages []string
+	gamesInc, skippedInc, err := cc.FetchUserGamesIncremental("u", 1, nil, func(stage string, current, total int, message string) {
+		stages = append(stages, stage)
+	})
+	require.NoError(t, err)
+	assert.Len(t, gamesInc, 1)
+	assert.Equal(t, 0, skippedInc)
+	assert.NotEmpty(t, stages)
+}
+
+func TestLichessIncrementalAndSyncEdgeCases(t *testing.T) {
+	// Build 25 distinct mini games to trigger 25-game progress in FetchUserGames and 20-game progress in FetchUserGamesIncremental
+	var manyPGN strings.Builder
+	for i := 1; i <= 25; i++ {
+		manyPGN.WriteString(fmt.Sprintf("[Event \"Game %d\"]\n[Site \"https://lichess.org/g%d\"]\n[Date \"2026.01.%02d\"]\n[White \"P%d\"]\n[Black \"Q%d\"]\n[Result \"1-0\"]\n\n1. e4 e5 1-0\n\n", i, i, i, i, i))
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if strings.Contains(path, "404") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if strings.Contains(path, "429") {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		if strings.Contains(path, "500") {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("err"))
+			return
+		}
+		if strings.Contains(path, "badjson") {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("not-json"))
+			return
+		}
+		if strings.HasPrefix(path, "/api/user/") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"count":{"all":10,"rated":10}}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/x-chess-pgn")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(manyPGN.String()))
+	}))
+	defer srv.Close()
+
+	lc := NewLichessClient()
+	lc.BaseURL = srv.URL
+
+	// 1. GetUserGameCount invalid JSON
+	assert.Equal(t, 0, lc.GetUserGameCount("badjson", false))
+
+	// 2. FetchUserGames with 25 games and totalExpected=10 (triggers pct > 100 cap)
+	var batchProg int
+	_, err := lc.FetchUserGames("user25", 0, "tok", true, 0, func(stage string, current, total int, message string) {
+		batchProg++
+	})
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, batchProg, 2)
+
+	// 3. FetchUserGamesIncremental error branches & 20-game progress
+	_, _, err = lc.FetchUserGamesIncremental("", "", false, 0, nil)
+	assert.Error(t, err)
+	_, _, err = lc.FetchUserGamesIncremental("404", "", false, 0, nil)
+	assert.Error(t, err)
+	_, _, err = lc.FetchUserGamesIncremental("429", "", false, 0, nil)
+	assert.Error(t, err)
+	_, _, err = lc.FetchUserGamesIncremental("500", "", false, 0, nil)
+	assert.Error(t, err)
+
+	var incProg int
+	games, _, err := lc.FetchUserGamesIncremental("user25", "tok", true, 22, nil, func(stage string, current, total int, message string) {
+		incProg++
+	})
+	require.NoError(t, err)
+	assert.Len(t, games, 22)
+	assert.GreaterOrEqual(t, incProg, 2)
+
+	// 4. SyncManager.ImportPlayerGames edge cases:
+	// - Default mode with open activeDB
+	// - TargetDedicatedBase where DedicatedPath matches activeDB.BasePath
+	// - Error recording when Lichess and Chess.com fail
+	tmpDir := t.TempDir()
+	pm, err := NewProfileManager(filepath.Join(tmpDir, "pm_edge.json"))
+	require.NoError(t, err)
+	sm := NewSyncManager(pm)
+	sm.Lichess.BaseURL = srv.URL
+	sm.ChessCom.BaseURL = srv.URL
+
+	activeDB := scid.NewDatabase()
+	activeBase := filepath.Join(tmpDir, "active_shared")
+	require.NoError(t, activeDB.Create(activeBase, "Active Shared"))
+	defer activeDB.Close()
+
+	// Default TargetMode ("") with open activeDB and empty PlayerName (uses ChessComUsername)
+	resDef, err := sm.ImportPlayerGames(ImportPlayerOptions{
+		LichessUsername: "user25",
+		MaxGames:        2,
+	}, activeDB)
+	require.NoError(t, err)
+	assert.Equal(t, 2, resDef.Imported)
+
+	// TargetDedicatedBase where DedicatedPath points to activeDB
+	resSameBase, err := sm.ImportPlayerGames(ImportPlayerOptions{
+		LichessUsername: "user25",
+		TargetMode:      TargetDedicatedBase,
+		DedicatedPath:   activeBase + ".si4",
+		MaxGames:        2,
+	}, activeDB)
+	require.NoError(t, err)
+	assert.Equal(t, 2, resSameBase.Imported)
+
+	// TargetDedicatedBase opening an ALREADY existing database on disk (when activeDB is nil)
+	otherBase := filepath.Join(tmpDir, "other_existing")
+	otherDB := scid.NewDatabase()
+	require.NoError(t, otherDB.Create(otherBase, "Other Existing"))
+	require.NoError(t, otherDB.Close())
+
+	resExistingDisk, err := sm.ImportPlayerGames(ImportPlayerOptions{
+		LichessUsername: "user25",
+		TargetMode:      TargetDedicatedBase,
+		DedicatedPath:   otherBase + ".si4",
+		MaxGames:        2,
+		AutoDeduplicate: true,
+	}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 2, resExistingDisk.Imported)
+
+	// Failing Lichess & Chess.com usernames in ImportPlayerGames
+	resFail, err := sm.ImportPlayerGames(ImportPlayerOptions{
+		ChessComUsername: "404",
+		LichessUsername:  "500",
+		TargetMode:       TargetBlendedBase,
+		DedicatedPath:    "",
+	}, activeDB)
+	require.NoError(t, err)
+	assert.Len(t, resFail.Errors, 2)
+
+	// Invalid BaseURLs for Lichess and ChessCom (http.NewRequest errors) and transport error
+	badLC := NewLichessClient()
+	badLC.BaseURL = "://bad"
+	assert.Equal(t, 0, badLC.GetUserGameCount("u", false))
+	_, err = badLC.FetchUserGames("u", 0, "", false, 0)
+	assert.Error(t, err)
+	_, _, err = badLC.FetchUserGamesIncremental("u", "", false, 0, nil)
+	assert.Error(t, err)
+
+	badLC.BaseURL = "http://invalid-domain-xyz-999.invalid"
+	_, _, err = badLC.FetchUserGamesIncremental("u", "", false, 0, nil)
+	assert.Error(t, err)
+
+	badCC := NewChessComClient()
+	badCC.BaseURL = "://bad"
+	_, err = badCC.FetchArchives("u")
+	assert.Error(t, err)
+	_, err = badCC.FetchMonthlyPGN("://bad")
+	assert.Error(t, err)
+	_, err = badCC.FetchUserGamesWithProgress("u", 0, 0, 0, nil)
+	assert.Error(t, err)
+	_, _, err = badCC.FetchUserGamesIncremental("u", 0, nil, nil)
+	assert.Error(t, err)
+
+	// Corrupt .si4 file on disk for openOrCreateDatabase and ImportPlayerGames error
+	corruptBase := filepath.Join(tmpDir, "corrupt_db")
+	require.NoError(t, os.WriteFile(corruptBase+".si4", []byte("not a valid si4 header"), 0644))
+	_, err = openOrCreateDatabase(corruptBase+".si4", "Corrupt")
+	assert.Error(t, err)
+	_, err = sm.ImportPlayerGames(ImportPlayerOptions{
+		LichessUsername: "user25",
+		TargetMode:      TargetDedicatedBase,
+		DedicatedPath:   corruptBase + ".si4",
+		MaxGames:        1,
+	}, nil)
+	assert.Error(t, err)
+
+	// SyncProfile with TargetBlendedBase into a fresh blended DB and an invalid blended DB
+	freshBlended := filepath.Join(tmpDir, "fresh_blended.si4")
+	profBlend := &Profile{
+		Name:            "BlendProf",
+		LichessUsername: "user25",
+		TargetMode:      TargetBlendedBase,
+		BlendedDatabase: freshBlended,
+		AutoDeduplicate: true,
+	}
+	syncDB := scid.NewDatabase()
+	require.NoError(t, syncDB.Create(filepath.Join(tmpDir, "sync_db"), "Sync DB"))
+	defer syncDB.Close()
+
+	resSync, err := sm.SyncProfile(profBlend, syncDB)
+	require.NoError(t, err)
+	assert.Equal(t, 25, resSync.Imported)
+
+	profBlendBad := &Profile{
+		Name:            "BlendBad",
+		LichessUsername: "user25",
+		TargetMode:      TargetBlendedBase,
+		BlendedDatabase: corruptBase + ".si4",
+	}
+	syncDB2 := scid.NewDatabase()
+	require.NoError(t, syncDB2.Create(filepath.Join(tmpDir, "sync_db2"), "Sync DB 2"))
+	defer syncDB2.Close()
+
+	resSyncBad, err := sm.SyncProfile(profBlendBad, syncDB2)
+	require.NoError(t, err)
+	assert.NotEmpty(t, resSyncBad.Errors)
+
+	// ImportPlayerGames with TargetBlendedBase and corrupt DedicatedPath
+	resBlendDedBad, err := sm.ImportPlayerGames(ImportPlayerOptions{
+		LichessUsername: "user25",
+		TargetMode:      TargetBlendedBase,
+		DedicatedPath:   corruptBase + ".si4",
+		MaxGames:        1,
+	}, activeDB)
+	require.NoError(t, err)
+	assert.NotEmpty(t, resBlendDedBad.Errors)
+
+	// ChessComClient FetchUserGamesWithProgress and FetchUserGamesIncremental when monthly archive fails or is empty
+	ccSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "emptyuser/games/archives") {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"archives":[]}`))
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/archives") {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"archives":["http://` + r.Host + `/pub/player/erruser/games/2026/01"]}`))
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ccSrv.Close()
+
+	ccErr := NewChessComClient()
+	ccErr.BaseURL = ccSrv.URL
+	_, err = ccErr.FetchUserGamesWithProgress("erruser", 0, 0, 0, nil)
+	assert.Error(t, err)
+	_, _, err = ccErr.FetchUserGamesIncremental("erruser", 0, nil, nil)
+	assert.Error(t, err)
+	emptyGames, emptySkipped, err := ccErr.FetchUserGamesIncremental("emptyuser", 0, nil, nil)
+	require.NoError(t, err)
+	assert.Empty(t, emptyGames)
+	assert.Equal(t, 0, emptySkipped)
+}
+
+
+
+

@@ -9,8 +9,9 @@ import (
 	"newscid/pkg/training"
 )
 
-// Piece values in centipawns for heuristic tactical evaluation
-var pieceValues = map[chess.PieceType]int{
+// Piece values in centipawns indexed by chess.PieceType for zero-hash heuristic tactical evaluation
+var pieceValues = [7]int{
+	chess.None:   0,
 	chess.Pawn:   100,
 	chess.Knight: 320,
 	chess.Bishop: 330,

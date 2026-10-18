@@ -106,12 +106,17 @@ func (p Piece) Color() Color {
 	return White
 }
 
-func (p Piece) String() string {
-	chars := " KQRBNP  kqrbnp"
-	if int(p) < len(chars) {
-		return string(chars[p])
+const pieceChars = " KQRBNP  kqrbnp"
+
+func (p Piece) Byte() byte {
+	if int(p) < len(pieceChars) {
+		return pieceChars[p]
 	}
-	return "."
+	return '.'
+}
+
+func (p Piece) String() string {
+	return string(p.Byte())
 }
 
 // Square represents squares 0..63 (A1=0, B1=1 ... H8=63).
