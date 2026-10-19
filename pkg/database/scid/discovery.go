@@ -190,6 +190,7 @@ func DiscoverScidDatabases() []DiscoveredDatabase {
 		}{
 			{filepath.Join(home, ".scidvspc", "data"), "User Databases"},
 			{filepath.Join(home, ".local", "share", "newscid", "databases"), "User Databases"},
+			{filepath.Join(home, ".local", "share", "newscid", "personas"), "Persona Databases"},
 			{filepath.Join(home, ".config", "newscid", "personas"), "Persona Databases"},
 			{filepath.Join(home, ".newscid", "personas"), "Persona Databases"},
 		}
