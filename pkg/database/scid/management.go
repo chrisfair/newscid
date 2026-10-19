@@ -216,9 +216,7 @@ func matchesECOFilter(gameECO, ecoFilter string) bool {
 	return strings.HasPrefix(eco, crit)
 }
 
-func playerMatchesSingle(gamePlayer, filterPlayer string) bool {
-	gp := strings.ToLower(strings.TrimSpace(gamePlayer))
-	fp := strings.ToLower(strings.TrimSpace(filterPlayer))
+func playerMatchesDirect(gp, fp string) bool {
 	if gp == "" || gp == "?" || fp == "" {
 		return false
 	}
@@ -247,6 +245,25 @@ func playerMatchesSingle(gamePlayer, filterPlayer string) bool {
 			lastFirst := last + ", " + first
 			if strings.Contains(gp, lastFirst) {
 				return true
+			}
+		}
+	}
+	return false
+}
+
+func playerMatchesSingle(gamePlayer, filterPlayer string) bool {
+	gp := strings.ToLower(strings.TrimSpace(gamePlayer))
+	fp := strings.ToLower(strings.TrimSpace(filterPlayer))
+	if playerMatchesDirect(gp, fp) {
+		return true
+	}
+	// Also check if filterPlayer matches a Famous Player's display name or alias (e.g. "Bobby Fischer" -> "Fischer, Robert James")
+	for _, famous := range DefaultFamousPlayersCatalog() {
+		if strings.EqualFold(famous.Name, fp) {
+			for _, al := range famous.Aliases {
+				if playerMatchesDirect(gp, strings.ToLower(strings.TrimSpace(al))) {
+					return true
+				}
 			}
 		}
 	}

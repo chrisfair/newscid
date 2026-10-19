@@ -60,6 +60,8 @@ type SearchCriteria struct {
 	PawnStructure string            `json:"pawnStructure,omitempty"`
 	CommentText   string            `json:"commentText,omitempty"`
 	Annotator     string            `json:"annotator,omitempty"`
+	PositionFEN   string            `json:"positionFen,omitempty"`
+	OpeningMoves  []string          `json:"openingMoves,omitempty"`
 }
 
 // Database represents an open SCID database.
@@ -374,37 +376,28 @@ func (db *Database) matchesCriteria(gameID int, entry *IndexEntry, criteria *Sea
 
 	// 8. Name criteria (only lookup from namebase if requested)
 	if len(criteria.Players) > 0 {
-		white := strings.ToLower(db.Names.GetName(NamePlayer, entry.WhiteID))
-		black := strings.ToLower(db.Names.GetName(NamePlayer, entry.BlackID))
-		matched := false
-		for _, p := range criteria.Players {
-			critP := strings.ToLower(strings.TrimSpace(p))
-			if critP != "" && (strings.Contains(white, critP) || strings.Contains(black, critP) || white == critP || black == critP) {
-				matched = true
-				break
-			}
-		}
-		if !matched {
+		white := db.Names.GetName(NamePlayer, entry.WhiteID)
+		black := db.Names.GetName(NamePlayer, entry.BlackID)
+		if !playerMatchesAny(white, criteria.Players) && !playerMatchesAny(black, criteria.Players) {
 			return false
 		}
 	}
 	if criteria.Player != "" {
 		white := db.Names.GetName(NamePlayer, entry.WhiteID)
 		black := db.Names.GetName(NamePlayer, entry.BlackID)
-		critP := strings.ToLower(criteria.Player)
-		if !strings.Contains(strings.ToLower(white), critP) && !strings.Contains(strings.ToLower(black), critP) {
+		if !playerMatchesSingle(white, criteria.Player) && !playerMatchesSingle(black, criteria.Player) {
 			return false
 		}
 	}
 	if criteria.White != "" {
 		white := db.Names.GetName(NamePlayer, entry.WhiteID)
-		if !strings.Contains(strings.ToLower(white), strings.ToLower(criteria.White)) {
+		if !playerMatchesSingle(white, criteria.White) {
 			return false
 		}
 	}
 	if criteria.Black != "" {
 		black := db.Names.GetName(NamePlayer, entry.BlackID)
-		if !strings.Contains(strings.ToLower(black), strings.ToLower(criteria.Black)) {
+		if !playerMatchesSingle(black, criteria.Black) {
 			return false
 		}
 	}
@@ -427,8 +420,16 @@ func (db *Database) matchesCriteria(gameID int, entry *IndexEntry, criteria *Sea
 		}
 	}
 
-	// 9. Advanced Filters (Material, Pawn Structure, Annotations)
-	if (criteria.Material != nil && criteria.Material.IsActive()) || criteria.PawnStructure != "" || criteria.CommentText != "" || criteria.Annotator != "" {
+	// 9. Advanced Filters (Material, Pawn Structure, Annotations, OpeningMoves, PositionFEN)
+	hasMat := criteria.Material != nil && criteria.Material.IsActive()
+	pawnType := parsePawnStructureType(criteria.PawnStructure)
+	hasPawn := pawnType != PawnStructNone
+	normOpening := normalizeOpeningMoves(criteria.OpeningMoves)
+	hasOpeningMoves := len(normOpening) > 0
+	targetCoreFEN := coreFENKey(criteria.PositionFEN)
+	hasPositionFEN := targetCoreFEN != ""
+
+	if hasMat || hasPawn || criteria.CommentText != "" || criteria.Annotator != "" || hasOpeningMoves || hasPositionFEN {
 		game, err := db.getGameLocked(gameID)
 		if err != nil || game == nil {
 			return false
@@ -441,12 +442,12 @@ func (db *Database) matchesCriteria(gameID int, entry *IndexEntry, criteria *Sea
 			}
 		}
 
-		// Material and/or Pawn Structure check
-		hasMat := criteria.Material != nil && criteria.Material.IsActive()
-		pawnType := parsePawnStructureType(criteria.PawnStructure)
-		hasPawn := pawnType != PawnStructNone
+		// Opening move sequence prefix check
+		if hasOpeningMoves && !matchesOpeningMoves(game.RootMove, normOpening) {
+			return false
+		}
 
-		if hasMat || hasPawn {
+		if hasMat || hasPawn || hasPositionFEN {
 			b := chess.NewBoard()
 			if game.StartFEN != "" && game.StartFEN != chess.StartingFEN {
 				if parsed, err := chess.ParseFEN(game.StartFEN); err == nil {
@@ -454,47 +455,65 @@ func (db *Database) matchesCriteria(gameID int, entry *IndexEntry, criteria *Sea
 				}
 			}
 
-			matchedAnyPly := false
+			matchedMatPawn := !(hasMat || hasPawn)
+			matchedPos := !hasPositionFEN
 			matchEndOnly := hasMat && criteria.Material.MatchEndOnly
 
 			// Check starting position
-			if !matchEndOnly {
+			if !matchEndOnly && !matchedMatPawn {
 				matOk := !hasMat || criteria.Material.MatchesBoard(b)
 				pawnOk := !hasPawn || matchesPawnStructureByType(b, pawnType)
 				if matOk && pawnOk {
-					matchedAnyPly = true
+					matchedMatPawn = true
 				}
+			}
+			if !matchedPos && coreFENKey(b.FEN()) == targetCoreFEN {
+				matchedPos = true
 			}
 
 			curr := game.RootMove
-			for !matchedAnyPly && curr != nil {
+			for (!matchedMatPawn || !matchedPos) && curr != nil {
 				b.MakeMove(curr.Move)
-				if !matchEndOnly {
+				if !matchEndOnly && !matchedMatPawn {
 					matOk := !hasMat || criteria.Material.MatchesBoard(b)
 					pawnOk := !hasPawn || matchesPawnStructureByType(b, pawnType)
 					if matOk && pawnOk {
-						matchedAnyPly = true
-						break
+						matchedMatPawn = true
 					}
+				}
+				if !matchedPos && coreFENKey(b.FEN()) == targetCoreFEN {
+					matchedPos = true
 				}
 				curr = curr.Next
 			}
 
-			if matchEndOnly {
+			if matchEndOnly && !matchedMatPawn {
 				matOk := !hasMat || criteria.Material.MatchesBoard(b)
 				pawnOk := !hasPawn || matchesPawnStructureByType(b, pawnType)
 				if matOk && pawnOk {
-					matchedAnyPly = true
+					matchedMatPawn = true
 				}
 			}
 
-			if !matchedAnyPly {
+			if !matchedMatPawn || !matchedPos {
 				return false
 			}
 		}
 	}
 
 	return true
+}
+
+func coreFENKey(fen string) string {
+	fen = strings.TrimSpace(fen)
+	if fen == "" {
+		return ""
+	}
+	fields := strings.Fields(fen)
+	if len(fields) >= 4 {
+		return strings.Join(fields[:4], " ")
+	}
+	return fen
 }
 
 // CountMatches returns the total number of games matching the criteria.

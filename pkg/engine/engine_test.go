@@ -549,6 +549,9 @@ engine {
   Cmd {}
 }
 `
+	managedDir := fakeHome + "/.local/share/newscid/engines"
+	require.NoError(t, os.MkdirAll(managedDir+"/subdir", 0755))
+	require.NoError(t, os.WriteFile(managedDir+"/managed_sf", []byte("#!/bin/sh\n"), 0755))
 	require.NoError(t, os.WriteFile(scidCfgDir+"/engines.dat", []byte(datContent), 0644))
 	discovered := engine.DiscoverScidEngines()
 	assert.NotEmpty(t, discovered)

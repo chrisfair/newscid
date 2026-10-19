@@ -52,6 +52,8 @@ type DatabaseInfo struct {
 	Name        string `json:"name"`
 	NumGames    int    `json:"numGames"`
 	Description string `json:"description"`
+	WritePolicy string `json:"writePolicy"`
+	IsLocked    bool   `json:"isLocked"`
 }
 
 // BoardState represents board status sent to the frontend.
@@ -258,11 +260,41 @@ func (a *App) DispatchRPC(method string, params []json.RawMessage) (interface{},
 // Database Operations
 // ==========================================
 
+func (a *App) checkActiveDBEditableLocked() error {
+	if a.db == nil || !a.db.IsOpen {
+		return fmt.Errorf("no database open")
+	}
+	desc := ""
+	if a.db.Header != nil {
+		desc = a.db.Header.Description
+	}
+	pol := a.resolveDatabaseWritePolicy(a.db.BasePath, a.db.NumGames(), desc)
+	if !pol.AllowsDirectEdit() {
+		return fmt.Errorf("database %q is protected (%s policy) to prevent accidental contamination; unlock it or switch to a personal database first", filepath.Base(a.db.BasePath), pol.String())
+	}
+	return nil
+}
+
+func (a *App) checkActiveDBSyncAllowedLocked() error {
+	if a.db == nil || !a.db.IsOpen {
+		return fmt.Errorf("no database open")
+	}
+	desc := ""
+	if a.db.Header != nil {
+		desc = a.db.Header.Description
+	}
+	pol := a.resolveDatabaseWritePolicy(a.db.BasePath, a.db.NumGames(), desc)
+	if !pol.AllowsOnlineSync() {
+		return fmt.Errorf("database %q is strictly locked (%s); unlock it or set it to Sync-Only to allow online updates", filepath.Base(a.db.BasePath), pol.String())
+	}
+	return nil
+}
+
 func (a *App) OpenDatabase(path string) (*DatabaseInfo, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	// If path is a PGN file, convert/cache into temporary Scid DB
+	// If path is a PGN file, convert/cache into Scid DB
 	if strings.HasSuffix(strings.ToLower(path), ".pgn") {
 		content, err := os.ReadFile(path)
 		if err != nil {
@@ -282,11 +314,16 @@ func (a *App) OpenDatabase(path string) (*DatabaseInfo, error) {
 		for _, g := range games {
 			_, _ = a.db.SaveGame(g)
 		}
+		numG := a.db.NumGames()
+		desc := "Imported PGN: " + filepath.Base(path)
+		pol := a.resolveDatabaseWritePolicy(a.db.BasePath, numG, desc)
 		return &DatabaseInfo{
 			BasePath:    a.db.BasePath,
 			Name:        filepath.Base(path),
-			NumGames:    a.db.NumGames(),
-			Description: "Imported PGN: " + filepath.Base(path),
+			NumGames:    numG,
+			Description: desc,
+			WritePolicy: pol.String(),
+			IsLocked:    !pol.AllowsDirectEdit(),
 		}, nil
 	}
 
@@ -298,12 +335,16 @@ func (a *App) OpenDatabase(path string) (*DatabaseInfo, error) {
 	if a.db.Header != nil {
 		desc = a.db.Header.Description
 	}
+	numG := a.db.NumGames()
+	pol := a.resolveDatabaseWritePolicy(a.db.BasePath, numG, desc)
 
 	return &DatabaseInfo{
 		BasePath:    a.db.BasePath,
 		Name:        filepath.Base(a.db.BasePath),
-		NumGames:    a.db.NumGames(),
+		NumGames:    numG,
 		Description: desc,
+		WritePolicy: pol.String(),
+		IsLocked:    !pol.AllowsDirectEdit(),
 	}, nil
 }
 
@@ -320,6 +361,8 @@ func (a *App) CreateDatabase(path string, description string) (*DatabaseInfo, er
 		Name:        filepath.Base(a.db.BasePath),
 		NumGames:    0,
 		Description: description,
+		WritePolicy: scid.WritePolicyEditable.String(),
+		IsLocked:    false,
 	}, nil
 }
 
@@ -344,12 +387,16 @@ func (a *App) GetDatabaseInfo() (*DatabaseInfo, error) {
 	if a.db.Header != nil {
 		desc = a.db.Header.Description
 	}
+	numG := a.db.NumGames()
+	pol := a.resolveDatabaseWritePolicy(a.db.BasePath, numG, desc)
 
 	return &DatabaseInfo{
 		BasePath:    a.db.BasePath,
 		Name:        filepath.Base(a.db.BasePath),
-		NumGames:    a.db.NumGames(),
+		NumGames:    numG,
 		Description: desc,
+		WritePolicy: pol.String(),
+		IsLocked:    !pol.AllowsDirectEdit(),
 	}, nil
 }
 
@@ -401,8 +448,8 @@ func (a *App) SaveGame(game *chess.Game) (int, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if a.db == nil || !a.db.IsOpen {
-		return 0, fmt.Errorf("no database open")
+	if err := a.checkActiveDBEditableLocked(); err != nil {
+		return 0, err
 	}
 
 	if game != nil && game.RootMove == nil && a.activeGame != nil && a.activeGame.RootMove != nil {
@@ -419,8 +466,8 @@ func (a *App) DeleteGame(gameID int, deleted bool) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if a.db == nil || !a.db.IsOpen {
-		return fmt.Errorf("no database open")
+	if err := a.checkActiveDBEditableLocked(); err != nil {
+		return err
 	}
 
 	return a.db.DeleteGame(gameID, deleted)
@@ -431,8 +478,8 @@ func (a *App) UpdateGameHeaders(gameID int, tags map[string]string) (*scid.GameS
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if a.db == nil || !a.db.IsOpen {
-		return nil, fmt.Errorf("no database open")
+	if err := a.checkActiveDBEditableLocked(); err != nil {
+		return nil, err
 	}
 
 	if err := a.db.UpdateGameTags(gameID, tags); err != nil {
@@ -456,8 +503,8 @@ func (a *App) CompactDatabase() (*scid.CompactStats, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if a.db == nil || !a.db.IsOpen {
-		return nil, fmt.Errorf("no database open")
+	if err := a.checkActiveDBEditableLocked(); err != nil {
+		return nil, err
 	}
 
 	return a.db.Compact()
@@ -468,8 +515,8 @@ func (a *App) SortDatabase(criteria scid.SortCriteria) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if a.db == nil || !a.db.IsOpen {
-		return fmt.Errorf("no database open")
+	if err := a.checkActiveDBEditableLocked(); err != nil {
+		return err
 	}
 
 	return a.db.Sort(criteria)
@@ -492,8 +539,8 @@ func (a *App) DeleteDuplicateGames(criteria scid.DuplicateCriteria) (int, error)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if a.db == nil || !a.db.IsOpen {
-		return 0, fmt.Errorf("no database open")
+	if err := a.checkActiveDBEditableLocked(); err != nil {
+		return 0, err
 	}
 
 	return a.db.DeleteDuplicates(criteria)
@@ -528,8 +575,8 @@ func (a *App) ImportPGNBatch(pgnText string) (*scid.ImportStats, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if a.db == nil || !a.db.IsOpen {
-		return nil, fmt.Errorf("no database open")
+	if err := a.checkActiveDBEditableLocked(); err != nil {
+		return nil, err
 	}
 
 	return a.db.ImportPGNText(pgnText)
@@ -540,8 +587,8 @@ func (a *App) ImportPGNFileBatch(filePath string) (*scid.ImportStats, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if a.db == nil || !a.db.IsOpen {
-		return nil, fmt.Errorf("no database open")
+	if err := a.checkActiveDBEditableLocked(); err != nil {
+		return nil, err
 	}
 
 	return a.db.ImportPGNFile(filePath)
@@ -1044,7 +1091,13 @@ func (a *App) GetBoardThemes() []sets.BoardThemeInfo {
 }
 
 func (a *App) GetDiscoveredDatabases() []scid.DiscoveredDatabase {
-	return scid.DiscoverScidDatabases()
+	dbs := scid.DiscoverScidDatabases()
+	for i := range dbs {
+		pol := a.resolveDatabaseWritePolicy(dbs[i].BasePath, dbs[i].NumGames, dbs[i].Description)
+		dbs[i].WritePolicy = pol.String()
+		dbs[i].IsLocked = !pol.AllowsDirectEdit()
+	}
+	return dbs
 }
 
 func (a *App) GetScidSystemBases() []string {
@@ -1395,6 +1448,9 @@ func (a *App) DownloadTWICIssue(issue int) (*online.TWICIssueResult, error) {
 	if a.db == nil || !a.db.IsOpen {
 		return nil, fmt.Errorf("no database is currently open; open or create a database first")
 	}
+	if err := a.checkActiveDBSyncAllowedLocked(); err != nil {
+		return nil, err
+	}
 
 	return a.twicClient.ImportIssue(context.Background(), issue, a.db)
 }
@@ -1406,6 +1462,9 @@ func (a *App) DownloadTWICRange(startIssue, endIssue int) (*online.TWICBatchResu
 
 	if a.db == nil || !a.db.IsOpen {
 		return nil, fmt.Errorf("no database is currently open; open or create a database first")
+	}
+	if err := a.checkActiveDBSyncAllowedLocked(); err != nil {
+		return nil, err
 	}
 
 	progressFn := func(currentIssue, processedIssues, totalIssues, gamesImported int) {
@@ -2477,8 +2536,8 @@ func (a *App) StandardizePlayerNames() (*scid.SpellCheckSummary, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if a.db == nil || !a.db.IsOpen {
-		return nil, fmt.Errorf("no database open")
+	if err := a.checkActiveDBEditableLocked(); err != nil {
+		return nil, err
 	}
 
 	return a.db.StandardizePlayerNames()
@@ -3184,9 +3243,12 @@ func (a *App) ImportMegaDatabase(opts online.MegaImportOptions) (*online.MegaImp
 		return res, err
 	}
 
-	// If a native .si4 archive was extracted, open it automatically!
+	// If a native .si4 archive was extracted, open it automatically and protect it as sync_only!
 	if res != nil && res.DatabasePath != "" {
+		_, _ = a.SetDatabaseWritePolicy(res.DatabasePath, scid.WritePolicySyncOnly.String())
 		_, _ = a.OpenDatabase(res.DatabasePath)
+	} else if targetDB != nil && targetDB.BasePath != "" {
+		_, _ = a.SetDatabaseWritePolicy(targetDB.BasePath, scid.WritePolicySyncOnly.String())
 	}
 	return res, nil
 }

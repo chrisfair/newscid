@@ -419,11 +419,12 @@ func WriteBook(path string, entries []BookEntry) error {
 // DiscoverBooks looks for opening books (.bin) across standard Scid vs PC and user directories.
 func DiscoverBooks(extraDirs ...string) []string {
 	dirs := []string{
+		filepath.Join(os.Getenv("HOME"), ".local", "share", "newscid", "books", "opening"),
+		filepath.Join(os.Getenv("HOME"), ".local", "share", "newscid", "books"),
 		"/usr/share/scid/books",
 		"/usr/share/games/scid/books",
 		"/usr/local/share/scid/books",
 		filepath.Join(os.Getenv("HOME"), ".scidvspc", "books"),
-		filepath.Join(os.Getenv("HOME"), ".local", "share", "newscid", "books"),
 		"books",
 	}
 	dirs = append(dirs, extraDirs...)

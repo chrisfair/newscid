@@ -133,6 +133,25 @@ func DiscoverScidEngines() []EngineConfig {
 	home, _ := os.UserHomeDir()
 	var configFiles []string
 	if home != "" {
+		managedEngDir := filepath.Join(home, ".local", "share", "newscid", "engines")
+		if entries, err := os.ReadDir(managedEngDir); err == nil {
+			for _, e := range entries {
+				if e.IsDir() {
+					continue
+				}
+				full := filepath.Join(managedEngDir, e.Name())
+				if fi, err := os.Stat(full); err == nil && (fi.Mode()&0o111 != 0) && !seenCmds[full] {
+					seenCmds[full] = true
+					discovered = append(discovered, EngineConfig{
+						Name:        e.Name(),
+						Cmd:         full,
+						ResolvedCmd: full,
+						UCI:         true,
+						Available:   true,
+					})
+				}
+			}
+		}
 		configFiles = append(configFiles,
 			filepath.Join(home, ".scidvspc", "config", "engines.dat"),
 			filepath.Join(home, ".scid5.0", "config", "engines.dat"),
