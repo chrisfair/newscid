@@ -4,10 +4,17 @@ import (
 	"path/filepath"
 	"testing"
 
+	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
+	"newscid/pkg/workstation"
 )
 
 func TestWorkspacePreferencesAndDatabaseRoles(t *testing.T) {
+	fakeHome := t.TempDir()
+	t.Setenv("HOME", fakeHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(fakeHome, ".config"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(fakeHome, ".local", "share"))
+
 	app := NewApp()
 	defer app.shutdown(nil)
 
@@ -26,14 +33,6 @@ func TestWorkspacePreferencesAndDatabaseRoles(t *testing.T) {
 		t.Fatalf("failed to create db2: %v", err)
 	}
 	_ = db2.Close()
-
-	// Save original preferences so we don't clobber user config
-	origPrefs, _ := app.GetAppPreferences()
-	if origPrefs != nil {
-		defer func() {
-			_, _ = app.SaveAppPreferences(*origPrefs)
-		}()
-	}
 
 	status, err := app.SetDefaultDatabase(db1Path + ".si4")
 	if err != nil {
@@ -83,5 +82,107 @@ func TestWorkspacePreferencesAndDatabaseRoles(t *testing.T) {
 	}
 	if shared.FEN != testFEN || shared.CurrentPly != 1 {
 		t.Errorf("unexpected shared workspace state: %+v", shared)
+	}
+}
+
+func TestDatabaseLockingNotablePlayersAndWorkstationReset(t *testing.T) {
+	fakeHome := t.TempDir()
+	t.Setenv("HOME", fakeHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(fakeHome, ".config"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(fakeHome, ".local", "share"))
+
+	app := NewApp()
+	defer app.shutdown(nil)
+
+	dbPath := filepath.Join(t.TempDir(), "TestGamesDB")
+	_, err := app.CreateDatabase(dbPath, "Personal Base")
+	if err != nil {
+		t.Fatalf("CreateDatabase failed: %v", err)
+	}
+
+	g, err := chess.ParsePGN(`[Event "World Championship"]
+[White "Fischer, Robert James"]
+[Black "Spassky, Boris V"]
+[Result "1-0"]
+[ECO "B90"]
+
+1. e4 c5 2. Nf3 d6 1-0`)
+	if err != nil {
+		t.Fatalf("ParsePGN failed: %v", err)
+	}
+	if _, err := app.SaveGame(g); err != nil {
+		t.Fatalf("SaveGame on editable DB failed: %v", err)
+	}
+
+	// Lock the database and verify SaveGame is blocked
+	lockedInfo, err := app.SetDatabaseWritePolicy(dbPath, "locked")
+	if err != nil || lockedInfo == nil || !lockedInfo.IsLocked || lockedInfo.WritePolicy != "locked" {
+		t.Fatalf("SetDatabaseWritePolicy(locked) failed: %+v, err=%v", lockedInfo, err)
+	}
+	if _, err := app.SaveGame(g); err == nil {
+		t.Fatalf("expected SaveGame to fail when database is locked")
+	}
+
+	// Set to sync_only: manual SaveGame blocked, online sync allowed
+	syncInfo, err := app.SetDatabaseWritePolicy(dbPath, "sync_only")
+	if err != nil || syncInfo == nil || syncInfo.WritePolicy != "sync_only" {
+		t.Fatalf("SetDatabaseWritePolicy(sync_only) failed: %+v, err=%v", syncInfo, err)
+	}
+	if _, err := app.SaveGame(g); err == nil {
+		t.Fatalf("expected manual SaveGame to fail when database is sync_only")
+	}
+
+	// Unlock back to editable
+	_, err = app.SetDatabaseWritePolicy(dbPath, "editable")
+	if err != nil {
+		t.Fatalf("SetDatabaseWritePolicy(editable) failed: %v", err)
+	}
+
+	// Famous & custom notable players discovery
+	notables, err := app.GetNotablePlayersDropdown()
+	if err != nil || len(notables) == 0 {
+		t.Fatalf("GetNotablePlayersDropdown failed: %v", err)
+	}
+	if notables[0].GameCount == 0 {
+		t.Errorf("expected Bobby Fischer / Boris Spassky to have GameCount > 0, got %+v", notables[0])
+	}
+
+	notables, err = app.AddCustomNotablePlayer("Morphy, Paul", []string{"Paul Morphy"}, "Legend", "1857-1859")
+	if err != nil {
+		t.Fatalf("AddCustomNotablePlayer failed: %v", err)
+	}
+	notables, err = app.RemoveNotablePlayer("Morphy, Paul")
+	if err != nil {
+		t.Fatalf("RemoveNotablePlayer failed: %v", err)
+	}
+	_, err = app.ResetNotablePlayersToDefault()
+	if err != nil {
+		t.Fatalf("ResetNotablePlayersToDefault failed: %v", err)
+	}
+
+	// Build focused sub-database from active database
+	subRes, err := app.BuildFocusedDatabase(scid.SubDatabaseFilter{
+		TargetName:   "Fischer_Najdorf",
+		Players:      []string{"Bobby Fischer"},
+		ECOFilter:    "B90",
+		OpeningMoves: []string{"1.e4", "c5", "2.Nf3"},
+		Deduplicate:  true,
+	})
+	if err != nil || subRes == nil || subRes.GamesMatched != 1 {
+		t.Fatalf("BuildFocusedDatabase failed: res=%+v, err=%v", subRes, err)
+	}
+
+	// Workstation storage report & asset copy
+	report, err := app.GetWorkstationStorageReport()
+	if err != nil || report == nil || len(report.Categories) == 0 {
+		t.Fatalf("GetWorkstationStorageReport failed: %v", err)
+	}
+
+	// Factory reset with opt-in backup
+	resetRes, err := app.FactoryResetNewScid(workstation.FactoryResetOptions{
+		CreateOptInBackup: true,
+	})
+	if err != nil || resetRes == nil || !resetRes.BackupCreated || resetRes.BackupArchivePath == "" {
+		t.Fatalf("FactoryResetNewScid failed: res=%+v, err=%v", resetRes, err)
 	}
 }

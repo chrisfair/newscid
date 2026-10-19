@@ -13,7 +13,15 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"newscid/pkg/blundervault"
 	"newscid/pkg/database/scid"
+	"newscid/pkg/online"
+	"newscid/pkg/persona"
+	"newscid/pkg/playerbot"
+	"newscid/pkg/polyglot"
+	"newscid/pkg/repertoire"
+	"newscid/pkg/training"
+	"newscid/pkg/workstation"
 )
 
 // SavedFloaterRect stores floating panel coordinates in user config.
@@ -66,6 +74,9 @@ type AppPreferences struct {
 	DefaultPortalPlatform       string                      `json:"defaultPortalPlatform"` // "lichess" | "chesscom"
 	PortalWindowMode            string                      `json:"portalWindowMode"`      // "browser-app" | "native-window" | "floater" | "docked"
 	CustomBrowserCmd            string                      `json:"customBrowserCmd"`
+	DatabasePolicies            map[string]string           `json:"databasePolicies,omitempty"`
+	CustomNotablePlayers        []scid.FamousPlayerEntry    `json:"customNotablePlayers,omitempty"`
+	HiddenFamousPlayers         []string                    `json:"hiddenFamousPlayers,omitempty"`
 }
 
 // DatabaseRolesStatus describes how the user's databases are currently assigned and related.
@@ -203,6 +214,7 @@ func defaultAppPreferences() *AppPreferences {
 		DefaultPortalPlatform:       "lichess",
 		PortalWindowMode:            "browser-app",
 		CustomBrowserCmd:            "",
+		DatabasePolicies:            make(map[string]string),
 	}
 }
 
@@ -225,6 +237,9 @@ func (a *App) GetAppPreferences() (*AppPreferences, error) {
 	_ = json.Unmarshal(data, prefs)
 	if prefs.PanelConfigs == nil {
 		prefs.PanelConfigs = make(map[string]SavedPanelConfig)
+	}
+	if prefs.DatabasePolicies == nil {
+		prefs.DatabasePolicies = make(map[string]string)
 	}
 	if prefs.CompactLayoutMode == "" {
 		prefs.CompactLayoutMode = "auto"
@@ -261,6 +276,9 @@ func (a *App) SaveAppPreferences(prefs AppPreferences) (*AppPreferences, error) 
 	if prefs.PanelConfigs == nil {
 		prefs.PanelConfigs = make(map[string]SavedPanelConfig)
 	}
+	if prefs.DatabasePolicies == nil {
+		prefs.DatabasePolicies = make(map[string]string)
+	}
 	data, err := json.MarshalIndent(prefs, "", "  ")
 	if err != nil {
 		prefsMu.Unlock()
@@ -288,6 +306,21 @@ func (a *App) SaveAppPreferences(prefs AppPreferences) (*AppPreferences, error) 
 	}
 
 	return &prefs, nil
+}
+
+func (a *App) resolveDatabaseWritePolicy(basePath string, numGames int, desc string) scid.WritePolicyID {
+	clean := normalizeScidBasePath(basePath)
+	if clean == "" {
+		return scid.WritePolicyEditable
+	}
+	prefs, _ := a.GetAppPreferences()
+	if prefs != nil && prefs.DatabasePolicies != nil {
+		if pol, ok := prefs.DatabasePolicies[clean]; ok && strings.TrimSpace(pol) != "" {
+			return scid.ParseWritePolicy(pol)
+		}
+	}
+	isRef := prefs != nil && normalizeScidBasePath(prefs.ReferenceDatabasePath) == clean && clean != ""
+	return scid.InferDefaultWritePolicy(clean, numGames, desc, isRef)
 }
 
 func (a *App) openReferenceDatabaseInternal(basePath string) error {
@@ -372,20 +405,30 @@ func (a *App) GetDatabaseRolesStatus() (*DatabaseRolesStatus, error) {
 	activeClean := ""
 	if a.db != nil && a.db.IsOpen {
 		activeClean = normalizeScidBasePath(a.db.BasePath)
+		numG := int(a.db.Header.NumGames)
+		desc := a.db.Header.Description
+		pol := a.resolveDatabaseWritePolicy(activeClean, numG, desc)
 		activeInfo = &DatabaseInfo{
 			BasePath:    a.db.BasePath,
 			Name:        filepath.Base(a.db.BasePath),
-			NumGames:    int(a.db.Header.NumGames),
-			Description: a.db.Header.Description,
+			NumGames:    numG,
+			Description: desc,
+			WritePolicy: pol.String(),
+			IsLocked:    !pol.AllowsDirectEdit(),
 		}
 	}
 	var refInfo *DatabaseInfo
 	if a.refDB != nil && a.refDB.IsOpen {
+		numG := int(a.refDB.Header.NumGames)
+		desc := a.refDB.Header.Description
+		pol := a.resolveDatabaseWritePolicy(a.refDB.BasePath, numG, desc)
 		refInfo = &DatabaseInfo{
 			BasePath:    a.refDB.BasePath,
 			Name:        filepath.Base(a.refDB.BasePath),
-			NumGames:    int(a.refDB.Header.NumGames),
-			Description: a.refDB.Header.Description,
+			NumGames:    numG,
+			Description: desc,
+			WritePolicy: pol.String(),
+			IsLocked:    !pol.AllowsDirectEdit(),
 		}
 	}
 	a.mu.RUnlock()
@@ -700,6 +743,11 @@ func (a *App) UpdateDatabaseFromLocal(targetBasePath string, sourceBasePaths []s
 		return nil, fmt.Errorf("no target database selected or open")
 	}
 
+	targetPolicy := a.resolveDatabaseWritePolicy(targetClean, 0, "")
+	if !targetPolicy.AllowsOnlineSync() {
+		return nil, fmt.Errorf("database %q is strictly locked (%s); unlock it or set it to Sync-Only first", filepath.Base(targetClean), targetPolicy.String())
+	}
+
 	if len(sourceBasePaths) == 0 {
 		discovered := scid.DiscoverScidDatabases()
 		for _, d := range discovered {
@@ -752,3 +800,298 @@ func (a *App) UpdateDatabaseFromLocal(targetBasePath string, sourceBasePaths []s
 	return targetDB.MergeFromDatabases(sourceBasePaths, progressCb)
 }
 
+// ==========================================
+// Database Locking & Write Policies
+// ==========================================
+
+// GetDatabaseWritePolicy returns the current write policy ("editable", "sync_only", or "locked") for basePath.
+func (a *App) GetDatabaseWritePolicy(basePath string) string {
+	clean := normalizeScidBasePath(basePath)
+	if clean == "" {
+		a.mu.RLock()
+		if a.db != nil && a.db.IsOpen {
+			clean = normalizeScidBasePath(a.db.BasePath)
+			numG := a.db.NumGames()
+			desc := ""
+			if a.db.Header != nil {
+				desc = a.db.Header.Description
+			}
+			a.mu.RUnlock()
+			return a.resolveDatabaseWritePolicy(clean, numG, desc).String()
+		}
+		a.mu.RUnlock()
+		return scid.WritePolicyEditable.String()
+	}
+	meta := scid.InspectDatabase(clean, "")
+	return a.resolveDatabaseWritePolicy(clean, meta.NumGames, meta.Description).String()
+}
+
+// SetDatabaseWritePolicy sets and persists the write policy ("editable", "sync_only", or "locked") for basePath.
+func (a *App) SetDatabaseWritePolicy(basePath string, policy string) (*DatabaseInfo, error) {
+	clean := normalizeScidBasePath(basePath)
+	if clean == "" {
+		a.mu.RLock()
+		if a.db != nil && a.db.IsOpen {
+			clean = normalizeScidBasePath(a.db.BasePath)
+		}
+		a.mu.RUnlock()
+	}
+	if clean == "" {
+		return nil, fmt.Errorf("no database path specified")
+	}
+
+	parsed := scid.ParseWritePolicy(policy)
+	prefs, _ := a.GetAppPreferences()
+	if prefs.DatabasePolicies == nil {
+		prefs.DatabasePolicies = make(map[string]string)
+	}
+	prefs.DatabasePolicies[clean] = parsed.String()
+	if _, err := a.SaveAppPreferences(*prefs); err != nil {
+		return nil, err
+	}
+
+	return a.GetDatabaseInfo()
+}
+
+// ==========================================
+// Multi-Database Focused Sub-Database Builder
+// ==========================================
+
+// BuildFocusedDatabase extracts games matching opening lines, ECO codes, or players from multiple databases
+// into a new focused Scid database in NewScid's managed databases folder.
+func (a *App) BuildFocusedDatabase(filter scid.SubDatabaseFilter) (*scid.SubDatabaseResult, error) {
+	dataRoot, _ := workstation.DefaultWorkstationDirs()
+	outputDir := filepath.Join(dataRoot, "databases")
+	_ = os.MkdirAll(outputDir, 0o755)
+
+	// If no source databases were explicitly passed, use active DB (or all discovered user DBs)
+	if len(filter.SourceBasePaths) == 0 {
+		a.mu.RLock()
+		if a.db != nil && a.db.IsOpen {
+			filter.SourceBasePaths = append(filter.SourceBasePaths, a.db.BasePath)
+		}
+		if a.refDB != nil && a.refDB.IsOpen && a.refDB.BasePath != "" {
+			filter.SourceBasePaths = append(filter.SourceBasePaths, a.refDB.BasePath)
+		}
+		a.mu.RUnlock()
+	}
+
+	res, err := scid.BuildFocusedSubDatabase(filter, outputDir, func(source string, scanned, matched int) {
+		a.emitEvent("subdb:progress", map[string]interface{}{
+			"source":  source,
+			"scanned": scanned,
+			"matched": matched,
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Mark the newly created personal sub-database as editable
+	if res != nil && res.TargetBasePath != "" {
+		_, _ = a.SetDatabaseWritePolicy(res.TargetBasePath, scid.WritePolicyEditable.String())
+	}
+	return res, nil
+}
+
+// ==========================================
+// Famous & Custom Tracked Players Discovery
+// ==========================================
+
+// GetNotablePlayersDropdown returns famous grandmasters and user-configured players discovered in the active database.
+func (a *App) GetNotablePlayersDropdown() ([]scid.DiscoveredNotablePlayer, error) {
+	prefs, _ := a.GetAppPreferences()
+	var custom []scid.FamousPlayerEntry
+	var hidden []string
+	if prefs != nil {
+		custom = prefs.CustomNotablePlayers
+		hidden = prefs.HiddenFamousPlayers
+	}
+
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+
+	return scid.DiscoverNotablePlayersInDatabase(db, custom, hidden), nil
+}
+
+// AddCustomNotablePlayer adds a user-selected player of interest to the Notable Players dropdown.
+func (a *App) AddCustomNotablePlayer(name string, aliases []string, title string, era string) ([]scid.DiscoveredNotablePlayer, error) {
+	cleanName := strings.TrimSpace(name)
+	if cleanName == "" {
+		return nil, fmt.Errorf("player name is required")
+	}
+
+	prefs, _ := a.GetAppPreferences()
+	// Remove from hidden list if present
+	var newHidden []string
+	for _, h := range prefs.HiddenFamousPlayers {
+		if !strings.EqualFold(strings.TrimSpace(h), cleanName) {
+			newHidden = append(newHidden, h)
+		}
+	}
+	prefs.HiddenFamousPlayers = newHidden
+
+	// Update or append custom entry
+	var cleanAliases []string
+	for _, al := range aliases {
+		if t := strings.TrimSpace(al); t != "" {
+			cleanAliases = append(cleanAliases, t)
+		}
+	}
+	if len(cleanAliases) == 0 {
+		cleanAliases = []string{cleanName}
+	}
+
+	entry := scid.FamousPlayerEntry{
+		Name:     cleanName,
+		Title:    strings.TrimSpace(title),
+		Era:      strings.TrimSpace(era),
+		Aliases:  cleanAliases,
+		IsCustom: true,
+	}
+	if entry.Title == "" {
+		entry.Title = "Tracked Player"
+	}
+
+	updated := false
+	for i, existing := range prefs.CustomNotablePlayers {
+		if strings.EqualFold(existing.Name, cleanName) {
+			prefs.CustomNotablePlayers[i] = entry
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		prefs.CustomNotablePlayers = append(prefs.CustomNotablePlayers, entry)
+	}
+
+	if _, err := a.SaveAppPreferences(*prefs); err != nil {
+		return nil, err
+	}
+	return a.GetNotablePlayersDropdown()
+}
+
+// RemoveNotablePlayer removes a custom player or hides a built-in famous player from the dropdown.
+func (a *App) RemoveNotablePlayer(name string) ([]scid.DiscoveredNotablePlayer, error) {
+	cleanName := strings.TrimSpace(name)
+	if cleanName == "" {
+		return a.GetNotablePlayersDropdown()
+	}
+
+	prefs, _ := a.GetAppPreferences()
+	var remaining []scid.FamousPlayerEntry
+	removedCustom := false
+	for _, c := range prefs.CustomNotablePlayers {
+		if strings.EqualFold(strings.TrimSpace(c.Name), cleanName) {
+			removedCustom = true
+			continue
+		}
+		remaining = append(remaining, c)
+	}
+	prefs.CustomNotablePlayers = remaining
+
+	if !removedCustom {
+		alreadyHidden := false
+		for _, h := range prefs.HiddenFamousPlayers {
+			if strings.EqualFold(strings.TrimSpace(h), cleanName) {
+				alreadyHidden = true
+				break
+			}
+		}
+		if !alreadyHidden {
+			prefs.HiddenFamousPlayers = append(prefs.HiddenFamousPlayers, cleanName)
+		}
+	}
+
+	if _, err := a.SaveAppPreferences(*prefs); err != nil {
+		return nil, err
+	}
+	return a.GetNotablePlayersDropdown()
+}
+
+// ResetNotablePlayersToDefault restores the default Famous Players list.
+func (a *App) ResetNotablePlayersToDefault() ([]scid.DiscoveredNotablePlayer, error) {
+	prefs, _ := a.GetAppPreferences()
+	prefs.CustomNotablePlayers = nil
+	prefs.HiddenFamousPlayers = nil
+	if _, err := a.SaveAppPreferences(*prefs); err != nil {
+		return nil, err
+	}
+	return a.GetNotablePlayersDropdown()
+}
+
+// ==========================================
+// Workstation Storage, Asset Copying & Factory Reset
+// ==========================================
+
+// GetWorkstationStorageReport returns the exact locations and contents of NewScid's managed directories
+// (databases, personas, engines, opening books, endgame tablebases, repertoires, config, and backups).
+func (a *App) GetWorkstationStorageReport() (*workstation.StorageReport, error) {
+	dataRoot, configRoot := workstation.DefaultWorkstationDirs()
+	return workstation.InspectStorage(dataRoot, configRoot)
+}
+
+// ImportAssetToWorkstation copies an external database (.si4/.pgn), UCI engine binary, Polyglot opening book (.bin),
+// or endgame tablebase (.rtbw/.rtbz) into NewScid's managed directory.
+func (a *App) ImportAssetToWorkstation(category string, sourcePath string) (*workstation.StoredAssetInfo, error) {
+	dataRoot, configRoot := workstation.DefaultWorkstationDirs()
+	return workstation.ImportAssetToWorkstation(category, sourcePath, dataRoot, configRoot)
+}
+
+// SelectAndImportWorkstationAsset opens a native file picker and copies the selected asset into NewScid's storage.
+func (a *App) SelectAndImportWorkstationAsset(category string) (*workstation.StoredAssetInfo, error) {
+	if a.ctx == nil {
+		return nil, fmt.Errorf("file dialog requires desktop GUI runtime")
+	}
+	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select Asset to Copy into NewScid Workstation Storage",
+	})
+	if err != nil || strings.TrimSpace(path) == "" {
+		return nil, err
+	}
+	return a.ImportAssetToWorkstation(category, path)
+}
+
+// FactoryResetNewScid completely resets all user databases, personas, repertoires, training vaults,
+// and saved configurations back to clean FACTORY SETTINGS, with an opt-in .tar.gz backup before wiping.
+func (a *App) FactoryResetNewScid(opts workstation.FactoryResetOptions) (*workstation.FactoryResetResult, error) {
+	// Close any open databases and stop running engines first
+	a.mu.Lock()
+	if a.engine != nil {
+		_ = a.engine.Quit()
+		a.engine = nil
+	}
+	if a.db != nil && a.db.IsOpen {
+		_ = a.db.Close()
+	}
+	if a.refDB != nil && a.refDB.IsOpen {
+		_ = a.refDB.Close()
+		a.refDB = nil
+	}
+	a.db = scid.NewDatabase()
+	a.activeGame = nil
+	a.personaBotCache = make(map[string]*playerbot.PlayerPersonality)
+	a.polyglotBooks = make(map[string]*polyglot.Book)
+	a.solitaireSession = nil
+	a.mu.Unlock()
+
+	dataRoot, configRoot := workstation.DefaultWorkstationDirs()
+	legacyDir := workstation.DefaultLegacyConfigDir()
+	res, err := workstation.FactoryResetWorkstation(opts, dataRoot, configRoot, legacyDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Reinitialize clean managers pointing to the fresh empty config directory
+	a.mu.Lock()
+	a.profileMgr, _ = online.NewProfileManager("")
+	a.syncMgr = online.NewSyncManager(a.profileMgr)
+	a.personaMgr, _ = persona.NewPersonaManager("")
+	a.repMgr = repertoire.NewManager("")
+	a.blunderVault, _ = blundervault.NewVault(filepath.Join(configRoot, "blunder_vault.json"))
+	a.cyclicalMgr, _ = training.NewCyclicalManager(filepath.Join(configRoot, "cyclical_drill.json"))
+	a.mu.Unlock()
+
+	return res, nil
+}
