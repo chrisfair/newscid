@@ -48,6 +48,8 @@ const emit = defineEmits<{
   (e: 'openOnlineSync'): void
   (e: 'openMaintenance'): void
   (e: 'updateFromLocal', targetPath?: string): void
+  (e: 'cycleWritePolicy', path: string, currentPolicy?: string): void
+  (e: 'openWorkstationManager', tab?: 'builder' | 'storage' | 'reset'): void
 }>()
 
 function normalizePath(p?: string): string {
@@ -104,6 +106,27 @@ function formatCount(n: number): string {
         </div>
 
         <div class="flex items-center gap-1.5 flex-wrap">
+          <button
+            class="px-2.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+            title="Create a smaller focused database from multiple source databases (by opening line or player)"
+            @click="emit('openWorkstationManager', 'builder')"
+          >
+            <span>⚡ Build Sub-DB</span>
+          </button>
+          <button
+            class="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+            title="View where NewScid stores databases, engines, opening books & endgame tablebases, or copy files into NewScid"
+            @click="emit('openWorkstationManager', 'storage')"
+          >
+            <span>📁 Storage &amp; Assets</span>
+          </button>
+          <button
+            class="px-2.5 py-1.5 rounded-lg bg-rose-950/50 hover:bg-rose-900/60 text-rose-300 border border-rose-500/40 font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+            title="Factory Reset all databases and settings to empty scratch state (with opt-in backup)"
+            @click="emit('openWorkstationManager', 'reset')"
+          >
+            <span>🧹 Factory Reset</span>
+          </button>
           <button
             class="px-2.5 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
             :disabled="isUpdatingFromLocal"
@@ -400,7 +423,20 @@ function formatCount(n: number): string {
             </div>
 
             <!-- Role Assignment Actions -->
-            <div class="flex items-center gap-1.5 shrink-0">
+            <div class="flex items-center gap-1.5 shrink-0 flex-wrap">
+              <button
+                class="px-2 py-1 rounded-md text-[11px] font-semibold border transition-colors cursor-pointer"
+                :class="db.writePolicy === 'locked' || db.isLocked
+                  ? 'bg-rose-950/60 border-rose-500/40 text-rose-300'
+                  : db.writePolicy === 'sync_only'
+                    ? 'bg-cyan-950/60 border-cyan-500/40 text-cyan-300'
+                    : 'bg-emerald-950/50 border-emerald-500/40 text-emerald-300'"
+                title="Click to cycle write policy: Editable (Personal) -> Sync-Only (Reference) -> Locked (Read-Only)"
+                @click="emit('cycleWritePolicy', db.basePath, db.writePolicy)"
+              >
+                {{ db.writePolicy === 'locked' || db.isLocked ? '🔒 Locked' : db.writePolicy === 'sync_only' ? '🔄 Sync-Only' : '🔓 Editable' }}
+              </button>
+
               <button
                 class="px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer"
                 :class="isActivePath(db.basePath)

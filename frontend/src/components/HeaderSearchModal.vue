@@ -24,6 +24,7 @@ const props = defineProps<{
   dbName?: string
   totalGames: number
   initialCriteria?: Partial<scid.SearchCriteria>
+  currentFen?: string
 }>()
 
 const emit = defineEmits<{
@@ -82,6 +83,22 @@ const matCriteria = reactive({
 const pawnStructure = ref('')
 const commentText = ref('')
 const annotator = ref('')
+const matchCurrentPosition = ref(false)
+const customPositionFen = ref('')
+const openingMovesText = ref('')
+
+const FAMOUS_QUICK_CHIPS = [
+  'Bobby Fischer',
+  'Magnus Carlsen',
+  'Garry Kasparov',
+  'Anatoly Karpov',
+  'Mikhail Tal',
+  'Jose Raul Capablanca',
+  'Paul Morphy',
+  'Viswanathan Anand',
+  'Hikaru Nakamura',
+  'Judit Polgar',
+]
 
 const isCounting = ref(false)
 const matchCount = ref<number | null>(null)
@@ -100,6 +117,13 @@ onMounted(() => {
     }
     if (props.initialCriteria.annotator) {
       annotator.value = props.initialCriteria.annotator
+    }
+    if ((props.initialCriteria as any).positionFen) {
+      customPositionFen.value = (props.initialCriteria as any).positionFen
+      matchCurrentPosition.value = true
+    }
+    if (Array.isArray((props.initialCriteria as any).openingMoves)) {
+      openingMovesText.value = (props.initialCriteria as any).openingMoves.join(' ')
     }
   }
 })
@@ -152,6 +176,9 @@ function resetFilters() {
   pawnStructure.value = ''
   commentText.value = ''
   annotator.value = ''
+  matchCurrentPosition.value = false
+  customPositionFen.value = ''
+  openingMovesText.value = ''
   matchCount.value = null
 }
 
@@ -182,6 +209,26 @@ function cleanCriteria(): scid.SearchCriteria {
   if (criteria.hasVariations) c.hasVariations = true
   if (criteria.onlyDeleted) c.onlyDeleted = true
   if (criteria.ignoreDeleted !== undefined) c.ignoreDeleted = criteria.ignoreDeleted
+
+  if (openingMovesText.value.trim()) {
+    const moves = openingMovesText.value
+      .replace(/\d+\.+/g, ' ')
+      .split(/\s+/)
+      .map(t => t.trim())
+      .filter(Boolean)
+    if (moves.length > 0) {
+      c.openingMoves = moves
+    }
+  }
+
+  if (matchCurrentPosition.value) {
+    const fen = customPositionFen.value.trim() || props.currentFen || ''
+    if (fen) {
+      c.positionFen = fen
+    }
+  } else if (customPositionFen.value.trim()) {
+    c.positionFen = customPositionFen.value.trim()
+  }
 
   const isMatActive = matCriteria.whiteQ >= 0 || matCriteria.whiteR >= 0 || matCriteria.whiteB >= 0 || matCriteria.whiteN >= 0 || matCriteria.whiteP >= 0 ||
     matCriteria.blackQ >= 0 || matCriteria.blackR >= 0 || matCriteria.blackB >= 0 || matCriteria.blackN >= 0 || matCriteria.blackP >= 0 ||
@@ -268,14 +315,30 @@ function handleSearch() {
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <!-- Either Player -->
-            <div class="md:col-span-2">
-              <label class="block text-zinc-400 mb-1">Either Player (White or Black contains)</label>
+            <div class="md:col-span-2 space-y-1.5">
+              <label class="block text-zinc-400">Either Player (White or Black — supports full names or surnames)</label>
               <input
                 v-model="criteria.player"
                 type="text"
-                placeholder="e.g. Kasparov or Fischer"
+                placeholder="e.g. Bobby Fischer, Magnus Carlsen, Kasparov..."
                 class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-200 focus:outline-hidden focus:border-emerald-500"
               />
+              <!-- Famous Legends Quick Chips -->
+              <div class="flex items-center gap-1.5 flex-wrap pt-0.5">
+                <span class="text-[10px] font-semibold uppercase tracking-wider text-amber-400">★ Famous Players:</span>
+                <button
+                  v-for="legend in FAMOUS_QUICK_CHIPS"
+                  :key="legend"
+                  type="button"
+                  class="px-2 py-0.5 rounded-md border text-[11px] transition-colors cursor-pointer"
+                  :class="criteria.player === legend
+                    ? 'bg-amber-500/20 border-amber-400 text-amber-200 font-semibold'
+                    : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-zinc-300'"
+                  @click="criteria.player = criteria.player === legend ? '' : legend"
+                >
+                  {{ legend }}
+                </button>
+              </div>
             </div>
 
             <!-- White Player & Elo -->
@@ -440,11 +503,11 @@ function handleSearch() {
           </div>
         </div>
 
-        <!-- 3. GAME DETAILS & ECO -->
+        <!-- 3. GAME DETAILS, OPENING LINE & BOARD POSITION -->
         <div class="p-4 rounded-lg bg-zinc-950/70 border border-zinc-800 space-y-3">
           <div class="flex items-center gap-2 text-sm font-semibold text-zinc-200 border-b border-zinc-800/80 pb-2">
             <Sliders class="w-4 h-4 text-blue-400" />
-            <span>Game Results, ECO & Move Length</span>
+            <span>Opening Line, Board Position, Result & Move Length</span>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -469,7 +532,7 @@ function handleSearch() {
               <input
                 v-model="criteria.eco"
                 type="text"
-                placeholder="e.g. B20 or B"
+                placeholder="e.g. B90 or C42"
                 class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-200 focus:outline-hidden focus:border-emerald-500"
               />
             </div>
@@ -492,6 +555,40 @@ function handleSearch() {
                   class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs text-zinc-200 focus:outline-hidden focus:border-emerald-500"
                 />
               </div>
+            </div>
+
+            <!-- Opening Move Sequence -->
+            <div class="md:col-span-3">
+              <label class="block text-zinc-400 mb-1">Opening Move Sequence (SAN or UCI moves)</label>
+              <input
+                v-model="openingMovesText"
+                type="text"
+                placeholder="e.g. 1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 a6"
+                class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs font-mono text-zinc-200 focus:outline-hidden focus:border-emerald-500"
+              />
+            </div>
+
+            <!-- Exact Board Position Match -->
+            <div class="md:col-span-3 p-3 rounded-lg bg-zinc-900/90 border border-emerald-500/30 space-y-2">
+              <div class="flex items-center justify-between gap-2 flex-wrap">
+                <label class="flex items-center gap-2 cursor-pointer select-none font-semibold text-emerald-300">
+                  <input
+                    v-model="matchCurrentPosition"
+                    type="checkbox"
+                    class="rounded border-zinc-700 text-emerald-500 focus:ring-0"
+                  />
+                  <span>🎯 Match Exact Board Position Reached Anywhere in Game</span>
+                </label>
+                <span v-if="currentFen" class="text-[10px] font-mono text-zinc-500 truncate max-w-xs">
+                  Board FEN: {{ currentFen }}
+                </span>
+              </div>
+              <input
+                v-model="customPositionFen"
+                type="text"
+                :placeholder="currentFen ? `Defaults to current board position (${currentFen})` : 'Paste target FEN position...'"
+                class="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-1 text-[11px] font-mono text-zinc-300 focus:outline-hidden focus:border-emerald-500"
+              />
             </div>
 
             <!-- Moves Length -->
