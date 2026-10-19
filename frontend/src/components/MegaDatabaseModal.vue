@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { Database, Download, X, CheckCircle, AlertCircle, Globe, Filter, Sparkles, HardDrive } from '@lucide/vue'
+import { Database, Download, X, CheckCircle, AlertCircle, Globe, Filter, Sparkles, HardDrive, Layers } from '@lucide/vue'
 import {
   GetMegaDatabaseCatalog,
   FetchLichessDatabaseFeed,
   ImportMegaDatabase,
+  BuildConsolidatedDatabase,
+  ConsolidateOnlineCatalogDatabases,
 } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 
@@ -43,7 +45,7 @@ interface MegaImportProgress {
 }
 
 const catalog = ref<MegaDatabaseSource[]>([])
-const activeTab = ref<'all' | 'LumbrasGigaBase' | 'Lichess' | 'custom'>('all')
+const activeTab = ref<'all' | 'LumbrasGigaBase' | 'Lichess' | 'custom' | 'consolidate'>('all')
 const selectedSourceId = ref<string>('lumbras-otb-2026')
 const customUrl = ref<string>('')
 const lichessLiveUrls = ref<string[]>([])
@@ -54,6 +56,13 @@ const maxGames = ref<number>(25000)
 const minElo = ref<number>(0)
 const createNewDb = ref<boolean>(false)
 const newDbName = ref<string>('')
+
+// Consolidated Database Builder state
+const consolidateTargetName = ref<string>('Consolidated_Reference')
+const consolidateIncludeLocal = ref<boolean>(true)
+const consolidateSelectedOnlineIds = ref<string[]>([])
+const consolidateSetAsRef = ref<boolean>(true)
+const consolidateSetAsUser = ref<boolean>(false)
 
 const isImporting = ref<boolean>(false)
 const progress = ref<MegaImportProgress | null>(null)
@@ -136,10 +145,66 @@ async function handleLoadLichessFeed(feed: 'broadcast' | 'standard') {
   }
 }
 
+function toggleConsolidateOnlineSource(id: string) {
+  const idx = consolidateSelectedOnlineIds.value.indexOf(id)
+  if (idx >= 0) {
+    consolidateSelectedOnlineIds.value.splice(idx, 1)
+  } else {
+    consolidateSelectedOnlineIds.value.push(id)
+  }
+}
+
 async function handleStartImport() {
   isImporting.value = true
   resultMsg.value = ''
   errorMsg.value = ''
+
+  if (activeTab.value === 'consolidate') {
+    progress.value = {
+      phase: 'consolidating',
+      sourceName: consolidateTargetName.value || 'Consolidated_Reference',
+      bytesDownloaded: 0,
+      totalBytes: 0,
+      gamesScanned: 0,
+      gamesImported: 0,
+      percent: 15,
+      message: 'Consolidating databases & removing duplicates (by Game ID and move sequence)...',
+    }
+    try {
+      let res: any
+      if (consolidateSelectedOnlineIds.value.length > 0) {
+        res = await ConsolidateOnlineCatalogDatabases(
+          [...consolidateSelectedOnlineIds.value],
+          consolidateIncludeLocal.value,
+          consolidateTargetName.value.trim() || 'Consolidated_Reference',
+          Number(maxGames.value) || 25000,
+          Number(minElo.value) || 0,
+          consolidateSetAsRef.value
+        )
+      } else {
+        res = await BuildConsolidatedDatabase({
+          targetName: consolidateTargetName.value.trim() || 'Consolidated_Reference',
+          targetDescription: 'Consolidated Online & Master Reference Database (Deduplicated by ID & Move Sequence)',
+          sourceBasePaths: [],
+          setAsReference: consolidateSetAsRef.value,
+          setAsDefaultUser: consolidateSetAsUser.value,
+          minElo: Number(minElo.value) || 0,
+        })
+      }
+      const saved = res?.uniqueGamesSaved ?? 0
+      const removed = res?.duplicatesRemoved ?? 0
+      const byId = res?.duplicatesById ?? 0
+      const byMoves = res?.duplicatesByContent ?? 0
+      resultMsg.value = `Consolidated "${res?.targetName || consolidateTargetName.value}": ${saved} unique games saved, ${removed} duplicates removed (${byId} by ID, ${byMoves} by identical moves)!`
+      emit('imported', saved)
+    } catch (err: any) {
+      errorMsg.value = typeof err === 'string' ? err : (err?.message || 'Failed to consolidate databases')
+    } finally {
+      isImporting.value = false
+    }
+    return
+  }
+
   progress.value = {
     phase: 'downloading',
     sourceName: activeTab.value === 'custom' ? customUrl.value : (selectedSource.value?.name || ''),
@@ -189,7 +254,7 @@ async function handleStartImport() {
           <div>
             <h2 class="text-sm font-bold text-zinc-100">One-Click Master &amp; Mega Database Downloader</h2>
             <p class="text-[11px] text-zinc-400">
-              Lumbra's GigaBase (&sim;15M+ OTB/Online) &bull; Lichess Open &amp; Broadcasts (.pgn.zst) &bull; Lichess Elite (2400+)
+              Lumbra's GigaBase (&sim;15M+ OTB/Online) &bull; Lichess Open &amp; Broadcasts (.pgn.zst) &bull; Lichess Elite (2400+) &bull; Consolidated Reference DB
             </p>
           </div>
         </div>
@@ -204,7 +269,7 @@ async function handleStartImport() {
       </div>
 
       <!-- Provider Filter Tabs -->
-      <div class="flex items-center gap-1.5 px-5 py-2.5 bg-zinc-950/60 border-b border-zinc-800 shrink-0">
+      <div class="flex items-center gap-1.5 px-5 py-2.5 bg-zinc-950/60 border-b border-zinc-800 shrink-0 flex-wrap">
         <button
           type="button"
           data-testid="tab-all"
@@ -241,12 +306,22 @@ async function handleStartImport() {
         >
           Live Monthly Feed / Custom URL
         </button>
+        <button
+          type="button"
+          data-testid="tab-consolidate"
+          class="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+          :class="activeTab === 'consolidate' ? 'bg-cyan-600 text-white' : 'bg-cyan-950/50 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-900/60'"
+          @click="activeTab = 'consolidate'"
+        >
+          <Layers class="w-3.5 h-3.5" />
+          <span>⚡ Consolidate All Online DBs</span>
+        </button>
       </div>
 
       <!-- Body -->
       <div class="p-5 space-y-4 overflow-y-auto flex-1 text-xs text-zinc-300">
         <!-- Curated Catalog Grid -->
-        <div v-if="activeTab !== 'custom'" class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+        <div v-if="activeTab !== 'custom' && activeTab !== 'consolidate'" class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
           <button
             v-for="src in filteredCatalog"
             :key="src.id"
@@ -277,6 +352,85 @@ async function handleStartImport() {
               <span class="font-mono">{{ src.sizeEstimate }}</span>
             </div>
           </button>
+        </div>
+
+        <!-- Consolidated Online & Local Reference Database Builder Tab -->
+        <div v-else-if="activeTab === 'consolidate'" class="bg-zinc-950 border border-cyan-500/40 rounded-xl p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="font-bold text-sm text-cyan-300 flex items-center gap-1.5">
+                <Layers class="w-4 h-4 text-cyan-400" />
+                <span>Consolidated Online &amp; Reference Database Builder</span>
+              </h3>
+              <p class="text-[11px] text-zinc-400 mt-0.5">
+                Combines all online and local databases into a single unified <code class="text-cyan-300">.si4</code> database, removing all duplicate games whether they share the same <strong>Online Game ID / URL</strong> or have <strong>identical move sequences</strong>.
+              </p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="space-y-1">
+              <label class="block text-[11px] text-zinc-400">Consolidated Database Name</label>
+              <input
+                v-model="consolidateTargetName"
+                data-testid="consolidate-target-name"
+                type="text"
+                placeholder="Consolidated_Reference"
+                class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-100 font-mono"
+              />
+            </div>
+
+            <div class="space-y-1.5 pt-1">
+              <label class="flex items-center gap-2 text-xs text-cyan-300 font-semibold cursor-pointer">
+                <input
+                  v-model="consolidateSetAsRef"
+                  data-testid="consolidate-set-ref"
+                  type="checkbox"
+                  class="rounded accent-cyan-500"
+                />
+                <span>Set as Default REFERENCE Database (Opening Tree / Theory)</span>
+              </label>
+              <label class="flex items-center gap-2 text-xs text-amber-300 cursor-pointer">
+                <input
+                  v-model="consolidateSetAsUser"
+                  data-testid="consolidate-set-user"
+                  type="checkbox"
+                  class="rounded accent-amber-500"
+                />
+                <span>Set as Default USER Database</span>
+              </label>
+              <label class="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+                <input
+                  v-model="consolidateIncludeLocal"
+                  type="checkbox"
+                  class="rounded accent-emerald-500"
+                />
+                <span>Include all installed local &amp; Persona databases</span>
+              </label>
+            </div>
+          </div>
+
+          <div v-if="catalog.length > 0" class="space-y-1.5 pt-1">
+            <div class="text-[11px] text-zinc-400">
+              Optional: Also stream &amp; merge online catalog feeds into the Consolidated Database:
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+              <label
+                v-for="src in catalog"
+                :key="'cons-' + src.id"
+                class="flex items-center gap-2 p-2 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-cyan-500/40 cursor-pointer text-[11px]"
+              >
+                <input
+                  type="checkbox"
+                  :checked="consolidateSelectedOnlineIds.includes(src.id)"
+                  class="rounded accent-cyan-500"
+                  @change="toggleConsolidateOnlineSource(src.id)"
+                />
+                <span class="font-semibold text-zinc-200 truncate">{{ src.name }}</span>
+                <span class="ml-auto text-[10px] font-mono text-emerald-400">{{ src.gamesEstimate }}</span>
+              </label>
+            </div>
+          </div>
         </div>
 
         <!-- Custom URL / Live Lichess Monthly Feed Tab -->
@@ -453,8 +607,9 @@ async function handleStartImport() {
             class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg cursor-pointer disabled:opacity-50"
             @click="handleStartImport"
           >
-            <Download class="w-4 h-4" />
-            <span>{{ isImporting ? 'Downloading & Importing...' : 'Download & Import Now' }}</span>
+            <Layers v-if="activeTab === 'consolidate'" class="w-4 h-4" />
+            <Download v-else class="w-4 h-4" />
+            <span>{{ isImporting ? (activeTab === 'consolidate' ? 'Consolidating Databases...' : 'Downloading & Importing...') : (activeTab === 'consolidate' ? 'Build Consolidated Database' : 'Download & Import Now') }}</span>
           </button>
         </div>
       </div>

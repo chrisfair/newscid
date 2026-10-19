@@ -785,3 +785,12 @@ export function VerifyDatabase() {
 export function VerifyRepertoireMove(arg1, arg2, arg3) {
   return window['go']['main']['App']['VerifyRepertoireMove'](arg1, arg2, arg3);
 }
+
+export function BuildConsolidatedDatabase(arg1) {
+  return window['go']['main']['App']['BuildConsolidatedDatabase'](arg1);
+}
+
+export function ConsolidateOnlineCatalogDatabases(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['ConsolidateOnlineCatalogDatabases'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+

@@ -421,3 +421,8 @@ export function UpdateGameHeaders(arg1:number,arg2:Record<string, string>):Promi
 export function VerifyDatabase():Promise<scid.VerificationReport>;
 
 export function VerifyRepertoireMove(arg1:string,arg2:string,arg3:string):Promise<main.RepertoireCheckResult>;
+
+export function BuildConsolidatedDatabase(arg1:any):Promise<any>;
+
+export function ConsolidateOnlineCatalogDatabases(arg1:Array<string>,arg2:boolean,arg3:string,arg4:number,arg5:number,arg6:boolean):Promise<any>;
+
