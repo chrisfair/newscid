@@ -50,6 +50,10 @@ export function AnnotatePGN(arg1, arg2) {
   return window['go']['main']['App']['AnnotatePGN'](arg1, arg2);
 }
 
+export function CheckCyclicalEntitlement() {
+  return window['go']['main']['App']['CheckCyclicalEntitlement']();
+}
+
 export function CheckTWICIssue(arg1) {
   return window['go']['main']['App']['CheckTWICIssue'](arg1);
 }
@@ -78,8 +82,16 @@ export function CountSearchMatches(arg1) {
   return window['go']['main']['App']['CountSearchMatches'](arg1);
 }
 
+export function CreateCyclicalDrillSet(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['CreateCyclicalDrillSet'](arg1, arg2, arg3, arg4);
+}
+
 export function CreateDatabase(arg1, arg2) {
   return window['go']['main']['App']['CreateDatabase'](arg1, arg2);
+}
+
+export function DeleteCyclicalDrillSet(arg1) {
+  return window['go']['main']['App']['DeleteCyclicalDrillSet'](arg1);
 }
 
 export function DeleteDuplicateGames(arg1) {
@@ -246,6 +258,10 @@ export function GetChess960Position(arg1) {
   return window['go']['main']['App']['GetChess960Position'](arg1);
 }
 
+export function GetCyclicalDashboard() {
+  return window['go']['main']['App']['GetCyclicalDashboard']();
+}
+
 export function GetDatabaseDemographics() {
   return window['go']['main']['App']['GetDatabaseDemographics']();
 }
@@ -316,6 +332,10 @@ export function GetLatestTWICIssue() {
 
 export function GetLegalMoves(arg1) {
   return window['go']['main']['App']['GetLegalMoves'](arg1);
+}
+
+export function GetLichessThemesCatalog() {
+  return window['go']['main']['App']['GetLichessThemesCatalog']();
 }
 
 export function GetMegaDatabaseCatalog() {
@@ -546,6 +566,10 @@ export function RecordBlunderReview(arg1, arg2) {
   return window['go']['main']['App']['RecordBlunderReview'](arg1, arg2);
 }
 
+export function RecordCyclicalPuzzleAttempt(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['RecordCyclicalPuzzleAttempt'](arg1, arg2, arg3, arg4);
+}
+
 export function RecordRepertoirePractice(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['RecordRepertoirePractice'](arg1, arg2, arg3, arg4);
 }
@@ -664,6 +688,10 @@ export function StartEngineMatch(arg1) {
 
 export function StartGuessTheMove(arg1, arg2) {
   return window['go']['main']['App']['StartGuessTheMove'](arg1, arg2);
+}
+
+export function StartNextCyclicalCycle(arg1) {
+  return window['go']['main']['App']['StartNextCyclicalCycle'](arg1);
 }
 
 export function StopEngine() {

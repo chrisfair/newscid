@@ -92,35 +92,49 @@ func BuildCheckoutURL(baseURL string, clientRef string) string {
 
 // SupportConfig is persisted to ~/.config/newscid/support.json.
 type SupportConfig struct {
-	Supported       bool   `json:"supported"`
-	IsLifetime      bool   `json:"isLifetime,omitempty"`
-	IsAuthor        bool   `json:"isAuthor"`
-	AuthorID        string `json:"authorId,omitempty"`
-	SupporterTier   string `json:"supporterTier,omitempty"`
-	Reference       string `json:"reference,omitempty"`
-	SupportedAt     int64  `json:"supportedAt,omitempty"`
-	SupportedUntil  int64  `json:"supportedUntil,omitempty"`
-	DismissCount    int    `json:"dismissCount"`
-	LastDismissedAt int64  `json:"lastDismissedAt,omitempty"`
-	StripeURL       string `json:"stripeUrl,omitempty"`
+	Supported                bool   `json:"supported"`
+	IsLifetime               bool   `json:"isLifetime,omitempty"`
+	IsAuthor                 bool   `json:"isAuthor"`
+	AuthorID                 string `json:"authorId,omitempty"`
+	SupporterTier            string `json:"supporterTier,omitempty"`
+	Reference                string `json:"reference,omitempty"`
+	SupportedAt              int64  `json:"supportedAt,omitempty"`
+	SupportedUntil           int64  `json:"supportedUntil,omitempty"`
+	DismissCount             int    `json:"dismissCount"`
+	LastDismissedAt          int64  `json:"lastDismissedAt,omitempty"`
+	StripeURL                string `json:"stripeUrl,omitempty"`
+	BughouseOnlineDonorToken string `json:"bughouseOnlineDonorToken,omitempty"`
 }
 
 // SupportStatus is returned to the frontend UI to determine whether to show the support form.
 type SupportStatus struct {
-	Supported       bool           `json:"supported"`
-	IsLifetime      bool           `json:"isLifetime"`
-	IsAuthor        bool           `json:"isAuthor"`
-	AuthorID        string         `json:"authorId,omitempty"`
-	DeviceSignature string         `json:"deviceSignature,omitempty"`
-	SupporterTier   string         `json:"supporterTier,omitempty"`
-	SupportedAt     int64          `json:"supportedAt,omitempty"`
-	SupportedUntil  int64          `json:"supportedUntil,omitempty"`
-	DismissCount    int            `json:"dismissCount"`
-	LastDismissedAt int64          `json:"lastDismissedAt,omitempty"`
-	StripeURL       string         `json:"stripeUrl"`
-	TierLinks       map[int]string `json:"tierLinks"`
-	MinAmountUSD    int            `json:"minAmountUsd"`
-	ShouldShowNag   bool           `json:"shouldShowNag"`
+	Supported                bool           `json:"supported"`
+	IsLifetime               bool           `json:"isLifetime"`
+	IsAuthor                 bool           `json:"isAuthor"`
+	AuthorID                 string         `json:"authorId,omitempty"`
+	DeviceSignature          string         `json:"deviceSignature,omitempty"`
+	SupporterTier            string         `json:"supporterTier,omitempty"`
+	SupportedAt              int64          `json:"supportedAt,omitempty"`
+	SupportedUntil           int64          `json:"supportedUntil,omitempty"`
+	DismissCount             int            `json:"dismissCount"`
+	LastDismissedAt          int64          `json:"lastDismissedAt,omitempty"`
+	StripeURL                string         `json:"stripeUrl"`
+	BughouseOnlineDonorToken string         `json:"bughouseOnlineDonorToken,omitempty"`
+	TierLinks                map[int]string `json:"tierLinks"`
+	MinAmountUSD             int            `json:"minAmountUsd"`
+	ShouldShowNag            bool           `json:"shouldShowNag"`
+}
+
+// FeatureEntitlement describes whether a premium training/analytics feature (such as Cyclical Tactical Drill)
+// is unlocked, and tracks readiness for future bughouse-online supporter synchronization.
+type FeatureEntitlement struct {
+	FeatureID          string `json:"featureId"`
+	Unlocked           bool   `json:"unlocked"`
+	EnforceGate        bool   `json:"enforceGate"`
+	SupporterActive    bool   `json:"supporterActive"`
+	BughouseOnlineSync bool   `json:"bughouseOnlineSync"`
+	TierRequired       string `json:"tierRequired"`
+	Message            string `json:"message"`
 }
 
 // Manager manages support/donation status, Stripe link configuration, and author ID exemption.
@@ -330,6 +344,61 @@ func (m *Manager) SetStripeURL(url string) error {
 	return m.save()
 }
 
+// SetBughouseOnlineToken stores a donor synchronization token from bughouse-online and marks Supported = true when non-empty.
+func (m *Manager) SetBughouseOnlineToken(token string) (SupportStatus, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	clean := strings.TrimSpace(token)
+	m.config.BughouseOnlineDonorToken = clean
+	if clean != "" {
+		m.config.Supported = true
+		if m.config.SupporterTier == "" {
+			m.config.SupporterTier = "bughouse-online Supporter"
+		}
+		if m.config.SupportedAt == 0 {
+			m.config.SupportedAt = time.Now().UnixMilli()
+		}
+	}
+
+	err := m.save()
+	return m.buildStatusLocked(""), err
+}
+
+// CheckFeatureEntitlement checks whether a feature (e.g., "cyclical-tactical-drill") is unlocked for the user.
+// While enforceGate is false, features are unlocked for all users with an informational readiness message.
+func (m *Manager) CheckFeatureEntitlement(featureID string, enforceGate bool, chessComIDs, lichessIDs []string) FeatureEntitlement {
+	status := m.GetStatus(chessComIDs, lichessIDs)
+
+	m.mu.RLock()
+	donorToken := strings.TrimSpace(m.config.BughouseOnlineDonorToken)
+	m.mu.RUnlock()
+
+	bughouseSync := donorToken != ""
+	supporterActive := status.Supported || status.IsLifetime || status.IsAuthor || bughouseSync
+
+	unlocked := true
+	msg := "Included in NewScid Workstation (Future bughouse-online Supporter Feature)"
+	if enforceGate {
+		unlocked = supporterActive
+		if unlocked {
+			msg = "Unlocked via Active Supporter / bughouse-online Entitlement"
+		} else {
+			msg = "Requires Active Supporter or bughouse-online Donor Entitlement"
+		}
+	}
+
+	return FeatureEntitlement{
+		FeatureID:          featureID,
+		Unlocked:           unlocked,
+		EnforceGate:        enforceGate,
+		SupporterActive:    supporterActive,
+		BughouseOnlineSync: bughouseSync,
+		TierRequired:       "$5 Knight (1 Month) or bughouse-online Donor",
+		Message:            msg,
+	}
+}
+
 func (m *Manager) buildStatusLocked(sig string) SupportStatus {
 	if sig == "" && m.config.AuthorID != "" {
 		sum := sha256.Sum256([]byte(strings.ToLower(m.config.AuthorID)))
@@ -342,7 +411,7 @@ func (m *Manager) buildStatusLocked(sig string) SupportStatus {
 
 	nowMs := time.Now().UnixMilli()
 	activeSupport := false
-	if m.config.IsAuthor || m.config.IsLifetime {
+	if m.config.IsAuthor || m.config.IsLifetime || strings.TrimSpace(m.config.BughouseOnlineDonorToken) != "" {
 		activeSupport = true
 	} else if m.config.Supported {
 		if m.config.SupportedUntil > 0 {
@@ -361,17 +430,18 @@ func (m *Manager) buildStatusLocked(sig string) SupportStatus {
 	}
 
 	return SupportStatus{
-		Supported:       activeSupport,
-		IsLifetime:      m.config.IsLifetime || m.config.IsAuthor,
-		IsAuthor:        m.config.IsAuthor,
-		AuthorID:        m.config.AuthorID,
-		DeviceSignature: sig,
-		SupporterTier:   m.config.SupporterTier,
-		SupportedAt:     m.config.SupportedAt,
-		SupportedUntil:  m.config.SupportedUntil,
-		DismissCount:    m.config.DismissCount,
-		LastDismissedAt: m.config.LastDismissedAt,
-		StripeURL:       stripeURL,
+		Supported:                activeSupport,
+		IsLifetime:               m.config.IsLifetime || m.config.IsAuthor,
+		IsAuthor:                 m.config.IsAuthor,
+		AuthorID:                 m.config.AuthorID,
+		DeviceSignature:          sig,
+		SupporterTier:            m.config.SupporterTier,
+		SupportedAt:              m.config.SupportedAt,
+		SupportedUntil:           m.config.SupportedUntil,
+		DismissCount:             m.config.DismissCount,
+		LastDismissedAt:          m.config.LastDismissedAt,
+		StripeURL:                stripeURL,
+		BughouseOnlineDonorToken: m.config.BughouseOnlineDonorToken,
 		TierLinks: map[int]string{
 			1:   StripeLink1USD,
 			5:   StripeLink5USD,
@@ -383,4 +453,5 @@ func (m *Manager) buildStatusLocked(sig string) SupportStatus {
 		ShouldShowNag: !activeSupport && !inDailyCooldown,
 	}
 }
+
 

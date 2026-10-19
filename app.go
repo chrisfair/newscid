@@ -113,6 +113,7 @@ type App struct {
 	notationStyle    chess.NotationStyle
 	blunderVault     *blundervault.Vault
 	supportMgr       *support.Manager
+	cyclicalMgr      *training.CyclicalManager
 }
 
 // NewApp creates a new App application struct
@@ -131,6 +132,8 @@ func NewApp() *App {
 	bVault, _ := blundervault.NewVault(vaultPath)
 	supportPath := filepath.Join(configDir, "newscid", "support.json")
 	supMgr, _ := support.NewManager(supportPath)
+	cyclicalPath := filepath.Join(configDir, "newscid", "cyclical_drill.json")
+	cycMgr, _ := training.NewCyclicalManager(cyclicalPath)
 
 	return &App{
 		db:              scid.NewDatabase(),
@@ -147,6 +150,7 @@ func NewApp() *App {
 		engineMultiPV:   1,
 		blunderVault:    bVault,
 		supportMgr:      supMgr,
+		cyclicalMgr:     cycMgr,
 	}
 }
 
@@ -3279,4 +3283,122 @@ func (a *App) DownloadAndAnalyzePlayerFairPlay(platform string, username string,
 	return fairplay.AnalyzePlayerFairPlay(db, user, maxGames)
 }
 
+// ==========================================
+// Cyclical Tactical Drill & Lichess Theme Mastery
+// ==========================================
 
+// GetCyclicalDashboard returns the user's cyclical drill sets, improvement history, and Lichess-style theme performance radar.
+func (a *App) GetCyclicalDashboard() training.CyclicalDashboard {
+	if a.cyclicalMgr == nil {
+		configDir, _ := os.UserConfigDir()
+		a.cyclicalMgr, _ = training.NewCyclicalManager(filepath.Join(configDir, "newscid", "cyclical_drill.json"))
+	}
+	return a.cyclicalMgr.GetDashboard()
+}
+
+// GetLichessThemesCatalog returns the full catalog of Lichess tactical & phase themes.
+func (a *App) GetLichessThemesCatalog() []training.LichessThemeInfo {
+	return training.GetLichessThemeCatalog()
+}
+
+// CreateCyclicalDrillSet builds a new Easy-to-Hard ordered Cyclical Drill Set from the user's game history and Blunder Vault.
+func (a *App) CreateCyclicalDrillSet(name string, playerOrPersonaID string, themeFilter []string, setSize int) (*training.CycleSet, error) {
+	if a.cyclicalMgr == nil {
+		configDir, _ := os.UserConfigDir()
+		a.cyclicalMgr, _ = training.NewCyclicalManager(filepath.Join(configDir, "newscid", "cyclical_drill.json"))
+	}
+
+	resolvedPlayer := strings.TrimSpace(playerOrPersonaID)
+	var games []*chess.Game
+
+	// Check if playerOrPersonaID matches a Persona ID or DisplayName
+	if a.personaMgr != nil && resolvedPlayer != "" {
+		for _, p := range a.personaMgr.GetPersonas() {
+			if p.ID == resolvedPlayer || strings.EqualFold(p.DisplayName, resolvedPlayer) {
+				resolvedPlayer = p.DisplayName
+				if p.DatabasePath != "" {
+					pDB := scid.NewDatabase()
+					if err := pDB.Open(p.DatabasePath); err == nil {
+						total := pDB.NumGames()
+						limit := 250
+						if total < limit {
+							limit = total
+						}
+						for id := total; id >= 1 && len(games) < limit; id-- {
+							if g, err := pDB.GetGame(id); err == nil && g != nil {
+								games = append(games, g)
+							}
+						}
+						_ = pDB.Close()
+					}
+				}
+				break
+			}
+		}
+	}
+
+	// Also pull games from the currently open database
+	a.mu.RLock()
+	db := a.db
+	activeGame := a.activeGame
+	a.mu.RUnlock()
+
+	if len(games) < 250 && db != nil && db.IsOpen {
+		total := db.NumGames()
+		for id := total; id >= 1 && len(games) < 250; id-- {
+			if g, err := db.GetGame(id); err == nil && g != nil {
+				games = append(games, g)
+			}
+		}
+	}
+	if len(games) == 0 && activeGame != nil {
+		games = append(games, activeGame)
+	}
+
+	var vaultPuzzles []*blundervault.Puzzle
+	if a.blunderVault != nil {
+		vaultPuzzles = a.blunderVault.GetAllPuzzles()
+	}
+
+	return a.cyclicalMgr.CreateCycleSet(name, resolvedPlayer, games, vaultPuzzles, themeFilter, setSize)
+}
+
+// DeleteCyclicalDrillSet removes a cyclical drill set by ID.
+func (a *App) DeleteCyclicalDrillSet(setID string) error {
+	if a.cyclicalMgr == nil {
+		return fmt.Errorf("cyclical manager not initialized")
+	}
+	return a.cyclicalMgr.DeleteCycleSet(setID)
+}
+
+// RecordCyclicalPuzzleAttempt records the user's attempt on a puzzle in an active cycle and updates Lichess theme stats.
+func (a *App) RecordCyclicalPuzzleAttempt(setID string, puzzleID string, solvedFirstTry bool, timeTakenSec int) (*training.CycleSet, error) {
+	if a.cyclicalMgr == nil {
+		return nil, fmt.Errorf("cyclical manager not initialized")
+	}
+	return a.cyclicalMgr.RecordCyclePuzzleAttempt(setID, puzzleID, solvedFirstTry, timeTakenSec)
+}
+
+// StartNextCyclicalCycle starts or resets a cycle run for the specified drill set.
+func (a *App) StartNextCyclicalCycle(setID string) (*training.CycleSet, error) {
+	if a.cyclicalMgr == nil {
+		return nil, fmt.Errorf("cyclical manager not initialized")
+	}
+	return a.cyclicalMgr.StartNextCycle(setID)
+}
+
+// CheckCyclicalEntitlement checks whether the user is entitled to the Cyclical Tactical Drill module
+// (unlocked by default in NewScid, with future bughouse-online donor/supporter readiness).
+func (a *App) CheckCyclicalEntitlement() support.FeatureEntitlement {
+	chessComIDs, lichessIDs := a.collectLinkedChessAndLichessIDs()
+	if a.supportMgr == nil {
+		return support.FeatureEntitlement{
+			FeatureID:    "cyclical-tactical-drill",
+			Unlocked:     true,
+			EnforceGate:  false,
+			TierRequired: "bughouse-online-supporter",
+			Message:      "Included in NewScid Workstation (Future bughouse-online Supporter Feature)",
+		}
+	}
+	return a.supportMgr.CheckFeatureEntitlement("cyclical-tactical-drill", false, chessComIDs, lichessIDs)
+}

@@ -197,4 +197,47 @@ func TestStripeURLForAmountAndCheckoutBuilder(t *testing.T) {
 	assert.False(t, stLife.ShouldShowNag)
 }
 
+func TestBughouseOnlineTokenAndFeatureEntitlement(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "entitlement.json")
+
+	mgr, err := NewManager(cfgPath)
+	require.NoError(t, err)
+
+	// 1. Before support, enforceGate = false unlocks feature with readiness message
+	entFree := mgr.CheckFeatureEntitlement("cyclical-tactical-drill", false, nil, nil)
+	assert.Equal(t, "cyclical-tactical-drill", entFree.FeatureID)
+	assert.True(t, entFree.Unlocked)
+	assert.False(t, entFree.EnforceGate)
+	assert.False(t, entFree.SupporterActive)
+	assert.False(t, entFree.BughouseOnlineSync)
+	assert.Equal(t, "Included in NewScid Workstation (Future bughouse-online Supporter Feature)", entFree.Message)
+
+	// 2. Before support, enforceGate = true locks feature
+	entGated := mgr.CheckFeatureEntitlement("cyclical-tactical-drill", true, nil, nil)
+	assert.False(t, entGated.Unlocked)
+	assert.True(t, entGated.EnforceGate)
+	assert.False(t, entGated.SupporterActive)
+	assert.Contains(t, entGated.Message, "Requires Active Supporter")
+
+	// 3. Setting a non-empty bughouse-online donor token marks Supported = true and unlocks gated feature
+	stToken, err := mgr.SetBughouseOnlineToken("bh_donor_token_abc123")
+	require.NoError(t, err)
+	assert.True(t, stToken.Supported)
+	assert.Equal(t, "bh_donor_token_abc123", stToken.BughouseOnlineDonorToken)
+	assert.Equal(t, "bughouse-online Supporter", stToken.SupporterTier)
+
+	entAfterToken := mgr.CheckFeatureEntitlement("cyclical-tactical-drill", true, nil, nil)
+	assert.True(t, entAfterToken.Unlocked)
+	assert.True(t, entAfterToken.SupporterActive)
+	assert.True(t, entAfterToken.BughouseOnlineSync)
+	assert.Contains(t, entAfterToken.Message, "Unlocked via Active Supporter")
+
+	// 4. Clearing the token
+	stCleared, err := mgr.SetBughouseOnlineToken("   ")
+	require.NoError(t, err)
+	assert.Empty(t, stCleared.BughouseOnlineDonorToken)
+}
+
+
 
