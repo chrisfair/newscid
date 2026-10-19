@@ -855,6 +855,83 @@ func (a *App) SetDatabaseWritePolicy(basePath string, policy string) (*DatabaseI
 }
 
 // ==========================================
+// Active Long-Running Operation Cancellation
+// ==========================================
+
+func (a *App) startCancellableOperation(name string) (context.Context, func()) {
+	a.opMu.Lock()
+	if a.activeOpCancel != nil {
+		a.activeOpCancel()
+	}
+	baseCtx := a.ctx
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	ctx, cancel := context.WithCancel(baseCtx)
+	a.activeOpCancel = cancel
+	a.activeOpName = name
+	a.opMu.Unlock()
+
+	a.emitEvent("operation:started", map[string]interface{}{
+		"operation": name,
+	})
+
+	finish := func() {
+		a.opMu.Lock()
+		cancel()
+		if a.activeOpName == name {
+			a.activeOpCancel = nil
+			a.activeOpName = ""
+		}
+		a.opMu.Unlock()
+		a.emitEvent("operation:finished", map[string]interface{}{
+			"operation": name,
+		})
+	}
+	return ctx, finish
+}
+
+// CancelActiveOperation cancels any currently running long action (database import, stream, consolidation, sub-database build, TWIC download, or engine match).
+func (a *App) CancelActiveOperation() bool {
+	a.opMu.Lock()
+	cancel := a.activeOpCancel
+	name := a.activeOpName
+	a.activeOpCancel = nil
+	a.activeOpName = ""
+	a.opMu.Unlock()
+
+	if cancel != nil {
+		cancel()
+		a.emitEvent("operation:cancelled", map[string]interface{}{
+			"operation": name,
+		})
+		return true
+	}
+
+	if a.StopEngineMatch() {
+		a.emitEvent("operation:cancelled", map[string]interface{}{
+			"operation": "engine-match",
+		})
+		return true
+	}
+	return false
+}
+
+// GetActiveOperation returns the name of the currently executing long-running operation, or "" if idle.
+func (a *App) GetActiveOperation() string {
+	a.opMu.Lock()
+	name := a.activeOpName
+	a.opMu.Unlock()
+	if name != "" {
+		return name
+	}
+	if a.IsEngineMatchRunning() {
+		return "engine-match"
+	}
+	return ""
+}
+
+// ==========================================
 // Multi-Database Focused Sub-Database Builder
 // ==========================================
 
@@ -864,6 +941,14 @@ func (a *App) BuildFocusedDatabase(filter scid.SubDatabaseFilter) (*scid.SubData
 	dataRoot, _ := workstation.DefaultWorkstationDirs()
 	outputDir := filepath.Join(dataRoot, "databases")
 	_ = os.MkdirAll(outputDir, 0o755)
+
+	if filter.ShouldCancel == nil {
+		opCtx, finishOp := a.startCancellableOperation("build-focused-db")
+		defer finishOp()
+		filter.ShouldCancel = func() bool {
+			return opCtx.Err() != nil
+		}
+	}
 
 	// If no source databases were explicitly passed, use active DB (or all discovered user DBs)
 	if len(filter.SourceBasePaths) == 0 {
@@ -908,7 +993,17 @@ func (a *App) BuildConsolidatedDatabase(opts scid.ConsolidateDatabaseOptions) (*
 	outputDir := filepath.Join(dataRoot, "databases")
 	_ = os.MkdirAll(outputDir, 0o755)
 
+	if opts.ShouldCancel == nil {
+		opCtx, finishOp := a.startCancellableOperation("consolidate-databases")
+		defer finishOp()
+		opts.ShouldCancel = func() bool {
+			return opCtx.Err() != nil
+		}
+	}
+
 	if len(opts.SourceBasePaths) == 0 {
+		// Default to only the most recent (2026 / latest) archives when auto-discovering sources
+		opts.OnlyMostRecentArchives = true
 		seenSrc := make(map[string]bool)
 		addSrc := func(p string) {
 			clean := normalizeScidBasePath(p)
@@ -982,8 +1077,8 @@ func (a *App) BuildConsolidatedDatabase(opts scid.ConsolidateDatabaseOptions) (*
 }
 
 // ConsolidateOnlineCatalogDatabases downloads/streams selected online databases from the catalog
-// and consolidates them (along with existing local databases if includeLocal is true) into a single
-// deduplicated Consolidated Reference Database.
+// (defaulting to the 2026 / most recent archives) and consolidates them (along with existing local
+// databases if includeLocal is true) into a single deduplicated Consolidated Reference Database.
 func (a *App) ConsolidateOnlineCatalogDatabases(
 	sourceIDs []string,
 	includeLocal bool,
@@ -1017,13 +1112,15 @@ func (a *App) ConsolidateOnlineCatalogDatabases(
 		sourcePaths = append(sourcePaths, clean)
 	}
 
+	opCtx, finishOp := a.startCancellableOperation("consolidate-online")
+	defer finishOp()
+
 	client := online.NewMegaDatabaseClient()
-	ctx := a.ctx
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	for _, id := range sourceIDs {
+		if opCtx.Err() != nil {
+			break
+		}
 		id = strings.TrimSpace(id)
 		if id == "" {
 			continue
@@ -1036,7 +1133,7 @@ func (a *App) ConsolidateOnlineCatalogDatabases(
 		} else {
 			_ = stageDB.Create(stageBase, "Online Stage: "+id)
 		}
-		res, err := client.DownloadAndImport(ctx, online.MegaImportOptions{
+		res, err := client.DownloadAndImport(opCtx, online.MegaImportOptions{
 			SourceID:          id,
 			MaxGames:          maxGamesPerSource,
 			MinElo:            minElo,
@@ -1070,11 +1167,15 @@ func (a *App) ConsolidateOnlineCatalogDatabases(
 	}
 
 	return a.BuildConsolidatedDatabase(scid.ConsolidateDatabaseOptions{
-		TargetName:        targetName,
-		TargetDescription: "Consolidated Online & Master Reference Database (Deduplicated by ID & Move Sequence)",
-		SourceBasePaths:   sourcePaths,
-		MinElo:            minElo,
-		SetAsReference:    setAsReference,
+		TargetName:             targetName,
+		TargetDescription:      "Consolidated Online & Master Reference Database (Deduplicated by ID & Move Sequence)",
+		SourceBasePaths:        sourcePaths,
+		MinElo:                 minElo,
+		SetAsReference:         setAsReference,
+		OnlyMostRecentArchives: true,
+		ShouldCancel: func() bool {
+			return opCtx.Err() != nil
+		},
 	})
 }
 

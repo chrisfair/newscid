@@ -15,7 +15,7 @@ import {
   RefreshCw,
   Layers
 } from '@lucide/vue'
-import { BuildConsolidatedDatabase } from '../../wailsjs/go/main/App'
+import { BuildConsolidatedDatabase, CancelActiveOperation } from '../../wailsjs/go/main/App'
 import type { DiscoveredDatabase } from './HeaderBar.vue'
 
 export interface DatabaseRolesStatusView {
@@ -55,23 +55,38 @@ const emit = defineEmits<{
 }>()
 
 const isConsolidating = ref(false)
+const consolidateOnly2026Latest = ref(true)
 const consolidateBanner = ref<string | null>(null)
+
+async function handleCancelConsolidation() {
+  try {
+    await CancelActiveOperation()
+    consolidateBanner.value = 'Cancelling consolidation and saving games imported so far...'
+  } catch (err) {
+    console.error('Failed to cancel consolidation:', err)
+  }
+}
 
 async function handleConsolidateAllToReference() {
   if (isConsolidating.value) return
   isConsolidating.value = true
-  consolidateBanner.value = 'Consolidating all databases & removing duplicate games (by ID and move sequence)...'
+  consolidateBanner.value = 'Consolidating 2026 / latest databases & removing duplicate games (by ID and move sequence)...'
   try {
-    const res = await BuildConsolidatedDatabase({
+    const res: any = await BuildConsolidatedDatabase({
       targetName: 'Consolidated_Reference',
       targetDescription: 'Consolidated Online & Master Reference Database (Deduplicated by ID & Move Sequence)',
       sourceBasePaths: [],
       setAsReference: true,
       setAsDefaultUser: false,
       minElo: 0,
-    })
+      onlyMostRecentArchives: consolidateOnly2026Latest.value,
+    } as any)
     if (res) {
-      consolidateBanner.value = `Consolidated "${res.targetName}": ${res.uniqueGamesSaved} unique games saved, ${res.duplicatesRemoved} duplicates removed (${res.duplicatesById} by ID, ${res.duplicatesByContent} by identical moves) across ${res.sourcesScanned} databases — now set as Default Reference DB!`
+      if (res.cancelled) {
+        consolidateBanner.value = `Consolidation cancelled cleanly — ${res.uniqueGamesSaved} unique games saved to "${res.targetName}".`
+      } else {
+        consolidateBanner.value = `Consolidated "${res.targetName}": ${res.uniqueGamesSaved} unique games saved, ${res.duplicatesRemoved} duplicates removed (${res.duplicatesById} by ID, ${res.duplicatesByContent} by identical moves) across ${res.sourcesScanned} databases — now set as Default Reference DB!`
+      }
       if (res.targetBasePath) {
         emit('setReferenceDB', res.targetBasePath, true)
       }
@@ -141,11 +156,19 @@ function formatCount(n: number): string {
             data-testid="consolidate-all-dbs-btn"
             class="px-2.5 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
             :disabled="isConsolidating"
-            title="Combine all online & local databases into a single deduplicated Consolidated Reference Database (removing duplicates by Game ID and move sequence)"
+            title="Combine 2026 / latest online & local databases into a single deduplicated Consolidated Reference Database (removing duplicates by Game ID and move sequence)"
             @click="handleConsolidateAllToReference"
           >
             <Layers class="w-3.5 h-3.5 text-cyan-400" :class="{ 'animate-spin': isConsolidating }" />
             <span>{{ isConsolidating ? 'Consolidating...' : '⚡ Consolidate All DBs' }}</span>
+          </button>
+          <button
+            v-if="isConsolidating"
+            data-testid="cancel-consolidate-btn"
+            class="px-2.5 py-1.5 rounded-lg bg-rose-950 hover:bg-rose-900 text-rose-200 border border-rose-500/40 font-bold flex items-center gap-1 cursor-pointer transition-colors"
+            @click="handleCancelConsolidation"
+          >
+            <span>✕ Cancel</span>
           </button>
           <button
             class="px-2.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 font-bold flex items-center gap-1.5 cursor-pointer transition-colors"

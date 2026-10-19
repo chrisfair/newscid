@@ -54,8 +54,16 @@ export function AnnotatePGN(arg1, arg2) {
   return window['go']['main']['App']['AnnotatePGN'](arg1, arg2);
 }
 
+export function BuildConsolidatedDatabase(arg1) {
+  return window['go']['main']['App']['BuildConsolidatedDatabase'](arg1);
+}
+
 export function BuildFocusedDatabase(arg1) {
   return window['go']['main']['App']['BuildFocusedDatabase'](arg1);
+}
+
+export function CancelActiveOperation() {
+  return window['go']['main']['App']['CancelActiveOperation']();
 }
 
 export function CheckCyclicalEntitlement() {
@@ -84,6 +92,10 @@ export function CloseDatabase() {
 
 export function CompactDatabase() {
   return window['go']['main']['App']['CompactDatabase']();
+}
+
+export function ConsolidateOnlineCatalogDatabases(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['ConsolidateOnlineCatalogDatabases'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function CountSearchMatches(arg1) {
@@ -246,6 +258,10 @@ export function GenerateSafetyDrillsFromDatabase(arg1) {
   return window['go']['main']['App']['GenerateSafetyDrillsFromDatabase'](arg1);
 }
 
+export function GetActiveOperation() {
+  return window['go']['main']['App']['GetActiveOperation']();
+}
+
 export function GetAllBlunderPuzzles() {
   return window['go']['main']['App']['GetAllBlunderPuzzles']();
 }
@@ -340,6 +356,10 @@ export function GetGuessTheMoveState() {
 
 export function GetIntuitionDrillBatch(arg1) {
   return window['go']['main']['App']['GetIntuitionDrillBatch'](arg1);
+}
+
+export function GetLatestMegaDatabaseCatalog() {
+  return window['go']['main']['App']['GetLatestMegaDatabaseCatalog']();
 }
 
 export function GetLatestTWICIssue() {
@@ -785,12 +805,3 @@ export function VerifyDatabase() {
 export function VerifyRepertoireMove(arg1, arg2, arg3) {
   return window['go']['main']['App']['VerifyRepertoireMove'](arg1, arg2, arg3);
 }
-
-export function BuildConsolidatedDatabase(arg1) {
-  return window['go']['main']['App']['BuildConsolidatedDatabase'](arg1);
-}
-
-export function ConsolidateOnlineCatalogDatabases(arg1, arg2, arg3, arg4, arg5, arg6) {
-  return window['go']['main']['App']['ConsolidateOnlineCatalogDatabases'](arg1, arg2, arg3, arg4, arg5, arg6);
-}
-

@@ -56,7 +56,11 @@ export function AnnotateCurrentGame(arg1:number):Promise<engine.GameAnalysis>;
 
 export function AnnotatePGN(arg1:string,arg2:number):Promise<engine.GameAnalysis>;
 
+export function BuildConsolidatedDatabase(arg1:scid.ConsolidateDatabaseOptions):Promise<scid.ConsolidateDatabaseResult>;
+
 export function BuildFocusedDatabase(arg1:scid.SubDatabaseFilter):Promise<scid.SubDatabaseResult>;
+
+export function CancelActiveOperation():Promise<boolean>;
 
 export function CheckCyclicalEntitlement():Promise<support.FeatureEntitlement>;
 
@@ -71,6 +75,8 @@ export function ClearGameNAGs(arg1:number):Promise<void>;
 export function CloseDatabase():Promise<void>;
 
 export function CompactDatabase():Promise<scid.CompactStats>;
+
+export function ConsolidateOnlineCatalogDatabases(arg1:Array<string>,arg2:boolean,arg3:string,arg4:number,arg5:number,arg6:boolean):Promise<scid.ConsolidateDatabaseResult>;
 
 export function CountSearchMatches(arg1:scid.SearchCriteria):Promise<number>;
 
@@ -152,6 +158,8 @@ export function GenerateRandomChess960():Promise<chess960.Position>;
 
 export function GenerateSafetyDrillsFromDatabase(arg1:number):Promise<Array<training.SafetyDrill>>;
 
+export function GetActiveOperation():Promise<string>;
+
 export function GetAllBlunderPuzzles():Promise<Array<blundervault.Puzzle>>;
 
 export function GetAppPreferences():Promise<main.AppPreferences>;
@@ -199,6 +207,8 @@ export function GetGuessTheMoveHint():Promise<string>;
 export function GetGuessTheMoveState():Promise<training.SolitaireSession>;
 
 export function GetIntuitionDrillBatch(arg1:number):Promise<Array<training.IntuitionChallenge>>;
+
+export function GetLatestMegaDatabaseCatalog():Promise<Array<online.MegaDatabaseSource>>;
 
 export function GetLatestTWICIssue():Promise<number>;
 
@@ -421,8 +431,3 @@ export function UpdateGameHeaders(arg1:number,arg2:Record<string, string>):Promi
 export function VerifyDatabase():Promise<scid.VerificationReport>;
 
 export function VerifyRepertoireMove(arg1:string,arg2:string,arg3:string):Promise<main.RepertoireCheckResult>;
-
-export function BuildConsolidatedDatabase(arg1:any):Promise<any>;
-
-export function ConsolidateOnlineCatalogDatabases(arg1:Array<string>,arg2:boolean,arg3:string,arg4:number,arg5:number,arg6:boolean):Promise<any>;
-

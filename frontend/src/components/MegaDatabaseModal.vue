@@ -7,6 +7,7 @@ import {
   ImportMegaDatabase,
   BuildConsolidatedDatabase,
   ConsolidateOnlineCatalogDatabases,
+  CancelActiveOperation,
 } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 
@@ -31,6 +32,8 @@ interface MegaDatabaseSource {
   gamesEstimate: string
   description: string
   supportsLimit: boolean
+  year?: number
+  isLatest?: boolean
 }
 
 interface MegaImportProgress {
@@ -46,6 +49,7 @@ interface MegaImportProgress {
 
 const catalog = ref<MegaDatabaseSource[]>([])
 const activeTab = ref<'all' | 'LumbrasGigaBase' | 'Lichess' | 'custom' | 'consolidate'>('all')
+const onlyLatest2026 = ref<boolean>(true)
 const selectedSourceId = ref<string>('lumbras-otb-2026')
 const customUrl = ref<string>('')
 const lichessLiveUrls = ref<string[]>([])
@@ -65,19 +69,34 @@ const consolidateSetAsRef = ref<boolean>(true)
 const consolidateSetAsUser = ref<boolean>(false)
 
 const isImporting = ref<boolean>(false)
+const isCancelling = ref<boolean>(false)
 const progress = ref<MegaImportProgress | null>(null)
 const resultMsg = ref<string>('')
 const errorMsg = ref<string>('')
 
+function isSourceMostRecent(s: MegaDatabaseSource): boolean {
+  if (s.isLatest === true) return true
+  if (s.isLatest === false) return false
+  if (typeof s.year === 'number') return s.year >= 2026
+  return !s.id.includes('2025') && !s.id.includes('2020-2024')
+}
+
+const visibleCatalog = computed(() => {
+  if (!onlyLatest2026.value) return catalog.value
+  const latest = catalog.value.filter(isSourceMostRecent)
+  return latest.length > 0 ? latest : catalog.value
+})
+
 const filteredCatalog = computed(() => {
-  if (activeTab.value === 'all') return catalog.value
+  const base = visibleCatalog.value
+  if (activeTab.value === 'all') return base
   if (activeTab.value === 'LumbrasGigaBase') {
-    return catalog.value.filter(s => s.provider === 'LumbrasGigaBase')
+    return base.filter(s => s.provider === 'LumbrasGigaBase')
   }
   if (activeTab.value === 'Lichess') {
-    return catalog.value.filter(s => s.provider.startsWith('Lichess'))
+    return base.filter(s => s.provider.startsWith('Lichess'))
   }
-  return catalog.value
+  return base
 })
 
 const selectedSource = computed(() => {
@@ -89,7 +108,8 @@ onMounted(async () => {
     const list = await GetMegaDatabaseCatalog()
     if (Array.isArray(list) && list.length > 0) {
       catalog.value = list
-      selectedSourceId.value = list[0].id
+      const firstLatest = list.find(isSourceMostRecent) || list[0]
+      selectedSourceId.value = firstLatest.id
     }
   } catch (err) {
     console.error('Failed to load mega database catalog:', err)
@@ -154,8 +174,27 @@ function toggleConsolidateOnlineSource(id: string) {
   }
 }
 
+async function handleCancelOperation() {
+  if (!isImporting.value) return
+  isCancelling.value = true
+  try {
+    await CancelActiveOperation()
+    if (progress.value) {
+      progress.value = {
+        ...progress.value,
+        message: 'Cancelling operation and saving imported games...',
+      }
+    }
+  } catch (err) {
+    console.error('Failed to cancel operation:', err)
+  } finally {
+    isCancelling.value = false
+  }
+}
+
 async function handleStartImport() {
   isImporting.value = true
+  isCancelling.value = false
   resultMsg.value = ''
   errorMsg.value = ''
 
@@ -189,13 +228,18 @@ async function handleStartImport() {
           setAsReference: consolidateSetAsRef.value,
           setAsDefaultUser: consolidateSetAsUser.value,
           minElo: Number(minElo.value) || 0,
-        })
+          onlyMostRecentArchives: onlyLatest2026.value,
+        } as any)
       }
       const saved = res?.uniqueGamesSaved ?? 0
       const removed = res?.duplicatesRemoved ?? 0
       const byId = res?.duplicatesById ?? 0
       const byMoves = res?.duplicatesByContent ?? 0
-      resultMsg.value = `Consolidated "${res?.targetName || consolidateTargetName.value}": ${saved} unique games saved, ${removed} duplicates removed (${byId} by ID, ${byMoves} by identical moves)!`
+      if (res?.cancelled) {
+        resultMsg.value = `Consolidation cancelled cleanly — ${saved} unique games saved to "${res?.targetName || consolidateTargetName.value}".`
+      } else {
+        resultMsg.value = `Consolidated "${res?.targetName || consolidateTargetName.value}": ${saved} unique games saved, ${removed} duplicates removed (${byId} by ID, ${byMoves} by identical moves)!`
+      }
       emit('imported', saved)
     } catch (err: any) {
       errorMsg.value = typeof err === 'string' ? err : (err?.message || 'Failed to consolidate databases')
@@ -217,7 +261,7 @@ async function handleStartImport() {
   }
 
   try {
-    const res = await ImportMegaDatabase({
+    const res: any = await ImportMegaDatabase({
       sourceId: activeTab.value === 'custom' ? 'custom' : selectedSourceId.value,
       customUrl: activeTab.value === 'custom' ? customUrl.value.trim() : '',
       maxGames: Number(maxGames.value) || 0,
@@ -225,7 +269,9 @@ async function handleStartImport() {
       createNewDatabase: createNewDb.value ? newDbName.value.trim() : '',
     })
 
-    if (res?.databasePath) {
+    if (res?.cancelled) {
+      resultMsg.value = `Import cancelled cleanly — ${res?.gamesImported ?? 0} games imported so far have been saved!`
+    } else if (res?.databasePath) {
       resultMsg.value = `Extracted & opened native Scid database: ${res.databasePath}`
     } else {
       resultMsg.value = `Successfully imported ${res?.gamesImported ?? 0} games (${res?.gamesScanned ?? 0} scanned)!`
@@ -269,53 +315,71 @@ async function handleStartImport() {
       </div>
 
       <!-- Provider Filter Tabs -->
-      <div class="flex items-center gap-1.5 px-5 py-2.5 bg-zinc-950/60 border-b border-zinc-800 shrink-0 flex-wrap">
-        <button
-          type="button"
-          data-testid="tab-all"
-          class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-          :class="activeTab === 'all' ? 'bg-emerald-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'"
-          @click="activeTab = 'all'"
+      <div class="flex items-center justify-between gap-2 px-5 py-2.5 bg-zinc-950/60 border-b border-zinc-800 shrink-0 flex-wrap">
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <button
+            type="button"
+            data-testid="tab-all"
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+            :class="activeTab === 'all' ? 'bg-emerald-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'"
+            @click="activeTab = 'all'"
+          >
+            All Databases ({{ visibleCatalog.length }})
+          </button>
+          <button
+            type="button"
+            data-testid="tab-lumbras"
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+            :class="activeTab === 'LumbrasGigaBase' ? 'bg-emerald-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'"
+            @click="activeTab = 'LumbrasGigaBase'"
+          >
+            Lumbra's GigaBase
+          </button>
+          <button
+            type="button"
+            data-testid="tab-lichess"
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+            :class="activeTab === 'Lichess' ? 'bg-emerald-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'"
+            @click="activeTab = 'Lichess'"
+          >
+            Lichess Open / Elite / Broadcasts
+          </button>
+          <button
+            type="button"
+            data-testid="tab-custom"
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+            :class="activeTab === 'custom' ? 'bg-emerald-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'"
+            @click="activeTab = 'custom'; handleLoadLichessFeed('broadcast')"
+          >
+            Live Monthly Feed / Custom URL
+          </button>
+          <button
+            type="button"
+            data-testid="tab-consolidate"
+            class="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+            :class="activeTab === 'consolidate' ? 'bg-cyan-600 text-white' : 'bg-cyan-950/50 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-900/60'"
+            @click="activeTab = 'consolidate'"
+          >
+            <Layers class="w-3.5 h-3.5" />
+            <span>⚡ Consolidate All Online DBs</span>
+          </button>
+        </div>
+
+        <label
+          data-testid="toggle-latest-2026"
+          class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer transition-colors"
+          :class="onlyLatest2026
+            ? 'bg-emerald-950/50 border-emerald-500/40 text-emerald-300'
+            : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'"
+          title="Default to the 2026 / most recent cumulative archives (which already contain prior games). Uncheck to manually browse or import older 2025 archives."
         >
-          All Databases ({{ catalog.length }})
-        </button>
-        <button
-          type="button"
-          data-testid="tab-lumbras"
-          class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-          :class="activeTab === 'LumbrasGigaBase' ? 'bg-emerald-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'"
-          @click="activeTab = 'LumbrasGigaBase'"
-        >
-          Lumbra's GigaBase
-        </button>
-        <button
-          type="button"
-          data-testid="tab-lichess"
-          class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-          :class="activeTab === 'Lichess' ? 'bg-emerald-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'"
-          @click="activeTab = 'Lichess'"
-        >
-          Lichess Open / Elite / Broadcasts
-        </button>
-        <button
-          type="button"
-          data-testid="tab-custom"
-          class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-          :class="activeTab === 'custom' ? 'bg-emerald-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'"
-          @click="activeTab = 'custom'; handleLoadLichessFeed('broadcast')"
-        >
-          Live Monthly Feed / Custom URL
-        </button>
-        <button
-          type="button"
-          data-testid="tab-consolidate"
-          class="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
-          :class="activeTab === 'consolidate' ? 'bg-cyan-600 text-white' : 'bg-cyan-950/50 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-900/60'"
-          @click="activeTab = 'consolidate'"
-        >
-          <Layers class="w-3.5 h-3.5" />
-          <span>⚡ Consolidate All Online DBs</span>
-        </button>
+          <input
+            v-model="onlyLatest2026"
+            type="checkbox"
+            class="rounded accent-emerald-500"
+          />
+          <span>2026 / Latest Archives Only</span>
+        </label>
       </div>
 
       <!-- Body -->
@@ -410,13 +474,13 @@ async function handleStartImport() {
             </div>
           </div>
 
-          <div v-if="catalog.length > 0" class="space-y-1.5 pt-1">
+          <div v-if="visibleCatalog.length > 0" class="space-y-1.5 pt-1">
             <div class="text-[11px] text-zinc-400">
-              Optional: Also stream &amp; merge online catalog feeds into the Consolidated Database:
+              Optional: Also stream &amp; merge online catalog feeds into the Consolidated Database ({{ onlyLatest2026 ? '2026 / Latest Archives' : 'All Archives' }}):
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-1.5">
               <label
-                v-for="src in catalog"
+                v-for="src in visibleCatalog"
                 :key="'cons-' + src.id"
                 class="flex items-center gap-2 p-2 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-cyan-500/40 cursor-pointer text-[11px]"
               >
@@ -551,11 +615,23 @@ async function handleStartImport() {
 
         <!-- Live Progress Bar -->
         <div v-if="isImporting || progress" class="bg-zinc-950 border border-zinc-800 rounded-xl p-3.5 space-y-2">
-          <div class="flex items-center justify-between text-xs">
+          <div class="flex items-center justify-between text-xs gap-2">
             <span class="font-semibold text-emerald-400">{{ progress?.message || 'Processing...' }}</span>
-            <span class="font-mono text-zinc-400">
-              {{ progress?.gamesImported ?? 0 }} imported / {{ progress?.gamesScanned ?? 0 }} scanned
-            </span>
+            <div class="flex items-center gap-2">
+              <span class="font-mono text-zinc-400">
+                {{ progress?.gamesImported ?? 0 }} imported / {{ progress?.gamesScanned ?? 0 }} scanned
+              </span>
+              <button
+                v-if="isImporting"
+                type="button"
+                data-testid="cancel-mega-import-btn"
+                :disabled="isCancelling"
+                class="px-2.5 py-1 rounded-lg bg-rose-950 hover:bg-rose-900 border border-rose-500/40 text-rose-200 text-[11px] font-bold cursor-pointer disabled:opacity-50"
+                @click="handleCancelOperation"
+              >
+                {{ isCancelling ? 'Cancelling...' : '✕ Stop / Cancel' }}
+              </button>
+            </div>
           </div>
           <div class="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
             <div
@@ -592,6 +668,16 @@ async function handleStartImport() {
           <span>Supports native <code class="text-zinc-300">.pgn.zst</code> streaming, <code class="text-zinc-300">.7z</code>, <code class="text-zinc-300">.zip</code> &amp; <code class="text-zinc-300">.si4</code></span>
         </div>
         <div class="flex items-center gap-2">
+          <button
+            v-if="isImporting"
+            type="button"
+            data-testid="footer-cancel-import-btn"
+            :disabled="isCancelling"
+            class="px-4 py-2 rounded-xl bg-rose-700 hover:bg-rose-600 text-white text-xs font-bold cursor-pointer disabled:opacity-50"
+            @click="handleCancelOperation"
+          >
+            {{ isCancelling ? 'Cancelling...' : '✕ Cancel Import' }}
+          </button>
           <button
             type="button"
             :disabled="isImporting"

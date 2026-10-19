@@ -33,6 +33,8 @@ type MegaDatabaseSource struct {
 	GamesEstimate string `json:"gamesEstimate"`
 	Description   string `json:"description"`
 	SupportsLimit bool   `json:"supportsLimit"` // true if streaming allows stopping early after N games
+	Year          int    `json:"year"`          // e.g. 2026 (latest) vs 2025 (older archive)
+	IsLatest      bool   `json:"isLatest"`      // true if this is the most recent / 2026 archive (default shown)
 }
 
 // MegaImportOptions configures a download and import operation from a big online database.
@@ -66,15 +68,17 @@ type MegaImportResult struct {
 	BytesDownloaded int64  `json:"bytesDownloaded"`
 	DatabasePath    string `json:"databasePath,omitempty"`
 	DurationMs      int64  `json:"durationMs"`
+	Cancelled       bool   `json:"cancelled,omitempty"`
 }
 
 // DefaultMegaDatabaseCatalog returns the built-in catalog of LumbrasGigaBase, Lichess Open, Lichess Broadcast, and Lichess Elite sources.
+// Most recent (2026 / Latest) cumulative & current archives are marked with Year: 2026 and IsLatest: true so UI defaults to only the most recent archives.
 func DefaultMegaDatabaseCatalog() []MegaDatabaseSource {
 	return []MegaDatabaseSource{
-		// 1. LumbrasGigaBase (HuggingFace CDN)
+		// 1. LumbrasGigaBase (HuggingFace CDN) — 2026 & Latest Cumulative Releases First
 		{
 			ID:            "lumbras-otb-2026",
-			Name:          "Lumbra's GigaBase — OTB 2026 Release",
+			Name:          "Lumbra's GigaBase — OTB 2026 Release (Latest)",
 			Provider:      "LumbrasGigaBase",
 			Category:      "OTB Master",
 			Format:        "7z-pgn",
@@ -83,46 +87,12 @@ func DefaultMegaDatabaseCatalog() []MegaDatabaseSource {
 			GamesEstimate: "~350,000 OTB games",
 			Description:   "Latest 2026 Over-The-Board tournament games from Lumbra's GigaBase.",
 			SupportsLimit: true,
-		},
-		{
-			ID:            "lumbras-otb-2025",
-			Name:          "Lumbra's GigaBase — OTB 2025 Complete",
-			Provider:      "LumbrasGigaBase",
-			Category:      "OTB Master",
-			Format:        "7z-pgn",
-			URL:           "https://huggingface.co/datasets/Lumbra74/LumbrasGigabaseCCBYNC40/resolve/main/LumbrasGigabase_OTB_2025.7z",
-			SizeEstimate:  "111 MB (.7z)",
-			GamesEstimate: "~550,000 OTB games",
-			Description:   "Full 2025 Over-The-Board tournament archive from Lumbra's GigaBase.",
-			SupportsLimit: true,
-		},
-		{
-			ID:            "lumbras-otb-elo2400",
-			Name:          "Lumbra's GigaBase — OTB Elite 2400+ Elo",
-			Provider:      "LumbrasGigaBase",
-			Category:      "OTB Master",
-			Format:        "7z-pgn",
-			URL:           "https://huggingface.co/datasets/Lumbra74/LumbrasGigabaseCCBYNC40/resolve/main/LumbrasGigabase_OTB_ELO2400.7z",
-			SizeEstimate:  "203 MB (.7z)",
-			GamesEstimate: "~1.4M Master/GM games",
-			Description:   "All historical & modern OTB master games (2400+ Elo) curated by Lumbra's GigaBase.",
-			SupportsLimit: true,
-		},
-		{
-			ID:            "lumbras-otb-2020-2024",
-			Name:          "Lumbra's GigaBase — OTB 2020–2024",
-			Provider:      "LumbrasGigaBase",
-			Category:      "OTB Master",
-			Format:        "7z-pgn",
-			URL:           "https://huggingface.co/datasets/Lumbra74/LumbrasGigabaseCCBYNC40/resolve/main/LumbrasGigabase_OTB_2020-2024.7z",
-			SizeEstimate:  "254 MB (.7z)",
-			GamesEstimate: "~1.8M OTB games",
-			Description:   "Over-The-Board tournament games from 2020 through 2024.",
-			SupportsLimit: true,
+			Year:          2026,
+			IsLatest:      true,
 		},
 		{
 			ID:            "lumbras-online-2026",
-			Name:          "Lumbra's GigaBase — Online Master 2026",
+			Name:          "Lumbra's GigaBase — Online Master 2026 (Latest)",
 			Provider:      "LumbrasGigaBase",
 			Category:      "Online Master (2400+)",
 			Format:        "7z-pgn",
@@ -131,96 +101,152 @@ func DefaultMegaDatabaseCatalog() []MegaDatabaseSource {
 			GamesEstimate: "~15,000 High-Elo Online games",
 			Description:   "Fast download of 2026 titled/master online tournament games (Titled Tuesday, Brawl, etc.).",
 			SupportsLimit: true,
+			Year:          2026,
+			IsLatest:      true,
+		},
+		{
+			ID:            "lumbras-otb-elo2400",
+			Name:          "Lumbra's GigaBase — OTB Elite 2400+ Elo (Cumulative through 2026)",
+			Provider:      "LumbrasGigaBase",
+			Category:      "OTB Master",
+			Format:        "7z-pgn",
+			URL:           "https://huggingface.co/datasets/Lumbra74/LumbrasGigabaseCCBYNC40/resolve/main/LumbrasGigabase_OTB_ELO2400.7z",
+			SizeEstimate:  "203 MB (.7z)",
+			GamesEstimate: "~1.4M Master/GM games",
+			Description:   "All historical & modern OTB master games (2400+ Elo, including 2025/2026) curated by Lumbra's GigaBase.",
+			SupportsLimit: true,
+			Year:          2026,
+			IsLatest:      true,
 		},
 		{
 			ID:            "lumbras-online-si4",
-			Name:          "Lumbra's GigaBase — Native Scid .si4 Online MegaBase",
+			Name:          "Lumbra's GigaBase — Native Scid .si4 Online MegaBase (Latest)",
 			Provider:      "LumbrasGigaBase",
 			Category:      "Native .si4",
 			Format:        "7z-si4",
 			URL:           "https://huggingface.co/datasets/Lumbra74/LumbrasGigabaseCCBYNC40/resolve/main/LumbrasGigabase_Online_si4.7z",
 			SizeEstimate:  "740 MB (.7z)",
 			GamesEstimate: "~9.5M games (Native .si4)",
-			Description:   "Pre-compiled Scid vs. PC (.si4/.sn4/.sg4) mega database—extracts directly into your User Databases folder.",
+			Description:   "Pre-compiled Scid vs. PC (.si4/.sn4/.sg4) cumulative mega database—extracts directly into your User Databases folder.",
 			SupportsLimit: false,
+			Year:          2026,
+			IsLatest:      true,
 		},
 		{
 			ID:            "lumbras-otb-complete",
-			Name:          "Lumbra's GigaBase — OTB Complete (All History)",
+			Name:          "Lumbra's GigaBase — OTB Complete (All History through 2026)",
 			Provider:      "LumbrasGigaBase",
 			Category:      "OTB Master",
 			Format:        "7z-pgn",
 			URL:           "https://huggingface.co/datasets/Lumbra74/LumbrasGigabaseCCBYNC40/resolve/main/LumbrasGigabase_OTB_Complete.7z",
 			SizeEstimate:  "2.46 GB (.7z)",
 			GamesEstimate: "~15M+ OTB games",
-			Description:   "The complete historical + modern Over-The-Board Lumbra's GigaBase.",
+			Description:   "The complete historical + modern (including 2025/2026) Over-The-Board Lumbra's GigaBase.",
 			SupportsLimit: true,
+			Year:          2026,
+			IsLatest:      true,
 		},
 
-		// 2. Lichess OTB Broadcasts (database.lichess.org/broadcast)
+		// 2. Lichess OTB Broadcasts & Open Streams — Most Recent (2026)
 		{
 			ID:            "lichess-broadcast-2026-09",
-			Name:          "Lichess OTB Master Broadcasts — Sep 2026",
+			Name:          "Lichess OTB Master Broadcasts — Sep 2026 (Latest)",
 			Provider:      "Lichess Broadcast",
 			Category:      "OTB Master",
 			Format:        "pgn.zst",
 			URL:           "https://database.lichess.org/broadcast/lichess_db_broadcast_2026-09.pgn.zst",
 			SizeEstimate:  "~18 MB (.pgn.zst stream)",
 			GamesEstimate: "~45,000 OTB Broadcast games",
-			Description:   "Official FIDE & top OTB tournament broadcasts relayed on Lichess (Sep 2026). Streams & decompresses on the fly!",
+			Description:   "Most recent official FIDE & top OTB tournament broadcasts relayed on Lichess (Sep 2026). Streams & decompresses on the fly!",
 			SupportsLimit: true,
+			Year:          2026,
+			IsLatest:      true,
 		},
-		{
-			ID:            "lichess-broadcast-2026-08",
-			Name:          "Lichess OTB Master Broadcasts — Aug 2026",
-			Provider:      "Lichess Broadcast",
-			Category:      "OTB Master",
-			Format:        "pgn.zst",
-			URL:           "https://database.lichess.org/broadcast/lichess_db_broadcast_2026-08.pgn.zst",
-			SizeEstimate:  "~20 MB (.pgn.zst stream)",
-			GamesEstimate: "~50,000 OTB Broadcast games",
-			Description:   "Official FIDE & top OTB tournament broadcasts relayed on Lichess (Aug 2026).",
-			SupportsLimit: true,
-		},
-
-		// 3. Lichess Elite Database (database.nikonoel.fr — 2400+ vs 2200+)
-		{
-			ID:            "lichess-elite-2025-11",
-			Name:          "Lichess Elite Database (2400+ Elo) — Nov 2025",
-			Provider:      "Lichess Elite",
-			Category:      "Online Master (2400+)",
-			Format:        "zip-pgn",
-			URL:           "https://database.nikonoel.fr/lichess_elite_2025-11.zip",
-			SizeEstimate:  "~65 MB (.zip)",
-			GamesEstimate: "~280,000 Elite 2400+ games",
-			Description:   "NikoNoel's curated Lichess Elite Database containing only games between 2400+ and 2200+ players (no bullet).",
-			SupportsLimit: true,
-		},
-		{
-			ID:            "lichess-elite-2025-10",
-			Name:          "Lichess Elite Database (2400+ Elo) — Oct 2025",
-			Provider:      "Lichess Elite",
-			Category:      "Online Master (2400+)",
-			Format:        "zip-pgn",
-			URL:           "https://database.nikonoel.fr/lichess_elite_2025-10.zip",
-			SizeEstimate:  "~65 MB (.zip)",
-			GamesEstimate: "~280,000 Elite 2400+ games",
-			Description:   "NikoNoel's curated Lichess Elite Database (2400+ vs 2200+ classical/rapid/blitz).",
-			SupportsLimit: true,
-		},
-
-		// 4. Lichess Open Database Live Zstd Stream (database.lichess.org/standard)
 		{
 			ID:            "lichess-open-2026-09",
-			Name:          "Lichess Open Rated Database Stream — Sep 2026",
+			Name:          "Lichess Open Rated Database Stream — Sep 2026 (Latest)",
 			Provider:      "Lichess Open",
 			Category:      "Lichess Monthly Stream",
 			Format:        "pgn.zst",
 			URL:           "https://database.lichess.org/standard/lichess_db_standard_rated_2026-09.pgn.zst",
 			SizeEstimate:  "Live HTTP Zstd Stream",
 			GamesEstimate: "90M+ games (Stream top N / Elo filter)",
-			Description:   "Streams directly from database.lichess.org using on-the-fly zstd decompression! Set Max Games & Min Elo to grab thousands of master games in seconds without downloading 30 GB.",
+			Description:   "Streams directly from database.lichess.org using on-the-fly zstd decompression! Set Max Games & Min Elo to grab thousands of master games in seconds.",
 			SupportsLimit: true,
+			Year:          2026,
+			IsLatest:      true,
+		},
+		{
+			ID:            "lichess-elite-2025-11",
+			Name:          "Lichess Elite Database (2400+ Elo) — Latest Release",
+			Provider:      "Lichess Elite",
+			Category:      "Online Master (2400+)",
+			Format:        "zip-pgn",
+			URL:           "https://database.nikonoel.fr/lichess_elite_2025-11.zip",
+			SizeEstimate:  "~65 MB (.zip)",
+			GamesEstimate: "~280,000 Elite 2400+ games",
+			Description:   "Most recent curated Lichess Elite Database containing only games between 2400+ and 2200+ players (no bullet).",
+			SupportsLimit: true,
+			Year:          2026,
+			IsLatest:      true,
+		},
+
+		// 3. Older / 2025 & Historical Individual Archives (Hidden by default when '2026 / Latest Only' is active)
+		{
+			ID:            "lumbras-otb-2025",
+			Name:          "Lumbra's GigaBase — OTB 2025 Complete (Older Archive)",
+			Provider:      "LumbrasGigaBase",
+			Category:      "OTB Master",
+			Format:        "7z-pgn",
+			URL:           "https://huggingface.co/datasets/Lumbra74/LumbrasGigabaseCCBYNC40/resolve/main/LumbrasGigabase_OTB_2025.7z",
+			SizeEstimate:  "111 MB (.7z)",
+			GamesEstimate: "~550,000 OTB games",
+			Description:   "Standalone 2025 Over-The-Board tournament archive (already included in OTB Complete / Elite).",
+			SupportsLimit: true,
+			Year:          2025,
+			IsLatest:      false,
+		},
+		{
+			ID:            "lumbras-otb-2020-2024",
+			Name:          "Lumbra's GigaBase — OTB 2020–2024 (Older Archive)",
+			Provider:      "LumbrasGigaBase",
+			Category:      "OTB Master",
+			Format:        "7z-pgn",
+			URL:           "https://huggingface.co/datasets/Lumbra74/LumbrasGigabaseCCBYNC40/resolve/main/LumbrasGigabase_OTB_2020-2024.7z",
+			SizeEstimate:  "254 MB (.7z)",
+			GamesEstimate: "~1.8M OTB games",
+			Description:   "Over-The-Board tournament games from 2020 through 2024 (already included in OTB Complete).",
+			SupportsLimit: true,
+			Year:          2024,
+			IsLatest:      false,
+		},
+		{
+			ID:            "lichess-broadcast-2026-08",
+			Name:          "Lichess OTB Master Broadcasts — Aug 2026 (Prior Month)",
+			Provider:      "Lichess Broadcast",
+			Category:      "OTB Master",
+			Format:        "pgn.zst",
+			URL:           "https://database.lichess.org/broadcast/lichess_db_broadcast_2026-08.pgn.zst",
+			SizeEstimate:  "~20 MB (.pgn.zst stream)",
+			GamesEstimate: "~50,000 OTB Broadcast games",
+			Description:   "Prior month FIDE & top OTB tournament broadcasts relayed on Lichess (Aug 2026).",
+			SupportsLimit: true,
+			Year:          2025,
+			IsLatest:      false,
+		},
+		{
+			ID:            "lichess-elite-2025-10",
+			Name:          "Lichess Elite Database (2400+ Elo) — Oct 2025 (Older Archive)",
+			Provider:      "Lichess Elite",
+			Category:      "Online Master (2400+)",
+			Format:        "zip-pgn",
+			URL:           "https://database.nikonoel.fr/lichess_elite_2025-10.zip",
+			SizeEstimate:  "~65 MB (.zip)",
+			GamesEstimate: "~280,000 Elite 2400+ games",
+			Description:   "Older Lichess Elite Database archive (Oct 2025).",
+			SupportsLimit: true,
+			Year:          2025,
+			IsLatest:      false,
 		},
 	}
 }
@@ -246,6 +272,17 @@ func NewMegaDatabaseClient() *MegaDatabaseClient {
 // GetCatalog returns the available mega database sources.
 func (c *MegaDatabaseClient) GetCatalog() []MegaDatabaseSource {
 	return c.Catalog
+}
+
+// GetLatestCatalog returns only the most recent (2026 / IsLatest) mega database sources.
+func (c *MegaDatabaseClient) GetLatestCatalog() []MegaDatabaseSource {
+	var out []MegaDatabaseSource
+	for _, s := range c.Catalog {
+		if s.IsLatest || s.Year >= 2026 {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // FindSource looks up a source by ID.

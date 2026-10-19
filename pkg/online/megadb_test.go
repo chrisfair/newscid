@@ -64,10 +64,19 @@ func TestMegaDatabaseCatalogAndLookup(t *testing.T) {
 	cat := client.GetCatalog()
 	require.NotEmpty(t, cat)
 
+	latest := client.GetLatestCatalog()
+	require.NotEmpty(t, latest)
+	assert.Less(t, len(latest), len(cat))
+	for _, s := range latest {
+		assert.True(t, s.IsLatest || s.Year >= 2026)
+	}
+
 	src, ok := client.FindSource("lumbras-otb-2026")
 	require.True(t, ok)
 	assert.Equal(t, "LumbrasGigaBase", src.Provider)
 	assert.Equal(t, "7z-pgn", src.Format)
+	assert.True(t, src.IsLatest)
+	assert.Equal(t, 2026, src.Year)
 
 	srcLichess, ok := client.FindSource("lichess-open-2026-09")
 	require.True(t, ok)

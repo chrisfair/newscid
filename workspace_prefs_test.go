@@ -295,5 +295,36 @@ func TestBuildConsolidatedDatabaseAndPersonaDatabaseDiscovery(t *testing.T) {
 	if pol := app.GetDatabaseWritePolicy(consRes.TargetBasePath); pol != "sync_only" {
 		t.Errorf("expected consolidated database policy=sync_only, got %q", pol)
 	}
+
+	// 4. Verify GetLatestMegaDatabaseCatalog and CancelActiveOperation / GetActiveOperation
+	latestCat := app.GetLatestMegaDatabaseCatalog()
+	if len(latestCat) == 0 {
+		t.Fatalf("expected non-empty latest mega database catalog")
+	}
+	for _, s := range latestCat {
+		if !s.IsLatest && s.Year < 2026 {
+			t.Errorf("expected only 2026/latest sources in GetLatestMegaDatabaseCatalog, got %+v", s)
+		}
+	}
+
+	if op := app.GetActiveOperation(); op != "" {
+		t.Errorf("expected idle active operation, got %q", op)
+	}
+	if app.CancelActiveOperation() {
+		t.Errorf("expected CancelActiveOperation to return false when idle")
+	}
+
+	opCtx, finish := app.startCancellableOperation("test-import")
+	if op := app.GetActiveOperation(); op != "test-import" {
+		t.Errorf("expected active operation test-import, got %q", op)
+	}
+	if !app.CancelActiveOperation() {
+		t.Errorf("expected CancelActiveOperation to return true when active")
+	}
+	if opCtx.Err() == nil {
+		t.Errorf("expected opCtx to be cancelled")
+	}
+	finish()
 }
+
 

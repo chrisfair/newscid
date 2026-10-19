@@ -101,20 +101,21 @@ func InferDefaultWritePolicy(basePath string, numGames int, description string, 
 
 // SubDatabaseFilter specifies criteria for extracting a focused sub-database across multiple sources.
 type SubDatabaseFilter struct {
-	TargetName        string   `json:"targetName"`
-	TargetDescription string   `json:"targetDescription"`
-	TargetBasePath    string   `json:"targetBasePath,omitempty"`
-	SourceBasePaths   []string `json:"sourceBasePaths"`
-	Players           []string `json:"players,omitempty"`      // Matches White or Black across any of these player names/aliases
-	PlayerColor       string   `json:"playerColor,omitempty"`  // "any", "white", "black"
-	ECOFilter         string   `json:"ecoFilter,omitempty"`    // e.g. "B90", "C42", or range "B20-B99"
-	OpeningMoves      []string `json:"openingMoves,omitempty"` // SAN or UCI move prefix sequence e.g. ["e4", "c5", "Nf3"] or ["1.e4", "c5"]
-	MinElo            int      `json:"minElo,omitempty"`
-	YearFrom          int      `json:"yearFrom,omitempty"`
-	YearTo            int      `json:"yearTo,omitempty"`
-	ResultFilter      string   `json:"resultFilter,omitempty"` // "", "1-0", "0-1", "1/2-1/2"
-	Deduplicate       bool     `json:"deduplicate"`
-	MaxGames          int      `json:"maxGames,omitempty"`
+	TargetName        string      `json:"targetName"`
+	TargetDescription string      `json:"targetDescription"`
+	TargetBasePath    string      `json:"targetBasePath,omitempty"`
+	SourceBasePaths   []string    `json:"sourceBasePaths"`
+	Players           []string    `json:"players,omitempty"`      // Matches White or Black across any of these player names/aliases
+	PlayerColor       string      `json:"playerColor,omitempty"`  // "any", "white", "black"
+	ECOFilter         string      `json:"ecoFilter,omitempty"`    // e.g. "B90", "C42", or range "B20-B99"
+	OpeningMoves      []string    `json:"openingMoves,omitempty"` // SAN or UCI move prefix sequence e.g. ["e4", "c5", "Nf3"] or ["1.e4", "c5"]
+	MinElo            int         `json:"minElo,omitempty"`
+	YearFrom          int         `json:"yearFrom,omitempty"`
+	YearTo            int         `json:"yearTo,omitempty"`
+	ResultFilter      string      `json:"resultFilter,omitempty"` // "", "1-0", "0-1", "1/2-1/2"
+	Deduplicate       bool        `json:"deduplicate"`
+	MaxGames          int         `json:"maxGames,omitempty"`
+	ShouldCancel      func() bool `json:"-"`
 }
 
 // SubDatabaseResult summarizes the outcome of building a focused sub-database.
@@ -125,6 +126,7 @@ type SubDatabaseResult struct {
 	TotalGamesScanned int    `json:"totalGamesScanned"`
 	GamesMatched      int    `json:"gamesMatched"`
 	DuplicatesSkipped int    `json:"duplicatesSkipped"`
+	Cancelled         bool   `json:"cancelled,omitempty"`
 }
 
 func sanitizeFileName(name string) string {
@@ -392,6 +394,10 @@ func BuildFocusedSubDatabase(
 	}
 
 	for _, rawSrc := range filter.SourceBasePaths {
+		if filter.ShouldCancel != nil && filter.ShouldCancel() {
+			result.Cancelled = true
+			break
+		}
 		src := strings.TrimSpace(rawSrc)
 		if src == "" {
 			continue
@@ -415,6 +421,10 @@ func BuildFocusedSubDatabase(
 			result.SourcesScanned++
 
 			for _, g := range games {
+				if filter.ShouldCancel != nil && filter.ShouldCancel() {
+					result.Cancelled = true
+					break
+				}
 				if g == nil {
 					continue
 				}
@@ -464,6 +474,10 @@ func BuildFocusedSubDatabase(
 		result.SourcesScanned++
 
 		for idx, entry := range srcDB.Entries {
+			if filter.ShouldCancel != nil && filter.ShouldCancel() {
+				result.Cancelled = true
+				break
+			}
 			if entry == nil || (entry.Flags&FlagDelete) != 0 {
 				continue
 			}
@@ -898,13 +912,15 @@ func DiscoverNotablePlayersInDatabase(
 
 // ConsolidateDatabaseOptions configures merging multiple online/local databases into a single deduplicated database.
 type ConsolidateDatabaseOptions struct {
-	TargetName        string   `json:"targetName"`
-	TargetDescription string   `json:"targetDescription"`
-	TargetBasePath    string   `json:"targetBasePath,omitempty"`
-	SourceBasePaths   []string `json:"sourceBasePaths"`
-	SetAsReference    bool     `json:"setAsReference"`
-	SetAsDefaultUser  bool     `json:"setAsDefaultUser"`
-	MinElo            int      `json:"minElo,omitempty"`
+	TargetName             string      `json:"targetName"`
+	TargetDescription      string      `json:"targetDescription"`
+	TargetBasePath         string      `json:"targetBasePath,omitempty"`
+	SourceBasePaths        []string    `json:"sourceBasePaths"`
+	SetAsReference         bool        `json:"setAsReference"`
+	SetAsDefaultUser       bool        `json:"setAsDefaultUser"`
+	MinElo                 int         `json:"minElo,omitempty"`
+	OnlyMostRecentArchives bool        `json:"onlyMostRecentArchives"`
+	ShouldCancel           func() bool `json:"-"`
 }
 
 // ConsolidateDatabaseResult summarizes the results of consolidating multiple databases.
@@ -917,6 +933,43 @@ type ConsolidateDatabaseResult struct {
 	DuplicatesRemoved   int    `json:"duplicatesRemoved"`
 	DuplicatesByID      int    `json:"duplicatesById"`
 	DuplicatesByContent int    `json:"duplicatesByContent"`
+	Cancelled           bool   `json:"cancelled,omitempty"`
+}
+
+// IsLegacyArchivePath returns true when a database path clearly belongs to an older annual/monthly
+// archive (e.g. 2025, 2024, 2020-2024) superseded by the 2026 / cumulative latest archives.
+func IsLegacyArchivePath(path string) bool {
+	base := strings.ToLower(filepath.Base(strings.TrimSpace(path)))
+	if base == "" {
+		return false
+	}
+	if strings.Contains(base, "2026") || strings.Contains(base, "complete") || strings.Contains(base, "elite") || strings.Contains(base, "elo2400") {
+		return false
+	}
+	for _, marker := range []string{"2025", "2024", "2023", "2020-2024", "2020_2024", "1990-1999", "2000-2009", "2010-2019"} {
+		if strings.Contains(base, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// FilterMostRecentDatabasePaths filters out older archive paths (e.g. 2025/2020-2024) when 2026 or
+// cumulative/current databases are present. If all provided paths are older archives, all are preserved.
+func FilterMostRecentDatabasePaths(paths []string) []string {
+	if len(paths) <= 1 {
+		return paths
+	}
+	filtered := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if !IsLegacyArchivePath(p) {
+			filtered = append(filtered, p)
+		}
+	}
+	if len(filtered) == 0 {
+		return paths
+	}
+	return filtered
 }
 
 // ExtractOnlineGameID extracts a canonical platform Game ID or unique game URL from PGN tags
@@ -1221,8 +1274,17 @@ func ConsolidateDatabases(
 		return nil
 	}
 
+	sourcePaths := opts.SourceBasePaths
+	if opts.OnlyMostRecentArchives {
+		sourcePaths = FilterMostRecentDatabasePaths(sourcePaths)
+	}
+
 	cleanTarget := strings.TrimSuffix(targetBasePath, ".si4")
-	for _, rawSrc := range opts.SourceBasePaths {
+	for _, rawSrc := range sourcePaths {
+		if opts.ShouldCancel != nil && opts.ShouldCancel() {
+			res.Cancelled = true
+			break
+		}
 		src := strings.TrimSpace(rawSrc)
 		if src == "" {
 			continue
@@ -1245,6 +1307,10 @@ func ConsolidateDatabases(
 				return nil, fmt.Errorf("parsing source PGN %q: %w", src, parseErr)
 			}
 			for _, g := range games {
+				if opts.ShouldCancel != nil && opts.ShouldCancel() {
+					res.Cancelled = true
+					break
+				}
 				if err := processGame(g); err != nil {
 					return nil, err
 				}
@@ -1263,6 +1329,10 @@ func ConsolidateDatabases(
 			return nil, fmt.Errorf("opening source Scid database %q: %w", src, err)
 		}
 		for idx, entry := range srcDB.Entries {
+			if opts.ShouldCancel != nil && opts.ShouldCancel() {
+				res.Cancelled = true
+				break
+			}
 			if entry == nil || (entry.Flags&FlagDelete) != 0 {
 				continue
 			}
