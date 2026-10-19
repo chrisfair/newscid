@@ -19,6 +19,8 @@ type DiscoveredDatabase struct {
 	Description string `json:"description"`
 	SizeStr     string `json:"sizeStr"`
 	Exists      bool   `json:"exists"`
+	WritePolicy string `json:"writePolicy"`
+	IsLocked    bool   `json:"isLocked"`
 }
 
 // ParseRecentDat extracts file paths from a Scid recent.dat file.
@@ -83,9 +85,11 @@ func InspectDatabase(basePath string, category string) DiscoveredDatabase {
 				db.BasePath = basePath
 				db.Exists = true
 				db.SizeStr = FormatFileSize(pgnInfo.Size())
-				return db
 			}
 		}
+		policy := InferDefaultWritePolicy(db.BasePath, db.NumGames, db.Description, false)
+		db.WritePolicy = policy.String()
+		db.IsLocked = !policy.AllowsDirectEdit()
 		return db
 	}
 
@@ -114,6 +118,10 @@ func InspectDatabase(basePath string, category string) DiscoveredDatabase {
 			}
 		}
 	}
+
+	policy := InferDefaultWritePolicy(db.BasePath, db.NumGames, db.Description, false)
+	db.WritePolicy = policy.String()
+	db.IsLocked = !policy.AllowsDirectEdit()
 
 	return db
 }
