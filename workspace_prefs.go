@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -892,6 +893,189 @@ func (a *App) BuildFocusedDatabase(filter scid.SubDatabaseFilter) (*scid.SubData
 		_, _ = a.SetDatabaseWritePolicy(res.TargetBasePath, scid.WritePolicyEditable.String())
 	}
 	return res, nil
+}
+
+// ==========================================
+// Consolidated Online & Master Database Builder
+// ==========================================
+
+// BuildConsolidatedDatabase combines all specified (or all discovered online/local) databases
+// into a single unified Scid (.si4) database, removing all duplicate games whether they match
+// by Online Game ID/URL or by identical move sequence / game content.
+// Optionally sets the resulting database as the Default Reference Database or Default User Database.
+func (a *App) BuildConsolidatedDatabase(opts scid.ConsolidateDatabaseOptions) (*scid.ConsolidateDatabaseResult, error) {
+	dataRoot, _ := workstation.DefaultWorkstationDirs()
+	outputDir := filepath.Join(dataRoot, "databases")
+	_ = os.MkdirAll(outputDir, 0o755)
+
+	if len(opts.SourceBasePaths) == 0 {
+		seenSrc := make(map[string]bool)
+		addSrc := func(p string) {
+			clean := normalizeScidBasePath(p)
+			if clean == "" || seenSrc[clean] {
+				return
+			}
+			baseLower := strings.ToLower(filepath.Base(clean))
+			if baseLower == "clipbase" {
+				return
+			}
+			seenSrc[clean] = true
+			opts.SourceBasePaths = append(opts.SourceBasePaths, clean)
+		}
+
+		for _, d := range a.GetDiscoveredDatabases() {
+			if d.Category == "Tutorial & Tactics" {
+				continue
+			}
+			addSrc(d.BasePath)
+		}
+
+		a.mu.RLock()
+		if a.db != nil && a.db.IsOpen {
+			addSrc(a.db.BasePath)
+		}
+		if a.refDB != nil && a.refDB.IsOpen {
+			addSrc(a.refDB.BasePath)
+		}
+		a.mu.RUnlock()
+	}
+
+	res, err := scid.ConsolidateDatabases(opts, outputDir, func(source string, scanned, added, skippedID, skippedMove int) {
+		a.emitEvent("consolidate:progress", map[string]interface{}{
+			"source":      source,
+			"scanned":     scanned,
+			"added":       added,
+			"skippedId":   skippedID,
+			"skippedMove": skippedMove,
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if res != nil && res.TargetBasePath != "" {
+		targetClean := normalizeScidBasePath(res.TargetBasePath)
+		// Consolidated reference databases default to Sync-Only to protect against accidental manual edits
+		_, _ = a.SetDatabaseWritePolicy(targetClean, scid.WritePolicySyncOnly.String())
+
+		if opts.SetAsReference {
+			_, _ = a.SetReferenceDatabase(targetClean, true)
+		}
+		if opts.SetAsDefaultUser {
+			_, _ = a.SetDefaultDatabase(targetClean)
+		}
+
+		// Refresh in-memory handles if the consolidated target is currently open as Active or Reference DB
+		a.mu.Lock()
+		if a.refDB != nil && a.refDB.IsOpen && normalizeScidBasePath(a.refDB.BasePath) == targetClean {
+			_ = a.refDB.Close()
+			_ = a.refDB.Open(targetClean)
+		}
+		if a.db != nil && a.db.IsOpen && normalizeScidBasePath(a.db.BasePath) == targetClean {
+			_ = a.db.Close()
+			_ = a.db.Open(targetClean)
+		}
+		a.mu.Unlock()
+	}
+
+	return res, nil
+}
+
+// ConsolidateOnlineCatalogDatabases downloads/streams selected online databases from the catalog
+// and consolidates them (along with existing local databases if includeLocal is true) into a single
+// deduplicated Consolidated Reference Database.
+func (a *App) ConsolidateOnlineCatalogDatabases(
+	sourceIDs []string,
+	includeLocal bool,
+	targetName string,
+	maxGamesPerSource int,
+	minElo int,
+	setAsReference bool,
+) (*scid.ConsolidateDatabaseResult, error) {
+	dataRoot, _ := workstation.DefaultWorkstationDirs()
+	outputDir := filepath.Join(dataRoot, "databases")
+	_ = os.MkdirAll(outputDir, 0o755)
+
+	if strings.TrimSpace(targetName) == "" {
+		targetName = "Consolidated_Reference"
+	}
+	if maxGamesPerSource <= 0 {
+		maxGamesPerSource = 2500
+	}
+
+	var sourcePaths []string
+	seen := make(map[string]bool)
+	addSource := func(p string) {
+		clean := normalizeScidBasePath(p)
+		if clean == "" || seen[clean] {
+			return
+		}
+		if strings.EqualFold(filepath.Base(clean), "clipbase") {
+			return
+		}
+		seen[clean] = true
+		sourcePaths = append(sourcePaths, clean)
+	}
+
+	client := online.NewMegaDatabaseClient()
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	for _, id := range sourceIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		stageName := "online_stage_" + strings.ReplaceAll(strings.ToLower(id), "-", "_")
+		stageBase := filepath.Join(outputDir, stageName)
+		stageDB := scid.NewDatabase()
+		if _, err := os.Stat(stageBase + ".si4"); err == nil {
+			_ = stageDB.Open(stageBase)
+		} else {
+			_ = stageDB.Create(stageBase, "Online Stage: "+id)
+		}
+		res, err := client.DownloadAndImport(ctx, online.MegaImportOptions{
+			SourceID:          id,
+			MaxGames:          maxGamesPerSource,
+			MinElo:            minElo,
+			CreateNewDatabase: stageName,
+		}, stageDB, outputDir, func(prog online.MegaImportProgress) {
+			a.emitEvent("megadb:progress", prog)
+		})
+		_ = stageDB.Close()
+		if err == nil && res != nil && res.DatabasePath != "" {
+			addSource(res.DatabasePath)
+		} else if _, statErr := os.Stat(stageBase + ".si4"); statErr == nil {
+			addSource(stageBase)
+		}
+	}
+
+	if includeLocal || len(sourcePaths) == 0 {
+		for _, d := range a.GetDiscoveredDatabases() {
+			if d.Category == "Tutorial & Tactics" {
+				continue
+			}
+			addSource(d.BasePath)
+		}
+		a.mu.RLock()
+		if a.db != nil && a.db.IsOpen {
+			addSource(a.db.BasePath)
+		}
+		if a.refDB != nil && a.refDB.IsOpen {
+			addSource(a.refDB.BasePath)
+		}
+		a.mu.RUnlock()
+	}
+
+	return a.BuildConsolidatedDatabase(scid.ConsolidateDatabaseOptions{
+		TargetName:        targetName,
+		TargetDescription: "Consolidated Online & Master Reference Database (Deduplicated by ID & Move Sequence)",
+		SourceBasePaths:   sourcePaths,
+		MinElo:            minElo,
+		SetAsReference:    setAsReference,
+	})
 }
 
 // ==========================================
