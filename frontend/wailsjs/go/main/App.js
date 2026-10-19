@@ -6,6 +6,10 @@ export function AddBlunderToVault(arg1) {
   return window['go']['main']['App']['AddBlunderToVault'](arg1);
 }
 
+export function AddCustomNotablePlayer(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['AddCustomNotablePlayer'](arg1, arg2, arg3, arg4);
+}
+
 export function AddGameComment(arg1, arg2) {
   return window['go']['main']['App']['AddGameComment'](arg1, arg2);
 }
@@ -48,6 +52,10 @@ export function AnnotateCurrentGame(arg1) {
 
 export function AnnotatePGN(arg1, arg2) {
   return window['go']['main']['App']['AnnotatePGN'](arg1, arg2);
+}
+
+export function BuildFocusedDatabase(arg1) {
+  return window['go']['main']['App']['BuildFocusedDatabase'](arg1);
 }
 
 export function CheckCyclicalEntitlement() {
@@ -186,6 +194,10 @@ export function ExportPGN(arg1) {
   return window['go']['main']['App']['ExportPGN'](arg1);
 }
 
+export function FactoryResetNewScid(arg1) {
+  return window['go']['main']['App']['FactoryResetNewScid'](arg1);
+}
+
 export function FetchChessComPreview(arg1) {
   return window['go']['main']['App']['FetchChessComPreview'](arg1);
 }
@@ -282,6 +294,10 @@ export function GetDatabaseStatistics() {
   return window['go']['main']['App']['GetDatabaseStatistics']();
 }
 
+export function GetDatabaseWritePolicy(arg1) {
+  return window['go']['main']['App']['GetDatabaseWritePolicy'](arg1);
+}
+
 export function GetDiscoveredDatabases() {
   return window['go']['main']['App']['GetDiscoveredDatabases']();
 }
@@ -340,6 +356,10 @@ export function GetLichessThemesCatalog() {
 
 export function GetMegaDatabaseCatalog() {
   return window['go']['main']['App']['GetMegaDatabaseCatalog']();
+}
+
+export function GetNotablePlayersDropdown() {
+  return window['go']['main']['App']['GetNotablePlayersDropdown']();
 }
 
 export function GetNotationStyle() {
@@ -452,6 +472,14 @@ export function GetVersionInfo() {
 
 export function GetWindowStartupConfig() {
   return window['go']['main']['App']['GetWindowStartupConfig']();
+}
+
+export function GetWorkstationStorageReport() {
+  return window['go']['main']['App']['GetWorkstationStorageReport']();
+}
+
+export function ImportAssetToWorkstation(arg1, arg2) {
+  return window['go']['main']['App']['ImportAssetToWorkstation'](arg1, arg2);
 }
 
 export function ImportMegaDatabase(arg1) {
@@ -578,8 +606,16 @@ export function RecordUserSupport(arg1, arg2) {
   return window['go']['main']['App']['RecordUserSupport'](arg1, arg2);
 }
 
+export function RemoveNotablePlayer(arg1) {
+  return window['go']['main']['App']['RemoveNotablePlayer'](arg1);
+}
+
 export function RemovePersonaIdentifier(arg1, arg2) {
   return window['go']['main']['App']['RemovePersonaIdentifier'](arg1, arg2);
+}
+
+export function ResetNotablePlayersToDefault() {
+  return window['go']['main']['App']['ResetNotablePlayersToDefault']();
 }
 
 export function SaveAppPreferences(arg1) {
@@ -624,6 +660,14 @@ export function SearchECO(arg1, arg2, arg3) {
 
 export function SearchPosition(arg1) {
   return window['go']['main']['App']['SearchPosition'](arg1);
+}
+
+export function SelectAndImportWorkstationAsset(arg1) {
+  return window['go']['main']['App']['SelectAndImportWorkstationAsset'](arg1);
+}
+
+export function SetDatabaseWritePolicy(arg1, arg2) {
+  return window['go']['main']['App']['SetDatabaseWritePolicy'](arg1, arg2);
 }
 
 export function SetDefaultDatabase(arg1) {
@@ -740,48 +784,4 @@ export function VerifyDatabase() {
 
 export function VerifyRepertoireMove(arg1, arg2, arg3) {
   return window['go']['main']['App']['VerifyRepertoireMove'](arg1, arg2, arg3);
-}
-
-export function GetDatabaseWritePolicy(arg1) {
-  return window['go']['main']['App']['GetDatabaseWritePolicy'](arg1);
-}
-
-export function SetDatabaseWritePolicy(arg1, arg2) {
-  return window['go']['main']['App']['SetDatabaseWritePolicy'](arg1, arg2);
-}
-
-export function BuildFocusedDatabase(arg1) {
-  return window['go']['main']['App']['BuildFocusedDatabase'](arg1);
-}
-
-export function GetNotablePlayersDropdown() {
-  return window['go']['main']['App']['GetNotablePlayersDropdown']();
-}
-
-export function AddCustomNotablePlayer(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['AddCustomNotablePlayer'](arg1, arg2, arg3, arg4);
-}
-
-export function RemoveNotablePlayer(arg1) {
-  return window['go']['main']['App']['RemoveNotablePlayer'](arg1);
-}
-
-export function ResetNotablePlayersToDefault() {
-  return window['go']['main']['App']['ResetNotablePlayersToDefault']();
-}
-
-export function GetWorkstationStorageReport() {
-  return window['go']['main']['App']['GetWorkstationStorageReport']();
-}
-
-export function ImportAssetToWorkstation(arg1, arg2) {
-  return window['go']['main']['App']['ImportAssetToWorkstation'](arg1, arg2);
-}
-
-export function SelectAndImportWorkstationAsset(arg1) {
-  return window['go']['main']['App']['SelectAndImportWorkstationAsset'](arg1);
-}
-
-export function FactoryResetNewScid(arg1) {
-  return window['go']['main']['App']['FactoryResetNewScid'](arg1);
 }

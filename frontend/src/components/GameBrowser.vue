@@ -268,7 +268,7 @@ async function handleAddCustomPlayer() {
     .map(a => a.trim())
     .filter(Boolean)
   try {
-    const list = await AddCustomNotablePlayer(name, newCustomPlayerTitle.value.trim() || 'Tracked Player', aliases)
+    const list = await AddCustomNotablePlayer(name, aliases, newCustomPlayerTitle.value.trim() || 'Tracked Player', '')
     if (Array.isArray(list)) {
       notablePlayers.value = list
     }
