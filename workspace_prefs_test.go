@@ -6,6 +6,7 @@ import (
 
 	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
+	"newscid/pkg/persona"
 	"newscid/pkg/workstation"
 )
 
@@ -186,3 +187,113 @@ func TestDatabaseLockingNotablePlayersAndWorkstationReset(t *testing.T) {
 		t.Fatalf("FactoryResetNewScid failed: res=%+v, err=%v", resetRes, err)
 	}
 }
+
+func TestBuildConsolidatedDatabaseAndPersonaDatabaseDiscovery(t *testing.T) {
+	fakeHome := t.TempDir()
+	t.Setenv("HOME", fakeHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(fakeHome, ".config"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(fakeHome, ".local", "share"))
+
+	app := NewApp()
+	defer app.shutdown(nil)
+
+	// 1. Save a Persona and verify it automatically gets a dedicated .si4 database in GetDiscoveredDatabases
+	savedPersona, err := app.SavePersona(&persona.Persona{
+		DisplayName:      "Magnus Study Persona",
+		Identifiers:      []string{"Carlsen, Magnus", "DrNykterstein"},
+		LichessUsername:  "DrNykterstein",
+		ChessComUsername: "MagnusCarlsen",
+	})
+	if err != nil || savedPersona == nil || savedPersona.DatabasePath == "" {
+		t.Fatalf("SavePersona failed or did not assign DatabasePath: %+v, err=%v", savedPersona, err)
+	}
+
+	discovered := app.GetDiscoveredDatabases()
+	foundPersonaDB := false
+	for _, d := range discovered {
+		if d.Category == "Persona Databases" {
+			foundPersonaDB = true
+			break
+		}
+	}
+	if !foundPersonaDB {
+		t.Fatalf("expected GetDiscoveredDatabases to include Persona Databases category, got %+v", discovered)
+	}
+
+	// 2. Create two source online databases with duplicate games (by online ID and by identical moves)
+	tmpDir := t.TempDir()
+	src1 := filepath.Join(tmpDir, "Lichess_Broadcasts")
+	src2 := filepath.Join(tmpDir, "Lichess_Elite")
+
+	db1 := scid.NewDatabase()
+	if err := db1.Create(src1, "Broadcasts"); err != nil {
+		t.Fatalf("create src1: %v", err)
+	}
+	g1, _ := chess.ParsePGN(`[Event "Titled Arena"]
+[Site "https://lichess.org/AbCdEf12"]
+[White "Carlsen, Magnus"]
+[Black "Nakamura, Hikaru"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 1-0`)
+	_, _ = db1.SaveGame(g1)
+	_ = db1.Close()
+
+	db2 := scid.NewDatabase()
+	if err := db2.Create(src2, "Elite"); err != nil {
+		t.Fatalf("create src2: %v", err)
+	}
+	// Duplicate 1: Same online ID AbCdEf12
+	g1Dup, _ := chess.ParsePGN(`[Event "Lichess Elite"]
+[Site "https://lichess.org/AbCdEf12/black"]
+[White "DrNykterstein"]
+[Black "Hikaru"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 1-0`)
+	// Duplicate 2: Different site tag, but identical 10-ply move sequence & players
+	g1MoveDup, _ := chess.ParsePGN(`[Event "OTB Mirror"]
+[Site "Oslo"]
+[White "Magnus Carlsen"]
+[Black "Hikaru Nakamura"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 1-0`)
+	// Unique game 2
+	g2Unique, _ := chess.ParsePGN(`[Event "Candidates"]
+[Site "https://www.chess.com/game/live/9988776655"]
+[White "Caruana, Fabiano"]
+[Black "Gukesh, D"]
+[Result "1/2-1/2"]
+
+1. d4 Nf6 2. c4 e6 3. Nc3 Bb4 4. e3 O-O 5. Bd3 d5 1/2-1/2`)
+	_, _ = db2.SaveGame(g1Dup)
+	_, _ = db2.SaveGame(g1MoveDup)
+	_, _ = db2.SaveGame(g2Unique)
+	_ = db2.Close()
+
+	// 3. Build Consolidated Database and set it as Default Reference Database
+	consRes, err := app.BuildConsolidatedDatabase(scid.ConsolidateDatabaseOptions{
+		TargetName:      "Consolidated_Online_Master",
+		SourceBasePaths: []string{src1, src2},
+		SetAsReference:  true,
+	})
+	if err != nil {
+		t.Fatalf("BuildConsolidatedDatabase failed: %v", err)
+	}
+	if consRes.UniqueGamesSaved != 2 || consRes.DuplicatesByID != 1 || consRes.DuplicatesByContent != 1 {
+		t.Fatalf("unexpected consolidation stats: %+v", consRes)
+	}
+
+	roles, err := app.GetDatabaseRolesStatus()
+	if err != nil {
+		t.Fatalf("GetDatabaseRolesStatus failed: %v", err)
+	}
+	if roles.ReferenceDBName != "Consolidated_Online_Master" {
+		t.Errorf("expected ReferenceDBName=Consolidated_Online_Master, got %q", roles.ReferenceDBName)
+	}
+	if pol := app.GetDatabaseWritePolicy(consRes.TargetBasePath); pol != "sync_only" {
+		t.Errorf("expected consolidated database policy=sync_only, got %q", pol)
+	}
+}
+

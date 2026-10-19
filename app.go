@@ -1091,11 +1091,42 @@ func (a *App) GetBoardThemes() []sets.BoardThemeInfo {
 }
 
 func (a *App) GetDiscoveredDatabases() []scid.DiscoveredDatabase {
+	personaPaths := make(map[string]*persona.Persona)
+	if a.personaMgr != nil {
+		for _, p := range a.personaMgr.GetPersonas() {
+			if basePath, err := a.personaMgr.EnsurePersonaDatabase(p); err == nil && basePath != "" {
+				personaPaths[normalizeScidBasePath(basePath)] = p
+			}
+		}
+	}
+
 	dbs := scid.DiscoverScidDatabases()
+	seen := make(map[string]bool, len(dbs))
 	for i := range dbs {
+		clean := normalizeScidBasePath(dbs[i].BasePath)
+		seen[clean] = true
+		if p, ok := personaPaths[clean]; ok {
+			dbs[i].Category = "Persona Databases"
+			if dbs[i].Description == "" {
+				dbs[i].Description = fmt.Sprintf("%s Unified Games Database", p.DisplayName)
+			}
+		}
 		pol := a.resolveDatabaseWritePolicy(dbs[i].BasePath, dbs[i].NumGames, dbs[i].Description)
 		dbs[i].WritePolicy = pol.String()
 		dbs[i].IsLocked = !pol.AllowsDirectEdit()
+	}
+
+	for clean, p := range personaPaths {
+		if !seen[clean] {
+			meta := scid.InspectDatabase(clean, "Persona Databases")
+			if meta.Description == "" {
+				meta.Description = fmt.Sprintf("%s Unified Games Database", p.DisplayName)
+			}
+			pol := a.resolveDatabaseWritePolicy(meta.BasePath, meta.NumGames, meta.Description)
+			meta.WritePolicy = pol.String()
+			meta.IsLocked = !pol.AllowsDirectEdit()
+			dbs = append(dbs, meta)
+		}
 	}
 	return dbs
 }
@@ -1976,12 +2007,16 @@ func (a *App) GetPersonaSimulatedMove(personaID string, fen string, isWhite bool
 // Persona Management & Multi-Alias Aggregation
 // ==========================================
 
-// GetPersonas returns all configured personas sorted by display name.
+// GetPersonas returns all configured personas sorted by display name, ensuring each has a dedicated .si4 database.
 func (a *App) GetPersonas() ([]*persona.Persona, error) {
 	if a.personaMgr == nil {
 		return nil, fmt.Errorf("persona manager not initialized")
 	}
-	return a.personaMgr.GetPersonas(), nil
+	personas := a.personaMgr.GetPersonas()
+	for _, p := range personas {
+		_, _ = a.personaMgr.EnsurePersonaDatabase(p)
+	}
+	return personas, nil
 }
 
 // GetPersona retrieves a persona by its unique ID.
