@@ -398,3 +398,25 @@ export function UpdateGameHeaders(arg1:number,arg2:Record<string, string>):Promi
 export function VerifyDatabase():Promise<scid.VerificationReport>;
 
 export function VerifyRepertoireMove(arg1:string,arg2:string,arg3:string):Promise<main.RepertoireCheckResult>;
+
+export function GetDatabaseWritePolicy(arg1:string):Promise<string>;
+
+export function SetDatabaseWritePolicy(arg1:string,arg2:string):Promise<main.DatabaseInfo>;
+
+export function BuildFocusedDatabase(arg1:any):Promise<any>;
+
+export function GetNotablePlayersDropdown():Promise<Array<any>>;
+
+export function AddCustomNotablePlayer(arg1:string,arg2:Array<string>,arg3:string,arg4:string):Promise<Array<any>>;
+
+export function RemoveNotablePlayer(arg1:string):Promise<Array<any>>;
+
+export function ResetNotablePlayersToDefault():Promise<Array<any>>;
+
+export function GetWorkstationStorageReport():Promise<any>;
+
+export function ImportAssetToWorkstation(arg1:string,arg2:string):Promise<any>;
+
+export function SelectAndImportWorkstationAsset(arg1:string):Promise<any>;
+
+export function FactoryResetNewScid(arg1:any):Promise<any>;

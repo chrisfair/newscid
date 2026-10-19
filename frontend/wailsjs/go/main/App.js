@@ -741,3 +741,47 @@ export function VerifyDatabase() {
 export function VerifyRepertoireMove(arg1, arg2, arg3) {
   return window['go']['main']['App']['VerifyRepertoireMove'](arg1, arg2, arg3);
 }
+
+export function GetDatabaseWritePolicy(arg1) {
+  return window['go']['main']['App']['GetDatabaseWritePolicy'](arg1);
+}
+
+export function SetDatabaseWritePolicy(arg1, arg2) {
+  return window['go']['main']['App']['SetDatabaseWritePolicy'](arg1, arg2);
+}
+
+export function BuildFocusedDatabase(arg1) {
+  return window['go']['main']['App']['BuildFocusedDatabase'](arg1);
+}
+
+export function GetNotablePlayersDropdown() {
+  return window['go']['main']['App']['GetNotablePlayersDropdown']();
+}
+
+export function AddCustomNotablePlayer(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['AddCustomNotablePlayer'](arg1, arg2, arg3, arg4);
+}
+
+export function RemoveNotablePlayer(arg1) {
+  return window['go']['main']['App']['RemoveNotablePlayer'](arg1);
+}
+
+export function ResetNotablePlayersToDefault() {
+  return window['go']['main']['App']['ResetNotablePlayersToDefault']();
+}
+
+export function GetWorkstationStorageReport() {
+  return window['go']['main']['App']['GetWorkstationStorageReport']();
+}
+
+export function ImportAssetToWorkstation(arg1, arg2) {
+  return window['go']['main']['App']['ImportAssetToWorkstation'](arg1, arg2);
+}
+
+export function SelectAndImportWorkstationAsset(arg1) {
+  return window['go']['main']['App']['SelectAndImportWorkstationAsset'](arg1);
+}
+
+export function FactoryResetNewScid(arg1) {
+  return window['go']['main']['App']['FactoryResetNewScid'](arg1);
+}

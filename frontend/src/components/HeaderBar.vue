@@ -44,11 +44,14 @@ export interface DiscoveredDatabase {
   description: string
   sizeStr: string
   exists: boolean
+  writePolicy?: string
+  isLocked?: boolean
 }
 
 const props = defineProps<{
   dbName?: string
   activeDbPath?: string
+  activeWritePolicy?: string
   defaultDbName?: string
   defaultDbPath?: string
   isActiveDefaultDb?: boolean
@@ -69,7 +72,9 @@ const emit = defineEmits<{
   (e: 'openSystemBase', path: string): void
   (e: 'openDiscoveredBase', path: string): void
   (e: 'setDefaultDB', path: string): void
+  (e: 'cycleWritePolicy', path?: string): void
   (e: 'openDatabaseHub'): void
+  (e: 'openWorkstationManager', tab?: 'builder' | 'storage' | 'reset'): void
   (e: 'openPreferences', section?: string): void
   (e: 'openPortalPanel', platform?: 'lichess' | 'chesscom'): void
   (e: 'importPGN'): void
@@ -207,6 +212,18 @@ defineExpose({
                     >
                       {{ db.type }}
                     </span>
+                    <span
+                      v-if="db.writePolicy === 'locked' || db.isLocked"
+                      class="px-1 py-0.2 rounded text-[9px] font-mono bg-rose-950/60 text-rose-300 border border-rose-700/50"
+                    >
+                      🔒 Locked
+                    </span>
+                    <span
+                      v-else-if="db.writePolicy === 'sync_only'"
+                      class="px-1 py-0.2 rounded text-[9px] font-mono bg-cyan-950/60 text-cyan-300 border border-cyan-700/50"
+                    >
+                      🔄 Sync-Only
+                    </span>
                   </div>
                   <span v-if="db.description" class="text-[10px] text-zinc-400 truncate mt-0.5">{{ db.description }}</span>
                 </div>
@@ -236,6 +253,20 @@ defineExpose({
       <span class="text-xs font-mono font-bold text-zinc-200 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded-md">
         {{ dbName || 'No Base Loaded' }}
       </span>
+
+      <button
+        v-if="dbName && activeDbPath"
+        class="px-2 py-0.5 rounded-md text-[11px] font-semibold border flex items-center gap-1 transition-colors cursor-pointer"
+        :class="activeWritePolicy === 'locked'
+          ? 'bg-rose-950/60 border-rose-500/40 text-rose-300'
+          : activeWritePolicy === 'sync_only'
+            ? 'bg-cyan-950/60 border-cyan-500/40 text-cyan-300'
+            : 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'"
+        :title="`Database Write Policy: ${activeWritePolicy || 'editable'} — Click to cycle lock mode`"
+        @click="emit('cycleWritePolicy', activeDbPath)"
+      >
+        <span>{{ activeWritePolicy === 'locked' ? '🔒 Locked' : activeWritePolicy === 'sync_only' ? '🔄 Sync-Only' : '🔓 Editable' }}</span>
+      </button>
 
       <button
         v-if="dbName && activeDbPath"
