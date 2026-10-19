@@ -399,3 +399,226 @@ func TestDiscoverNotablePlayersInDatabase(t *testing.T) {
 	assert.True(t, foundCarlsen)
 	assert.True(t, foundCoach)
 }
+
+func TestExtractOnlineGameIDAndDeduplicator(t *testing.T) {
+	assert.Equal(t, "", ExtractOnlineGameID(nil))
+
+	gLichess := &chess.Game{
+		Tags: map[string]string{
+			"Site": "https://lichess.org/AbCd1234/white#25",
+		},
+	}
+	assert.Equal(t, "lichess:abcd1234", ExtractOnlineGameID(gLichess))
+
+	gLichess12 := &chess.Game{
+		Tags: map[string]string{
+			"Link": "https://lichess.org/game/export/ZyXw9876aaaa",
+		},
+	}
+	assert.Equal(t, "lichess:zyxw9876", ExtractOnlineGameID(gLichess12))
+
+	gLichessBroadcast := &chess.Game{
+		Tags: map[string]string{
+			"Site": "https://lichess.org/broadcast/tata-steel/round-1/BcDe5678",
+		},
+	}
+	assert.Equal(t, "lichess:bcde5678", ExtractOnlineGameID(gLichessBroadcast))
+
+	gChessCom := &chess.Game{
+		Tags: map[string]string{
+			"Site": "Chess.com",
+			"Link": "https://www.chess.com/game/live/1092837465?username=test",
+		},
+	}
+	assert.Equal(t, "chesscom:1092837465", ExtractOnlineGameID(gChessCom))
+
+	gExplicitID := &chess.Game{
+		Tags: map[string]string{
+			"GameId": "FIDE-2026-0091",
+		},
+	}
+	assert.Equal(t, "id:fide-2026-0091", ExtractOnlineGameID(gExplicitID))
+
+	gNonAlpha := &chess.Game{
+		Tags: map[string]string{
+			"Site": "https://lichess.org/ab$def12",
+			"Link": "https://chess.com/game/live/12$456",
+		},
+	}
+	assert.Equal(t, "", ExtractOnlineGameID(gNonAlpha))
+
+	var nilDedup *GameDeduplicator
+	dup, byID := nilDedup.CheckAndAdd(gExplicitID)
+	assert.False(t, dup)
+	assert.False(t, byID)
+	nilDedup.SeedFromDatabase(nil)
+
+	dedup := NewGameDeduplicator()
+	shortGame := &chess.Game{
+		Tags: map[string]string{
+			"White":  "Fischer, Bobby",
+			"Black":  "Tal, Mikhail",
+			"Date":   "1960.01.01",
+			"Result": "1-0",
+		},
+		RootMove: &chess.MoveNode{UCI: "e2e4"},
+	}
+	dup1, _ := dedup.CheckAndAdd(shortGame)
+	assert.False(t, dup1)
+	dup2, byID2 := dedup.CheckAndAdd(shortGame)
+	assert.True(t, dup2)
+	assert.False(t, byID2)
+
+	// Test canonicalPlayerKey
+	assert.Equal(t, canonicalPlayerKey("GM Fischer, Robert James"), canonicalPlayerKey("Robert James Fischer"))
+	assert.Equal(t, "?", canonicalPlayerKey("?"))
+}
+
+func TestConsolidateDatabases(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create Source DB 1 (.si4) with 3 games
+	src1Path := filepath.Join(tmpDir, "online_lichess")
+	src1 := NewDatabase()
+	require.NoError(t, src1.Create(src1Path, "Lichess Games"))
+	pgn1 := `
+[Event "Rated Blitz"]
+[Site "https://lichess.org/AbCdEf12"]
+[Date "2026.02.10"]
+[White "Carlsen, Magnus"]
+[Black "Nakamura, Hikaru"]
+[Result "1-0"]
+[WhiteElo "2880"]
+[BlackElo "2870"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 1-0
+
+[Event "World Championship"]
+[Site "Reykjavik"]
+[Date "1972.07.23"]
+[White "Fischer, Robert James"]
+[Black "Spassky, Boris V"]
+[Result "1-0"]
+[WhiteElo "2785"]
+[BlackElo "2660"]
+
+1. c4 e6 2. Nf3 d5 3. d4 Nf6 4. Nc3 Be7 5. Bg5 O-O 1-0
+`
+	_, err := src1.ImportPGNText(pgn1)
+	require.NoError(t, err)
+	require.NoError(t, src1.Close())
+
+	// Create Source 2 (.pgn) containing:
+	// - Game 1: Duplicate by Lichess ID (AbCdEf12) even with different White/Black handles
+	// - Game 2: Duplicate by identical 10-ply move sequence & canonical players ("Robert James Fischer" vs "Boris V Spassky")
+	// - Game 3: Unique new game on Chess.com
+	src2PGNPath := filepath.Join(tmpDir, "online_chesscom.pgn")
+	pgn2 := `
+[Event "Titled Arena"]
+[Site "https://lichess.org/AbCdEf12"]
+[Date "2026.02.10"]
+[White "DrNykterstein"]
+[Black "Hikaru"]
+[Result "1-0"]
+[WhiteElo "2880"]
+[BlackElo "2870"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 1-0
+
+[Event "WCh 1972"]
+[Site "Iceland"]
+[Date "1972.07.23"]
+[White "Robert James Fischer"]
+[Black "Boris V Spassky"]
+[Result "1-0"]
+[WhiteElo "2785"]
+[BlackElo "2660"]
+
+1. c4 e6 2. Nf3 d5 3. d4 Nf6 4. Nc3 Be7 5. Bg5 O-O 1-0
+
+[Event "Titled Tuesday"]
+[Site "Chess.com"]
+[Link "https://www.chess.com/game/live/9988776655"]
+[Date "2026.03.01"]
+[White "Caruana, Fabiano"]
+[Black "Firouzja, Alireza"]
+[Result "1/2-1/2"]
+[WhiteElo "2805"]
+[BlackElo "2790"]
+
+1. d4 Nf6 2. c4 g6 3. Nc3 Bg7 4. e4 d6 5. Nf3 O-O 1/2-1/2
+`
+	require.NoError(t, os.WriteFile(src2PGNPath, []byte(pgn2), 0o644))
+
+	var progressCalls int
+	res, err := ConsolidateDatabases(ConsolidateDatabaseOptions{
+		TargetName:      "Consolidated_Online_Master",
+		SourceBasePaths: []string{src1Path, src2PGNPath},
+		MinElo:          2500,
+	}, tmpDir, func(source string, scanned, saved, dupID, dupContent int) {
+		progressCalls++
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	assert.Equal(t, 2, res.SourcesScanned)
+	assert.Equal(t, 5, res.TotalGamesScanned)
+	assert.Equal(t, 3, res.UniqueGamesSaved)
+	assert.Equal(t, 2, res.DuplicatesRemoved)
+	assert.Equal(t, 1, res.DuplicatesByID)
+	assert.Equal(t, 1, res.DuplicatesByContent)
+	assert.GreaterOrEqual(t, progressCalls, 2)
+
+	// Re-running consolidation into the same target database should skip all 3 existing games!
+	res2, err := ConsolidateDatabases(ConsolidateDatabaseOptions{
+		TargetBasePath:  res.TargetBasePath,
+		SourceBasePaths: []string{"", src1Path, src2PGNPath, res.TargetBasePath},
+		MinElo:          2900, // Also test MinElo filtering on .si4 and .pgn
+	}, tmpDir, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 0, res2.UniqueGamesSaved)
+
+	// Test custom StartFEN & short header-only game in CanonicalGameIdentity
+	idKey, movesKey, hdrKey := CanonicalGameIdentity(nil)
+	assert.Empty(t, idKey)
+	assert.Empty(t, movesKey)
+	assert.Empty(t, hdrKey)
+
+	customFenGame := &chess.Game{
+		StartFEN: "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+		Tags: map[string]string{
+			"White":  "GM",
+			"Black":  "?",
+			"Date":   "2026.01.01",
+			"Result": "1-0",
+		},
+		RootMove: &chess.MoveNode{SAN: "Nf3"},
+	}
+	_, _, hdrKey2 := CanonicalGameIdentity(customFenGame)
+	assert.NotEmpty(t, hdrKey2)
+
+	// Mark game 1 deleted in target DB and re-run with default TargetName into a temp dir
+	reopenDB := NewDatabase()
+	require.NoError(t, reopenDB.Open(res.TargetBasePath))
+	require.NoError(t, reopenDB.DeleteGame(1, true))
+	require.NoError(t, reopenDB.Close())
+
+	res3, err := ConsolidateDatabases(ConsolidateDatabaseOptions{
+		TargetBasePath:  res.TargetBasePath,
+		SourceBasePaths: []string{src1Path},
+	}, tmpDir, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 1, res3.UniqueGamesSaved)
+
+	// Verify error when no source paths provided or missing source file
+	_, err = ConsolidateDatabases(ConsolidateDatabaseOptions{}, tmpDir, nil)
+	assert.Error(t, err)
+	_, err = ConsolidateDatabases(ConsolidateDatabaseOptions{
+		SourceBasePaths: []string{filepath.Join(tmpDir, "missing.pgn")},
+	}, "", nil)
+	assert.Error(t, err)
+	_, err = ConsolidateDatabases(ConsolidateDatabaseOptions{
+		SourceBasePaths: []string{filepath.Join(tmpDir, "missing_scid")},
+	}, tmpDir, nil)
+	assert.Error(t, err)
+}
+

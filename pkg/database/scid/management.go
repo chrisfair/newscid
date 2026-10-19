@@ -66,6 +66,7 @@ var referenceDatabaseKeywords = []string{
 	"million",
 	"master",
 	"reference",
+	"consolidated",
 }
 
 // InferDefaultWritePolicy determines the default write policy for a database based on its location, size, and metadata.
@@ -890,3 +891,409 @@ func DiscoverNotablePlayersInDatabase(
 
 	return results
 }
+
+// ============================================================================
+// Consolidated Database Builder & Dual-Layer Game Deduplicator (ID + Content)
+// ============================================================================
+
+// ConsolidateDatabaseOptions configures merging multiple online/local databases into a single deduplicated database.
+type ConsolidateDatabaseOptions struct {
+	TargetName        string   `json:"targetName"`
+	TargetDescription string   `json:"targetDescription"`
+	TargetBasePath    string   `json:"targetBasePath,omitempty"`
+	SourceBasePaths   []string `json:"sourceBasePaths"`
+	SetAsReference    bool     `json:"setAsReference"`
+	SetAsDefaultUser  bool     `json:"setAsDefaultUser"`
+	MinElo            int      `json:"minElo,omitempty"`
+}
+
+// ConsolidateDatabaseResult summarizes the results of consolidating multiple databases.
+type ConsolidateDatabaseResult struct {
+	TargetBasePath      string `json:"targetBasePath"`
+	TargetName          string `json:"targetName"`
+	SourcesScanned      int    `json:"sourcesScanned"`
+	TotalGamesScanned   int    `json:"totalGamesScanned"`
+	UniqueGamesSaved    int    `json:"uniqueGamesSaved"`
+	DuplicatesRemoved   int    `json:"duplicatesRemoved"`
+	DuplicatesByID      int    `json:"duplicatesById"`
+	DuplicatesByContent int    `json:"duplicatesByContent"`
+}
+
+// ExtractOnlineGameID extracts a canonical platform Game ID or unique game URL from PGN tags
+// ([GameId], [Link], [Site]) when present, e.g. "lichess:a1b2c3d4" or "chesscom:987654321".
+func ExtractOnlineGameID(g *chess.Game) string {
+	if g == nil || g.Tags == nil {
+		return ""
+	}
+	for _, tagKey := range []string{"GameId", "GameID", "gameId", "FideGameId"} {
+		if val := strings.TrimSpace(g.Tags[tagKey]); val != "" && val != "?" {
+			return "id:" + strings.ToLower(val)
+		}
+	}
+
+	for _, tagKey := range []string{"Link", "Site", "Event"} {
+		raw := strings.TrimSpace(g.Tags[tagKey])
+		if raw == "" || raw == "?" {
+			continue
+		}
+		lower := strings.ToLower(raw)
+		if idx := strings.Index(lower, "lichess.org/"); idx >= 0 {
+			rest := strings.Trim(lower[idx+len("lichess.org/"):], "/")
+			if idxHash := strings.IndexAny(rest, "?# "); idxHash >= 0 {
+				rest = rest[:idxHash]
+			}
+			parts := strings.Split(rest, "/")
+			for i := len(parts) - 1; i >= 0; i-- {
+				cand := strings.TrimSuffix(parts[i], ".pgn")
+				if cand == "" || cand == "white" || cand == "black" || cand == "export" || cand == "game" || cand == "embed" || cand == "broadcast" || cand == "tournament" || cand == "swiss" || cand == "study" {
+					continue
+				}
+				if len(cand) >= 8 && len(cand) <= 12 && isAlphanumericASCII(cand) {
+					if len(cand) == 12 {
+						cand = cand[:8]
+					}
+					return "lichess:" + cand
+				}
+				break
+			}
+		}
+		if idx := strings.Index(lower, "chess.com/"); idx >= 0 {
+			rest := strings.Trim(lower[idx+len("chess.com/"):], "/")
+			if idxHash := strings.IndexAny(rest, "?# "); idxHash >= 0 {
+				rest = rest[:idxHash]
+			}
+			parts := strings.Split(rest, "/")
+			// e.g. game/live/123456 or game/daily/123456 or live/game/123456
+			if len(parts) >= 2 {
+				last := parts[len(parts)-1]
+				if len(last) >= 5 && isAlphanumericASCII(last) && (parts[0] == "game" || parts[0] == "live" || parts[0] == "daily" || parts[0] == "events") {
+					return "chesscom:" + last
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func isAlphanumericASCII(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || c == '-' || c == '_') {
+			return false
+		}
+	}
+	return true
+}
+
+func canonicalPlayerKey(raw string) string {
+	s := strings.ToLower(strings.TrimSpace(raw))
+	if s == "" || s == "?" {
+		return "?"
+	}
+	// Strip commas and dots, split tokens, sort tokens so "Fischer, Robert James" == "Robert James Fischer"
+	cleaned := strings.NewReplacer(",", " ", ".", " ", "-", " ").Replace(s)
+	fields := strings.Fields(cleaned)
+	var filtered []string
+	for _, f := range fields {
+		if f == "gm" || f == "im" || f == "fm" || f == "cm" || f == "wgm" || f == "wim" || f == "nm" {
+			continue
+		}
+		filtered = append(filtered, f)
+	}
+	if len(filtered) == 0 {
+		return s
+	}
+	sort.Strings(filtered)
+	return strings.Join(filtered, "_")
+}
+
+// CanonicalGameIdentity computes three deduplication keys for a game:
+// 1. gameIDKey: non-empty if the game has an explicit online game ID / URL (Lichess, Chess.com, GameId tag).
+// 2. exactMovesKey: non-empty if the game has >= 8 plies (4 full moves), capturing StartFEN + full move sequence.
+// 3. canonicalHeaderMovesKey: captures normalized White + Black + Date/Year + Result + move sequence.
+func CanonicalGameIdentity(g *chess.Game) (gameIDKey string, exactMovesKey string, canonicalHeaderMovesKey string) {
+	if g == nil {
+		return "", "", ""
+	}
+	gameIDKey = ExtractOnlineGameID(g)
+
+	var movesBuilder strings.Builder
+	if g.StartFEN != "" && g.StartFEN != chess.StartingFEN {
+		movesBuilder.WriteString(g.StartFEN)
+		movesBuilder.WriteByte('|')
+	}
+	plyCount := 0
+	for curr := g.RootMove; curr != nil && plyCount < 200; curr = curr.Next {
+		if curr.UCI != "" {
+			movesBuilder.WriteString(strings.ToLower(curr.UCI))
+		} else {
+			movesBuilder.WriteString(strings.TrimRight(curr.SAN, "+#!?"))
+		}
+		movesBuilder.WriteByte(',')
+		plyCount++
+	}
+	movesStr := movesBuilder.String()
+
+	if plyCount >= 8 {
+		exactMovesKey = fmt.Sprintf("moves:%d:%s", plyCount, movesStr)
+	}
+
+	wKey := canonicalPlayerKey(g.Tag("White"))
+	bKey := canonicalPlayerKey(g.Tag("Black"))
+	dateStr := normalizeScidDate(g.Tag("Date"))
+	yearStr := ""
+	if len(dateStr) >= 4 {
+		yearStr = dateStr[:4]
+	}
+	resStr := string(gameResult(g))
+	if plyCount > 0 || (wKey != "?" && bKey != "?") {
+		canonicalHeaderMovesKey = fmt.Sprintf("hdr:%s|%s|%s|%s|%s", wKey, bKey, yearStr, resStr, movesStr)
+	}
+	return gameIDKey, exactMovesKey, canonicalHeaderMovesKey
+}
+
+// GameDeduplicator tracks seen games across multiple online and local databases by both
+// Online Game ID/URL and Canonical Move/Header Content.
+type GameDeduplicator struct {
+	seenIDs         map[string]struct{}
+	seenExactMoves  map[string]struct{}
+	seenHeaderMoves map[string]struct{}
+}
+
+// NewGameDeduplicator creates an initialized GameDeduplicator.
+func NewGameDeduplicator() *GameDeduplicator {
+	return &GameDeduplicator{
+		seenIDs:         make(map[string]struct{}),
+		seenExactMoves:  make(map[string]struct{}),
+		seenHeaderMoves: make(map[string]struct{}),
+	}
+}
+
+// CheckAndAdd checks whether g is already known (either by online game ID or by identical game content).
+// If g is new, it records g's identity keys and returns (false, false).
+func (d *GameDeduplicator) CheckAndAdd(g *chess.Game) (isDuplicate bool, byGameID bool) {
+	if d == nil || g == nil {
+		return false, false
+	}
+	idKey, movesKey, hdrKey := CanonicalGameIdentity(g)
+	if idKey != "" {
+		if _, exists := d.seenIDs[idKey]; exists {
+			return true, true
+		}
+	}
+	if movesKey != "" {
+		if _, exists := d.seenExactMoves[movesKey]; exists {
+			return true, false
+		}
+	}
+	if hdrKey != "" {
+		if _, exists := d.seenHeaderMoves[hdrKey]; exists {
+			return true, false
+		}
+	}
+
+	if idKey != "" {
+		d.seenIDs[idKey] = struct{}{}
+	}
+	if movesKey != "" {
+		d.seenExactMoves[movesKey] = struct{}{}
+	}
+	if hdrKey != "" {
+		d.seenHeaderMoves[hdrKey] = struct{}{}
+	}
+	return false, false
+}
+
+// SeedFromDatabase pre-populates the deduplicator with all non-deleted games already present in db.
+func (d *GameDeduplicator) SeedFromDatabase(db *Database) {
+	if d == nil || db == nil || !db.IsOpen {
+		return
+	}
+	total := db.NumGames()
+	for idx := 0; idx < total; idx++ {
+		db.RLock()
+		entry := db.Entries[idx]
+		deleted := entry == nil || (entry.Flags&FlagDelete) != 0
+		db.RUnlock()
+		if deleted {
+			continue
+		}
+		if g, err := db.GetGame(idx + 1); err == nil && g != nil {
+			d.CheckAndAdd(g)
+		}
+	}
+}
+
+// ConsolidateDatabases merges multiple source databases (.si4 and/or .pgn) into a single consolidated .si4 database,
+// removing all duplicate games whether they match by Online Game ID/URL or by identical move/header content.
+func ConsolidateDatabases(
+	opts ConsolidateDatabaseOptions,
+	outputDir string,
+	progressFn func(source string, scanned, saved, dupID, dupContent int),
+) (*ConsolidateDatabaseResult, error) {
+	if len(opts.SourceBasePaths) == 0 {
+		return nil, fmt.Errorf("at least one source database is required to consolidate")
+	}
+
+	targetName := strings.TrimSpace(opts.TargetName)
+	if targetName == "" {
+		targetName = "Consolidated_Reference"
+	}
+	targetBasePath := strings.TrimSpace(opts.TargetBasePath)
+	if targetBasePath == "" {
+		if strings.TrimSpace(outputDir) == "" {
+			outputDir = os.TempDir()
+		}
+		_ = os.MkdirAll(outputDir, 0o755)
+		targetBasePath = filepath.Join(outputDir, sanitizeFileName(targetName))
+	} else {
+		targetBasePath = strings.TrimSuffix(targetBasePath, ".si4")
+		_ = os.MkdirAll(filepath.Dir(targetBasePath), 0o755)
+	}
+
+	desc := strings.TrimSpace(opts.TargetDescription)
+	if desc == "" {
+		desc = "Consolidated Online & Master Reference Database (Deduplicated)"
+	}
+
+	targetDB := NewDatabase()
+	if _, err := os.Stat(targetBasePath + ".si4"); err == nil {
+		if err := targetDB.Open(targetBasePath); err != nil {
+			return nil, fmt.Errorf("opening target consolidated database: %w", err)
+		}
+	} else {
+		if err := targetDB.Create(targetBasePath, desc); err != nil {
+			return nil, fmt.Errorf("creating target consolidated database: %w", err)
+		}
+	}
+	defer func() {
+		_ = targetDB.Close()
+	}()
+
+	dedup := NewGameDeduplicator()
+	dedup.SeedFromDatabase(targetDB)
+
+	res := &ConsolidateDatabaseResult{
+		TargetBasePath: targetBasePath,
+		TargetName:     filepath.Base(targetBasePath),
+	}
+
+	batch := make([]*chess.Game, 0, 250)
+	flushBatch := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		stats, err := targetDB.ImportGames(batch)
+		if err != nil {
+			return err
+		}
+		res.UniqueGamesSaved += stats.Imported
+		batch = batch[:0]
+		return nil
+	}
+
+	processGame := func(g *chess.Game) error {
+		res.TotalGamesScanned++
+		if opts.MinElo > 0 {
+			wElo, _ := strconv.Atoi(strings.TrimSpace(g.Tag("WhiteElo")))
+			bElo, _ := strconv.Atoi(strings.TrimSpace(g.Tag("BlackElo")))
+			if wElo < opts.MinElo && bElo < opts.MinElo {
+				return nil
+			}
+		}
+		isDup, byID := dedup.CheckAndAdd(g)
+		if isDup {
+			res.DuplicatesRemoved++
+			if byID {
+				res.DuplicatesByID++
+			} else {
+				res.DuplicatesByContent++
+			}
+			return nil
+		}
+		batch = append(batch, g)
+		if len(batch) >= 250 {
+			return flushBatch()
+		}
+		return nil
+	}
+
+	cleanTarget := strings.TrimSuffix(targetBasePath, ".si4")
+	for _, rawSrc := range opts.SourceBasePaths {
+		src := strings.TrimSpace(rawSrc)
+		if src == "" {
+			continue
+		}
+		cleanSrc := strings.TrimSuffix(src, ".si4")
+		if cleanSrc == cleanTarget {
+			continue
+		}
+
+		res.SourcesScanned++
+		lowerSrc := strings.ToLower(src)
+		if strings.HasSuffix(lowerSrc, ".pgn") {
+			f, err := os.Open(src)
+			if err != nil {
+				return nil, fmt.Errorf("opening source PGN %q: %w", src, err)
+			}
+			games, parseErr := chess.ParsePGNDatabase(f)
+			_ = f.Close()
+			if parseErr != nil {
+				return nil, fmt.Errorf("parsing source PGN %q: %w", src, parseErr)
+			}
+			for _, g := range games {
+				if err := processGame(g); err != nil {
+					return nil, err
+				}
+			}
+			if err := flushBatch(); err != nil {
+				return nil, err
+			}
+			if progressFn != nil {
+				progressFn(src, res.TotalGamesScanned, res.UniqueGamesSaved, res.DuplicatesByID, res.DuplicatesByContent)
+			}
+			continue
+		}
+
+		srcDB := NewDatabase()
+		if err := srcDB.Open(cleanSrc); err != nil {
+			return nil, fmt.Errorf("opening source Scid database %q: %w", src, err)
+		}
+		for idx, entry := range srcDB.Entries {
+			if entry == nil || (entry.Flags&FlagDelete) != 0 {
+				continue
+			}
+			if opts.MinElo > 0 && int(entry.WhiteElo) < opts.MinElo && int(entry.BlackElo) < opts.MinElo {
+				res.TotalGamesScanned++
+				continue
+			}
+			g, err := srcDB.GetGame(idx + 1)
+			if err != nil || g == nil {
+				continue
+			}
+			if err := processGame(g); err != nil {
+				_ = srcDB.Close()
+				return nil, err
+			}
+			if progressFn != nil && res.TotalGamesScanned%250 == 0 {
+				progressFn(src, res.TotalGamesScanned, res.UniqueGamesSaved, res.DuplicatesByID, res.DuplicatesByContent)
+			}
+		}
+		_ = srcDB.Close()
+		if err := flushBatch(); err != nil {
+			return nil, err
+		}
+		if progressFn != nil {
+			progressFn(src, res.TotalGamesScanned, res.UniqueGamesSaved, res.DuplicatesByID, res.DuplicatesByContent)
+		}
+	}
+
+	if err := flushBatch(); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
