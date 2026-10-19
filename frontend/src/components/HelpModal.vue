@@ -333,6 +333,30 @@ const HELP_TOPICS: HelpTopic[] = [
     ]
   },
   {
+    id: 'cyclical-drill',
+    title: 'Cyclical Tactical Drill & Theme Radar',
+    icon: Award,
+    summary: 'Easy-to-Hard cyclical puzzle loops from your games + Lichess 9-axis theme radar.',
+    tags: ['cyclical', 'woodpecker', 'cycle', 'radar', 'themes', 'lichess', 'easy', 'hard', 'improvement', 'tactics'],
+    content: [
+      {
+        heading: 'High-Frequency Cyclical Pattern Repetition (Easy → Hard)',
+        subheading: 'Build automatic tactical reflexes from your own game history.',
+        paragraphs: [
+          'Open Play → Cyclical Tactical Drill & Theme Radar to build a fixed set of tactical puzzles extracted directly from your own database games, Unified Personas, and Blunder Vault.',
+          'This module implements cyclical spaced puzzle-set repetition—similar to the training method popularized by GM Axel Smith and IM Hans Tikkanen\'s book "The Woodpecker Method"—where you solve the exact same set of puzzles across up to 7 repeated cycles, aiming to halve your completion time in each cycle (Independent open-source implementation; not affiliated with or endorsed by Quality Chess or Chessable).'
+        ],
+        bullets: [
+          'Easy → Medium → Hard Progression: Every cycle set is automatically sorted by difficulty tier and estimated rating (1000–2500) so you warm up on 1-move patterns and hanging pieces before tackling deep multi-move combinations, sacrifices, and quiet moves.',
+          'Multi-Cycle Improvement History: Tracks Total Time, Halved Target Time, Speedup Factor vs. Cycle 1 (e.g., 2.3x faster), First-Try Accuracy %, Avg Seconds/Puzzle, and per-tier (Easy/Medium/Hard) accuracy across every completed cycle.',
+          'Lichess 30+ Theme Tagger & 9-Axis Radar Chart: Classifies every puzzle using Lichess\'s open-source tactical motif taxonomy (fork, pin, skewer, discoveredAttack, sacrifice, deflection, intermezzo, quietMove, defensiveMove, backRankMate, smotheredMate, endgame, etc.) and computes per-theme Performance Ratings (RatingAvg - 500 + 1000 × FirstWins / Attempts).',
+          'Targeted Theme Loops: Filter any new cycle set by specific Lichess themes or click "Select My Weakest Themes" to drill your lowest-rated tactical motifs.'
+        ],
+        tip: 'After completing Cycle 1, click "Next Faster Cycle (Halved Time)" to start Cycle 2 with a 50% faster target pace.'
+      }
+    ]
+  },
+  {
     id: 'cognitive-drills',
     title: 'Board Vision & Cognitive Drills',
     icon: Eye,

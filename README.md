@@ -33,6 +33,7 @@ It reads and writes industry-standard **SCID v4 binary databases** (`.si4` index
   - **Piece Safety & Undefended Piece Scanner**: Rapidly identify loose and hanging pieces in complex middlegames.
   - **Intuition Evaluation Storm**: Rapid positional judgment under countdown pressure.
   - **Prophylaxis ("What Is Threatening?") Drill**: Detect the opponent's hidden threat and find the calm prophylactic defense.
+- **Cyclical Tactical Drill & Lichess Theme Radar**: Builds fixed puzzle sets from your own game history, Personas, and Blunder Vault, sorted strictly from **Easy → Medium → Hard**, and tracks your **History of Improvement** across up to 7 repeated cycles (halving the target completion time each cycle—similar to the cyclical pattern training popularized by *The Woodpecker Method*). Includes a 30+ motif Lichess-compatible tactical classifier, a **9-Axis SVG Theme Radar Chart** (`PerformanceRating = RatingAvg - 500 + 1000 × FirstWins / Attempts`), and 1-click weak-theme cycle generation.
 - **Personal Blunder Vault (SM-2 Spaced Repetition)** & **Database Puzzle Miner**: Mine tactical turnarounds from your own games and drill them via SuperMemo-2 scheduling.
 - **Time-Trouble & Clock-Management Dossier**: Parses `[%clk]` telemetry to detect "Panic Mode" blunder spikes under 30 seconds and "Premature Instinct" errors.
 - **Tactics, Blindfold Ladders, Solitaire Chess (Guess the Move) & Practical Repertoire Shortener (80/20 Pareto Pruner)**.

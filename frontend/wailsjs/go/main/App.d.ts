@@ -6,10 +6,10 @@ import {training} from '../models';
 import {stats} from '../models';
 import {fairplay} from '../models';
 import {engine} from '../models';
+import {support} from '../models';
 import {eco} from '../models';
 import {scid} from '../models';
 import {main} from '../models';
-import {support} from '../models';
 import {json} from '../models';
 import {online} from '../models';
 import {explainer} from '../models';
@@ -53,6 +53,8 @@ export function AnnotateCurrentGame(arg1:number):Promise<engine.GameAnalysis>;
 
 export function AnnotatePGN(arg1:string,arg2:number):Promise<engine.GameAnalysis>;
 
+export function CheckCyclicalEntitlement():Promise<support.FeatureEntitlement>;
+
 export function CheckTWICIssue(arg1:number):Promise<boolean>;
 
 export function ClassifyMoves(arg1:Array<string>):Promise<eco.Entry>;
@@ -67,7 +69,11 @@ export function CompactDatabase():Promise<scid.CompactStats>;
 
 export function CountSearchMatches(arg1:scid.SearchCriteria):Promise<number>;
 
+export function CreateCyclicalDrillSet(arg1:string,arg2:string,arg3:Array<string>,arg4:number):Promise<training.CycleSet>;
+
 export function CreateDatabase(arg1:string,arg2:string):Promise<main.DatabaseInfo>;
+
+export function DeleteCyclicalDrillSet(arg1:string):Promise<void>;
 
 export function DeleteDuplicateGames(arg1:scid.DuplicateCriteria):Promise<number>;
 
@@ -151,6 +157,8 @@ export function GetBoardThemes():Promise<Array<sets.BoardThemeInfo>>;
 
 export function GetChess960Position(arg1:number):Promise<chess960.Position>;
 
+export function GetCyclicalDashboard():Promise<training.CyclicalDashboard>;
+
 export function GetDatabaseDemographics():Promise<stats.DatabaseDemographics>;
 
 export function GetDatabaseInfo():Promise<main.DatabaseInfo>;
@@ -186,6 +194,8 @@ export function GetIntuitionDrillBatch(arg1:number):Promise<Array<training.Intui
 export function GetLatestTWICIssue():Promise<number>;
 
 export function GetLegalMoves(arg1:string):Promise<Array<string>>;
+
+export function GetLichessThemesCatalog():Promise<Array<training.LichessThemeInfo>>;
 
 export function GetMegaDatabaseCatalog():Promise<Array<online.MegaDatabaseSource>>;
 
@@ -301,6 +311,8 @@ export function QueryPolyglotBook(arg1:string,arg2:string):Promise<Array<polyglo
 
 export function RecordBlunderReview(arg1:string,arg2:number):Promise<blundervault.Puzzle>;
 
+export function RecordCyclicalPuzzleAttempt(arg1:string,arg2:string,arg3:boolean,arg4:number):Promise<training.CycleSet>;
+
 export function RecordRepertoirePractice(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<void>;
 
 export function RecordUserSupport(arg1:string,arg2:string):Promise<support.SupportStatus>;
@@ -360,6 +372,8 @@ export function StartEngine(arg1:string):Promise<void>;
 export function StartEngineMatch(arg1:tournament.EngineMatchConfig):Promise<tournament.EngineMatchSummary>;
 
 export function StartGuessTheMove(arg1:number,arg2:string):Promise<training.SolitaireSession>;
+
+export function StartNextCyclicalCycle(arg1:string):Promise<training.CycleSet>;
 
 export function StopEngine():Promise<void>;
 

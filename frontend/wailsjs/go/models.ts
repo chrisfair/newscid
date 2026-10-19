@@ -3256,6 +3256,30 @@ export namespace stats {
 
 export namespace support {
 	
+	export class FeatureEntitlement {
+	    featureId: string;
+	    unlocked: boolean;
+	    enforceGate: boolean;
+	    supporterActive: boolean;
+	    bughouseOnlineSync: boolean;
+	    tierRequired: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FeatureEntitlement(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.featureId = source["featureId"];
+	        this.unlocked = source["unlocked"];
+	        this.enforceGate = source["enforceGate"];
+	        this.supporterActive = source["supporterActive"];
+	        this.bughouseOnlineSync = source["bughouseOnlineSync"];
+	        this.tierRequired = source["tierRequired"];
+	        this.message = source["message"];
+	    }
+	}
 	export class SupportStatus {
 	    supported: boolean;
 	    isLifetime: boolean;
@@ -3268,6 +3292,7 @@ export namespace support {
 	    dismissCount: number;
 	    lastDismissedAt?: number;
 	    stripeUrl: string;
+	    bughouseOnlineDonorToken?: string;
 	    tierLinks: Record<number, string>;
 	    minAmountUsd: number;
 	    shouldShowNag: boolean;
@@ -3289,6 +3314,7 @@ export namespace support {
 	        this.dismissCount = source["dismissCount"];
 	        this.lastDismissedAt = source["lastDismissedAt"];
 	        this.stripeUrl = source["stripeUrl"];
+	        this.bughouseOnlineDonorToken = source["bughouseOnlineDonorToken"];
 	        this.tierLinks = source["tierLinks"];
 	        this.minAmountUsd = source["minAmountUsd"];
 	        this.shouldShowNag = source["shouldShowNag"];
@@ -3700,6 +3726,64 @@ export namespace tournament {
 
 export namespace training {
 	
+	export class PuzzleAttemptResult {
+	    puzzleId: string;
+	    solvedFirstTry: boolean;
+	    timeTakenSec: number;
+	    attemptedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new PuzzleAttemptResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.puzzleId = source["puzzleId"];
+	        this.solvedFirstTry = source["solvedFirstTry"];
+	        this.timeTakenSec = source["timeTakenSec"];
+	        this.attemptedAt = source["attemptedAt"];
+	    }
+	}
+	export class ActiveCycleProgress {
+	    cycleNumber: number;
+	    currentIndex: number;
+	    elapsedSec: number;
+	    firstTryCorrect: number;
+	    totalAttempted: number;
+	    results: Record<string, PuzzleAttemptResult>;
+	
+	    static createFrom(source: any = {}) {
+	        return new ActiveCycleProgress(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.cycleNumber = source["cycleNumber"];
+	        this.currentIndex = source["currentIndex"];
+	        this.elapsedSec = source["elapsedSec"];
+	        this.firstTryCorrect = source["firstTryCorrect"];
+	        this.totalAttempted = source["totalAttempted"];
+	        this.results = this.convertValues(source["results"], PuzzleAttemptResult, true);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class PieceSafety {
 	    square: string;
 	    piece: string;
@@ -3778,6 +3862,225 @@ export namespace training {
 		    return a;
 		}
 	}
+	export class CycleRun {
+	    cycleNumber: number;
+	    completedAt: string;
+	    totalPuzzles: number;
+	    firstTryCorrect: number;
+	    totalSolved: number;
+	    accuracyPct: number;
+	    totalTimeSec: number;
+	    targetTimeSec: number;
+	    avgSecPerPuzzle: number;
+	    speedupVsCycle1: number;
+	    easyAccuracyPct: number;
+	    mediumAccuracyPct: number;
+	    hardAccuracyPct: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CycleRun(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.cycleNumber = source["cycleNumber"];
+	        this.completedAt = source["completedAt"];
+	        this.totalPuzzles = source["totalPuzzles"];
+	        this.firstTryCorrect = source["firstTryCorrect"];
+	        this.totalSolved = source["totalSolved"];
+	        this.accuracyPct = source["accuracyPct"];
+	        this.totalTimeSec = source["totalTimeSec"];
+	        this.targetTimeSec = source["targetTimeSec"];
+	        this.avgSecPerPuzzle = source["avgSecPerPuzzle"];
+	        this.speedupVsCycle1 = source["speedupVsCycle1"];
+	        this.easyAccuracyPct = source["easyAccuracyPct"];
+	        this.mediumAccuracyPct = source["mediumAccuracyPct"];
+	        this.hardAccuracyPct = source["hardAccuracyPct"];
+	    }
+	}
+	export class CyclicalPuzzle {
+	    id: string;
+	    sourceGameId?: number;
+	    white: string;
+	    black: string;
+	    event: string;
+	    date: string;
+	    ply: number;
+	    fen: string;
+	    turn: string;
+	    solutionUci: string[];
+	    solutionSan: string[];
+	    playedBlunderUci?: string;
+	    themes: string[];
+	    primaryTheme: string;
+	    difficultyTier: string;
+	    difficultyOrder: number;
+	    estimatedRating: number;
+	    evalDeltaCp: number;
+	    explanation: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CyclicalPuzzle(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.sourceGameId = source["sourceGameId"];
+	        this.white = source["white"];
+	        this.black = source["black"];
+	        this.event = source["event"];
+	        this.date = source["date"];
+	        this.ply = source["ply"];
+	        this.fen = source["fen"];
+	        this.turn = source["turn"];
+	        this.solutionUci = source["solutionUci"];
+	        this.solutionSan = source["solutionSan"];
+	        this.playedBlunderUci = source["playedBlunderUci"];
+	        this.themes = source["themes"];
+	        this.primaryTheme = source["primaryTheme"];
+	        this.difficultyTier = source["difficultyTier"];
+	        this.difficultyOrder = source["difficultyOrder"];
+	        this.estimatedRating = source["estimatedRating"];
+	        this.evalDeltaCp = source["evalDeltaCp"];
+	        this.explanation = source["explanation"];
+	    }
+	}
+	export class CycleSet {
+	    id: string;
+	    name: string;
+	    playerName: string;
+	    themeFilter: string[];
+	    createdAt: number;
+	    currentCycle: number;
+	    targetDays: number;
+	    puzzles: CyclicalPuzzle[];
+	    cycles: CycleRun[];
+	    activeProgress?: ActiveCycleProgress;
+	
+	    static createFrom(source: any = {}) {
+	        return new CycleSet(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.playerName = source["playerName"];
+	        this.themeFilter = source["themeFilter"];
+	        this.createdAt = source["createdAt"];
+	        this.currentCycle = source["currentCycle"];
+	        this.targetDays = source["targetDays"];
+	        this.puzzles = this.convertValues(source["puzzles"], CyclicalPuzzle);
+	        this.cycles = this.convertValues(source["cycles"], CycleRun);
+	        this.activeProgress = this.convertValues(source["activeProgress"], ActiveCycleProgress);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ThemePerformanceStat {
+	    themeKey: string;
+	    themeName: string;
+	    category: string;
+	    attempts: number;
+	    firstWins: number;
+	    fixed: number;
+	    failed: number;
+	    accuracyPct: number;
+	    avgTimeSec: number;
+	    ratingAvg: number;
+	    performanceRating: number;
+	    historyRatings: number[];
+	    totalTimeSec: number;
+	    totalRatingSum: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ThemePerformanceStat(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.themeKey = source["themeKey"];
+	        this.themeName = source["themeName"];
+	        this.category = source["category"];
+	        this.attempts = source["attempts"];
+	        this.firstWins = source["firstWins"];
+	        this.fixed = source["fixed"];
+	        this.failed = source["failed"];
+	        this.accuracyPct = source["accuracyPct"];
+	        this.avgTimeSec = source["avgTimeSec"];
+	        this.ratingAvg = source["ratingAvg"];
+	        this.performanceRating = source["performanceRating"];
+	        this.historyRatings = source["historyRatings"];
+	        this.totalTimeSec = source["totalTimeSec"];
+	        this.totalRatingSum = source["totalRatingSum"];
+	    }
+	}
+	export class CyclicalDashboard {
+	    sets: CycleSet[];
+	    themeStats: ThemePerformanceStat[];
+	    radarAxes: ThemePerformanceStat[];
+	    strongThemes: ThemePerformanceStat[];
+	    weakThemes: ThemePerformanceStat[];
+	    globalPerformanceRating: number;
+	    totalPuzzlesAttempted: number;
+	    totalCyclesCompleted: number;
+	    improvementSummary: string;
+	    methodAttribution: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CyclicalDashboard(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sets = this.convertValues(source["sets"], CycleSet);
+	        this.themeStats = this.convertValues(source["themeStats"], ThemePerformanceStat);
+	        this.radarAxes = this.convertValues(source["radarAxes"], ThemePerformanceStat);
+	        this.strongThemes = this.convertValues(source["strongThemes"], ThemePerformanceStat);
+	        this.weakThemes = this.convertValues(source["weakThemes"], ThemePerformanceStat);
+	        this.globalPerformanceRating = source["globalPerformanceRating"];
+	        this.totalPuzzlesAttempted = source["totalPuzzlesAttempted"];
+	        this.totalCyclesCompleted = source["totalCyclesCompleted"];
+	        this.improvementSummary = source["improvementSummary"];
+	        this.methodAttribution = source["methodAttribution"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class PerformanceSummary {
 	    score: number;
 	    maxScore: number;
@@ -3912,6 +4215,28 @@ export namespace training {
 	        this.keyFeature = source["keyFeature"];
 	    }
 	}
+	export class LichessThemeInfo {
+	    id: number;
+	    key: string;
+	    name: string;
+	    category: string;
+	    description: string;
+	    actionable: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new LichessThemeInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.key = source["key"];
+	        this.name = source["name"];
+	        this.category = source["category"];
+	        this.description = source["description"];
+	        this.actionable = source["actionable"];
+	    }
+	}
 	export class MoveRecord {
 	    ply: number;
 	    turn: string;
@@ -4000,6 +4325,7 @@ export namespace training {
 	        this.opponentThreat = source["opponentThreat"];
 	    }
 	}
+	
 	export class SafetyDrill {
 	    id: string;
 	    title: string;

@@ -47,6 +47,7 @@ import ProphylaxisModal from './components/ProphylaxisModal.vue'
 import SupportModal from './components/SupportModal.vue'
 import MegaDatabaseModal from './components/MegaDatabaseModal.vue'
 import FairPlayModal from './components/FairPlayModal.vue'
+import CyclicalDrillModal from './components/CyclicalDrillModal.vue'
 import FloatingPanel from './components/FloatingPanel.vue'
 import LivePortalPanel from './components/LivePortalPanel.vue'
 import DatabaseHubPanel, { type DatabaseRolesStatusView } from './components/DatabaseHubPanel.vue'
@@ -361,6 +362,7 @@ const showProphylaxisModal = ref(false)
 const showSupportModal = ref(false)
 const showMegaDatabaseModal = ref(false)
 const showFairPlayModal = ref(false)
+const showCyclicalDrillModal = ref(false)
 const showPreferencesModal = ref(false)
 const preferencesSection = ref('databases')
 const antiPersonaTargetId = ref<string>('')
@@ -1729,6 +1731,7 @@ function handleKeydown(e: KeyboardEvent) {
     showSupportModal.value ||
     showMegaDatabaseModal.value ||
     showFairPlayModal.value ||
+    showCyclicalDrillModal.value ||
     showPreferencesModal.value ||
     showImportModal.value
   ) {
@@ -2662,6 +2665,7 @@ function handleTrainAntiRepertoire() {
 }
 
 function resolveActiveContextualHelpTopic(): string {
+  if (showCyclicalDrillModal.value) return 'cyclical-drill'
   if (showFairPlayModal.value) return 'fairplay'
   if (showPersonaModal.value) return 'personas'
   if (showOnlineSyncModal.value) return 'online-sync'
@@ -3150,6 +3154,14 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
     action: () => applyLayoutPreset('floaters')
   },
   {
+    id: 'cyclical-tactical-drill',
+    title: 'Cyclical Tactical Drill & Lichess Theme Radar',
+    subtitle: 'Solve personal game puzzles ordered Easy → Hard across faster cycles & inspect Lichess theme proficiency',
+    icon: 'zap',
+    category: 'Training',
+    action: () => { showCyclicalDrillModal.value = true }
+  },
+  {
     id: 'reset-docked-panels',
     title: 'Reset All Panels to Docked Layout',
     subtitle: 'Restore standard docked workspace layout',
@@ -3505,6 +3517,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         @prophylaxis="showProphylaxisModal = true"
         @show-support="showSupportModal = true"
         @fair-play-inspector="showFairPlayModal = true"
+        @cyclical-drill="showCyclicalDrillModal = true"
       />
 
       <!-- Top Header Bar (Auto-hidden in Compact / Small-Screen Mode to maximize board height) -->
@@ -4847,6 +4860,17 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       :board-theme="currentTheme"
       @close="showProphylaxisModal = false"
       @load-position="(fen) => handleSetupBoardApply(fen)"
+    />
+
+    <!-- Cyclical Tactical Drill & Lichess Theme Radar Modal -->
+    <CyclicalDrillModal
+      v-if="showCyclicalDrillModal"
+      :board-theme="currentTheme"
+      :piece-set="currentPieceSet"
+      :current-piece-set="currentPieceSet"
+      :active-db-name="dbInfo?.name"
+      :initial-player="gameTags.White && gameTags.White !== '?' ? gameTags.White : ''"
+      @close="showCyclicalDrillModal = false"
     />
   </div>
 </template>
