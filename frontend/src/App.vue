@@ -48,6 +48,7 @@ import SupportModal from './components/SupportModal.vue'
 import MegaDatabaseModal from './components/MegaDatabaseModal.vue'
 import FairPlayModal from './components/FairPlayModal.vue'
 import CyclicalDrillModal from './components/CyclicalDrillModal.vue'
+import WorkstationManagerModal from './components/WorkstationManagerModal.vue'
 import FloatingPanel from './components/FloatingPanel.vue'
 import LivePortalPanel from './components/LivePortalPanel.vue'
 import DatabaseHubPanel, { type DatabaseRolesStatusView } from './components/DatabaseHubPanel.vue'
@@ -143,6 +144,8 @@ import {
   LaunchPortalWindow,
   PublishWorkspaceState,
   GetSharedWorkspaceState,
+  GetDatabaseWritePolicy,
+  SetDatabaseWritePolicy,
 } from '../wailsjs/go/main/App'
 import { EventsOn, EventsOff, ClipboardSetText, ClipboardGetText, BrowserOpenURL } from '../wailsjs/runtime/runtime'
 
@@ -363,11 +366,31 @@ const showSupportModal = ref(false)
 const showMegaDatabaseModal = ref(false)
 const showFairPlayModal = ref(false)
 const showCyclicalDrillModal = ref(false)
+const showWorkstationManagerModal = ref(false)
+const workstationInitialTab = ref<'builder' | 'storage' | 'reset'>('builder')
+const workstationInitialFilter = ref<any>(undefined)
 const showPreferencesModal = ref(false)
 const preferencesSection = ref('databases')
 const antiPersonaTargetId = ref<string>('')
 const antiPersonaTargetName = ref<string>('')
 const showOpeningTreeModal = ref(false)
+
+const activeDbWritePolicy = computed(() => {
+  const fromInfo = (dbInfo.value as any)?.writePolicy
+  if (fromInfo) return fromInfo
+  if (dbInfo.value?.basePath) {
+    const found = discoveredDatabases.value.find(d => d.basePath === dbInfo.value?.basePath)
+    if (found?.writePolicy) return found.writePolicy
+  }
+  return 'editable'
+})
+
+const currentOpeningMovesList = computed(() => {
+  return flatMoves.value
+    .filter(m => !m.variationLevel || m.variationLevel === 0)
+    .slice(0, 16)
+    .map(m => m.san || m.uci)
+})
 
 const appPreferences = ref<AppPreferencesModel>({
   defaultDatabasePath: '',
@@ -676,6 +699,50 @@ async function handleLaunchPortalWindow(platform: 'lichess' | 'chesscom', custom
       window.open(url, '_blank')
     }
   }
+}
+
+function openWorkstationManagerModal(tab: 'builder' | 'storage' | 'reset' = 'builder', filter?: any) {
+  workstationInitialTab.value = tab
+  workstationInitialFilter.value = filter
+  showWorkstationManagerModal.value = true
+}
+
+async function handleRefreshDiscoveredDatabases() {
+  try {
+    discoveredDatabases.value = (await GetDiscoveredDatabases()) as DiscoveredDatabase[]
+    discoveredEngines.value = (await GetDiscoveredEngines()) as EngineOption[]
+    availableEngines.value = await GetAvailableEngines()
+    const info = await GetDatabaseInfo()
+    if (info && info.basePath) {
+      dbInfo.value = info
+    }
+    await refreshDatabaseRolesStatus()
+  } catch (err) {
+    console.error('Failed to refresh discovered databases:', err)
+  }
+}
+
+async function handleCycleDatabaseWritePolicy(basePath?: string, currentPolicy?: string) {
+  const targetPath = basePath || dbInfo.value?.basePath || ''
+  if (!targetPath) return
+  try {
+    const cur = currentPolicy || (await GetDatabaseWritePolicy(targetPath)) || 'editable'
+    const nextPolicy = cur === 'editable' ? 'sync_only' : cur === 'sync_only' ? 'locked' : 'editable'
+    await SetDatabaseWritePolicy(targetPath, nextPolicy)
+    await handleRefreshDiscoveredDatabases()
+  } catch (err: any) {
+    alert(`Failed to update database write policy: ${err?.message || err}`)
+  }
+}
+
+async function handleFactoryResetCompleted() {
+  dbInfo.value = null
+  gamesList.value = []
+  totalGames.value = 0
+  currentPage.value = 1
+  searchFilter.value = {}
+  handleNewGame()
+  await handleRefreshDiscoveredDatabases()
 }
 
 function openAntiPersonaModal(target?: persona.Persona | { id: string; displayName?: string } | string) {
@@ -1732,6 +1799,7 @@ function handleKeydown(e: KeyboardEvent) {
     showMegaDatabaseModal.value ||
     showFairPlayModal.value ||
     showCyclicalDrillModal.value ||
+    showWorkstationManagerModal.value ||
     showPreferencesModal.value ||
     showImportModal.value
   ) {
@@ -3162,6 +3230,38 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
     action: () => { showCyclicalDrillModal.value = true }
   },
   {
+    id: 'sub-database-builder',
+    title: 'Build Focused Sub-Database (from Multiple DBs)',
+    subtitle: 'Extract games matching specific opening lines or players across multiple databases into a focused .si4 DB',
+    icon: 'folder-open',
+    category: 'Actions',
+    action: () => openWorkstationManagerModal('builder')
+  },
+  {
+    id: 'workstation-storage-locations',
+    title: 'Managed Storage Locations & Copy Assets',
+    subtitle: 'View where NewScid stores databases, engines, opening books & endgame tablebases, and copy files in',
+    icon: 'folder-open',
+    category: 'Tools',
+    action: () => openWorkstationManagerModal('storage')
+  },
+  {
+    id: 'factory-reset-workstation',
+    title: 'Factory Reset All Databases & Settings',
+    subtitle: 'Reset NewScid databases, personas, and saved settings to empty factory state (with opt-in backup)',
+    icon: 'wrench',
+    category: 'Tools',
+    action: () => openWorkstationManagerModal('reset')
+  },
+  {
+    id: 'cycle-db-write-policy',
+    title: 'Cycle Active Database Lock / Write Policy',
+    subtitle: 'Toggle between Editable (Personal), Sync-Only (Reference), and Strictly Locked (Read-Only)',
+    icon: 'shield',
+    category: 'Actions',
+    action: () => handleCycleDatabaseWritePolicy()
+  },
+  {
     id: 'reset-docked-panels',
     title: 'Reset All Panels to Docked Layout',
     subtitle: 'Restore standard docked workspace layout',
@@ -3370,6 +3470,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           :active-game-id="activeGameId"
           :db-name="dbInfo?.name"
           :active-criteria="searchFilter"
+          :current-fen="currentFEN"
+          :write-policy="activeDbWritePolicy"
           @load-game="handleLoadGame"
           @page-change="handlePageChange"
           @search="handleSearch"
@@ -3377,6 +3479,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           @new-game="handleNewGame"
           @save-game="handleSaveCurrentGame"
           @delete-game="handleDeleteGame"
+          @cycle-write-policy="handleCycleDatabaseWritePolicy(dbInfo?.basePath, activeDbWritePolicy)"
+          @open-sub-db-builder="(f) => openWorkstationManagerModal('builder', f)"
         />
 
         <LivePortalPanel
@@ -3408,6 +3512,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           @open-online-sync="showOnlineSyncModal = true"
           @open-maintenance="showMaintenanceModal = true"
           @update-from-local="handleUpdateDatabaseFromLocal"
+          @cycle-write-policy="handleCycleDatabaseWritePolicy"
+          @open-workstation-manager="openWorkstationManagerModal"
         />
       </div>
     </div>
@@ -3518,6 +3624,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         @show-support="showSupportModal = true"
         @fair-play-inspector="showFairPlayModal = true"
         @cyclical-drill="showCyclicalDrillModal = true"
+        @open-workstation-manager="openWorkstationManagerModal"
       />
 
       <!-- Top Header Bar (Auto-hidden in Compact / Small-Screen Mode to maximize board height) -->
@@ -3525,6 +3632,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         v-if="!zenMode && !effectiveCompact"
         ref="headerBarRef"
         :db-name="dbInfo?.name"
+        :active-db-path="dbInfo?.basePath"
+        :active-write-policy="activeDbWritePolicy"
         :default-db-name="dbRolesStatus?.defaultDbName"
         :is-active-default-db="dbRolesStatus?.isActiveDefault"
         :reference-db-name="dbRolesStatus?.referenceDbName"
@@ -3547,8 +3656,11 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         @change-u-i-theme="applyUITheme"
         @toggle-dark-light="toggleDarkLight"
         @toggle-flip="flipped = !flipped"
+        @set-default-d-b="handleSetDefaultDatabase"
         @set-current-as-default-d-b="handleSetCurrentAsDefaultDB"
+        @cycle-write-policy="handleCycleDatabaseWritePolicy"
         @open-database-hub="openDatabaseHubView"
+        @open-workstation-manager="openWorkstationManagerModal"
         @open-portal-panel="openPortalView"
         @launch-portal-window="handleLaunchPortalWindow"
         @open-preferences="openPreferencesModal"
@@ -4088,6 +4200,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
                 :active-game-id="activeGameId"
                 :db-name="dbInfo?.name"
                 :active-criteria="searchFilter"
+                :current-fen="currentFEN"
+                :write-policy="activeDbWritePolicy"
                 @load-game="handleLoadGame"
                 @page-change="handlePageChange"
                 @search="handleSearch"
@@ -4095,6 +4209,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
                 @new-game="handleNewGame"
                 @save-game="handleSaveCurrentGame"
                 @delete-game="handleDeleteGame"
+                @cycle-write-policy="handleCycleDatabaseWritePolicy(dbInfo?.basePath, activeDbWritePolicy)"
+                @open-sub-db-builder="(f) => openWorkstationManagerModal('builder', f)"
               />
             </div>
 
@@ -4136,6 +4252,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
                 @open-online-sync="showOnlineSyncModal = true"
                 @open-maintenance="showMaintenanceModal = true"
                 @update-from-local="handleUpdateDatabaseFromLocal"
+                @cycle-write-policy="handleCycleDatabaseWritePolicy"
+                @open-workstation-manager="openWorkstationManagerModal"
               />
             </div>
 
@@ -4244,6 +4362,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           :active-game-id="activeGameId"
           :db-name="dbInfo?.name"
           :active-criteria="searchFilter"
+          :current-fen="currentFEN"
+          :write-policy="activeDbWritePolicy"
           @load-game="handleLoadGame"
           @page-change="handlePageChange"
           @search="handleSearch"
@@ -4251,6 +4371,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           @new-game="handleNewGame"
           @save-game="handleSaveCurrentGame"
           @delete-game="handleDeleteGame"
+          @cycle-write-policy="handleCycleDatabaseWritePolicy(dbInfo?.basePath, activeDbWritePolicy)"
+          @open-sub-db-builder="(f) => openWorkstationManagerModal('builder', f)"
         />
       </div>
 
@@ -4358,6 +4480,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
             @open-online-sync="showOnlineSyncModal = true"
             @open-maintenance="showMaintenanceModal = true"
             @update-from-local="handleUpdateDatabaseFromLocal"
+            @cycle-write-policy="handleCycleDatabaseWritePolicy"
+            @open-workstation-manager="openWorkstationManagerModal"
           />
         </div>
 
@@ -4405,6 +4529,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
             :active-game-id="activeGameId"
             :db-name="dbInfo?.name"
             :active-criteria="searchFilter"
+            :current-fen="currentFEN"
+            :write-policy="activeDbWritePolicy"
             @load-game="handleLoadGame"
             @page-change="handlePageChange"
             @search="handleSearch"
@@ -4412,6 +4538,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
             @new-game="handleNewGame"
             @save-game="handleSaveCurrentGame"
             @delete-game="handleDeleteGame"
+            @cycle-write-policy="handleCycleDatabaseWritePolicy(dbInfo?.basePath, activeDbWritePolicy)"
+            @open-sub-db-builder="(f) => openWorkstationManagerModal('builder', f)"
           />
         </div>
 
@@ -4580,6 +4708,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       :db-name="dbInfo?.name"
       :total-games="totalGames"
       :initial-criteria="searchFilter"
+      :current-fen="currentFEN"
       @apply-search="handleSearch"
       @close="showSearchModal = false"
     />
@@ -4871,6 +5000,21 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       :active-db-name="dbInfo?.name"
       :initial-player="gameTags.White && gameTags.White !== '?' ? gameTags.White : ''"
       @close="showCyclicalDrillModal = false"
+    />
+
+    <!-- Workstation Manager, Multi-Database Sub-Database Builder, Managed Storage & Factory Reset Modal -->
+    <WorkstationManagerModal
+      v-if="showWorkstationManagerModal"
+      :initial-tab="workstationInitialTab"
+      :active-db-path="dbInfo?.basePath"
+      :active-db-name="dbInfo?.name"
+      :discovered-databases="discoveredDatabases"
+      :initial-filter="workstationInitialFilter"
+      :current-opening-moves="currentOpeningMovesList"
+      @close="showWorkstationManagerModal = false"
+      @open-database="(p) => { showWorkstationManagerModal = false; handleOpenDiscoveredBase(p) }"
+      @refresh-databases="handleRefreshDiscoveredDatabases"
+      @factory-reset-completed="handleFactoryResetCompleted"
     />
   </div>
 </template>

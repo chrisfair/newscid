@@ -107,8 +107,11 @@ Emit output as formatted JSON.
 .IP \(bu 2
 \fBPersistent User Configuration\fR: Any change to panel docking/floating geometry, default startup database, reference database, board theme, piece set, UI theme, or notation style is immediately persisted to \fI~/.config/newscid/preferences.json\fR.
 .SH MAJOR WORKSTATION MODULES
-.SS 1. Native SCID Binary Database Engine & Incremental Mega Updates
-Reads and writes 47-byte index records (\fB.si4\fR), Huffman-compressed move streams (\fB.sg4\fR), and front-coded namebase tries (\fB.sn4\fR). Supports one-click downloading and incremental updating of multi-million-game master archives (LumbrasGigaBase, TWIC) and local database merging without duplicating existing games.
+.SS 1. Native SCID Binary Database Engine, Intuitive Search, Write Locking & Sub-DB Builder
+Reads and writes 47-byte index records (\fB.si4\fR), Huffman-compressed move streams (\fB.sg4\fR), and front-coded namebase tries (\fB.sn4\fR).
+Provides 1-click board position search (\fBMatch Board\fR), opening move-sequence and ECO range filtering, and a customizable \fBFamous Players\fR selector (Bobby Fischer, Magnus Carlsen, Garry Kasparov, Mikhail Tal, etc.) with automatic FIDE alias resolution.
+Every database enforces a configurable write policy (\fBEditable\fR for personal/persona databases, \fBSync-Only\fR for imported reference databases, or \fBLocked\fR read-only) to prevent accidental contamination.
+Supports extracting focused sub-databases across multiple source \fB.si4\fR/\fB.pgn\fR databases and performing a complete \fBFactory Reset\fR (with opt-in \fB.tar.gz\fR backup) to start from a clean slate.
 .SS 2. Player Personas & Incremental Online Synchronization
 Unifies disparate database identifiers (FIDE OTB name, Chess.com username, Lichess handle) under a single consolidated Persona profile with its own dedicated \fB.si4\fR database. Syncing any player or persona fetches the newest games since the last sync first, then backfills older historical games while skipping all games already present in the database.
 .SS 3. Longitudinal Fair-Play & Time-Control Consistency Inspector
@@ -156,7 +159,7 @@ Open database / New game / Save current game.
 Open Database Maintenance, Compaction & Sorting dialog.
 .TP
 .B Ctrl+H
-Open Header, Material & Pawn-Structure Search dialog.
+Open Header, Position, Opening, Material & Pawn-Structure Search dialog.
 .TP
 .B Ctrl+B
 Open Setup Board / FEN Editor.
@@ -172,13 +175,25 @@ Display Keyboard Shortcuts reference.
 .SH FILES
 .TP
 .I ~/.config/newscid/preferences.json
-Persistent workstation panel layout, floating geometry, default database, and visual theme configuration.
+Persistent workstation panel layout, floating geometry, default database, database write policies, custom famous players, and visual theme configuration.
 .TP
 .I ~/.config/newscid/personas.json
 Saved multi-alias Player Personas and sync metadata.
 .TP
-.I ~/.local/share/newscid/
-Default directory for user databases (\fB.si4\fR), blunder vault, and training repertoires.
+.I ~/.local/share/newscid/databases/
+Managed directory for user and focused SCID databases (\fB.si4\fR, \fB.sg4\fR, \fB.sn4\fR).
+.TP
+.I ~/.local/share/newscid/engines/
+Managed directory for copied UCI chess engine binaries.
+.TP
+.I ~/.local/share/newscid/books/opening/
+Managed directory for copied Polyglot (\fB.bin\fR) opening books.
+.TP
+.I ~/.local/share/newscid/books/endgame/
+Managed directory for copied Syzygy (\fB.rtbw\fR/\fB.rtbz\fR) endgame tablebases.
+.TP
+.I ~/.local/share/newscid/backups/
+Opt-in compressed (\fB.tar.gz\fR) archives created prior to Factory Reset.
 .SH SEE ALSO
 .BR stockfish (6),
 .BR scid (1)
