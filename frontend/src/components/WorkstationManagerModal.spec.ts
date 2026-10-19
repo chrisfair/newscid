@@ -12,6 +12,7 @@ vi.mock('../../wailsjs/go/main/App', () => ({
   FactoryResetNewScid: vi.fn(),
   GetNotablePlayersDropdown: vi.fn(),
   SetDatabaseWritePolicy: vi.fn(),
+  CancelActiveOperation: vi.fn(),
 }))
 
 vi.mock('../../wailsjs/runtime/runtime', () => ({

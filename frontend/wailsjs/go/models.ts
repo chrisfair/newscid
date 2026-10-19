@@ -1356,6 +1356,8 @@ export namespace online {
 	    gamesEstimate: string;
 	    description: string;
 	    supportsLimit: boolean;
+	    year: number;
+	    isLatest: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new MegaDatabaseSource(source);
@@ -1373,6 +1375,8 @@ export namespace online {
 	        this.gamesEstimate = source["gamesEstimate"];
 	        this.description = source["description"];
 	        this.supportsLimit = source["supportsLimit"];
+	        this.year = source["year"];
+	        this.isLatest = source["isLatest"];
 	    }
 	}
 	export class MegaImportOptions {
@@ -1404,6 +1408,7 @@ export namespace online {
 	    bytesDownloaded: number;
 	    databasePath?: string;
 	    durationMs: number;
+	    cancelled?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new MegaImportResult(source);
@@ -1419,6 +1424,7 @@ export namespace online {
 	        this.bytesDownloaded = source["bytesDownloaded"];
 	        this.databasePath = source["databasePath"];
 	        this.durationMs = source["durationMs"];
+	        this.cancelled = source["cancelled"];
 	    }
 	}
 	export class Profile {
@@ -2228,6 +2234,60 @@ export namespace scid {
 	        this.compactedSg4Size = source["compactedSg4Size"];
 	    }
 	}
+	export class ConsolidateDatabaseOptions {
+	    targetName: string;
+	    targetDescription: string;
+	    targetBasePath?: string;
+	    sourceBasePaths: string[];
+	    setAsReference: boolean;
+	    setAsDefaultUser: boolean;
+	    minElo?: number;
+	    onlyMostRecentArchives: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConsolidateDatabaseOptions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.targetName = source["targetName"];
+	        this.targetDescription = source["targetDescription"];
+	        this.targetBasePath = source["targetBasePath"];
+	        this.sourceBasePaths = source["sourceBasePaths"];
+	        this.setAsReference = source["setAsReference"];
+	        this.setAsDefaultUser = source["setAsDefaultUser"];
+	        this.minElo = source["minElo"];
+	        this.onlyMostRecentArchives = source["onlyMostRecentArchives"];
+	    }
+	}
+	export class ConsolidateDatabaseResult {
+	    targetBasePath: string;
+	    targetName: string;
+	    sourcesScanned: number;
+	    totalGamesScanned: number;
+	    uniqueGamesSaved: number;
+	    duplicatesRemoved: number;
+	    duplicatesById: number;
+	    duplicatesByContent: number;
+	    cancelled?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConsolidateDatabaseResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.targetBasePath = source["targetBasePath"];
+	        this.targetName = source["targetName"];
+	        this.sourcesScanned = source["sourcesScanned"];
+	        this.totalGamesScanned = source["totalGamesScanned"];
+	        this.uniqueGamesSaved = source["uniqueGamesSaved"];
+	        this.duplicatesRemoved = source["duplicatesRemoved"];
+	        this.duplicatesById = source["duplicatesById"];
+	        this.duplicatesByContent = source["duplicatesByContent"];
+	        this.cancelled = source["cancelled"];
+	    }
+	}
 	export class NameCountPair {
 	    name: string;
 	    count: number;
@@ -2774,6 +2834,7 @@ export namespace scid {
 	    totalGamesScanned: number;
 	    gamesMatched: number;
 	    duplicatesSkipped: number;
+	    cancelled?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new SubDatabaseResult(source);
@@ -2787,6 +2848,7 @@ export namespace scid {
 	        this.totalGamesScanned = source["totalGamesScanned"];
 	        this.gamesMatched = source["gamesMatched"];
 	        this.duplicatesSkipped = source["duplicatesSkipped"];
+	        this.cancelled = source["cancelled"];
 	    }
 	}
 	export class VerificationReport {

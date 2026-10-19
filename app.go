@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -109,6 +110,9 @@ type App struct {
 	twicClient       *online.TWICClient
 	matchCancel      context.CancelFunc
 	matchRunning     bool
+	opMu             sync.Mutex
+	activeOpCancel   context.CancelFunc
+	activeOpName     string
 	engineMultiPV    int
 	engineThreads    int
 	engineHashMB     int
@@ -1483,7 +1487,10 @@ func (a *App) DownloadTWICIssue(issue int) (*online.TWICIssueResult, error) {
 		return nil, err
 	}
 
-	return a.twicClient.ImportIssue(context.Background(), issue, a.db)
+	opCtx, finishOp := a.startCancellableOperation("twic-download")
+	defer finishOp()
+
+	return a.twicClient.ImportIssue(opCtx, issue, a.db)
 }
 
 // DownloadTWICRange downloads and imports a range of TWIC issues [startIssue..endIssue] into the active database.
@@ -1498,6 +1505,9 @@ func (a *App) DownloadTWICRange(startIssue, endIssue int) (*online.TWICBatchResu
 		return nil, err
 	}
 
+	opCtx, finishOp := a.startCancellableOperation("twic-download")
+	defer finishOp()
+
 	progressFn := func(currentIssue, processedIssues, totalIssues, gamesImported int) {
 		a.emitEvent("twic:progress", map[string]interface{}{
 			"currentIssue":    currentIssue,
@@ -1507,7 +1517,7 @@ func (a *App) DownloadTWICRange(startIssue, endIssue int) (*online.TWICBatchResu
 		})
 	}
 
-	return a.twicClient.ImportRange(context.Background(), startIssue, endIssue, a.db, progressFn)
+	return a.twicClient.ImportRange(opCtx, startIssue, endIssue, a.db, progressFn)
 }
 
 // CheckTWICIssue checks if a particular TWIC issue exists on the server.
@@ -3213,6 +3223,12 @@ func (a *App) GetMegaDatabaseCatalog() []online.MegaDatabaseSource {
 	return client.GetCatalog()
 }
 
+// GetLatestMegaDatabaseCatalog returns only the most recent (2026 / latest cumulative) online databases.
+func (a *App) GetLatestMegaDatabaseCatalog() []online.MegaDatabaseSource {
+	client := online.NewMegaDatabaseClient()
+	return client.GetLatestCatalog()
+}
+
 // FetchLichessDatabaseFeed fetches the latest monthly .pgn.zst archive URLs from database.lichess.org.
 func (a *App) FetchLichessDatabaseFeed(feedType string, limit int) ([]string, error) {
 	client := online.NewMegaDatabaseClient()
@@ -3266,15 +3282,23 @@ func (a *App) ImportMegaDatabase(opts online.MegaImportOptions) (*online.MegaImp
 		}
 	}
 
-	ctx := a.ctx
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	opCtx, finishOp := a.startCancellableOperation("mega-import")
+	defer finishOp()
 
-	res, err := client.DownloadAndImport(ctx, opts, targetDB, userDBDir, func(prog online.MegaImportProgress) {
+	res, err := client.DownloadAndImport(opCtx, opts, targetDB, userDBDir, func(prog online.MegaImportProgress) {
 		a.emitEvent("megadb:progress", prog)
 	})
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			if res == nil {
+				res = &online.MegaImportResult{
+					SourceID:   opts.SourceID,
+					SourceName: src.Name,
+				}
+			}
+			res.Cancelled = true
+			return res, nil
+		}
 		return res, err
 	}
 

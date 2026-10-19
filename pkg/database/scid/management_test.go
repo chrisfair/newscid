@@ -622,3 +622,86 @@ func TestConsolidateDatabases(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestArchiveFilteringAndCancellation(t *testing.T) {
+	assert.False(t, IsLegacyArchivePath(""))
+	assert.False(t, IsLegacyArchivePath("/data/lumbras_otb_2026"))
+	assert.False(t, IsLegacyArchivePath("/data/lumbras_otb_complete"))
+	assert.False(t, IsLegacyArchivePath("/data/lichess_elite_2025_11"))
+	assert.True(t, IsLegacyArchivePath("/data/lumbras_otb_2025"))
+	assert.True(t, IsLegacyArchivePath("/data/lumbras_otb_2020-2024"))
+
+	assert.Equal(t, []string{"/data/only_one_2025"}, FilterMostRecentDatabasePaths([]string{"/data/only_one_2025"}))
+	assert.Equal(t, []string{"/data/a_2025", "/data/b_2024"}, FilterMostRecentDatabasePaths([]string{"/data/a_2025", "/data/b_2024"}))
+	assert.Equal(t, []string{"/data/lumbras_otb_2026"}, FilterMostRecentDatabasePaths([]string{"/data/lumbras_otb_2026", "/data/lumbras_otb_2025"}))
+
+	tmpDir := t.TempDir()
+	db2026 := filepath.Join(tmpDir, "archive_2026")
+	db2025 := filepath.Join(tmpDir, "archive_2025")
+	pgnPath := filepath.Join(tmpDir, "games_2026.pgn")
+
+	for _, p := range []string{db2026, db2025} {
+		db := NewDatabase()
+		require.NoError(t, db.Create(p, "Test"))
+		g, err := chess.ParsePGN(`[White "A"] [Black "B"] [Date "2026.01.01"] [Result "1-0"] 1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 1-0`)
+		require.NoError(t, err)
+		_, err = db.SaveGame(g)
+		require.NoError(t, err)
+		require.NoError(t, db.Close())
+	}
+	require.NoError(t, os.WriteFile(pgnPath, []byte("[White \"C\"]\n[Black \"D\"]\n[Date \"2026.02.01\"]\n[Result \"0-1\"]\n\n1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. cxd5 exd5 0-1\n"), 0o644))
+
+	// Consolidate with OnlyMostRecentArchives: true -> should skip db2025!
+	resLatest, err := ConsolidateDatabases(ConsolidateDatabaseOptions{
+		TargetName:             "Latest_Only",
+		SourceBasePaths:        []string{db2026, db2025},
+		OnlyMostRecentArchives: true,
+	}, tmpDir, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 1, resLatest.SourcesScanned)
+
+	// Consolidate with immediate cancellation
+	resCancel1, err := ConsolidateDatabases(ConsolidateDatabaseOptions{
+		TargetName:      "Cancelled_Immediate",
+		SourceBasePaths: []string{db2026},
+		ShouldCancel:    func() bool { return true },
+	}, tmpDir, nil)
+	require.NoError(t, err)
+	assert.True(t, resCancel1.Cancelled)
+	assert.Equal(t, 0, resCancel1.SourcesScanned)
+
+	// Consolidate with mid-stream cancellation inside PGN and Scid loops
+	calls := 0
+	resCancelMid, err := ConsolidateDatabases(ConsolidateDatabaseOptions{
+		TargetName:      "Cancelled_Mid",
+		SourceBasePaths: []string{pgnPath, db2026},
+		ShouldCancel: func() bool {
+			calls++
+			return calls == 2 || calls == 4
+		},
+	}, tmpDir, nil)
+	require.NoError(t, err)
+	assert.True(t, resCancelMid.Cancelled)
+
+	// BuildFocusedSubDatabase with immediate and mid-loop cancellation
+	subCancel1, err := BuildFocusedSubDatabase(SubDatabaseFilter{
+		TargetName:      "Sub_Cancel_1",
+		SourceBasePaths: []string{db2026},
+		ShouldCancel:    func() bool { return true },
+	}, tmpDir, nil)
+	require.NoError(t, err)
+	assert.True(t, subCancel1.Cancelled)
+
+	subCalls := 0
+	subCancel2, err := BuildFocusedSubDatabase(SubDatabaseFilter{
+		TargetName:      "Sub_Cancel_2",
+		SourceBasePaths: []string{pgnPath, db2026},
+		ShouldCancel: func() bool {
+			subCalls++
+			return subCalls == 2 || subCalls == 4
+		},
+	}, tmpDir, nil)
+	require.NoError(t, err)
+	assert.True(t, subCancel2.Cancelled)
+}
+
+

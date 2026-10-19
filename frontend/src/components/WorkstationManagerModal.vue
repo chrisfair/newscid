@@ -29,6 +29,7 @@ import {
   FactoryResetNewScid,
   GetNotablePlayersDropdown,
   SetDatabaseWritePolicy,
+  CancelActiveOperation,
 } from '../../wailsjs/go/main/App'
 import { ClipboardSetText } from '../../wailsjs/runtime/runtime'
 
@@ -831,7 +832,16 @@ onMounted(async () => {
                 >
                   <RefreshCw v-if="loading" :size="16" class="spin" />
                   <Layers v-else :size="16" />
-                  <span>Build Focused Sub-Database</span>
+                  <span>{{ loading ? 'Building Sub-Database...' : 'Build Focused Sub-Database' }}</span>
+                </button>
+                <button
+                  v-if="loading"
+                  type="button"
+                  class="mini-btn"
+                  data-testid="cancel-build-subdb-btn"
+                  @click="CancelActiveOperation()"
+                >
+                  ✕ Cancel Build
                 </button>
               </div>
 

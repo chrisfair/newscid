@@ -9,6 +9,7 @@ vi.mock('../../wailsjs/go/main/App', () => ({
   ImportMegaDatabase: vi.fn(),
   BuildConsolidatedDatabase: vi.fn(),
   ConsolidateOnlineCatalogDatabases: vi.fn(),
+  CancelActiveOperation: vi.fn(),
 }))
 
 vi.mock('../../wailsjs/runtime/runtime', () => ({
@@ -28,6 +29,8 @@ const mockCatalog = [
     gamesEstimate: '~350,000 OTB games',
     description: 'Latest 2026 Over-The-Board tournament games.',
     supportsLimit: true,
+    year: 2026,
+    isLatest: true,
   },
   {
     id: 'lichess-open-2026-09',
@@ -40,6 +43,22 @@ const mockCatalog = [
     gamesEstimate: '90M+ games',
     description: 'Streams directly from database.lichess.org using on-the-fly zstd decompression.',
     supportsLimit: true,
+    year: 2026,
+    isLatest: true,
+  },
+  {
+    id: 'lumbras-otb-2025',
+    name: "Lumbra's GigaBase — OTB 2025 Complete (Older Archive)",
+    provider: 'LumbrasGigaBase',
+    category: 'OTB Master',
+    format: '7z-pgn',
+    url: 'https://huggingface.co/datasets/Lumbra74/LumbrasGigabaseCCBYNC40/resolve/main/LumbrasGigabase_OTB_2025.7z',
+    sizeEstimate: '111 MB (.7z)',
+    gamesEstimate: '~550,000 OTB games',
+    description: 'Older 2025 archive.',
+    supportsLimit: true,
+    year: 2025,
+    isLatest: false,
   },
 ]
 
@@ -66,9 +85,10 @@ describe('MegaDatabaseModal.vue', () => {
       duplicatesById: 90,
       duplicatesByContent: 60,
     } as any)
+    vi.mocked(AppBindings.CancelActiveOperation).mockResolvedValue(true)
   })
 
-  it('renders catalog of LumbrasGigaBase and Lichess databases and filters by provider', async () => {
+  it('defaults to 2026 / Latest Archives Only and reveals older 2025 archives when unchecked', async () => {
     const wrapper = mount(MegaDatabaseModal, {
       props: { dbOpen: true, dbName: 'MyPrepBase' },
     })
@@ -76,6 +96,12 @@ describe('MegaDatabaseModal.vue', () => {
 
     expect(wrapper.text()).toContain("Lumbra's GigaBase — OTB 2026 Release")
     expect(wrapper.text()).toContain('Lichess Open Rated Database Stream — Sep 2026')
+    // Older 2025 archive is hidden by default
+    expect(wrapper.find('[data-testid="source-lumbras-otb-2025"]').exists()).toBe(false)
+
+    // Uncheck "2026 / Latest Archives Only" to manually view older 2025 archive
+    await wrapper.get('[data-testid="toggle-latest-2026"] input').setValue(false)
+    expect(wrapper.find('[data-testid="source-lumbras-otb-2025"]').exists()).toBe(true)
 
     // Filter to Lichess only
     await wrapper.get('[data-testid="tab-lichess"]').trigger('click')
@@ -124,9 +150,40 @@ describe('MegaDatabaseModal.vue', () => {
       setAsReference: true,
       setAsDefaultUser: false,
       minElo: 0,
+      onlyMostRecentArchives: true,
     })
     expect(wrapper.get('[data-testid="megadb-success-msg"]').text()).toContain('1050 unique games saved')
     expect(wrapper.get('[data-testid="megadb-success-msg"]').text()).toContain('150 duplicates removed')
   })
+
+  it('allows cancelling an active long-running import operation', async () => {
+    let resolveImport!: (val: any) => void
+    vi.mocked(AppBindings.ImportMegaDatabase).mockReturnValue(
+      new Promise(resolve => {
+        resolveImport = resolve
+      })
+    )
+
+    const wrapper = mount(MegaDatabaseModal, {
+      props: { dbOpen: true, dbName: 'MyPrepBase' },
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-testid="start-mega-import-btn"]').trigger('click')
+    expect(wrapper.find('[data-testid="cancel-mega-import-btn"]').exists()).toBe(true)
+
+    await wrapper.get('[data-testid="cancel-mega-import-btn"]').trigger('click')
+    expect(AppBindings.CancelActiveOperation).toHaveBeenCalled()
+
+    resolveImport({
+      sourceId: 'lumbras-otb-2026',
+      gamesScanned: 1200,
+      gamesImported: 750,
+      cancelled: true,
+    })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="megadb-success-msg"]').text()).toContain('Import cancelled cleanly — 750 games imported so far have been saved!')
+  })
 })
+
 
