@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import {
   Database,
   Star,
@@ -12,8 +12,10 @@ import {
   Wrench,
   ArrowRight,
   Check,
-  RefreshCw
+  RefreshCw,
+  Layers
 } from '@lucide/vue'
+import { BuildConsolidatedDatabase } from '../../wailsjs/go/main/App'
 import type { DiscoveredDatabase } from './HeaderBar.vue'
 
 export interface DatabaseRolesStatusView {
@@ -51,6 +53,35 @@ const emit = defineEmits<{
   (e: 'cycleWritePolicy', path: string, currentPolicy?: string): void
   (e: 'openWorkstationManager', tab?: 'builder' | 'storage' | 'reset'): void
 }>()
+
+const isConsolidating = ref(false)
+const consolidateBanner = ref<string | null>(null)
+
+async function handleConsolidateAllToReference() {
+  if (isConsolidating.value) return
+  isConsolidating.value = true
+  consolidateBanner.value = 'Consolidating all databases & removing duplicate games (by ID and move sequence)...'
+  try {
+    const res = await BuildConsolidatedDatabase({
+      targetName: 'Consolidated_Reference',
+      targetDescription: 'Consolidated Online & Master Reference Database (Deduplicated by ID & Move Sequence)',
+      sourceBasePaths: [],
+      setAsReference: true,
+      setAsDefaultUser: false,
+      minElo: 0,
+    })
+    if (res) {
+      consolidateBanner.value = `Consolidated "${res.targetName}": ${res.uniqueGamesSaved} unique games saved, ${res.duplicatesRemoved} duplicates removed (${res.duplicatesById} by ID, ${res.duplicatesByContent} by identical moves) across ${res.sourcesScanned} databases — now set as Default Reference DB!`
+      if (res.targetBasePath) {
+        emit('setReferenceDB', res.targetBasePath, true)
+      }
+    }
+  } catch (err: any) {
+    consolidateBanner.value = `Consolidation note: ${err?.message || String(err)}`
+  } finally {
+    isConsolidating.value = false
+  }
+}
 
 function normalizePath(p?: string): string {
   if (!p) return ''
@@ -101,11 +132,21 @@ function formatCount(n: number): string {
             <span>How Databases Work Together in NewScid</span>
           </h3>
           <p class="text-[11px] text-zinc-400 mt-0.5">
-            NewScid separates databases into 4 clear roles so your personal games stay separate from multi-million-game master reference bases.
+            Select any database as your <strong>Default USER Database</strong> or your <strong>Default REFERENCE Database</strong> (including a deduplicated Consolidated Database), while each <strong>Persona</strong> maintains its own dedicated database.
           </p>
         </div>
 
         <div class="flex items-center gap-1.5 flex-wrap">
+          <button
+            data-testid="consolidate-all-dbs-btn"
+            class="px-2.5 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+            :disabled="isConsolidating"
+            title="Combine all online & local databases into a single deduplicated Consolidated Reference Database (removing duplicates by Game ID and move sequence)"
+            @click="handleConsolidateAllToReference"
+          >
+            <Layers class="w-3.5 h-3.5 text-cyan-400" :class="{ 'animate-spin': isConsolidating }" />
+            <span>{{ isConsolidating ? 'Consolidating...' : '⚡ Consolidate All DBs' }}</span>
+          </button>
           <button
             class="px-2.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
             title="Create a smaller focused database from multiple source databases (by opening line or player)"
@@ -154,6 +195,23 @@ function formatCount(n: number): string {
       </div>
 
       <div
+        v-if="consolidateBanner"
+        data-testid="consolidate-status-banner"
+        class="p-2.5 rounded-lg bg-cyan-950/40 border border-cyan-500/40 text-cyan-200 text-xs flex items-center justify-between gap-2"
+      >
+        <div class="flex items-center gap-2">
+          <Layers class="w-3.5 h-3.5 text-cyan-400 shrink-0" :class="{ 'animate-spin': isConsolidating }" />
+          <span>{{ consolidateBanner }}</span>
+        </div>
+        <button
+          class="text-[10px] text-cyan-300 hover:text-white underline cursor-pointer"
+          @click="consolidateBanner = null"
+        >
+          Dismiss
+        </button>
+      </div>
+
+      <div
         v-if="localMergeStatus"
         class="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2"
       >
@@ -163,13 +221,13 @@ function formatCount(n: number): string {
 
       <!-- 4 Database Role Cards -->
       <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2.5">
-        <!-- 1. DEFAULT DATABASE -->
+        <!-- 1. DEFAULT USER DATABASE -->
         <div class="p-3 rounded-xl bg-zinc-900/90 border border-amber-500/40 flex flex-col justify-between gap-2">
           <div>
             <div class="flex items-center justify-between">
               <span class="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1">
                 <Star class="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                1. Default Startup DB
+                1. Default Startup DB (User)
               </span>
               <span
                 v-if="rolesStatus?.isActiveDefault"
@@ -182,8 +240,24 @@ function formatCount(n: number): string {
               {{ rolesStatus?.defaultDbName || 'Not Configured Yet' }}
             </div>
             <p class="text-[11px] text-zinc-400 mt-1 leading-snug">
-              Automatically opens on startup as your home database. Set your personal or main study base here.
+              Your personal startup database (editable by default) as opposed to the Reference DB.
             </p>
+            <select
+              v-if="discoveredDatabases.length > 0"
+              data-testid="select-default-user-db"
+              :value="normalizePath(rolesStatus?.defaultDbPath)"
+              class="mt-1.5 w-full bg-zinc-950 border border-amber-500/30 rounded px-2 py-1 text-[11px] text-zinc-200"
+              @change="(e) => emit('setDefaultDB', (e.target as HTMLSelectElement).value)"
+            >
+              <option value="">-- Select Any DB as Default USER DB --</option>
+              <option
+                v-for="db in discoveredDatabases"
+                :key="'def-' + db.basePath"
+                :value="normalizePath(db.basePath)"
+              >
+                [{{ db.category }}] {{ db.name }} ({{ formatCount(db.numGames) }})
+              </option>
+            </select>
           </div>
 
           <div class="flex items-center gap-1.5 pt-1 flex-wrap">
@@ -269,13 +343,13 @@ function formatCount(n: number): string {
           </div>
         </div>
 
-        <!-- 3. REFERENCE DATABASE (MEGA / MASTER BASE) -->
+        <!-- 3. REFERENCE DATABASE (MEGA / CONSOLIDATED / MASTER BASE) -->
         <div class="p-3 rounded-xl bg-zinc-900/90 border border-cyan-500/40 flex flex-col justify-between gap-2">
           <div>
             <div class="flex items-center justify-between">
               <span class="text-[10px] font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1">
                 <BookOpen class="w-3.5 h-3.5 text-cyan-400" />
-                3. Reference Theory DB
+                3. Reference Theory DB (Default Ref)
               </span>
               <span v-if="rolesStatus?.referenceDb" class="text-[10px] font-mono text-cyan-300">
                 {{ formatCount(rolesStatus.referenceDb.numGames) }}
@@ -285,8 +359,24 @@ function formatCount(n: number): string {
               {{ rolesStatus?.referenceDbName || 'Uses Active DB / Polyglot' }}
             </div>
             <p class="text-[11px] text-zinc-400 mt-1 leading-snug">
-              Feeds the <strong>Opening Tree (F3)</strong> with master statistics even while your Active DB is your personal games.
+              Select the <strong>Consolidated DB</strong> or any online/master database as your Default Reference DB for Opening Tree (F3).
             </p>
+            <select
+              v-if="discoveredDatabases.length > 0"
+              data-testid="select-default-ref-db"
+              :value="normalizePath(rolesStatus?.referenceDbPath)"
+              class="mt-1.5 w-full bg-zinc-950 border border-cyan-500/30 rounded px-2 py-1 text-[11px] text-zinc-200"
+              @change="(e) => emit('setReferenceDB', (e.target as HTMLSelectElement).value, true)"
+            >
+              <option value="">-- Select Any DB as Default REFERENCE DB --</option>
+              <option
+                v-for="db in discoveredDatabases"
+                :key="'ref-' + db.basePath"
+                :value="normalizePath(db.basePath)"
+              >
+                [{{ db.category }}] {{ db.name }} ({{ formatCount(db.numGames) }})
+              </option>
+            </select>
           </div>
 
           <div class="flex items-center justify-between gap-1.5 pt-1 flex-wrap">

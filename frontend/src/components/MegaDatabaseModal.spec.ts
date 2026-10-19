@@ -7,6 +7,8 @@ vi.mock('../../wailsjs/go/main/App', () => ({
   GetMegaDatabaseCatalog: vi.fn(),
   FetchLichessDatabaseFeed: vi.fn(),
   ImportMegaDatabase: vi.fn(),
+  BuildConsolidatedDatabase: vi.fn(),
+  ConsolidateOnlineCatalogDatabases: vi.fn(),
 }))
 
 vi.mock('../../wailsjs/runtime/runtime', () => ({
@@ -54,6 +56,16 @@ describe('MegaDatabaseModal.vue', () => {
       gamesScanned: 5000,
       gamesImported: 5000,
     } as any)
+    vi.mocked(AppBindings.BuildConsolidatedDatabase).mockResolvedValue({
+      targetName: 'Consolidated_Reference',
+      targetBasePath: '/home/user/.local/share/newscid/databases/Consolidated_Reference',
+      sourcesScanned: 3,
+      totalGamesScanned: 1200,
+      uniqueGamesSaved: 1050,
+      duplicatesRemoved: 150,
+      duplicatesById: 90,
+      duplicatesByContent: 60,
+    } as any)
   })
 
   it('renders catalog of LumbrasGigaBase and Lichess databases and filters by provider', async () => {
@@ -92,4 +104,29 @@ describe('MegaDatabaseModal.vue', () => {
     expect(wrapper.find('[data-testid="megadb-success-msg"]').exists()).toBe(true)
     expect(wrapper.emitted('imported')).toBeTruthy()
   })
+
+  it('builds a Consolidated Reference Database removing duplicates by ID and move sequence', async () => {
+    const wrapper = mount(MegaDatabaseModal, {
+      props: { dbOpen: true, dbName: 'MyPrepBase' },
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-testid="tab-consolidate"]').trigger('click')
+    expect(wrapper.text()).toContain('Consolidated Online & Reference Database Builder')
+
+    await wrapper.get('[data-testid="start-mega-import-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(AppBindings.BuildConsolidatedDatabase).toHaveBeenCalledWith({
+      targetName: 'Consolidated_Reference',
+      targetDescription: 'Consolidated Online & Master Reference Database (Deduplicated by ID & Move Sequence)',
+      sourceBasePaths: [],
+      setAsReference: true,
+      setAsDefaultUser: false,
+      minElo: 0,
+    })
+    expect(wrapper.get('[data-testid="megadb-success-msg"]').text()).toContain('1050 unique games saved')
+    expect(wrapper.get('[data-testid="megadb-success-msg"]').text()).toContain('150 duplicates removed')
+  })
 })
+
