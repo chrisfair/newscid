@@ -122,25 +122,44 @@ const HELP_TOPICS: HelpTopic[] = [
     id: 'databases',
     title: 'Databases, PGN & Mega Updates',
     icon: Database,
-    summary: 'Native .si4 binary databases, incremental Mega DB updates, TWIC, and maintenance.',
-    tags: ['database', 'si4', 'pgn', 'import', 'export', 'sort', 'compact', 'maintenance', 'mega', 'twic'],
+    summary: 'Intuitive Position/Player/Opening search, Famous Players selector, Write Policies, Sub-DB Builder, Managed Storage & Factory Reset.',
+    tags: ['database', 'si4', 'pgn', 'search', 'position', 'opening', 'famous', 'fischer', 'carlsen', 'lock', 'editable', 'sync_only', 'locked', 'storage', 'factory', 'reset', 'sub-database', 'mega', 'twic'],
     content: [
       {
-        heading: 'SCID Binary Format (.si4, .sg4, .sn4)',
-        subheading: 'High-speed binary format capable of searching millions of games in milliseconds.',
+        heading: 'Intuitive Search: Board Position, Famous Players & Openings',
+        subheading: 'Filter millions of games in milliseconds directly from the Database Game Browser or Search Modal (Ctrl+H).',
         paragraphs: [
-          'NewScid natively reads and writes SCID v4 databases:',
-          '• .si4 (Index file): 47-byte binary records storing game metadata, player IDs, ECO codes, dates, ratings, and offsets.',
-          '• .sg4 (Game file): Stores game moves and variations using compact 1-byte Huffman encoding.',
-          '• .sn4 (Namebase file): Front-coded trie storing player, event, site, and round names.'
+          'The Database Game Browser toolbar provides 3 instant search dimensions that can be combined freely:'
+        ],
+        bullets: [
+          'Match Board Position (1-Click): Click "Match Board" in the Game Browser toolbar (or in Search → Position) to filter the database for every game that reached the exact position currently on your chessboard.',
+          'Famous & Custom Players Dropdown: Open the "Famous Players" dropdown to immediately filter by 24+ world champions and legends (Bobby Fischer, Magnus Carlsen, Garry Kasparov, Mikhail Tal, Capablanca, Judit Polgar, etc.) across all historical FIDE name aliases, with live game counts and peak Elo in the open database. Click the Customize (+) icon to add any player you find interesting or hide/restore defaults.',
+          'Opening ECO & Move Sequence Search: Filter by ECO code/range (e.g. "B90" or "B20-B99"), click 1-click opening family chips (Sicilian, Ruy Lopez, Queen\'s Gambit, King\'s Indian, French, Caro-Kann), or type an opening move sequence (e.g. "1.e4 c5 2.Nf3 d6").'
+        ],
+        tip: 'Click "Extract Sub-DB" in the Game Browser toolbar to turn your current search filter into a dedicated, focused .si4 database!'
+      },
+      {
+        heading: 'Database Write Policies & Contamination Locks',
+        subheading: 'Protect reference archives while keeping personal and persona databases editable.',
+        paragraphs: [
+          'Every database has a clickable Write Policy badge in the Game Browser, Header Bar, and Database Hub:'
+        ],
+        bullets: [
+          'Editable (Personal / Persona Default): Permits direct game saving, PGN import, header editing, deletion, sorting, and compaction.',
+          'Sync-Only (Imported Large / Reference Default): Blocks manual edits or accidental game saves/deletions to prevent contaminating master databases, while still permitting Online Account Sync, TWIC updates, and incremental local database merges.',
+          'Locked (Strict Read-Only): Blocks all modifications and sync operations.'
         ]
       },
       {
-        heading: 'Incremental Mega Database & TWIC Updates',
+        heading: 'Multi-Database Sub-Database Builder, Managed Storage & Factory Reset',
+        subheading: 'File → Build Focused Sub-Database / Managed Storage Locations / Factory Reset.',
         paragraphs: [
-          'Open File → Download Free Mega Database (4M+ Games) to download or incrementally update master OTB and online archives (LumbrasGigaBase) directly into a native .si4 database.',
-          'If you already have a large database on disk, choose "Update Existing .si4 Database (Skip Existing Games)" or "Update Currently Open Database". NewScid builds an in-memory game signature hash set (White, Black, Date, Result, PlyCount, and opening ply signature) and appends only brand-new games without duplicating existing records.',
-          'Use File → Download TWIC Weekly Games to fetch recent weekly tournament issues from The Week in Chess.'
+          'Open the Workstation Manager (via the File menu, Database Hub, or Command Palette) to manage three core workstation workflows:'
+        ],
+        bullets: [
+          'Build Focused Sub-Database: Select multiple source .si4 or .pgn databases and extract matching games by Players, Color, ECO range, Opening Move Sequence ("Use Moves on Board"), Minimum Elo, and Year range—with automatic cross-database deduplication.',
+          'Managed Storage & Asset Importer: NewScid stores assets in ~/.local/share/newscid/{databases,personas,engines,books/opening,books/endgame,repertoires,backups} and ~/.config/newscid. Copy external .si4 databases, UCI engine binaries, Polyglot (.bin) opening books, or Syzygy (.rtbw/.rtbz) endgame tablebases directly into NewScid\'s managed directories with 1 click.',
+          'Factory Reset (Wipe to Empty State with Opt-In Backup): Completely reset all databases, personas, repertoires, training vaults, and saved settings back to FACTORY SETTINGS (empty/nonexistent) so you can start over from scratch. You are warned before wiping and can optionally check the opt-in backup box to save a compressed .tar.gz archive first.'
         ],
         tip: 'Use File → Database Maintenance (Ctrl+M) to physically compact deleted records, sort by Date/Elo/ECO, or set your current database as the automatic startup default.'
       }
@@ -523,13 +542,24 @@ KEYBOARD SHORTCUTS
 FILES
        ~/.config/newscid/preferences.json
               Persistent workstation layout, floating panel geometry, default
-              startup database, and visual theme settings.
+              startup database, database write policies, custom famous players,
+              and visual theme settings.
 
        ~/.config/newscid/personas.json
               Multi-alias player persona definitions and sync metadata.
 
        ~/.local/share/newscid/databases/
-              Default directory for local SCID (.si4/.sg4/.sn4) databases.
+              Managed directory for local SCID (.si4/.sg4/.sn4) databases.
+
+       ~/.local/share/newscid/engines/
+              Managed directory for copied UCI chess engine binaries.
+
+       ~/.local/share/newscid/books/opening/ & ~/.local/share/newscid/books/endgame/
+              Managed directories for Polyglot (.bin) opening books and Syzygy
+              (.rtbw/.rtbz) endgame tablebases.
+
+       ~/.local/share/newscid/backups/
+              Opt-in compressed (.tar.gz) archives created prior to Factory Reset.
 
 AUTHOR
        Written by Christopher Patrick Fair.

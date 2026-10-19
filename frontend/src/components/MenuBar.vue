@@ -181,6 +181,7 @@ const emit = defineEmits<{
   (e: 'megaDownloader'): void
   (e: 'fairPlayInspector'): void
   (e: 'cyclicalDrill'): void
+  (e: 'openWorkstationManager', tab?: 'builder' | 'storage' | 'reset'): void
 }>()
 
 const activeMenu = ref<string | null>(null)
@@ -461,6 +462,31 @@ onUnmounted(() => {
           @click="selectItem(() => emit('standardizeNames'))"
         >
           <span class="flex items-center gap-2.5 whitespace-nowrap"><Sparkles class="w-4 h-4 shrink-0 text-purple-400" /> Standardize Player Names (Spellcheck)...</span>
+        </button>
+
+        <div class="h-px bg-zinc-800 my-1 mx-2" />
+        <div class="px-3.5 py-1 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Sub-Database Builder, Storage &amp; Reset</div>
+
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-indigo-300 font-semibold flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('openWorkstationManager', 'builder'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Filter class="w-4 h-4 shrink-0 text-indigo-400" /> Build Focused Sub-Database (from Multiple DBs)...</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono">Multi-DB</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('openWorkstationManager', 'storage'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><FolderOpen class="w-4 h-4 shrink-0 text-amber-400" /> Managed Storage Locations &amp; Copy Assets...</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">Paths</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-rose-300 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('openWorkstationManager', 'reset'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><RotateCcw class="w-4 h-4 shrink-0 text-rose-400" /> Factory Reset Databases &amp; Settings...</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono">Scratch</span>
         </button>
       </div>
     </div>

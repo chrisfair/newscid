@@ -13,10 +13,16 @@ It reads and writes industry-standard **SCID v4 binary databases** (`.si4` index
 - **Automatic Persistent Preferences**: Every workspace layout change, default startup database, reference opening database, board theme, piece set, UI theme, and notation style is automatically saved to `~/.config/newscid/preferences.json`.
 - **Small-Screen & Responsive Auto-Fit**: Automatically scales the chessboard so 100% of ranks `1–8` and files `a–h` remain visible with zero clipping on compact laptop screens.
 
-### 2. Native `.si4` Databases, Incremental Mega Updates & Online Sync
+### 2. Native `.si4` Databases, Intuitive Search, Write Locking, Sub-DB Builder & Factory Reset
 - **Full SCID Binary Compatibility**: Reads and writes 47-byte `.si4` index records, `.sg4` Huffman move streams, and `.sn4` front-coded namebases with physical compaction, multi-key sorting, and 17-pattern pawn-structure search (IQP, Carlsbad, Maroczy, Hedgehog, Stonewall, Dragon, etc.).
-- **Incremental Mega Database & Local Merge Updates**: Download or update multi-million-game master archives (**LumbrasGigaBase**, **The Week in Chess / TWIC**) or merge local `.si4` databases incrementally. A 64-bit game-signature hash set (`White | Black | Date | Result | PlyCount | OpeningMoves`) skips existing games in $O(1)$ time without creating duplicates.
-- **Newest-First + Backfill Online Sync (Lichess & Chess.com)**: Syncing any player or **Unified Persona** fetches the newest games since your last sync first, then backfills older historical archives without recounting games already in your database.
+- **Intuitive Position, Famous Players & Opening Search**:
+  - **1-Click Board Position Search (`Match Board`)**: Filter any database in milliseconds for games reaching the exact position currently on the chessboard.
+  - **Famous & Custom Players Selector**: Instant dropdown in the Game Browser and Search Modal discovering 24+ legends (Bobby Fischer, Magnus Carlsen, Garry Kasparov, Mikhail Tal, Capablanca, Judit Polgar, etc.) across all historical FIDE aliases with live game counts and peak Elo, plus full customization to add your own players of interest.
+  - **Opening ECO & Move-Sequence Search**: Filter by ECO code/range (`B90`, `B20-B99`), 1-click opening family chips, or exact initial move sequences (`1.e4 c5 2.Nf3 d6`).
+- **Database Write Policies & Contamination Locks**: Every database has a clickable lock policy (`Editable` for personal/persona databases, `Sync-Only` for imported reference databases, or `Locked` read-only) so large master archives cannot be accidentally contaminated by manual edits while still supporting online/TWIC sync.
+- **Multi-Database Focused Sub-Database Builder**: Extract matching games across multiple source `.si4` or `.pgn` databases into a focused `.si4` study database by opening line, players, Elo, or year with cross-database deduplication.
+- **Managed Workstation Storage & Factory Reset**: Copies databases, UCI engines, Polyglot opening books, and Syzygy endgame tablebases into `~/.local/share/newscid/{databases,personas,engines,books/opening,books/endgame,repertoires,backups}` with 1-click path discovery, and includes a **Factory Reset** tool (with opt-in `.tar.gz` backup) to wipe all content back to empty factory settings.
+- **Incremental Mega Database & Online Sync (Lichess & Chess.com)**: Download/update master archives (**LumbrasGigaBase**, **TWIC**) or incrementally sync Lichess & Chess.com accounts (newest-first + historical backfill) without duplicating existing games.
 
 ### 3. Longitudinal Fair-Play & Time-Control Consistency Inspector
 - **Calibrated Multi-Game Integrity Screening**: Evaluates all games of any database or online player across **Bullet, Blitz, Rapid, and Classical** time controls.
