@@ -987,6 +987,9 @@ export namespace main {
 	    defaultPortalPlatform: string;
 	    portalWindowMode: string;
 	    customBrowserCmd: string;
+	    databasePolicies?: Record<string, string>;
+	    customNotablePlayers?: scid.FamousPlayerEntry[];
+	    hiddenFamousPlayers?: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new AppPreferences(source);
@@ -1024,6 +1027,9 @@ export namespace main {
 	        this.defaultPortalPlatform = source["defaultPortalPlatform"];
 	        this.portalWindowMode = source["portalWindowMode"];
 	        this.customBrowserCmd = source["customBrowserCmd"];
+	        this.databasePolicies = source["databasePolicies"];
+	        this.customNotablePlayers = this.convertValues(source["customNotablePlayers"], scid.FamousPlayerEntry);
+	        this.hiddenFamousPlayers = source["hiddenFamousPlayers"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1079,6 +1085,8 @@ export namespace main {
 	    name: string;
 	    numGames: number;
 	    description: string;
+	    writePolicy: string;
+	    isLocked: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new DatabaseInfo(source);
@@ -1090,6 +1098,8 @@ export namespace main {
 	        this.name = source["name"];
 	        this.numGames = source["numGames"];
 	        this.description = source["description"];
+	        this.writePolicy = source["writePolicy"];
+	        this.isLocked = source["isLocked"];
 	    }
 	}
 	export class DatabaseRolesStatus {
@@ -2301,6 +2311,8 @@ export namespace scid {
 	    description: string;
 	    sizeStr: string;
 	    exists: boolean;
+	    writePolicy: string;
+	    isLocked: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new DiscoveredDatabase(source);
@@ -2316,6 +2328,38 @@ export namespace scid {
 	        this.description = source["description"];
 	        this.sizeStr = source["sizeStr"];
 	        this.exists = source["exists"];
+	        this.writePolicy = source["writePolicy"];
+	        this.isLocked = source["isLocked"];
+	    }
+	}
+	export class DiscoveredNotablePlayer {
+	    name: string;
+	    title: string;
+	    era: string;
+	    aliases: string[];
+	    matchedNames: string[];
+	    gameCount: number;
+	    peakElo: number;
+	    yearStart: number;
+	    yearEnd: number;
+	    isCustom: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new DiscoveredNotablePlayer(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.title = source["title"];
+	        this.era = source["era"];
+	        this.aliases = source["aliases"];
+	        this.matchedNames = source["matchedNames"];
+	        this.gameCount = source["gameCount"];
+	        this.peakElo = source["peakElo"];
+	        this.yearStart = source["yearStart"];
+	        this.yearEnd = source["yearEnd"];
+	        this.isCustom = source["isCustom"];
 	    }
 	}
 	export class DuplicateCriteria {
@@ -2409,6 +2453,26 @@ export namespace scid {
 		    }
 		    return a;
 		}
+	}
+	export class FamousPlayerEntry {
+	    name: string;
+	    title: string;
+	    era: string;
+	    aliases: string[];
+	    isCustom: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new FamousPlayerEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.title = source["title"];
+	        this.era = source["era"];
+	        this.aliases = source["aliases"];
+	        this.isCustom = source["isCustom"];
+	    }
 	}
 	
 	export class ImportStats {
@@ -2537,6 +2601,8 @@ export namespace scid {
 	    pawnStructure?: string;
 	    commentText?: string;
 	    annotator?: string;
+	    positionFen?: string;
+	    openingMoves?: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new SearchCriteria(source);
@@ -2574,6 +2640,8 @@ export namespace scid {
 	        this.pawnStructure = source["pawnStructure"];
 	        this.commentText = source["commentText"];
 	        this.annotator = source["annotator"];
+	        this.positionFen = source["positionFen"];
+	        this.openingMoves = source["openingMoves"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -2661,6 +2729,66 @@ export namespace scid {
 		}
 	}
 	
+	export class SubDatabaseFilter {
+	    targetName: string;
+	    targetDescription: string;
+	    targetBasePath?: string;
+	    sourceBasePaths: string[];
+	    players?: string[];
+	    playerColor?: string;
+	    ecoFilter?: string;
+	    openingMoves?: string[];
+	    minElo?: number;
+	    yearFrom?: number;
+	    yearTo?: number;
+	    resultFilter?: string;
+	    deduplicate: boolean;
+	    maxGames?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SubDatabaseFilter(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.targetName = source["targetName"];
+	        this.targetDescription = source["targetDescription"];
+	        this.targetBasePath = source["targetBasePath"];
+	        this.sourceBasePaths = source["sourceBasePaths"];
+	        this.players = source["players"];
+	        this.playerColor = source["playerColor"];
+	        this.ecoFilter = source["ecoFilter"];
+	        this.openingMoves = source["openingMoves"];
+	        this.minElo = source["minElo"];
+	        this.yearFrom = source["yearFrom"];
+	        this.yearTo = source["yearTo"];
+	        this.resultFilter = source["resultFilter"];
+	        this.deduplicate = source["deduplicate"];
+	        this.maxGames = source["maxGames"];
+	    }
+	}
+	export class SubDatabaseResult {
+	    targetBasePath: string;
+	    targetName: string;
+	    sourcesScanned: number;
+	    totalGamesScanned: number;
+	    gamesMatched: number;
+	    duplicatesSkipped: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SubDatabaseResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.targetBasePath = source["targetBasePath"];
+	        this.targetName = source["targetName"];
+	        this.sourcesScanned = source["sourcesScanned"];
+	        this.totalGamesScanned = source["totalGamesScanned"];
+	        this.gamesMatched = source["gamesMatched"];
+	        this.duplicatesSkipped = source["duplicatesSkipped"];
+	    }
+	}
 	export class VerificationReport {
 	    totalGames: number;
 	    activeGames: number;
@@ -4539,6 +4667,163 @@ export namespace version {
 	        this.platform = source["platform"];
 	        this.compiler = source["compiler"];
 	    }
+	}
+
+}
+
+export namespace workstation {
+	
+	export class StoredAssetInfo {
+	    name: string;
+	    path: string;
+	    category: string;
+	    sizeBytes: number;
+	    sizeFormatted: string;
+	    modifiedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new StoredAssetInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.category = source["category"];
+	        this.sizeBytes = source["sizeBytes"];
+	        this.sizeFormatted = source["sizeFormatted"];
+	        this.modifiedAt = source["modifiedAt"];
+	    }
+	}
+	export class CategoryStorageInfo {
+	    categoryId: number;
+	    key: string;
+	    label: string;
+	    path: string;
+	    description: string;
+	    fileCount: number;
+	    totalBytes: number;
+	    sizeFormatted: string;
+	    assets: StoredAssetInfo[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CategoryStorageInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.categoryId = source["categoryId"];
+	        this.key = source["key"];
+	        this.label = source["label"];
+	        this.path = source["path"];
+	        this.description = source["description"];
+	        this.fileCount = source["fileCount"];
+	        this.totalBytes = source["totalBytes"];
+	        this.sizeFormatted = source["sizeFormatted"];
+	        this.assets = this.convertValues(source["assets"], StoredAssetInfo);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class FactoryResetOptions {
+	    createOptInBackup: boolean;
+	    backupDestDir?: string;
+	    keepEngines?: boolean;
+	    keepBooks?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new FactoryResetOptions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.createOptInBackup = source["createOptInBackup"];
+	        this.backupDestDir = source["backupDestDir"];
+	        this.keepEngines = source["keepEngines"];
+	        this.keepBooks = source["keepBooks"];
+	    }
+	}
+	export class FactoryResetResult {
+	    resetCompletedAt: string;
+	    backupCreated: boolean;
+	    backupArchivePath?: string;
+	    wipedPaths: string[];
+	    filesRemoved: number;
+	    bytesFreed: number;
+	    sizeFreedStr: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FactoryResetResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.resetCompletedAt = source["resetCompletedAt"];
+	        this.backupCreated = source["backupCreated"];
+	        this.backupArchivePath = source["backupArchivePath"];
+	        this.wipedPaths = source["wipedPaths"];
+	        this.filesRemoved = source["filesRemoved"];
+	        this.bytesFreed = source["bytesFreed"];
+	        this.sizeFreedStr = source["sizeFreedStr"];
+	        this.message = source["message"];
+	    }
+	}
+	export class StorageReport {
+	    dataRootDir: string;
+	    configRootDir: string;
+	    totalBytes: number;
+	    totalSizeStr: string;
+	    totalFiles: number;
+	    categories: CategoryStorageInfo[];
+	
+	    static createFrom(source: any = {}) {
+	        return new StorageReport(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.dataRootDir = source["dataRootDir"];
+	        this.configRootDir = source["configRootDir"];
+	        this.totalBytes = source["totalBytes"];
+	        this.totalSizeStr = source["totalSizeStr"];
+	        this.totalFiles = source["totalFiles"];
+	        this.categories = this.convertValues(source["categories"], CategoryStorageInfo);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }

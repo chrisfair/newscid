@@ -8,7 +8,7 @@ import (
 // Build-time variables injected via -ldflags.
 var (
 	// Version is the current semantic version of NewScid.
-	Version = "1.3.23"
+	Version = "1.3.24"
 
 	// GitCommit is the git commit hash at build time.
 	GitCommit = "development"
