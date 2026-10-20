@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"newscid/pkg/blundervault"
+	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
 	"newscid/pkg/online"
 	"newscid/pkg/persona"
@@ -72,6 +74,8 @@ type AppPreferences struct {
 	AnnotateMoveTimeMs          int                         `json:"annotateMoveTimeMs"`
 	LichessUsername             string                      `json:"lichessUsername"`
 	ChessComUsername            string                      `json:"chessComUsername"`
+	AutoCapturePortalGames      bool                        `json:"autoCapturePortalGames"`
+	AutoLoadCapturedGame        bool                        `json:"autoLoadCapturedGame"`
 	DefaultPortalPlatform       string                      `json:"defaultPortalPlatform"` // "lichess" | "chesscom"
 	PortalWindowMode            string                      `json:"portalWindowMode"`      // "browser-app" | "native-window" | "floater" | "docked"
 	CustomBrowserCmd            string                      `json:"customBrowserCmd"`
@@ -212,6 +216,8 @@ func defaultAppPreferences() *AppPreferences {
 		AnnotateMoveTimeMs:          150,
 		LichessUsername:             "",
 		ChessComUsername:            "",
+		AutoCapturePortalGames:      true,
+		AutoLoadCapturedGame:        true,
 		DefaultPortalPlatform:       "lichess",
 		PortalWindowMode:            "browser-app",
 		CustomBrowserCmd:            "",
@@ -612,6 +618,9 @@ func (a *App) LaunchPortalWindow(platform string, targetURL string, mode string)
 	prefs, _ := a.GetAppPreferences()
 	if mode == "" {
 		mode = prefs.PortalWindowMode
+	}
+	if prefs == nil || prefs.AutoCapturePortalGames {
+		_, _ = a.StartLivePortalWatcher()
 	}
 
 	title := "NewScid Live Portal — Lichess.org"
@@ -1380,3 +1389,415 @@ func (a *App) FactoryResetNewScid(opts workstation.FactoryResetOptions) (*workst
 
 	return res, nil
 }
+
+// ==========================================
+// Standardized 3-Tier Database Import Pipeline
+// (Original Archive vs. Master Reference vs. Personal User DB)
+// ==========================================
+
+// StandardImportRequest defines how an external database (.pgn or .si4) or PGN text
+// should be imported into NewScid's 3-tier database architecture:
+//   - "original_and_master": Save untouched Original Archive (Locked) + Merge & Deduplicate into Master Reference DB (Sync-Only)
+//   - "original_only":       Save untouched Original Archive (Locked) as a standalone database
+//   - "master_only":         Merge & Deduplicate directly into Master Reference DB (Sync-Only)
+//   - "user_db":             Import & Deduplicate into Personal User Database (Editable, Default Startup DB)
+type StandardImportRequest struct {
+	SourcePath       string `json:"sourcePath"`
+	PGNText          string `json:"pgnText"`
+	ArchiveName      string `json:"archiveName"`
+	ImportMode       string `json:"importMode"` // "original_and_master" | "original_only" | "master_only" | "user_db"
+	MasterDBName     string `json:"masterDbName"`
+	UserDBName       string `json:"userDbName"`
+	TargetDir        string `json:"targetDir,omitempty"`
+	SetMasterAsRef   bool   `json:"setMasterAsRef"`
+	SetUserAsDefault bool   `json:"setUserAsDefault"`
+	OpenAfterImport  bool   `json:"openAfterImport"`
+}
+
+// StandardImportResult reports the outcome of a standardized database import across Original, Master, and User tiers.
+type StandardImportResult struct {
+	ImportMode         string `json:"importMode"`
+	OriginalBasePath   string `json:"originalBasePath,omitempty"`
+	OriginalName       string `json:"originalName,omitempty"`
+	OriginalGames      int    `json:"originalGames"`
+	MasterBasePath     string `json:"masterBasePath,omitempty"`
+	MasterName         string `json:"masterName,omitempty"`
+	MasterTotalGames   int    `json:"masterTotalGames"`
+	MasterAddedGames   int    `json:"masterAddedGames"`
+	MasterSkippedDupes int    `json:"masterSkippedDupes"`
+	UserBasePath       string `json:"userBasePath,omitempty"`
+	UserName           string `json:"userName,omitempty"`
+	UserTotalGames     int    `json:"userTotalGames"`
+	UserAddedGames     int    `json:"userAddedGames"`
+	UserSkippedDupes   int    `json:"userSkippedDupes"`
+	ActiveBasePath     string `json:"activeBasePath,omitempty"`
+	Summary            string `json:"summary"`
+}
+
+func sanitizeDBFilename(raw string, fallback string) string {
+	s := strings.TrimSpace(raw)
+	for _, ext := range []string{".si4", ".sg4", ".sn4", ".pgn"} {
+		if strings.HasSuffix(strings.ToLower(s), ext) {
+			s = s[:len(s)-len(ext)]
+		}
+	}
+	s = filepath.Base(s)
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
+			b.WriteRune(r)
+		} else if r == ' ' || r == '.' {
+			b.WriteRune('_')
+		}
+	}
+	out := strings.Trim(b.String(), "_-")
+	if out == "" || out == "." {
+		return fallback
+	}
+	return out
+}
+
+func copyScidBundleFiles(srcBase, dstBase string) error {
+	cleanSrc, _ := filepath.Abs(srcBase)
+	cleanDst, _ := filepath.Abs(dstBase)
+	if cleanSrc == cleanDst {
+		return nil
+	}
+	for _, ext := range []string{".si4", ".sg4", ".sn4"} {
+		in, err := os.Open(cleanSrc + ext)
+		if err != nil {
+			return fmt.Errorf("opening %s%s: %w", srcBase, ext, err)
+		}
+		out, err := os.OpenFile(cleanDst+ext, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+		if err != nil {
+			_ = in.Close()
+			return fmt.Errorf("creating %s%s: %w", dstBase, ext, err)
+		}
+		_, copyErr := io.Copy(out, in)
+		_ = out.Close()
+		_ = in.Close()
+		if copyErr != nil {
+			return fmt.Errorf("copying %s: %w", ext, copyErr)
+		}
+	}
+	return nil
+}
+
+// EnsurePersonalUserDatabase ensures the user has a dedicated editable Personal User Database
+// (defaulting to ~/.local/share/newscid/databases/My_Games), marks it Editable, sets it as the
+// Default Startup User DB, and optionally opens it as the Active Working DB.
+func (a *App) EnsurePersonalUserDatabase(openActive bool) (*DatabaseInfo, error) {
+	prefs, _ := a.GetAppPreferences()
+	dataRoot, _ := workstation.DefaultWorkstationDirs()
+	dbDir := filepath.Join(dataRoot, "databases")
+	_ = os.MkdirAll(dbDir, 0o755)
+
+	targetBase := ""
+	if prefs != nil && strings.TrimSpace(prefs.DefaultDatabasePath) != "" {
+		cand := normalizeScidBasePath(prefs.DefaultDatabasePath)
+		if _, err := os.Stat(cand + ".si4"); err == nil {
+			targetBase = cand
+		}
+	}
+	if targetBase == "" {
+		targetBase = filepath.Join(dbDir, "My_Games")
+	}
+
+	if _, err := os.Stat(targetBase + ".si4"); err != nil {
+		db := scid.NewDatabase()
+		if err := db.Create(targetBase, "Personal User Database (My Games, Annotations & Repertoire)"); err != nil {
+			return nil, fmt.Errorf("creating personal user database: %w", err)
+		}
+		_ = db.Close()
+	}
+
+	_, _ = a.SetDatabaseWritePolicy(targetBase, scid.WritePolicyEditable.String())
+	_, _ = a.SetDefaultDatabase(targetBase)
+
+	if openActive {
+		return a.OpenDatabase(targetBase)
+	}
+	meta := scid.InspectDatabase(targetBase, "User Databases")
+	return &DatabaseInfo{
+		BasePath:    targetBase,
+		Name:        filepath.Base(targetBase),
+		NumGames:    meta.NumGames,
+		Description: meta.Description,
+		WritePolicy: scid.WritePolicyEditable.String(),
+		IsLocked:    false,
+	}, nil
+}
+
+// ImportStandardDatabase imports a .pgn file, .si4 database, or raw PGN text according to NewScid's
+// standardized 3-tier database model (Original Archive -> Master Reference DB, or Personal User DB).
+func (a *App) ImportStandardDatabase(req StandardImportRequest) (*StandardImportResult, error) {
+	mode := strings.ToLower(strings.TrimSpace(req.ImportMode))
+	if mode == "" {
+		mode = "original_and_master"
+	}
+
+	targetDir := strings.TrimSpace(req.TargetDir)
+	if targetDir == "" {
+		dataRoot, _ := workstation.DefaultWorkstationDirs()
+		targetDir = filepath.Join(dataRoot, "databases")
+	}
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return nil, fmt.Errorf("creating databases directory: %w", err)
+	}
+
+	srcPath := strings.TrimSpace(req.SourcePath)
+	pgnText := strings.TrimSpace(req.PGNText)
+	if srcPath == "" && pgnText == "" {
+		return nil, fmt.Errorf("either a database/PGN file path or PGN text is required")
+	}
+
+	opCtx, finishOp := a.startCancellableOperation("standard-import")
+	defer finishOp()
+	_ = opCtx
+
+	res := &StandardImportResult{
+		ImportMode: mode,
+	}
+
+	// Determine archive name
+	defaultArchive := "Imported_Archive"
+	if srcPath != "" {
+		defaultArchive = sanitizeDBFilename(srcPath, "Imported_Archive")
+	}
+	archiveName := sanitizeDBFilename(req.ArchiveName, defaultArchive)
+
+	// Helper to open or create a Scid database and merge from source
+	mergeIntoTargetDB := func(dbBasePath, description, policy string, sources []string) (*scid.MergeStats, error) {
+		cleanTarget := normalizeScidBasePath(dbBasePath)
+
+		// Close active or ref handle temporarily if it points to cleanTarget so disk writes are consistent
+		a.mu.Lock()
+		wasActive := a.db != nil && a.db.IsOpen && normalizeScidBasePath(a.db.BasePath) == cleanTarget
+		wasRef := a.refDB != nil && a.refDB.IsOpen && normalizeScidBasePath(a.refDB.BasePath) == cleanTarget
+		if wasActive {
+			_ = a.db.Close()
+		}
+		if wasRef {
+			_ = a.refDB.Close()
+		}
+		a.mu.Unlock()
+
+		tDB := scid.NewDatabase()
+		if _, err := os.Stat(cleanTarget + ".si4"); err == nil {
+			if err := tDB.Open(cleanTarget); err != nil {
+				return nil, fmt.Errorf("opening %s: %w", filepath.Base(cleanTarget), err)
+			}
+		} else {
+			if err := tDB.Create(cleanTarget, description); err != nil {
+				return nil, fmt.Errorf("creating %s: %w", filepath.Base(cleanTarget), err)
+			}
+		}
+
+		mStats, mergeErr := tDB.MergeFromDatabases(sources, func(sourceName string, scanned, imported, skipped int) {
+			a.emitEvent("import:progress", map[string]interface{}{
+				"target":   filepath.Base(cleanTarget),
+				"source":   sourceName,
+				"scanned":  scanned,
+				"imported": imported,
+				"skipped":  skipped,
+			})
+		})
+		_ = tDB.Close()
+
+		_, _ = a.SetDatabaseWritePolicy(cleanTarget, policy)
+
+		a.mu.Lock()
+		if wasActive {
+			_ = a.db.Open(cleanTarget)
+		}
+		if wasRef {
+			_ = a.refDB.Open(cleanTarget)
+		}
+		a.mu.Unlock()
+
+		return mStats, mergeErr
+	}
+
+	// Step 1: If raw PGN text was provided without a file path, write it to a temporary PGN file for uniform processing
+	effectiveSrc := srcPath
+	if effectiveSrc == "" && pgnText != "" {
+		tmpPGN := filepath.Join(os.TempDir(), fmt.Sprintf("newscid_import_%d.pgn", time.Now().UnixNano()))
+		if err := os.WriteFile(tmpPGN, []byte(pgnText), 0o644); err != nil {
+			return nil, fmt.Errorf("staging PGN text: %w", err)
+		}
+		defer os.Remove(tmpPGN)
+		effectiveSrc = tmpPGN
+	}
+
+	isPGNSource := strings.HasSuffix(strings.ToLower(effectiveSrc), ".pgn")
+	srcScidBase := normalizeScidBasePath(effectiveSrc)
+	if !isPGNSource {
+		if _, err := os.Stat(srcScidBase + ".si4"); err != nil {
+			return nil, fmt.Errorf("source database not found: %s", effectiveSrc)
+		}
+	}
+
+	// Step 2: Execute according to ImportMode
+	switch mode {
+	case "original_only", "original_and_master":
+		origBase := filepath.Join(targetDir, archiveName)
+		origDesc := fmt.Sprintf("Original Source Archive (%s)", archiveName)
+
+		if isPGNSource {
+			// Create or update Original Archive from PGN
+			if _, err := os.Stat(origBase + ".si4"); err == nil {
+				for _, ext := range []string{".si4", ".sg4", ".sn4"} {
+					_ = os.Remove(origBase + ext)
+				}
+			}
+			origDB := scid.NewDatabase()
+			if err := origDB.Create(origBase, origDesc); err != nil {
+				return nil, fmt.Errorf("creating original archive %s: %w", archiveName, err)
+			}
+			fPgn, err := os.Open(effectiveSrc)
+			if err != nil {
+				_ = origDB.Close()
+				return nil, fmt.Errorf("opening PGN source: %w", err)
+			}
+			games, parseErr := chess.ParsePGNDatabase(fPgn)
+			_ = fPgn.Close()
+			if parseErr != nil {
+				_ = origDB.Close()
+				return nil, fmt.Errorf("parsing PGN source: %w", parseErr)
+			}
+			if _, err := origDB.ImportGames(games); err != nil {
+				_ = origDB.Close()
+				return nil, fmt.Errorf("importing games into original archive: %w", err)
+			}
+			res.OriginalGames = origDB.NumGames()
+			_ = origDB.Close()
+		} else {
+			if err := copyScidBundleFiles(srcScidBase, origBase); err != nil {
+				return nil, fmt.Errorf("copying original Scid archive: %w", err)
+			}
+			meta := scid.InspectDatabase(origBase, "")
+			res.OriginalGames = meta.NumGames
+		}
+
+		// Protect Original Archive as locked so it stays a pristine source copy
+		_, _ = a.SetDatabaseWritePolicy(origBase, scid.WritePolicyLocked.String())
+		res.OriginalBasePath = origBase
+		res.OriginalName = filepath.Base(origBase)
+
+		if mode == "original_and_master" {
+			masterName := sanitizeDBFilename(req.MasterDBName, "Master_Reference")
+			masterBase := filepath.Join(targetDir, masterName)
+			masterDesc := "Master Reference Database (Consolidated & Deduplicated Theory Base)"
+
+			mStats, err := mergeIntoTargetDB(masterBase, masterDesc, scid.WritePolicySyncOnly.String(), []string{origBase})
+			if err != nil {
+				return nil, fmt.Errorf("merging original into master reference database: %w", err)
+			}
+			res.MasterBasePath = masterBase
+			res.MasterName = filepath.Base(masterBase)
+			res.MasterTotalGames = mStats.TargetTotalGames
+			res.MasterAddedGames = mStats.Imported
+			res.MasterSkippedDupes = mStats.DuplicatesSkipped
+
+			if req.SetMasterAsRef {
+				_, _ = a.SetReferenceDatabase(masterBase, true)
+			}
+			if req.OpenAfterImport {
+				if info, err := a.OpenDatabase(masterBase); err == nil && info != nil {
+					res.ActiveBasePath = info.BasePath
+				}
+			}
+			res.Summary = fmt.Sprintf(
+				"Saved untouched Original Archive '%s' (%d games, Locked) and merged +%d new games (%d duplicates skipped) into Master Reference '%s' (%d total games).",
+				res.OriginalName, res.OriginalGames, res.MasterAddedGames, res.MasterSkippedDupes, res.MasterName, res.MasterTotalGames,
+			)
+		} else {
+			if req.OpenAfterImport {
+				if info, err := a.OpenDatabase(origBase); err == nil && info != nil {
+					res.ActiveBasePath = info.BasePath
+				}
+			}
+			res.Summary = fmt.Sprintf(
+				"Imported standalone Original Archive '%s' (%d games, Locked against accidental edits).",
+				res.OriginalName, res.OriginalGames,
+			)
+		}
+
+	case "master_only":
+		masterName := sanitizeDBFilename(req.MasterDBName, "Master_Reference")
+		masterBase := filepath.Join(targetDir, masterName)
+		masterDesc := "Master Reference Database (Consolidated & Deduplicated Theory Base)"
+
+		srcForMerge := effectiveSrc
+		if !isPGNSource {
+			srcForMerge = srcScidBase
+		}
+		mStats, err := mergeIntoTargetDB(masterBase, masterDesc, scid.WritePolicySyncOnly.String(), []string{srcForMerge})
+		if err != nil {
+			return nil, fmt.Errorf("merging into master reference database: %w", err)
+		}
+		res.MasterBasePath = masterBase
+		res.MasterName = filepath.Base(masterBase)
+		res.MasterTotalGames = mStats.TargetTotalGames
+		res.MasterAddedGames = mStats.Imported
+		res.MasterSkippedDupes = mStats.DuplicatesSkipped
+
+		if req.SetMasterAsRef {
+			_, _ = a.SetReferenceDatabase(masterBase, true)
+		}
+		if req.OpenAfterImport {
+			if info, err := a.OpenDatabase(masterBase); err == nil && info != nil {
+				res.ActiveBasePath = info.BasePath
+			}
+		}
+		res.Summary = fmt.Sprintf(
+			"Merged +%d new games (%d duplicates skipped) into Master Reference '%s' (%d total games).",
+			res.MasterAddedGames, res.MasterSkippedDupes, res.MasterName, res.MasterTotalGames,
+		)
+
+	case "user_db":
+		prefs, _ := a.GetAppPreferences()
+		userBase := ""
+		if strings.TrimSpace(req.UserDBName) != "" {
+			userBase = filepath.Join(targetDir, sanitizeDBFilename(req.UserDBName, "My_Games"))
+		} else if prefs != nil && strings.TrimSpace(prefs.DefaultDatabasePath) != "" && req.TargetDir == "" {
+			userBase = normalizeScidBasePath(prefs.DefaultDatabasePath)
+		} else {
+			userBase = filepath.Join(targetDir, "My_Games")
+		}
+		userDesc := "Personal User Database (My Games, Annotations & Repertoire)"
+
+		srcForMerge := effectiveSrc
+		if !isPGNSource {
+			srcForMerge = srcScidBase
+		}
+		mStats, err := mergeIntoTargetDB(userBase, userDesc, scid.WritePolicyEditable.String(), []string{srcForMerge})
+		if err != nil {
+			return nil, fmt.Errorf("importing into personal user database: %w", err)
+		}
+		res.UserBasePath = userBase
+		res.UserName = filepath.Base(userBase)
+		res.UserTotalGames = mStats.TargetTotalGames
+		res.UserAddedGames = mStats.Imported
+		res.UserSkippedDupes = mStats.DuplicatesSkipped
+
+		if req.SetUserAsDefault || (prefs != nil && strings.TrimSpace(prefs.DefaultDatabasePath) == "") {
+			_, _ = a.SetDefaultDatabase(userBase)
+		}
+		if req.OpenAfterImport {
+			if info, err := a.OpenDatabase(userBase); err == nil && info != nil {
+				res.ActiveBasePath = info.BasePath
+			}
+		}
+		res.Summary = fmt.Sprintf(
+			"Imported +%d new games (%d duplicates skipped) into Personal User DB '%s' (%d total games, Editable).",
+			res.UserAddedGames, res.UserSkippedDupes, res.UserName, res.UserTotalGames,
+		)
+
+	default:
+		return nil, fmt.Errorf("unsupported import mode %q", req.ImportMode)
+	}
+
+	return res, nil
+}
+

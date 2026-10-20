@@ -52,6 +52,8 @@ const emit = defineEmits<{
   (e: 'updateFromLocal', targetPath?: string): void
   (e: 'cycleWritePolicy', path: string, currentPolicy?: string): void
   (e: 'openWorkstationManager', tab?: 'builder' | 'storage' | 'reset'): void
+  (e: 'openStandardImport'): void
+  (e: 'ensureUserDB'): void
 }>()
 
 const isConsolidating = ref(false)
@@ -152,6 +154,20 @@ function formatCount(n: number): string {
         </div>
 
         <div class="flex items-center gap-1.5 flex-wrap">
+          <button
+            class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+            title="Standard Import (.pgn or .si4) — Save untouched Original Archive (Locked), Merge into Master Reference DB, or Import into Personal User DB"
+            @click="emit('openStandardImport')"
+          >
+            <span>📦 Standard Import (.pgn / .si4)</span>
+          </button>
+          <button
+            class="px-2.5 py-1.5 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+            title="Initialize or open your editable Personal User Database (My_Games)"
+            @click="emit('ensureUserDB')"
+          >
+            <span>👤 My User DB</span>
+          </button>
           <button
             data-testid="consolidate-all-dbs-btn"
             class="px-2.5 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 font-bold flex items-center gap-1.5 cursor-pointer transition-colors"

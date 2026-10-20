@@ -80,7 +80,21 @@ const emit = defineEmits<{
   (e: 'deleteGame', id: number): void
   (e: 'cycleWritePolicy'): void
   (e: 'openSubDbBuilder', filter?: any): void
+  (e: 'openStandardImport'): void
+  (e: 'openMegaDownloader'): void
+  (e: 'ensurePersonalDb'): void
+  (e: 'openOnlineSync'): void
 }>()
+
+const startingFENPrefix = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR'
+const currentBoardMoveNumber = computed(() => {
+  if (!props.currentFen || props.currentFen.startsWith(startingFENPrefix)) {
+    return 0
+  }
+  const parts = props.currentFen.trim().split(/\s+/)
+  const moveNum = parts.length >= 6 ? parseInt(parts[5], 10) : 0
+  return Number.isFinite(moveNum) && moveNum > 0 ? moveNum : 1
+})
 
 const searchPlayer = ref('')
 const selectedFamousPlayer = ref('')
@@ -460,215 +474,227 @@ const totalPages = () => Math.max(1, Math.ceil(props.totalGames / props.pageSize
       </div>
     </div>
 
-    <!-- Intuitive Search Bar: Player / Famous Legends, Opening Line / Moves, & Board Position -->
-    <div class="px-3 py-2 bg-zinc-950/70 border-b border-zinc-800 flex flex-wrap items-center gap-2">
-      <!-- 1. Player Input -->
-      <div class="relative">
-        <Search class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
-        <input
-          v-model="searchPlayer"
-          type="text"
-          placeholder="Player (e.g. Fischer, Carlsen)..."
-          class="bg-zinc-800 border border-zinc-700 rounded-lg pl-8 pr-3 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-hidden focus:border-emerald-500 w-44"
-          @input="onSearchInput"
-        />
-      </div>
+    <!-- Intuitive Search Bar: Grouped into 3 Labeled Clusters (1. Player & Legend, 2. Opening & Moves, 3. Position & Result) -->
+    <div class="px-3 py-2 bg-zinc-950/80 border-b border-zinc-800 flex flex-wrap items-center gap-2">
+      <!-- CLUSTER 1: 👤 Player & Famous Legends -->
+      <div class="flex flex-wrap items-center gap-1.5 bg-zinc-900/90 border border-zinc-800 rounded-xl px-2 py-1">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-amber-400/90 select-none">👤 Player:</span>
+        <div class="relative">
+          <Search class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+          <input
+            v-model="searchPlayer"
+            type="text"
+            placeholder="Player (e.g. Fischer, Carlsen)..."
+            class="bg-zinc-800 border border-zinc-700 rounded-lg pl-8 pr-2.5 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-hidden focus:border-emerald-500 w-40"
+            @input="onSearchInput"
+          />
+        </div>
 
-      <!-- 2. Famous & Custom Players Quick-Lookup Dropdown -->
-      <div class="relative flex items-center gap-1">
-        <select
-          v-model="selectedFamousPlayer"
-          aria-label="Famous Players Quick Lookup"
-          class="bg-zinc-800 border border-amber-500/40 rounded-lg pl-2 pr-6 py-1 text-xs text-amber-200 font-medium focus:outline-hidden focus:border-amber-400 cursor-pointer max-w-[185px]"
-          title="Quickly look up games by Famous Players or your custom tracked players"
-          @change="onSelectFamousPlayer"
-        >
-          <option value="" class="bg-zinc-900 text-zinc-200">★ Famous Players...</option>
-          <option
-            v-for="p in notablePlayers"
-            :key="p.name"
-            :value="p.name"
-            class="bg-zinc-900 text-zinc-100"
+        <!-- Famous & Custom Players Quick-Lookup Dropdown -->
+        <div class="relative flex items-center gap-1">
+          <select
+            v-model="selectedFamousPlayer"
+            aria-label="Famous Players Quick Lookup"
+            class="bg-zinc-800 border border-amber-500/40 rounded-lg pl-2 pr-6 py-1 text-xs text-amber-200 font-medium focus:outline-hidden focus:border-amber-400 cursor-pointer max-w-[175px]"
+            title="Quickly look up games by Famous Players or your custom tracked players"
+            @change="onSelectFamousPlayer"
           >
-            {{ p.gameCount > 0 ? `★ ${p.name} (${p.gameCount})` : `☆ ${p.name}` }}{{ p.isCustom ? ' [Custom]' : '' }}
-          </option>
-        </select>
-
-        <button
-          type="button"
-          class="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-amber-300 text-xs flex items-center gap-1 cursor-pointer transition-colors"
-          title="Customize Famous & Tracked Players Dropdown (Add or remove players)"
-          @click="showCustomizePlayers = !showCustomizePlayers"
-        >
-          <UserPlus class="w-3.5 h-3.5" />
-        </button>
-
-        <!-- Customize Famous Players Popover -->
-        <div
-          v-if="showCustomizePlayers"
-          class="absolute top-full left-0 mt-1.5 w-80 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-3 z-50 text-xs space-y-2.5"
-        >
-          <div class="flex items-center justify-between border-b border-zinc-800 pb-1.5">
-            <span class="font-bold text-amber-300 flex items-center gap-1.5">
-              <Star class="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-              <span>Customize Players Dropdown</span>
-            </span>
-            <button
-              type="button"
-              class="text-zinc-400 hover:text-white cursor-pointer"
-              @click="showCustomizePlayers = false"
-            >
-              <X class="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div class="space-y-1.5">
-            <input
-              v-model="newCustomPlayerName"
-              type="text"
-              placeholder="Player name (e.g. Paul Morphy or Hikaru)"
-              class="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 text-xs text-zinc-200"
-            />
-            <div class="flex gap-1.5">
-              <input
-                v-model="newCustomPlayerTitle"
-                type="text"
-                placeholder="Note / Title (optional)"
-                class="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 text-xs text-zinc-200"
-              />
-              <button
-                type="button"
-                class="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold cursor-pointer"
-                @click="handleAddCustomPlayer"
-              >
-                + Add
-              </button>
-            </div>
-            <input
-              v-model="newCustomPlayerAliases"
-              type="text"
-              placeholder="Optional aliases (e.g. Fischer, Robert J)"
-              class="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 text-[11px] text-zinc-300"
-            />
-          </div>
-
-          <div class="max-h-36 overflow-y-auto divide-y divide-zinc-800/60 border border-zinc-800 rounded-lg bg-zinc-950/60">
-            <div
+            <option value="" class="bg-zinc-900 text-zinc-200">★ Famous Players...</option>
+            <option
               v-for="p in notablePlayers"
               :key="p.name"
-              class="px-2.5 py-1.5 flex items-center justify-between gap-2"
+              :value="p.name"
+              class="bg-zinc-900 text-zinc-100"
             >
-              <div class="truncate">
-                <span class="font-semibold text-zinc-200">{{ p.name }}</span>
-                <span v-if="p.gameCount > 0" class="ml-1 text-[10px] font-mono text-emerald-400">({{ p.gameCount }})</span>
-                <span v-if="p.isCustom" class="ml-1 text-[10px] text-amber-400">[Custom]</span>
-              </div>
+              {{ p.gameCount > 0 ? `★ ${p.name} (${p.gameCount})` : `☆ ${p.name}` }}{{ p.isCustom ? ' [Custom]' : '' }}
+            </option>
+          </select>
+
+          <button
+            type="button"
+            class="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-amber-300 text-xs flex items-center gap-1 cursor-pointer transition-colors"
+            title="Customize Famous & Tracked Players Dropdown (Add or remove players)"
+            @click="showCustomizePlayers = !showCustomizePlayers"
+          >
+            <UserPlus class="w-3.5 h-3.5" />
+          </button>
+
+          <!-- Customize Famous Players Popover -->
+          <div
+            v-if="showCustomizePlayers"
+            class="absolute top-full left-0 mt-1.5 w-80 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-3 z-50 text-xs space-y-2.5"
+          >
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-1.5">
+              <span class="font-bold text-amber-300 flex items-center gap-1.5">
+                <Star class="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                <span>Customize Players Dropdown</span>
+              </span>
               <button
                 type="button"
-                class="text-zinc-500 hover:text-rose-400 cursor-pointer"
-                title="Remove from dropdown"
-                @click="handleRemoveNotablePlayer(p.name)"
+                class="text-zinc-400 hover:text-white cursor-pointer"
+                @click="showCustomizePlayers = false"
               >
                 <X class="w-3.5 h-3.5" />
               </button>
             </div>
-          </div>
 
-          <div class="flex items-center justify-between pt-1 border-t border-zinc-800">
-            <button
-              type="button"
-              class="text-[11px] text-zinc-400 hover:text-zinc-200 flex items-center gap-1 cursor-pointer"
-              @click="handleResetNotablePlayers"
-            >
-              <RotateCcw class="w-3 h-3" />
-              <span>Restore Default Legends</span>
-            </button>
-            <button
-              type="button"
-              class="text-[11px] text-emerald-400 font-semibold cursor-pointer"
-              @click="showCustomizePlayers = false"
-            >
-              Done
-            </button>
+            <div class="space-y-1.5">
+              <input
+                v-model="newCustomPlayerName"
+                type="text"
+                placeholder="Player name (e.g. Paul Morphy or Hikaru)"
+                class="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 text-xs text-zinc-200"
+              />
+              <div class="flex gap-1.5">
+                <input
+                  v-model="newCustomPlayerTitle"
+                  type="text"
+                  placeholder="Note / Title (optional)"
+                  class="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 text-xs text-zinc-200"
+                />
+                <button
+                  type="button"
+                  class="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold cursor-pointer"
+                  @click="handleAddCustomPlayer"
+                >
+                  + Add
+                </button>
+              </div>
+              <input
+                v-model="newCustomPlayerAliases"
+                type="text"
+                placeholder="Optional aliases (e.g. Fischer, Robert J)"
+                class="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1 text-[11px] text-zinc-300"
+              />
+            </div>
+
+            <div class="max-h-36 overflow-y-auto divide-y divide-zinc-800/60 border border-zinc-800 rounded-lg bg-zinc-950/60">
+              <div
+                v-for="p in notablePlayers"
+                :key="p.name"
+                class="px-2.5 py-1.5 flex items-center justify-between gap-2"
+              >
+                <div class="truncate">
+                  <span class="font-semibold text-zinc-200">{{ p.name }}</span>
+                  <span v-if="p.gameCount > 0" class="ml-1 text-[10px] font-mono text-emerald-400">({{ p.gameCount }})</span>
+                  <span v-if="p.isCustom" class="ml-1 text-[10px] text-amber-400">[Custom]</span>
+                </div>
+                <button
+                  type="button"
+                  class="text-zinc-500 hover:text-rose-400 cursor-pointer"
+                  title="Remove from dropdown"
+                  @click="handleRemoveNotablePlayer(p.name)"
+                >
+                  <X class="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-1 border-t border-zinc-800">
+              <button
+                type="button"
+                class="text-[11px] text-zinc-400 hover:text-zinc-200 flex items-center gap-1 cursor-pointer"
+                @click="handleResetNotablePlayers"
+              >
+                <RotateCcw class="w-3 h-3" />
+                <span>Restore Default Legends</span>
+              </button>
+              <button
+                type="button"
+                class="text-[11px] text-emerald-400 font-semibold cursor-pointer"
+                @click="showCustomizePlayers = false"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- 3. Opening Preset Selector + Smart ECO / Opening Moves Input -->
-      <select
-        v-model="selectedOpeningPreset"
-        aria-label="Opening Family Preset"
-        class="bg-zinc-800 border border-zinc-700 rounded-lg pl-2 pr-6 py-1 text-xs text-zinc-200 font-medium focus:outline-hidden focus:border-emerald-500 cursor-pointer max-w-[165px]"
-        title="Filter by popular opening family"
-        @change="onSelectOpeningPreset"
-      >
-        <option
-          v-for="preset in OPENING_PRESETS"
-          :key="preset.label"
-          :value="preset.value"
-          class="bg-zinc-900 text-zinc-100"
+      <!-- CLUSTER 2: 📖 Opening Family, ECO & Move Sequence -->
+      <div class="flex flex-wrap items-center gap-1.5 bg-zinc-900/90 border border-zinc-800 rounded-xl px-2 py-1">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-400/90 select-none">📖 Opening:</span>
+        <select
+          v-model="selectedOpeningPreset"
+          aria-label="Opening Family Preset"
+          class="bg-zinc-800 border border-zinc-700 rounded-lg pl-2 pr-6 py-1 text-xs text-zinc-200 font-medium focus:outline-hidden focus:border-emerald-500 cursor-pointer max-w-[155px]"
+          title="Filter by popular opening family"
+          @change="onSelectOpeningPreset"
         >
-          {{ preset.label }}
-        </option>
-      </select>
+          <option
+            v-for="preset in OPENING_PRESETS"
+            :key="preset.label"
+            :value="preset.value"
+            class="bg-zinc-900 text-zinc-100"
+          >
+            {{ preset.label }}
+          </option>
+        </select>
 
-      <div class="relative">
-        <BookOpen class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
-        <input
-          v-model="searchOpeningInput"
-          type="text"
-          placeholder="ECO (B90) or moves (1.e4 c5)..."
-          class="bg-zinc-800 border border-zinc-700 rounded-lg pl-8 pr-2.5 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-hidden focus:border-emerald-500 w-44 font-mono"
-          title="Type an ECO code (e.g. B90 or B20-B99) OR opening moves (e.g. 1.e4 c5 2.Nf3)"
-          @input="onSearchInput"
-        />
+        <div class="relative">
+          <BookOpen class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+          <input
+            v-model="searchOpeningInput"
+            type="text"
+            placeholder="ECO (B90) or moves (1.e4 c5)..."
+            class="bg-zinc-800 border border-zinc-700 rounded-lg pl-8 pr-2.5 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-hidden focus:border-emerald-500 w-40 font-mono"
+            title="Type an ECO code (e.g. B90 or B20-B99) OR opening moves (e.g. 1.e4 c5 2.Nf3)"
+            @input="onSearchInput"
+          />
+        </div>
       </div>
 
-      <!-- 4. 1-Click Match Current Board Position Toggle -->
-      <button
-        type="button"
-        class="px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-        :class="matchBoardPosition
-          ? 'bg-emerald-600/30 border-emerald-400 text-emerald-200 shadow-xs'
-          : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-300'"
-        title="Find all games in the database that reach the exact position currently on the chessboard"
-        @click="togglePositionSearch"
-      >
-        <Crosshair class="w-3.5 h-3.5" :class="matchBoardPosition ? 'text-emerald-300' : 'text-zinc-400'" />
-        <span>Match Board Position</span>
-      </button>
+      <!-- CLUSTER 3: ♟️ Board Position, Result & Advanced Filters -->
+      <div class="flex flex-wrap items-center gap-1.5 bg-zinc-900/90 border border-zinc-800 rounded-xl px-2 py-1">
+        <button
+          type="button"
+          class="px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+          :class="matchBoardPosition
+            ? 'bg-emerald-600/30 border-emerald-400 text-emerald-200 shadow-xs'
+            : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-300'"
+          title="Find all games in the database that reach the exact position currently on the chessboard"
+          @click="togglePositionSearch"
+        >
+          <Crosshair class="w-3.5 h-3.5" :class="matchBoardPosition ? 'text-emerald-300' : 'text-zinc-400'" />
+          <span>Match Board Position</span>
+          <span
+            v-if="currentBoardMoveNumber > 0"
+            class="px-1 py-0.2 rounded text-[10px] font-mono bg-emerald-950/80 text-emerald-300 border border-emerald-700/50"
+          >
+            Move {{ currentBoardMoveNumber }}
+          </span>
+        </button>
 
-      <!-- 5. Result Dropdown -->
-      <select
-        v-model="filterResult"
-        class="bg-zinc-800 border border-zinc-700 rounded-lg pl-2 pr-6 py-1 text-xs text-zinc-100 font-medium focus:outline-hidden focus:border-emerald-500 cursor-pointer"
-        @change="onSearchInput"
-      >
-        <option value="" class="bg-zinc-900 text-zinc-100">Any Result</option>
-        <option value="1-0" class="bg-zinc-900 text-zinc-100">1-0</option>
-        <option value="0-1" class="bg-zinc-900 text-zinc-100">0-1</option>
-        <option value="1/2-1/2" class="bg-zinc-900 text-zinc-100">½-½</option>
-      </select>
+        <select
+          v-model="filterResult"
+          class="bg-zinc-800 border border-zinc-700 rounded-lg pl-2 pr-6 py-1 text-xs text-zinc-100 font-medium focus:outline-hidden focus:border-emerald-500 cursor-pointer"
+          @change="onSearchInput"
+        >
+          <option value="" class="bg-zinc-900 text-zinc-100">Any Result</option>
+          <option value="1-0" class="bg-zinc-900 text-zinc-100">1-0</option>
+          <option value="0-1" class="bg-zinc-900 text-zinc-100">0-1</option>
+          <option value="1/2-1/2" class="bg-zinc-900 text-zinc-100">½-½</option>
+        </select>
 
-      <!-- 6. Advanced Search Modal Button -->
-      <button
-        type="button"
-        class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700 text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-        title="Advanced Header, Material, Structure & Position Search (Ctrl+H)"
-        @click="emit('openAdvancedSearch')"
-      >
-        <Sliders class="w-3 h-3 text-emerald-400" />
-        <span>More Filters</span>
-      </button>
+        <button
+          type="button"
+          class="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700 text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+          title="Advanced Header, Material, Structure & Position Search (Ctrl+H)"
+          @click="emit('openAdvancedSearch')"
+        >
+          <Sliders class="w-3 h-3 text-emerald-400" />
+          <span>More Filters</span>
+        </button>
 
-      <button
-        v-if="hasActiveCriteria"
-        type="button"
-        class="text-xs text-zinc-400 hover:text-red-400 underline cursor-pointer ml-1"
-        @click="clearFilters"
-      >
-        Clear
-      </button>
+        <button
+          v-if="hasActiveCriteria"
+          type="button"
+          class="text-xs text-zinc-400 hover:text-red-400 underline cursor-pointer ml-1"
+          @click="clearFilters"
+        >
+          Clear
+        </button>
+      </div>
     </div>
 
     <!-- Active Filter Banner -->
@@ -697,10 +723,75 @@ const totalPages = () => Math.max(1, Math.ceil(props.totalGames / props.pageSize
       </button>
     </div>
 
-    <!-- Games Table -->
+    <!-- Games Table or Guided Empty-State Setup Hub -->
     <div class="games-table-container flex-1 overflow-y-auto">
-      <div v-if="games.length === 0" class="text-zinc-500 text-xs italic text-center py-12">
-        No games match the current query or database is empty.
+      <div v-if="games.length === 0" class="p-4 flex flex-col items-center justify-center min-h-[160px]">
+        <!-- Filtered 0 matches state -->
+        <div v-if="hasActiveCriteria" class="text-center space-y-2 py-4">
+          <p class="text-zinc-400 text-xs">
+            No games in <strong>{{ dbName || 'the active database' }}</strong> match the current search filter.
+          </p>
+          <button
+            type="button"
+            class="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-emerald-300 text-xs font-semibold cursor-pointer"
+            @click="clearFilters"
+          >
+            Clear Search Filters
+          </button>
+        </div>
+
+        <!-- Guided 3-Tier Database Onboarding Hub when no DB is open or DB is empty -->
+        <div v-else class="w-full max-w-4xl space-y-2.5">
+          <div class="flex items-center justify-between text-xs px-1">
+            <span class="font-bold text-zinc-200">
+              {{ dbName ? `'${dbName}' is currently empty (0 games)` : 'Welcome to NewScid — Set Up Your 3-Tier Database Workspace' }}
+            </span>
+            <span class="text-[11px] text-zinc-500">Original Archives (Locked) • Master Reference (Sync-Only) • Personal User DB (Editable)</span>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
+            <button
+              type="button"
+              class="text-left p-3 rounded-xl bg-zinc-950/80 hover:bg-zinc-800/80 border border-cyan-500/30 hover:border-cyan-400 transition-all cursor-pointer flex flex-col justify-between gap-1.5"
+              @click="emit('openMegaDownloader')"
+            >
+              <div class="font-bold text-cyan-300 flex items-center justify-between">
+                <span>🏛️ 1. Build Master Reference DB</span>
+                <span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300">2026 Archives</span>
+              </div>
+              <p class="text-[11px] text-zinc-400 leading-snug">
+                Download latest 2026 master/elite archives &amp; consolidate into your deduplicated <strong>Master Reference DB</strong> for the Opening Tree.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              class="text-left p-3 rounded-xl bg-zinc-950/80 hover:bg-zinc-800/80 border border-emerald-500/30 hover:border-emerald-400 transition-all cursor-pointer flex flex-col justify-between gap-1.5"
+              @click="emit('openStandardImport')"
+            >
+              <div class="font-bold text-emerald-300 flex items-center justify-between">
+                <span>📦 2. Standard Import (.pgn / .si4)</span>
+                <span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-300">Original + Master</span>
+              </div>
+              <p class="text-[11px] text-zinc-400 leading-snug">
+                Import any external database as a locked <strong>Original Archive</strong> and automatically merge &amp; deduplicate into <strong>Master Reference</strong>.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              class="text-left p-3 rounded-xl bg-zinc-950/80 hover:bg-zinc-800/80 border border-amber-500/30 hover:border-amber-400 transition-all cursor-pointer flex flex-col justify-between gap-1.5"
+              @click="emit('ensurePersonalDb')"
+            >
+              <div class="font-bold text-amber-300 flex items-center justify-between">
+                <span>👤 3. Personal User DB (My_Games)</span>
+                <span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-950 text-amber-300">Editable</span>
+              </div>
+              <p class="text-[11px] text-zinc-400 leading-snug">
+                Initialize or open your editable <strong>Personal User Database</strong> for your own games, annotations, Cyclical Drill &amp; Blunder Vault.
+              </p>
+            </button>
+          </div>
+        </div>
       </div>
 
       <table v-else class="w-full text-left font-mono text-xs border-collapse">

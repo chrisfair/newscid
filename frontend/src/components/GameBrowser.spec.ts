@@ -162,4 +162,26 @@ describe('GameBrowser.vue', () => {
     await subDbBtn!.trigger('click')
     expect(wrapper.emitted('openSubDbBuilder')).toBeTruthy()
   })
+
+  it('renders the 3-card Guided Empty-State Setup Hub when no games exist and no filters are active', async () => {
+    const wrapper = mount(GameBrowser, {
+      props: {
+        games: [],
+        totalGames: 0,
+        currentPage: 1,
+        pageSize: 50,
+      }
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Set Up Your 3-Tier Database Workspace')
+    expect(wrapper.text()).toContain('1. Build Master Reference DB')
+    expect(wrapper.text()).toContain('2. Standard Import (.pgn / .si4)')
+    expect(wrapper.text()).toContain('3. Personal User DB (My_Games)')
+
+    const importBtn = wrapper.findAll('button').find(b => b.text().includes('2. Standard Import (.pgn / .si4)'))
+    expect(importBtn).toBeDefined()
+    await importBtn!.trigger('click')
+    expect(wrapper.emitted('openStandardImport')).toBeTruthy()
+  })
 })

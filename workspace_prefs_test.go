@@ -327,4 +327,107 @@ func TestBuildConsolidatedDatabaseAndPersonaDatabaseDiscovery(t *testing.T) {
 	finish()
 }
 
+func TestStandardDatabaseImportThreeTierModel(t *testing.T) {
+	fakeHome := t.TempDir()
+	t.Setenv("HOME", fakeHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(fakeHome, ".config"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(fakeHome, ".local", "share"))
+
+	app := NewApp()
+	defer app.shutdown(nil)
+
+	// 1. EnsurePersonalUserDatabase creates My_Games (Editable) and sets it as Default User DB
+	userInfo, err := app.EnsurePersonalUserDatabase(true)
+	if err != nil || userInfo == nil {
+		t.Fatalf("EnsurePersonalUserDatabase failed: %v", err)
+	}
+	if userInfo.Name != "My_Games" || userInfo.WritePolicy != "editable" || userInfo.IsLocked {
+		t.Fatalf("unexpected user database info: %+v", userInfo)
+	}
+
+	// 2. Import an external PGN archive using "original_and_master" (Standard Reference Import)
+	samplePGN := `[Event "Candidates 2026"]
+[Site "Toronto"]
+[Date "2026.04.10"]
+[Round "1"]
+[White "Caruana, Fabiano"]
+[Black "Nakamura, Hikaru"]
+[Result "1/2-1/2"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 1/2-1/2
+
+[Event "Candidates 2026"]
+[Site "Toronto"]
+[Date "2026.04.11"]
+[Round "2"]
+[White "Gukesh, D"]
+[Black "Firouzja, Alireza"]
+[Result "1-0"]
+
+1. d4 Nf6 2. c4 g6 3. Nc3 Bg7 1-0
+`
+	res1, err := app.ImportStandardDatabase(StandardImportRequest{
+		PGNText:         samplePGN,
+		ArchiveName:     "Candidates_2026_Original",
+		ImportMode:      "original_and_master",
+		MasterDBName:    "Master_Reference",
+		SetMasterAsRef:  true,
+		OpenAfterImport: false,
+	})
+	if err != nil || res1 == nil {
+		t.Fatalf("ImportStandardDatabase(original_and_master) failed: %v", err)
+	}
+	if res1.OriginalName != "Candidates_2026_Original" || res1.OriginalGames != 2 {
+		t.Fatalf("unexpected original archive stats: %+v", res1)
+	}
+	if res1.MasterName != "Master_Reference" || res1.MasterAddedGames != 2 || res1.MasterTotalGames != 2 {
+		t.Fatalf("unexpected master reference stats: %+v", res1)
+	}
+	// Verify Original Archive is locked and Master Reference is sync_only
+	if pol := app.GetDatabaseWritePolicy(res1.OriginalBasePath); pol != "locked" {
+		t.Errorf("expected Original Archive policy=locked, got %q", pol)
+	}
+	if pol := app.GetDatabaseWritePolicy(res1.MasterBasePath); pol != "sync_only" {
+		t.Errorf("expected Master Reference policy=sync_only, got %q", pol)
+	}
+
+	// Re-importing the same games into Master should skip 2 duplicates
+	resDup, err := app.ImportStandardDatabase(StandardImportRequest{
+		PGNText:      samplePGN,
+		ImportMode:   "master_only",
+		MasterDBName: "Master_Reference",
+	})
+	if err != nil || resDup.MasterAddedGames != 0 || resDup.MasterSkippedDupes != 2 {
+		t.Fatalf("expected 0 added and 2 skipped duplicates on re-import, got %+v (err=%v)", resDup, err)
+	}
+
+	// 3. Import personal games into User DB ("user_db")
+	myGamePGN := `[Event "Club Championship"]
+[Site "Local Club"]
+[Date "2026.05.01"]
+[Round "1"]
+[White "Christopher"]
+[Black "Opponent"]
+[Result "1-0"]
+
+1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 1-0
+`
+	resUser, err := app.ImportStandardDatabase(StandardImportRequest{
+		PGNText:          myGamePGN,
+		ImportMode:       "user_db",
+		SetUserAsDefault: true,
+		OpenAfterImport:  true,
+	})
+	if err != nil || resUser == nil {
+		t.Fatalf("ImportStandardDatabase(user_db) failed: %v", err)
+	}
+	if resUser.UserName != "My_Games" || resUser.UserAddedGames != 1 || resUser.UserTotalGames != 1 {
+		t.Fatalf("unexpected user_db import stats: %+v", resUser)
+	}
+	if pol := app.GetDatabaseWritePolicy(resUser.UserBasePath); pol != "editable" {
+		t.Errorf("expected User DB policy=editable, got %q", pol)
+	}
+}
+
+
 

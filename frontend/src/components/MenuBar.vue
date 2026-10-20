@@ -372,6 +372,13 @@ onUnmounted(() => {
           <span class="text-[11px] text-zinc-500 font-mono tracking-wider shrink-0">Ctrl+O</span>
         </button>
         <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-emerald-300 font-semibold flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('importPGN'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Upload class="w-4 h-4 shrink-0 text-emerald-400" /> Standard Import (.pgn / .si4 — Original, Master or User DB)...</span>
+          <span class="text-[11px] text-emerald-400 font-mono tracking-wider shrink-0">Ctrl+I</span>
+        </button>
+        <button
           class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('createDB'))"
         >
@@ -1275,6 +1282,7 @@ onUnmounted(() => {
       </button>
 
       <button
+        v-if="compactLayout"
         class="px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-emerald-500/50 text-zinc-300 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer transition-colors"
         title="Open Lichess.org / Chess.com Live Portal"
         @click="emit('openPortalPanel', 'lichess')"
@@ -1284,6 +1292,7 @@ onUnmounted(() => {
       </button>
 
       <button
+        v-if="compactLayout"
         class="px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-emerald-500/50 text-zinc-300 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer transition-colors"
         title="Open Preferences & Options Document (Ctrl+,)"
         @click="emit('openPreferences', 'databases')"
