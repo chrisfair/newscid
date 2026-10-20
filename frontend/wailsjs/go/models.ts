@@ -513,6 +513,66 @@ export namespace explainer {
 
 export namespace fairplay {
 	
+	export class BannedValidationSummary {
+	    accountsChecked: number;
+	    confirmedBannedCount: number;
+	    gamesVsBanned: number;
+	    bannedInTopTwoBands: number;
+	    bannedTopTwoRatePct: number;
+	    openTopTwoRatePct: number;
+	    multiplierVsOpen: number;
+	    confirmedBannedHandles?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new BannedValidationSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.accountsChecked = source["accountsChecked"];
+	        this.confirmedBannedCount = source["confirmedBannedCount"];
+	        this.gamesVsBanned = source["gamesVsBanned"];
+	        this.bannedInTopTwoBands = source["bannedInTopTwoBands"];
+	        this.bannedTopTwoRatePct = source["bannedTopTwoRatePct"];
+	        this.openTopTwoRatePct = source["openTopTwoRatePct"];
+	        this.multiplierVsOpen = source["multiplierVsOpen"];
+	        this.confirmedBannedHandles = source["confirmedBannedHandles"];
+	    }
+	}
+	export class BenchmarkBandSummary {
+	    bandIndex: number;
+	    bandName: string;
+	    description: string;
+	    thresholdScore: number;
+	    selfCount: number;
+	    selfPct: number;
+	    opponentCount: number;
+	    opponentPct: number;
+	    expectedOppCount: number;
+	    excessOppCount: number;
+	    bannedOppCount: number;
+	    bannedOppPct: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new BenchmarkBandSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.bandIndex = source["bandIndex"];
+	        this.bandName = source["bandName"];
+	        this.description = source["description"];
+	        this.thresholdScore = source["thresholdScore"];
+	        this.selfCount = source["selfCount"];
+	        this.selfPct = source["selfPct"];
+	        this.opponentCount = source["opponentCount"];
+	        this.opponentPct = source["opponentPct"];
+	        this.expectedOppCount = source["expectedOppCount"];
+	        this.excessOppCount = source["excessOppCount"];
+	        this.bannedOppCount = source["bannedOppCount"];
+	        this.bannedOppPct = source["bannedOppPct"];
+	    }
+	}
 	export class CrossControlDivergence {
 	    hasMultipleControls: boolean;
 	    baselineControl: string;
@@ -639,6 +699,223 @@ export namespace fairplay {
 	        this.flags = source["flags"];
 	    }
 	}
+	export class HardMoveMoment {
+	    ply: number;
+	    moveNumber: number;
+	    side: string;
+	    playedSan: string;
+	    bestSan: string;
+	    foundTopChoice: boolean;
+	    humanProb: number;
+	    evalLossCp: number;
+	    evalGapTop2Cp: number;
+	    plausibleOptions: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new HardMoveMoment(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ply = source["ply"];
+	        this.moveNumber = source["moveNumber"];
+	        this.side = source["side"];
+	        this.playedSan = source["playedSan"];
+	        this.bestSan = source["bestSan"];
+	        this.foundTopChoice = source["foundTopChoice"];
+	        this.humanProb = source["humanProb"];
+	        this.evalLossCp = source["evalLossCp"];
+	        this.evalGapTop2Cp = source["evalGapTop2Cp"];
+	        this.plausibleOptions = source["plausibleOptions"];
+	    }
+	}
+	export class GameHardMovePerformance {
+	    gameId: number;
+	    date: string;
+	    timeControl: string;
+	    side: string;
+	    playerName: string;
+	    anonymousLabel: string;
+	    playerElo: number;
+	    opponentName: string;
+	    result: string;
+	    totalNonBookMoves: number;
+	    hardMoveCount: number;
+	    hardMovesFound: number;
+	    hardMoveHitRatePct: number;
+	    expectedHardHits: number;
+	    tailProbability: number;
+	    unusualnessScore: number;
+	    zScore: number;
+	    bandIndex: number;
+	    bandName: string;
+	    isBannedOpponent: boolean;
+	    banSource?: string;
+	    hardMoments?: HardMoveMoment[];
+	
+	    static createFrom(source: any = {}) {
+	        return new GameHardMovePerformance(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.gameId = source["gameId"];
+	        this.date = source["date"];
+	        this.timeControl = source["timeControl"];
+	        this.side = source["side"];
+	        this.playerName = source["playerName"];
+	        this.anonymousLabel = source["anonymousLabel"];
+	        this.playerElo = source["playerElo"];
+	        this.opponentName = source["opponentName"];
+	        this.result = source["result"];
+	        this.totalNonBookMoves = source["totalNonBookMoves"];
+	        this.hardMoveCount = source["hardMoveCount"];
+	        this.hardMovesFound = source["hardMovesFound"];
+	        this.hardMoveHitRatePct = source["hardMoveHitRatePct"];
+	        this.expectedHardHits = source["expectedHardHits"];
+	        this.tailProbability = source["tailProbability"];
+	        this.unusualnessScore = source["unusualnessScore"];
+	        this.zScore = source["zScore"];
+	        this.bandIndex = source["bandIndex"];
+	        this.bandName = source["bandName"];
+	        this.isBannedOpponent = source["isBannedOpponent"];
+	        this.banSource = source["banSource"];
+	        this.hardMoments = this.convertValues(source["hardMoments"], HardMoveMoment);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SelectiveCheatingPoint {
+	    label: string;
+	    swappedMovesSpec: string;
+	    avgSwappedPerGame: number;
+	    topTwoBandsCaughtPct: number;
+	    topFivePctCaughtPct: number;
+	    avgUnusualnessScore: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SelectiveCheatingPoint(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.swappedMovesSpec = source["swappedMovesSpec"];
+	        this.avgSwappedPerGame = source["avgSwappedPerGame"];
+	        this.topTwoBandsCaughtPct = source["topTwoBandsCaughtPct"];
+	        this.topFivePctCaughtPct = source["topFivePctCaughtPct"];
+	        this.avgUnusualnessScore = source["avgUnusualnessScore"];
+	    }
+	}
+	export class HardMoveBenchmarkReport {
+	    benchmarkPlayer: string;
+	    timeControlFilter: string;
+	    hardMoveProbCutoff: number;
+	    totalGamesScanned: number;
+	    selfGamesQualified: number;
+	    opponentGamesQualified: number;
+	    totalHardMovesAnalyzed: number;
+	    selfAvgHardHitRatePct: number;
+	    opponentAvgHardHitRatePct: number;
+	    selfExpectedHitRatePct: number;
+	    opponentExpectedHitRatePct: number;
+	    topTwoBandThreshold: number;
+	    topHalfPctThreshold: number;
+	    selfInTopTwoBands: number;
+	    selfTopTwoRatePct: number;
+	    opponentInTopTwoBands: number;
+	    opponentTopTwoRatePct: number;
+	    expectedOpponentTopTwo: number;
+	    excessOpponentGames: number;
+	    excessGamesLowEstimate: number;
+	    excessGamesHighEstimate: number;
+	    excessPctOfAllGames: number;
+	    excessPValue: number;
+	    oddsOneIn: number;
+	    selfInTop100Count: number;
+	    opponentInTop100Count: number;
+	    bands: BenchmarkBandSummary[];
+	    selectiveSimulation: SelectiveCheatingPoint[];
+	    bannedValidation: BannedValidationSummary;
+	    top100Games: GameHardMovePerformance[];
+	    verdictHeadline: string;
+	    verdictFindings: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new HardMoveBenchmarkReport(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.benchmarkPlayer = source["benchmarkPlayer"];
+	        this.timeControlFilter = source["timeControlFilter"];
+	        this.hardMoveProbCutoff = source["hardMoveProbCutoff"];
+	        this.totalGamesScanned = source["totalGamesScanned"];
+	        this.selfGamesQualified = source["selfGamesQualified"];
+	        this.opponentGamesQualified = source["opponentGamesQualified"];
+	        this.totalHardMovesAnalyzed = source["totalHardMovesAnalyzed"];
+	        this.selfAvgHardHitRatePct = source["selfAvgHardHitRatePct"];
+	        this.opponentAvgHardHitRatePct = source["opponentAvgHardHitRatePct"];
+	        this.selfExpectedHitRatePct = source["selfExpectedHitRatePct"];
+	        this.opponentExpectedHitRatePct = source["opponentExpectedHitRatePct"];
+	        this.topTwoBandThreshold = source["topTwoBandThreshold"];
+	        this.topHalfPctThreshold = source["topHalfPctThreshold"];
+	        this.selfInTopTwoBands = source["selfInTopTwoBands"];
+	        this.selfTopTwoRatePct = source["selfTopTwoRatePct"];
+	        this.opponentInTopTwoBands = source["opponentInTopTwoBands"];
+	        this.opponentTopTwoRatePct = source["opponentTopTwoRatePct"];
+	        this.expectedOpponentTopTwo = source["expectedOpponentTopTwo"];
+	        this.excessOpponentGames = source["excessOpponentGames"];
+	        this.excessGamesLowEstimate = source["excessGamesLowEstimate"];
+	        this.excessGamesHighEstimate = source["excessGamesHighEstimate"];
+	        this.excessPctOfAllGames = source["excessPctOfAllGames"];
+	        this.excessPValue = source["excessPValue"];
+	        this.oddsOneIn = source["oddsOneIn"];
+	        this.selfInTop100Count = source["selfInTop100Count"];
+	        this.opponentInTop100Count = source["opponentInTop100Count"];
+	        this.bands = this.convertValues(source["bands"], BenchmarkBandSummary);
+	        this.selectiveSimulation = this.convertValues(source["selectiveSimulation"], SelectiveCheatingPoint);
+	        this.bannedValidation = this.convertValues(source["bannedValidation"], BannedValidationSummary);
+	        this.top100Games = this.convertValues(source["top100Games"], GameHardMovePerformance);
+	        this.verdictHeadline = source["verdictHeadline"];
+	        this.verdictFindings = source["verdictFindings"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class TimeControlIssueProfile {
 	    category: string;
 	    gamesAnalyzed: number;
@@ -745,6 +1022,7 @@ export namespace fairplay {
 		    return a;
 		}
 	}
+	
 
 }
 
@@ -984,6 +1262,8 @@ export namespace main {
 	    annotateMoveTimeMs: number;
 	    lichessUsername: string;
 	    chessComUsername: string;
+	    autoCapturePortalGames: boolean;
+	    autoLoadCapturedGame: boolean;
 	    defaultPortalPlatform: string;
 	    portalWindowMode: string;
 	    customBrowserCmd: string;
@@ -1024,6 +1304,8 @@ export namespace main {
 	        this.annotateMoveTimeMs = source["annotateMoveTimeMs"];
 	        this.lichessUsername = source["lichessUsername"];
 	        this.chessComUsername = source["chessComUsername"];
+	        this.autoCapturePortalGames = source["autoCapturePortalGames"];
+	        this.autoLoadCapturedGame = source["autoLoadCapturedGame"];
 	        this.defaultPortalPlatform = source["defaultPortalPlatform"];
 	        this.portalWindowMode = source["portalWindowMode"];
 	        this.customBrowserCmd = source["customBrowserCmd"];
@@ -1182,6 +1464,97 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class LivePortalCaptureStatus {
+	    enabled: boolean;
+	    autoLoadToBoard: boolean;
+	    watcherActive: boolean;
+	    intervalSeconds: number;
+	    lichessUsername: string;
+	    chessComUsername: string;
+	    targetDatabasePath: string;
+	    targetDatabaseName: string;
+	    lastCheckAtMs: number;
+	    lastCapturedAtMs: number;
+	    lastCapturedGameId: number;
+	    lastCapturedGameSummary: string;
+	    sessionCapturedCount: number;
+	    lastError?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LivePortalCaptureStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.autoLoadToBoard = source["autoLoadToBoard"];
+	        this.watcherActive = source["watcherActive"];
+	        this.intervalSeconds = source["intervalSeconds"];
+	        this.lichessUsername = source["lichessUsername"];
+	        this.chessComUsername = source["chessComUsername"];
+	        this.targetDatabasePath = source["targetDatabasePath"];
+	        this.targetDatabaseName = source["targetDatabaseName"];
+	        this.lastCheckAtMs = source["lastCheckAtMs"];
+	        this.lastCapturedAtMs = source["lastCapturedAtMs"];
+	        this.lastCapturedGameId = source["lastCapturedGameId"];
+	        this.lastCapturedGameSummary = source["lastCapturedGameSummary"];
+	        this.sessionCapturedCount = source["sessionCapturedCount"];
+	        this.lastError = source["lastError"];
+	    }
+	}
+	export class LivePortalCaptureResult {
+	    checkedAtMs: number;
+	    newGamesImported: number;
+	    lichessImported: number;
+	    chessComImported: number;
+	    duplicatesSkipped: number;
+	    latestGameId: number;
+	    latestGameSummary: string;
+	    latestGamePgn?: string;
+	    targetDatabasePath: string;
+	    targetDatabaseName: string;
+	    autoLoadToBoard: boolean;
+	    status?: LivePortalCaptureStatus;
+	
+	    static createFrom(source: any = {}) {
+	        return new LivePortalCaptureResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.checkedAtMs = source["checkedAtMs"];
+	        this.newGamesImported = source["newGamesImported"];
+	        this.lichessImported = source["lichessImported"];
+	        this.chessComImported = source["chessComImported"];
+	        this.duplicatesSkipped = source["duplicatesSkipped"];
+	        this.latestGameId = source["latestGameId"];
+	        this.latestGameSummary = source["latestGameSummary"];
+	        this.latestGamePgn = source["latestGamePgn"];
+	        this.targetDatabasePath = source["targetDatabasePath"];
+	        this.targetDatabaseName = source["targetDatabaseName"];
+	        this.autoLoadToBoard = source["autoLoadToBoard"];
+	        this.status = this.convertValues(source["status"], LivePortalCaptureStatus);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class RepertoireCheckResult {
 	    isRepertoire: boolean;
 	    playedMove?: repertoire.RepertoireMove;
@@ -1250,6 +1623,78 @@ export namespace main {
 	        this.gameTags = source["gameTags"];
 	        this.pendingMoveUci = source["pendingMoveUci"];
 	        this.pendingLoadId = source["pendingLoadId"];
+	    }
+	}
+	export class StandardImportRequest {
+	    sourcePath: string;
+	    pgnText: string;
+	    archiveName: string;
+	    importMode: string;
+	    masterDbName: string;
+	    userDbName: string;
+	    targetDir?: string;
+	    setMasterAsRef: boolean;
+	    setUserAsDefault: boolean;
+	    openAfterImport: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new StandardImportRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sourcePath = source["sourcePath"];
+	        this.pgnText = source["pgnText"];
+	        this.archiveName = source["archiveName"];
+	        this.importMode = source["importMode"];
+	        this.masterDbName = source["masterDbName"];
+	        this.userDbName = source["userDbName"];
+	        this.targetDir = source["targetDir"];
+	        this.setMasterAsRef = source["setMasterAsRef"];
+	        this.setUserAsDefault = source["setUserAsDefault"];
+	        this.openAfterImport = source["openAfterImport"];
+	    }
+	}
+	export class StandardImportResult {
+	    importMode: string;
+	    originalBasePath?: string;
+	    originalName?: string;
+	    originalGames: number;
+	    masterBasePath?: string;
+	    masterName?: string;
+	    masterTotalGames: number;
+	    masterAddedGames: number;
+	    masterSkippedDupes: number;
+	    userBasePath?: string;
+	    userName?: string;
+	    userTotalGames: number;
+	    userAddedGames: number;
+	    userSkippedDupes: number;
+	    activeBasePath?: string;
+	    summary: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new StandardImportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.importMode = source["importMode"];
+	        this.originalBasePath = source["originalBasePath"];
+	        this.originalName = source["originalName"];
+	        this.originalGames = source["originalGames"];
+	        this.masterBasePath = source["masterBasePath"];
+	        this.masterName = source["masterName"];
+	        this.masterTotalGames = source["masterTotalGames"];
+	        this.masterAddedGames = source["masterAddedGames"];
+	        this.masterSkippedDupes = source["masterSkippedDupes"];
+	        this.userBasePath = source["userBasePath"];
+	        this.userName = source["userName"];
+	        this.userTotalGames = source["userTotalGames"];
+	        this.userAddedGames = source["userAddedGames"];
+	        this.userSkippedDupes = source["userSkippedDupes"];
+	        this.activeBasePath = source["activeBasePath"];
+	        this.summary = source["summary"];
 	    }
 	}
 	export class TacticsPuzzle {
