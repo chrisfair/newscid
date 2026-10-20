@@ -72,6 +72,8 @@ const emit = defineEmits<{
   (e: 'openSystemBase', path: string): void
   (e: 'openDiscoveredBase', path: string): void
   (e: 'setDefaultDB', path: string): void
+  (e: 'setReferenceDB', path: string): void
+  (e: 'ensureUserDB'): void
   (e: 'cycleWritePolicy', path?: string): void
   (e: 'openDatabaseHub'): void
   (e: 'openWorkstationManager', tab?: 'builder' | 'storage' | 'reset'): void
@@ -227,9 +229,27 @@ defineExpose({
                   </div>
                   <span v-if="db.description" class="text-[10px] text-zinc-400 truncate mt-0.5">{{ db.description }}</span>
                 </div>
-                <div class="flex flex-col items-end shrink-0 text-[10px] font-mono">
-                  <span v-if="db.numGames > 0" class="text-emerald-400 font-semibold">{{ formatGameCount(db.numGames) }}</span>
-                  <span v-if="db.sizeStr" class="text-zinc-500">{{ db.sizeStr }}</span>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <div class="hidden group-hover:flex items-center gap-1 mr-1">
+                    <span
+                      class="px-1.5 py-0.5 rounded bg-amber-950/70 hover:bg-amber-800 border border-amber-500/40 text-amber-200 text-[9px] font-semibold"
+                      title="Set as Default Personal User DB"
+                      @click.stop="emit('setDefaultDB', db.basePath); showBasesDropdown = false"
+                    >
+                      👤 User
+                    </span>
+                    <span
+                      class="px-1.5 py-0.5 rounded bg-cyan-950/70 hover:bg-cyan-800 border border-cyan-500/40 text-cyan-200 text-[9px] font-semibold"
+                      title="Set as Default Master Reference DB (for Opening Tree)"
+                      @click.stop="emit('setReferenceDB', db.basePath); showBasesDropdown = false"
+                    >
+                      🏛️ Ref
+                    </span>
+                  </div>
+                  <div class="flex flex-col items-end shrink-0 text-[10px] font-mono">
+                    <span v-if="db.numGames > 0" class="text-emerald-400 font-semibold">{{ formatGameCount(db.numGames) }}</span>
+                    <span v-if="db.sizeStr" class="text-zinc-500">{{ db.sizeStr }}</span>
+                  </div>
                 </div>
               </button>
             </div>
@@ -237,8 +257,17 @@ defineExpose({
         </div>
 
         <button
-          class="header-btn flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-emerald-300 text-xs font-medium border border-emerald-500/30 transition-colors cursor-pointer"
-          title="View how Default DB, Active DB, Reference DB, and Clipbase relate"
+          class="header-btn flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-950/50 hover:bg-emerald-900/60 text-emerald-300 text-xs font-semibold border border-emerald-500/40 transition-colors cursor-pointer"
+          title="Standard Import (.pgn or .si4) — Import Original Archive, Merge into Master Reference, or Import into User DB (Ctrl+I)"
+          @click="emit('importPGN')"
+        >
+          <FileUp class="w-3.5 h-3.5 text-emerald-400" />
+          <span>Import DB / PGN</span>
+        </button>
+
+        <button
+          class="header-btn flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800 transition-colors cursor-pointer"
+          title="View and configure how Original Archives, Master Reference DB, Personal User DB, and Persona DBs relate"
           @click="emit('openDatabaseHub')"
         >
           <Database class="w-3.5 h-3.5 text-emerald-400" />
@@ -247,61 +276,79 @@ defineExpose({
       </div>
     </div>
 
-    <!-- Center: Active Database & Relationship Status -->
-    <div class="hidden md:flex items-center gap-2">
-      <span class="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Active Base:</span>
-      <span class="text-xs font-mono font-bold text-zinc-200 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded-md">
-        {{ dbName || 'No Base Loaded' }}
-      </span>
+    <!-- Center: Interactive 3-Role Database Switcher Pill (Active • Personal User DB • Master Reference DB) -->
+    <div class="hidden md:flex items-center gap-1.5 bg-zinc-900/80 border border-zinc-800 rounded-xl px-2.5 py-1">
+      <!-- 1. Active Working DB -->
+      <div class="flex items-center gap-1.5">
+        <span class="text-[10px] text-zinc-400 uppercase tracking-wider font-bold">📂 Active:</span>
+        <span class="text-xs font-mono font-bold text-zinc-100">
+          {{ dbName || 'No Base Loaded' }}
+        </span>
+        <button
+          v-if="dbName && activeDbPath"
+          class="px-1.5 py-0.2 rounded text-[10px] font-semibold border flex items-center gap-1 transition-colors cursor-pointer"
+          :class="activeWritePolicy === 'locked'
+            ? 'bg-rose-950/60 border-rose-500/40 text-rose-300'
+            : activeWritePolicy === 'sync_only'
+              ? 'bg-cyan-950/60 border-cyan-500/40 text-cyan-300'
+              : 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'"
+          :title="`Database Write Policy: ${activeWritePolicy || 'editable'} — Click to cycle lock mode`"
+          @click="emit('cycleWritePolicy', activeDbPath)"
+        >
+          <span>{{ activeWritePolicy === 'locked' ? '🔒 Locked' : activeWritePolicy === 'sync_only' ? '🔄 Sync-Only' : '🔓 Editable' }}</span>
+        </button>
+      </div>
 
-      <button
-        v-if="dbName && activeDbPath"
-        class="px-2 py-0.5 rounded-md text-[11px] font-semibold border flex items-center gap-1 transition-colors cursor-pointer"
-        :class="activeWritePolicy === 'locked'
-          ? 'bg-rose-950/60 border-rose-500/40 text-rose-300'
-          : activeWritePolicy === 'sync_only'
-            ? 'bg-cyan-950/60 border-cyan-500/40 text-cyan-300'
-            : 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'"
-        :title="`Database Write Policy: ${activeWritePolicy || 'editable'} — Click to cycle lock mode`"
-        @click="emit('cycleWritePolicy', activeDbPath)"
-      >
-        <span>{{ activeWritePolicy === 'locked' ? '🔒 Locked' : activeWritePolicy === 'sync_only' ? '🔄 Sync-Only' : '🔓 Editable' }}</span>
-      </button>
+      <div class="h-3.5 w-px bg-zinc-800 mx-1" />
 
-      <button
-        v-if="dbName && activeDbPath"
-        class="px-2 py-0.5 rounded-md text-[11px] font-semibold border flex items-center gap-1 transition-colors cursor-pointer"
-        :class="isActiveDefaultDb
-          ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-          : 'bg-zinc-900 hover:bg-amber-950/50 border-zinc-800 text-zinc-400 hover:text-amber-300'"
-        :title="isActiveDefaultDb ? `${dbName} is your Default Startup Database` : `Set ${dbName} as your Default Startup Database`"
-        @click="emit('setDefaultDB', activeDbPath)"
-      >
-        <Star class="w-3 h-3" :class="isActiveDefaultDb ? 'fill-amber-400 text-amber-400' : 'text-zinc-500'" />
-        <span>{{ isActiveDefaultDb ? 'Default DB' : 'Set Default' }}</span>
-      </button>
+      <!-- 2. Personal User DB (Editable Default Startup DB) -->
+      <div class="flex items-center gap-1">
+        <button
+          class="px-2 py-0.5 rounded-md text-[11px] font-semibold border flex items-center gap-1 transition-colors cursor-pointer"
+          :class="isActiveDefaultDb
+            ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+            : 'bg-zinc-950/80 hover:bg-amber-950/40 border-zinc-800 text-amber-200/90 hover:text-amber-300'"
+          title="Click to open (or initialize) your editable Personal User Database (My_Games)"
+          @click="emit('ensureUserDB')"
+        >
+          <Star class="w-3 h-3" :class="isActiveDefaultDb ? 'fill-amber-400 text-amber-400' : 'text-amber-400'" />
+          <span>👤 User DB: {{ defaultDbName || 'My_Games' }}</span>
+        </button>
+        <button
+          v-if="dbName && activeDbPath && !isActiveDefaultDb"
+          class="px-1.5 py-0.5 rounded text-[10px] bg-zinc-950 hover:bg-amber-950/60 border border-zinc-800 text-zinc-400 hover:text-amber-300 cursor-pointer"
+          :title="`Set currently open '${dbName}' as your Default Personal User Database`"
+          @click="emit('setDefaultDB', activeDbPath)"
+        >
+          Set Current
+        </button>
+      </div>
 
-      <span
-        v-if="referenceDbName"
-        class="hidden xl:flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-950/40 border border-cyan-500/30 text-[11px] font-mono text-cyan-300"
-        title="Reference Database used for Opening Tree statistics"
-      >
-        <BookOpen class="w-3 h-3 text-cyan-400" />
-        <span>Ref: {{ referenceDbName }}</span>
-      </span>
+      <div class="hidden xl:block h-3.5 w-px bg-zinc-800 mx-1" />
+
+      <!-- 3. Master Reference DB (Background Opening Tree Encyclopedia) -->
+      <div class="hidden xl:flex items-center gap-1">
+        <button
+          class="px-2 py-0.5 rounded-md bg-cyan-950/40 hover:bg-cyan-900/50 border border-cyan-500/30 text-[11px] font-mono text-cyan-300 flex items-center gap-1 cursor-pointer transition-colors"
+          title="Master Reference Database queried in the background by the Opening Tree — click to configure roles"
+          @click="emit('openDatabaseHub')"
+        >
+          <BookOpen class="w-3 h-3 text-cyan-400" />
+          <span>🏛️ Master Ref: {{ referenceDbName || 'Uses Active DB' }}</span>
+        </button>
+        <button
+          v-if="dbName && activeDbPath && referenceDbName !== dbName"
+          class="px-1.5 py-0.5 rounded text-[10px] bg-zinc-950 hover:bg-cyan-950/60 border border-zinc-800 text-zinc-400 hover:text-cyan-300 cursor-pointer"
+          :title="`Set currently open '${dbName}' as your Default Master Reference Database`"
+          @click="emit('setReferenceDB', activeDbPath)"
+        >
+          Set Current
+        </button>
+      </div>
     </div>
 
-    <!-- Right: Import/Export, Panels/Floaters, Board Flip & Preferences -->
+    <!-- Right: Export, Flip, Theme & Settings -->
     <div class="flex items-center gap-1.5">
-      <button
-        class="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs flex items-center gap-1 border border-zinc-800 transition-colors cursor-pointer"
-        title="Customize Panels, Floaters & Multi-Screen (Hyprland)"
-        @click="emit('openPreferences', 'panels')"
-      >
-        <LayoutGrid class="w-3.5 h-3.5 text-amber-400" />
-        <span class="hidden lg:inline">Panels</span>
-      </button>
-
       <button
         class="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs flex items-center gap-1 border border-zinc-800 transition-colors cursor-pointer"
         title="Open Lichess.org / Chess.com Live Portal"
@@ -309,15 +356,6 @@ defineExpose({
       >
         <Globe class="w-3.5 h-3.5 text-cyan-400" />
         <span class="hidden xl:inline">Portal</span>
-      </button>
-
-      <button
-        class="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs flex items-center gap-1 border border-zinc-800 transition-colors"
-        title="Import PGN"
-        @click="emit('importPGN')"
-      >
-        <FileUp class="w-3.5 h-3.5 text-zinc-400" />
-        <span class="hidden sm:inline">Import</span>
       </button>
 
       <button
