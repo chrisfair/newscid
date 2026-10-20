@@ -1,6 +1,6 @@
 # Maintainer: Christopher Patrick Fair <christopherpatrickfair@gmail.com>
 pkgname=newscid
-pkgver=1.3.25
+pkgver=1.3.26
 pkgrel=1
 pkgdesc="Modern Chess Information Database (Scid vs. PC Rewrite)"
 arch=('x86_64')
