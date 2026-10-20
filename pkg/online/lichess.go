@@ -334,3 +334,124 @@ func (c *LichessClient) FetchUserGamesIncremental(
 	return newGames, skippedExisting, nil
 }
 
+// FetchRecentNewGames polls only the most recent `limit` games for a Lichess user
+// (ideal for lightweight real-time auto-capture while playing in the Live Portal)
+// and returns any games not yet present in existingSigs.
+func (c *LichessClient) FetchRecentNewGames(
+	username string,
+	token string,
+	limit int,
+	existingSigs *scid.GameSignatureSet,
+) ([]*chess.Game, int, error) {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return nil, 0, fmt.Errorf("lichess username cannot be empty")
+	}
+	if limit <= 0 {
+		limit = 8
+	}
+
+	endpoint := fmt.Sprintf("%s/api/games/user/%s", strings.TrimRight(c.BaseURL, "/"), url.PathEscape(username))
+	queryParams := url.Values{}
+	queryParams.Set("clocks", "true")
+	queryParams.Set("evals", "true")
+	queryParams.Set("opening", "true")
+	queryParams.Set("max", strconv.Itoa(limit))
+
+	req, err := http.NewRequest(http.MethodGet, endpoint+"?"+queryParams.Encode(), nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("Accept", "application/x-chess-pgn")
+	req.Header.Set("User-Agent", c.UserAgent)
+	if strings.TrimSpace(token) != "" {
+		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
+	}
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, 0, fmt.Errorf("lichess HTTP %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	rawBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, 0, err
+	}
+	parsed, err := chess.ParsePGNDatabase(strings.NewReader(string(rawBytes)))
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var newGames []*chess.Game
+	skipped := 0
+	// Iterate from oldest of the recent batch to newest so chronological order is preserved on import
+	for i := len(parsed) - 1; i >= 0; i-- {
+		g := parsed[i]
+		if g == nil {
+			continue
+		}
+		if existingSigs != nil && existingSigs.ContainsGame(g) {
+			skipped++
+			continue
+		}
+		if existingSigs != nil {
+			existingSigs.AddGame(g)
+		}
+		newGames = append(newGames, g)
+	}
+	return newGames, skipped, nil
+}
+
+// FetchGameByID downloads a single Lichess game by its 8-character (or 12-character player URL) ID.
+func (c *LichessClient) FetchGameByID(gameID string, token string) (*chess.Game, error) {
+	cleanID := strings.TrimSpace(gameID)
+	cleanID = strings.TrimPrefix(cleanID, "/")
+	if idx := strings.Index(cleanID, "/"); idx > 0 {
+		cleanID = cleanID[:idx]
+	}
+	if idx := strings.IndexAny(cleanID, "?#"); idx > 0 {
+		cleanID = cleanID[:idx]
+	}
+	if len(cleanID) == 12 {
+		cleanID = cleanID[:8]
+	}
+	if len(cleanID) < 8 {
+		return nil, fmt.Errorf("invalid lichess game ID %q", gameID)
+	}
+
+	endpoint := fmt.Sprintf("%s/game/export/%s?clocks=true&evals=true&opening=true", strings.TrimRight(c.BaseURL, "/"), url.PathEscape(cleanID))
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/x-chess-pgn")
+	req.Header.Set("User-Agent", c.UserAgent)
+	if strings.TrimSpace(token) != "" {
+		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
+	}
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf("lichess game export HTTP %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	rawBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	return chess.ParsePGN(string(rawBytes))
+}
+
+
