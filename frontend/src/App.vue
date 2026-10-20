@@ -49,6 +49,7 @@ import MegaDatabaseModal from './components/MegaDatabaseModal.vue'
 import FairPlayModal from './components/FairPlayModal.vue'
 import CyclicalDrillModal from './components/CyclicalDrillModal.vue'
 import WorkstationManagerModal from './components/WorkstationManagerModal.vue'
+import StandardImportModal from './components/StandardImportModal.vue'
 import FloatingPanel from './components/FloatingPanel.vue'
 import LivePortalPanel from './components/LivePortalPanel.vue'
 import DatabaseHubPanel, { type DatabaseRolesStatusView } from './components/DatabaseHubPanel.vue'
@@ -146,6 +147,8 @@ import {
   GetSharedWorkspaceState,
   GetDatabaseWritePolicy,
   SetDatabaseWritePolicy,
+  EnsurePersonalUserDatabase,
+  StartLivePortalWatcher,
 } from '../wailsjs/go/main/App'
 import { EventsOn, EventsOff, ClipboardSetText, ClipboardGetText, BrowserOpenURL } from '../wailsjs/runtime/runtime'
 
@@ -166,6 +169,7 @@ const flipped = ref(false)
 const activeTab = ref<'notation' | 'tree' | 'games' | 'engine' | 'db-roles' | 'portal' | 'info'>('notation')
 const bottomDrawerOpen = ref(true)
 const showMoreTabsDropdown = ref(false)
+const showPanelWindowDropdown = ref(false)
 
 // History & Move Tree
 const history = ref<{ fen: string; lastMove: { from: string; to: string } | null }[]>([
@@ -745,6 +749,58 @@ async function handleFactoryResetCompleted() {
   await handleRefreshDiscoveredDatabases()
 }
 
+async function handleEnsurePersonalUserDatabase() {
+  try {
+    const info = await EnsurePersonalUserDatabase(true)
+    if (info) {
+      dbInfo.value = info
+      currentPage.value = 1
+      searchFilter.value = {}
+      await refreshGames()
+      if (gamesList.value.length > 0) {
+        await handleLoadGame(1)
+      }
+      bottomDrawerOpen.value = true
+    }
+    await handleRefreshDiscoveredDatabases()
+    await publishCurrentWorkspaceState()
+  } catch (err: any) {
+    alert(`Failed to initialize Personal User Database: ${err?.message || err}`)
+  }
+}
+
+async function handleStandardDatabaseImported(res: any) {
+  await handleRefreshDiscoveredDatabases()
+  const info = await GetDatabaseInfo()
+  if (info) {
+    dbInfo.value = info
+  }
+  currentPage.value = 1
+  await refreshGames()
+  if (gamesList.value.length > 0) {
+    await handleLoadGame(1)
+  }
+  await fetchOpeningTree(currentFEN.value)
+  await publishCurrentWorkspaceState()
+}
+
+async function handleLoadPgnOnBoardFromModal(pgn: string) {
+  importPGNText.value = pgn
+  await confirmImportPGN()
+}
+
+async function handlePortalGameCaptured(res: any) {
+  await handleRefreshDiscoveredDatabases()
+  await refreshGames()
+  if (res?.autoLoadToBoard) {
+    if (res.latestGameId && res.latestGameId > 0 && dbInfo.value?.basePath && res.targetDatabasePath && dbInfo.value.basePath.includes(res.targetDatabaseName || '')) {
+      await handleLoadGame(res.latestGameId)
+    } else if (res.latestGamePgn) {
+      await handleLoadPgnOnBoardFromModal(res.latestGamePgn)
+    }
+  }
+}
+
 function openAntiPersonaModal(target?: persona.Persona | { id: string; displayName?: string } | string) {
   if (typeof target === 'string') {
     antiPersonaTargetId.value = ''
@@ -1314,13 +1370,19 @@ onMounted(async () => {
       selectedEngine.value = availableEngines.value[0]
     }
 
-    // 4. Listen to live engine events & annotation progress
+    // 4. Listen to live engine events, annotation progress & live portal auto-captured games
     EventsOn('engine:eval', (data: EvalInfo) => {
       evalInfo.value = data
     })
     EventsOn('annotate:progress', (data: { currentPly: number; totalPlies: number; percent: number }) => {
       annotationProgress.value = data
     })
+    EventsOn('portal:game-captured', (res: any) => {
+      handlePortalGameCaptured(res)
+    })
+    if ((appPreferences.value as any).autoCapturePortalGames !== false) {
+      StartLivePortalWatcher().catch(() => {})
+    }
 
     const initMPV = await GetEngineMultiPV()
     if (initMPV > 0) {
@@ -3481,6 +3543,10 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           @delete-game="handleDeleteGame"
           @cycle-write-policy="handleCycleDatabaseWritePolicy(dbInfo?.basePath, activeDbWritePolicy)"
           @open-sub-db-builder="(f) => openWorkstationManagerModal('builder', f)"
+          @open-standard-import="showImportModal = true"
+          @open-mega-downloader="showMegaDatabaseModal = true"
+          @ensure-personal-db="handleEnsurePersonalUserDatabase"
+          @open-online-sync="showOnlineSyncModal = true"
         />
 
         <LivePortalPanel
@@ -3493,6 +3559,9 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           @open-fair-play="showFairPlayModal = true"
           @detach-portal-screen="handleDetachPanelScreen('portal')"
           @float-portal="togglePanelFloater('portal')"
+          @game-captured="handlePortalGameCaptured"
+          @load-game-by-id="handleLoadGame"
+          @load-pgn-to-board="handleLoadPgnOnBoardFromModal"
         />
 
         <DatabaseHubPanel
@@ -3514,6 +3583,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           @update-from-local="handleUpdateDatabaseFromLocal"
           @cycle-write-policy="handleCycleDatabaseWritePolicy"
           @open-workstation-manager="openWorkstationManagerModal"
+          @open-standard-import="showImportModal = true"
+          @ensure-user-d-b="handleEnsurePersonalUserDatabase"
         />
       </div>
     </div>
@@ -3657,6 +3728,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         @toggle-dark-light="toggleDarkLight"
         @toggle-flip="flipped = !flipped"
         @set-default-d-b="handleSetDefaultDatabase"
+        @set-reference-d-b="(p: string) => handleSetReferenceDatabase(p, true)"
+        @ensure-user-d-b="handleEnsurePersonalUserDatabase"
         @set-current-as-default-d-b="handleSetCurrentAsDefaultDB"
         @cycle-write-policy="handleCycleDatabaseWritePolicy"
         @open-database-hub="openDatabaseHubView"
@@ -3703,8 +3776,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           </button>
         </div>
 
-        <!-- Database Relationship Status Pill in Tab Strip -->
-        <div class="hidden lg:flex items-center gap-2 text-[11px] shrink-0">
+        <!-- Database Relationship Status Pill in Tab Strip (only shown in compact mode when HeaderBar is hidden) -->
+        <div v-if="effectiveCompact" class="hidden lg:flex items-center gap-2 text-[11px] shrink-0">
           <button
             class="px-2 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 flex items-center gap-1.5 cursor-pointer transition-colors"
             title="Click to view and configure how Default, Active, Reference, and Clipbase databases relate"
@@ -4089,42 +4162,67 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
               </div>
             </div>
 
-            <!-- Active Tab Panel Controls (Float / Detach to Hyprland Screen / Workspace / Hide / Bottom Drawer Toggle) -->
-            <div class="flex items-center gap-1 shrink-0">
-              <button
-                class="text-[11px] text-amber-300 hover:text-amber-200 px-1.5 py-1 rounded bg-amber-950/40 hover:bg-amber-900/50 border border-amber-500/30 transition-colors cursor-pointer"
-                :title="`Undock '${activeTab}' into a draggable Floating Window (Floater)`"
-                @click="togglePanelFloater(activeTab as PanelId)"
-              >
-                <span class="hidden sm:inline">Float </span>❐
-              </button>
-              <button
-                class="text-[11px] text-purple-300 hover:text-purple-200 px-1.5 py-1 rounded bg-purple-950/40 hover:bg-purple-900/50 border border-purple-500/30 transition-colors cursor-pointer"
-                :title="`Detach '${activeTab}' into a native OS window for another Hyprland monitor`"
-                @click="handleDetachPanelScreen(activeTab as PanelId)"
-              >
-                <span class="hidden sm:inline">Screen </span>↗
-              </button>
-              <select
-                :value="workspacePanels[activeTab as PanelId]?.targetWorkspace || ''"
-                class="bg-zinc-900 border border-purple-500/30 rounded px-1 py-1 text-[10px] text-purple-300 font-mono cursor-pointer"
-                :title="`Detach & relocate '${activeTab}' to a specific Hyprland Workspace (1..10)`"
-                @change="handleDetachPanelScreen(activeTab as PanelId, ($event.target as HTMLSelectElement).value)"
-              >
-                <option value="">WS ▾</option>
-                <option v-for="ws in 10" :key="ws" :value="String(ws)">WS {{ ws }}</option>
-              </select>
+            <!-- Active Tab Panel Controls (Clean 'Window ▾' Menu + Bottom DB Drawer Toggle) -->
+            <div class="flex items-center gap-1 shrink-0 relative">
+              <div class="relative">
+                <button
+                  class="text-[11px] text-zinc-300 hover:text-white px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-colors cursor-pointer flex items-center gap-1"
+                  :title="`Float, Detach to another Screen, or Move '${activeTab}' panel to a Hyprland Workspace`"
+                  @click="showPanelWindowDropdown = !showPanelWindowDropdown"
+                >
+                  <span>Window ▾</span>
+                </button>
+                <div
+                  v-if="showPanelWindowDropdown"
+                  class="fixed inset-0 z-40"
+                  @click="showPanelWindowDropdown = false"
+                />
+                <div
+                  v-if="showPanelWindowDropdown"
+                  class="absolute right-0 top-full mt-1 w-56 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl py-1.5 z-50 text-xs space-y-1"
+                >
+                  <div class="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                    Panel Layout ({{ activeTab }})
+                  </div>
+                  <button
+                    class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-amber-300 flex items-center justify-between cursor-pointer"
+                    @click="togglePanelFloater(activeTab as PanelId); showPanelWindowDropdown = false"
+                  >
+                    <span>Undock as Floating Window</span>
+                    <span class="font-mono text-[10px]">Float ❐</span>
+                  </button>
+                  <button
+                    class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-purple-300 flex items-center justify-between cursor-pointer"
+                    @click="handleDetachPanelScreen(activeTab as PanelId); showPanelWindowDropdown = false"
+                  >
+                    <span>Detach to Separate Screen</span>
+                    <span class="font-mono text-[10px]">Screen ↗</span>
+                  </button>
+                  <div class="px-3 py-1.5 flex items-center justify-between gap-2 border-t border-zinc-800">
+                    <span class="text-[11px] text-zinc-400">Hyprland Workspace:</span>
+                    <select
+                      :value="workspacePanels[activeTab as PanelId]?.targetWorkspace || ''"
+                      class="bg-zinc-950 border border-purple-500/40 rounded px-1.5 py-0.5 text-[11px] text-purple-300 font-mono cursor-pointer"
+                      @change="handleDetachPanelScreen(activeTab as PanelId, ($event.target as HTMLSelectElement).value); showPanelWindowDropdown = false"
+                    >
+                      <option value="">WS ▾</option>
+                      <option v-for="ws in 10" :key="ws" :value="String(ws)">WS {{ ws }}</option>
+                    </select>
+                  </div>
+                  <button
+                    v-if="!effectiveCompact"
+                    class="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-rose-300 flex items-center justify-between cursor-pointer border-t border-zinc-800"
+                    @click="setPanelMode(activeTab as PanelId, 'hidden'); showPanelWindowDropdown = false"
+                  >
+                    <span>Hide '{{ activeTab }}' Panel</span>
+                    <span>✕</span>
+                  </button>
+                </div>
+              </div>
+
               <button
                 v-if="!effectiveCompact"
-                class="text-[11px] text-zinc-400 hover:text-rose-300 px-1.5 py-1 rounded bg-zinc-800/80 hover:bg-zinc-800 transition-colors cursor-pointer"
-                :title="`Hide '${activeTab}' panel (restore anytime from Windows menu)`"
-                @click="setPanelMode(activeTab as PanelId, 'hidden')"
-              >
-                ✕
-              </button>
-              <button
-                v-if="!effectiveCompact"
-                class="text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded bg-zinc-800/80 hover:bg-zinc-800 transition-colors cursor-pointer ml-0.5"
+                class="text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-colors cursor-pointer"
                 @click="toggleBottomGamesDrawer()"
               >
                 {{ showBottomGamesDrawer ? 'Hide DB ▼' : 'Show DB ▲' }}
@@ -4211,6 +4309,10 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
                 @delete-game="handleDeleteGame"
                 @cycle-write-policy="handleCycleDatabaseWritePolicy(dbInfo?.basePath, activeDbWritePolicy)"
                 @open-sub-db-builder="(f) => openWorkstationManagerModal('builder', f)"
+                @open-standard-import="showImportModal = true"
+                @open-mega-downloader="showMegaDatabaseModal = true"
+                @ensure-user-d-b="handleEnsurePersonalUserDatabase"
+                @open-online-sync="showOnlineSyncModal = true"
               />
             </div>
 
@@ -4254,6 +4356,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
                 @update-from-local="handleUpdateDatabaseFromLocal"
                 @cycle-write-policy="handleCycleDatabaseWritePolicy"
                 @open-workstation-manager="openWorkstationManagerModal"
+                @open-standard-import="showImportModal = true"
+                @ensure-user-d-b="handleEnsurePersonalUserDatabase"
               />
             </div>
 
@@ -4268,6 +4372,9 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
                 @open-fair-play="showFairPlayModal = true"
                 @detach-portal-screen="handleDetachPanelScreen('portal')"
                 @float-portal="togglePanelFloater('portal')"
+                @game-captured="handlePortalGameCaptured"
+                @load-game-by-id="handleLoadGame"
+                @load-pgn-to-board="handleLoadPgnOnBoardFromModal"
               />
             </div>
 
@@ -4373,6 +4480,10 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           @delete-game="handleDeleteGame"
           @cycle-write-policy="handleCycleDatabaseWritePolicy(dbInfo?.basePath, activeDbWritePolicy)"
           @open-sub-db-builder="(f) => openWorkstationManagerModal('builder', f)"
+          @open-standard-import="showImportModal = true"
+          @open-mega-downloader="showMegaDatabaseModal = true"
+          @open-online-sync="showOnlineSyncModal = true"
+          @ensure-personal-db="handleEnsurePersonalUserDatabase"
         />
       </div>
 
@@ -4482,6 +4593,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
             @update-from-local="handleUpdateDatabaseFromLocal"
             @cycle-write-policy="handleCycleDatabaseWritePolicy"
             @open-workstation-manager="openWorkstationManagerModal"
+            @open-standard-import="showImportModal = true"
+            @ensure-user-d-b="handleEnsurePersonalUserDatabase"
           />
         </div>
 
@@ -4495,6 +4608,9 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
             @open-fair-play="showFairPlayModal = true"
             @detach-portal-screen="handleDetachPanelScreen('portal')"
             @float-portal="togglePanelFloater('portal')"
+            @game-captured="handlePortalGameCaptured"
+            @load-game-by-id="handleLoadGame"
+            @load-pgn-to-board="handleLoadPgnOnBoardFromModal"
           />
         </div>
 
@@ -4859,36 +4975,15 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       @close="showCoordinateTrainerModal = false"
     />
 
-    <!-- Import PGN Modal -->
-    <div
+    <!-- Standard 3-Tier Database & PGN Import Modal (Ctrl+I) -->
+    <StandardImportModal
       v-if="showImportModal"
-      class="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in"
-      @click.self="showImportModal = false"
-    >
-      <div class="bg-zinc-900 border border-zinc-700 w-full max-w-lg rounded-2xl p-5 shadow-2xl flex flex-col gap-3">
-        <h3 class="font-bold text-sm text-zinc-100">Import PGN Game</h3>
-        <textarea
-          v-model="importPGNText"
-          rows="8"
-          placeholder="Paste PGN tags and moves here..."
-          class="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-3 text-xs font-mono text-zinc-200 placeholder-zinc-500 focus:outline-hidden focus:border-emerald-500"
-        />
-        <div class="flex justify-end gap-2">
-          <button
-            class="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 text-xs font-medium hover:bg-zinc-700 cursor-pointer"
-            @click="showImportModal = false"
-          >
-            Cancel
-          </button>
-          <button
-            class="px-4 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-500 cursor-pointer"
-            @click="confirmImportPGN"
-          >
-            Load Game
-          </button>
-        </div>
-      </div>
-    </div>
+      :default-db-name="dbRolesStatus?.defaultDbName || 'My_Games'"
+      :reference-db-name="dbRolesStatus?.referenceDbName || 'Master_Reference'"
+      @imported-database="handleStandardDatabaseImported"
+      @load-pgn-on-board="handleLoadPgnOnBoardFromModal"
+      @close="showImportModal = false"
+    />
 
     <!-- Zen Mode Floating Exit Indicator -->
     <button

@@ -3404,6 +3404,43 @@ func (a *App) DownloadAndAnalyzePlayerFairPlay(platform string, username string,
 	return fairplay.AnalyzePlayerFairPlay(db, user, maxGames)
 }
 
+// AnalyzeHardMoveBenchmark runs the "Man vs Chess" Self-Benchmarked Hard-Move Excess Detector
+// across all games of benchmarkPlayer in the currently open database (or Default Personal User DB).
+func (a *App) AnalyzeHardMoveBenchmark(
+	benchmarkPlayer string,
+	timeControlFilter string,
+	maxGames int,
+	checkOnlineBans bool,
+) (*fairplay.HardMoveBenchmarkReport, error) {
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+
+	if db == nil || !db.IsOpen {
+		if _, err := a.EnsurePersonalUserDatabase(true); err == nil {
+			a.mu.RLock()
+			db = a.db
+			a.mu.RUnlock()
+		}
+	}
+	return fairplay.AnalyzeHardMoveBenchmark(db, benchmarkPlayer, timeControlFilter, maxGames, checkOnlineBans)
+}
+
+// DownloadAndAnalyzeHardMoveBenchmark downloads a player's games from Lichess.org / Chess.com into the active
+// or personal database and runs the Self-Benchmarked Hard-Move Excess Detector.
+func (a *App) DownloadAndAnalyzeHardMoveBenchmark(
+	platform string,
+	username string,
+	timeControlFilter string,
+	maxGames int,
+	checkOnlineBans bool,
+) (*fairplay.HardMoveBenchmarkReport, error) {
+	if _, err := a.DownloadAndAnalyzePlayerFairPlay(platform, username, maxGames); err != nil {
+		return nil, err
+	}
+	return a.AnalyzeHardMoveBenchmark(username, timeControlFilter, maxGames, checkOnlineBans)
+}
+
 // ==========================================
 // Cyclical Tactical Drill & Lichess Theme Mastery
 // ==========================================
