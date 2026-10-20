@@ -276,3 +276,110 @@ func (c *ChessComClient) FetchUserGamesIncremental(
 	return newGames, skippedExisting, nil
 }
 
+// FetchRecentNewGames checks only the single most recent monthly archive for a Chess.com player
+// (ideal for fast real-time auto-capture while playing in the Live Portal) and returns any games
+// in the tail of that archive not yet present in existingSigs.
+func (c *ChessComClient) FetchRecentNewGames(
+	username string,
+	limit int,
+	existingSigs *scid.GameSignatureSet,
+) ([]*chess.Game, int, error) {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return nil, 0, fmt.Errorf("chess.com username cannot be empty")
+	}
+	if limit <= 0 {
+		limit = 8
+	}
+
+	archives, err := c.FetchArchives(username)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(archives) == 0 {
+		return nil, 0, nil
+	}
+
+	latestArchiveURL := archives[len(archives)-1]
+	pgnText, err := c.FetchMonthlyPGN(latestArchiveURL)
+	if err != nil {
+		return nil, 0, err
+	}
+	if strings.TrimSpace(pgnText) == "" {
+		return nil, 0, nil
+	}
+
+	monthGames, err := chess.ParsePGNDatabase(strings.NewReader(pgnText))
+	if err != nil || len(monthGames) == 0 {
+		return nil, 0, err
+	}
+
+	startIdx := 0
+	if len(monthGames) > limit {
+		startIdx = len(monthGames) - limit
+	}
+
+	var newGames []*chess.Game
+	skipped := 0
+	for i := startIdx; i < len(monthGames); i++ {
+		g := monthGames[i]
+		if g == nil {
+			continue
+		}
+		if existingSigs != nil && existingSigs.ContainsGame(g) {
+			skipped++
+			continue
+		}
+		if existingSigs != nil {
+			existingSigs.AddGame(g)
+		}
+		newGames = append(newGames, g)
+	}
+	return newGames, skipped, nil
+}
+
+// FetchGameByID locates a specific Chess.com game by its numeric Game ID from the player's latest archive.
+func (c *ChessComClient) FetchGameByID(gameID string, username string) (*chess.Game, error) {
+	cleanID := strings.TrimSpace(gameID)
+	if cleanID == "" {
+		return nil, fmt.Errorf("empty chess.com game ID")
+	}
+	if strings.TrimSpace(username) == "" {
+		return nil, fmt.Errorf("chess.com username is required to fetch game #%s from player archive", cleanID)
+	}
+
+	archives, err := c.FetchArchives(username)
+	if err != nil {
+		return nil, err
+	}
+	if len(archives) == 0 {
+		return nil, fmt.Errorf("no archives found for chess.com user %q", username)
+	}
+
+	// Check up to the 2 most recent monthly archives
+	for step := 0; step < len(archives) && step < 2; step++ {
+		archURL := archives[len(archives)-1-step]
+		pgnText, err := c.FetchMonthlyPGN(archURL)
+		if err != nil || strings.TrimSpace(pgnText) == "" {
+			continue
+		}
+		games, err := chess.ParsePGNDatabase(strings.NewReader(pgnText))
+		if err != nil {
+			continue
+		}
+		for i := len(games) - 1; i >= 0; i-- {
+			g := games[i]
+			if g == nil || g.Tags == nil {
+				continue
+			}
+			for _, tagKey := range []string{"Link", "Site", "URL", "Event"} {
+				if val, ok := g.Tags[tagKey]; ok && strings.Contains(val, cleanID) {
+					return g, nil
+				}
+			}
+		}
+	}
+	return nil, fmt.Errorf("game #%s not found in recent archives for %s", cleanID, username)
+}
+
+
