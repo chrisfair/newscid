@@ -96,7 +96,7 @@ fi
 
 if [ -f packaging/pacman/.SRCINFO ]; then
     sed -i -E "s/pkgver = .*/pkgver = ${NEW_VERSION}/" packaging/pacman/.SRCINFO
-    sed -i -E "s/newscid-[0-9.]+\.tar\.gz/newscid-${NEW_VERSION}.tar.gz/g" packaging/pacman/.SRCINFO
+    sed -i -E "s/newscid-[0-9.]+(-[0-9]+)?\.tar\.gz/newscid-${NEW_VERSION}\1.tar.gz/g" packaging/pacman/.SRCINFO
     sed -i -E "s/tags\/v[0-9.]+\.tar\.gz/tags\/v${NEW_VERSION}.tar.gz/g" packaging/pacman/.SRCINFO
     sed -i -E "s/tag=v[0-9.]+/tag=v${NEW_VERSION}/" packaging/pacman/.SRCINFO
 fi

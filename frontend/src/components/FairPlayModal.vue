@@ -14,10 +14,16 @@ import {
   ExternalLink,
   X,
   TrendingUp,
+  Crosshair,
+  EyeOff,
+  Eye,
+  Sparkles,
 } from '@lucide/vue'
 import {
   AnalyzePlayerFairPlay,
   DownloadAndAnalyzePlayerFairPlay,
+  AnalyzeHardMoveBenchmark,
+  DownloadAndAnalyzeHardMoveBenchmark,
   GetDatabasePlayers,
 } from '../../wailsjs/go/main/App'
 
@@ -136,11 +142,15 @@ const maxGames = ref<number>(250)
 const dbPlayers = ref<string[]>([])
 
 const isAnalyzing = ref<boolean>(false)
+const isCheckingOnlineBans = ref<boolean>(false)
 const errorMsg = ref<string>('')
 const copiedReport = ref<boolean>(false)
 const dossier = ref<PlayerFairPlayDossier | null>(null)
-const activeViewTab = ref<'matrix' | 'daily' | 'games' | 'report'>('matrix')
+const hardMoveReport = ref<any | null>(null)
+const activeViewTab = ref<'matrix' | 'hardmove' | 'daily' | 'games' | 'report'>('matrix')
 const selectedControlFilter = ref<string>('ALL')
+const anonymousMode = ref<boolean>(false)
+const checkOnlineBans = ref<boolean>(false)
 
 onMounted(async () => {
   if (props.dbOpen) {
@@ -190,18 +200,66 @@ async function handleRunInspection() {
   copiedReport.value = false
 
   try {
+    const limit = Number(maxGames.value) || 250
     if (sourceMode.value === 'online') {
-      const res = await DownloadAndAnalyzePlayerFairPlay(onlinePlatform.value, target, Number(maxGames.value) || 250)
+      const res = await DownloadAndAnalyzePlayerFairPlay(onlinePlatform.value, target, limit)
       dossier.value = res
       emit('imported', res?.totalGamesAnalyzed ?? 0)
+      if (typeof DownloadAndAnalyzeHardMoveBenchmark === 'function') {
+        try {
+          hardMoveReport.value = await DownloadAndAnalyzeHardMoveBenchmark(
+            onlinePlatform.value,
+            target,
+            selectedControlFilter.value,
+            limit,
+            checkOnlineBans.value
+          )
+        } catch {
+          // Optional benchmark fallback
+        }
+      }
     } else {
-      const res = await AnalyzePlayerFairPlay(target, Number(maxGames.value) || 250)
+      const res = await AnalyzePlayerFairPlay(target, limit)
       dossier.value = res
+      if (typeof AnalyzeHardMoveBenchmark === 'function') {
+        try {
+          hardMoveReport.value = await AnalyzeHardMoveBenchmark(
+            target,
+            selectedControlFilter.value,
+            limit,
+            checkOnlineBans.value
+          )
+        } catch {
+          // Optional benchmark fallback
+        }
+      }
     }
   } catch (err: any) {
     errorMsg.value = typeof err === 'string' ? err : (err?.message || 'Failed to run fair-play & time-control analysis')
   } finally {
     isAnalyzing.value = false
+  }
+}
+
+async function handleRunHardMoveWithOnlineBanCheck() {
+  const target = playerName.value.trim()
+  if (!target || isCheckingOnlineBans.value) return
+  isCheckingOnlineBans.value = true
+  checkOnlineBans.value = true
+  try {
+    const limit = Number(maxGames.value) || 250
+    if (typeof AnalyzeHardMoveBenchmark === 'function') {
+      hardMoveReport.value = await AnalyzeHardMoveBenchmark(
+        target,
+        selectedControlFilter.value,
+        limit,
+        true
+      )
+    }
+  } catch (err: any) {
+    errorMsg.value = typeof err === 'string' ? err : (err?.message || 'Failed to verify online ban status')
+  } finally {
+    isCheckingOnlineBans.value = false
   }
 }
 
@@ -233,13 +291,13 @@ async function handleCopyReport() {
           </div>
           <div>
             <h2 class="text-base font-bold text-white flex items-center gap-2">
-              <span>Longitudinal Fair-Play &amp; Time-Control Consistency Inspector</span>
+              <span>Longitudinal Fair-Play &amp; Hard-Move Excess Inspector</span>
               <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                Multi-Control &amp; Everyday Dossier
+                Multi-Control &amp; Self-Benchmarked Detector
               </span>
             </h2>
             <p class="text-xs text-zinc-400">
-              Measures consistent statistical anomalies across Bullet, Blitz, Rapid &amp; Classical and tracks everyday session consistency (IPR, ACPL &amp; Move-Time CV)
+              Combines Multi-Time-Control Consistency (IPR, ACPL &amp; Move-Time CV) with the Self-Benchmarked Hard-Move Excess Detector (p ≤ 30%)
             </p>
           </div>
         </div>
@@ -281,7 +339,7 @@ async function handleCopyReport() {
             </div>
 
             <div class="text-[11px] text-zinc-400">
-              Objective statistical metrics (Ken Regan IPR / Move-Time CV / Cross-Control Z-Score)
+              Ken Regan IPR • Move-Time CV • Hard-Move Self-Benchmark (p ≤ 30%)
             </div>
           </div>
 
@@ -303,7 +361,7 @@ async function handleCopyReport() {
             <!-- Player Name / Username -->
             <div :class="sourceMode === 'online' ? 'md:col-span-4' : 'md:col-span-7'" class="space-y-1">
               <label class="block text-[11px] text-zinc-400">
-                {{ sourceMode === 'online' ? 'Online Username' : 'Player Name in Database' }}
+                {{ sourceMode === 'online' ? 'Online Username (Your Account or Opponent)' : 'Player Name in Database (Benchmark User)' }}
               </label>
               <input
                 v-model="playerName"
@@ -331,6 +389,8 @@ async function handleCopyReport() {
                 <option :value="250">250 games</option>
                 <option :value="500">500 games</option>
                 <option :value="1000">1,000 games</option>
+                <option :value="5000">5,000 games</option>
+                <option :value="10000">10,000 games</option>
               </select>
             </div>
 
@@ -453,8 +513,8 @@ async function handleCopyReport() {
           </div>
 
           <!-- Navigation Tabs for Dossier Views -->
-          <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
-            <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-2">
+            <div class="flex items-center gap-1.5 flex-wrap">
               <button
                 type="button"
                 data-testid="tab-matrix"
@@ -465,6 +525,18 @@ async function handleCopyReport() {
                 <Clock class="w-3.5 h-3.5" />
                 <span>Per-Time-Control Issue Scores ({{ dossier.timeControlProfiles?.length || 0 }})</span>
               </button>
+
+              <button
+                type="button"
+                data-testid="tab-hardmove"
+                class="px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 cursor-pointer"
+                :class="activeViewTab === 'hardmove' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'text-zinc-400 hover:text-zinc-200'"
+                @click="activeViewTab = 'hardmove'"
+              >
+                <Crosshair class="w-3.5 h-3.5 text-emerald-400" />
+                <span>🎯 Hard-Move &amp; Self-Benchmark (Opponents vs. You)</span>
+              </button>
+
               <button
                 type="button"
                 data-testid="tab-daily"
@@ -475,6 +547,7 @@ async function handleCopyReport() {
                 <Calendar class="w-3.5 h-3.5" />
                 <span>Everyday Consistency Timeline ({{ dossier.dailyTimeline?.length || 0 }} Days)</span>
               </button>
+
               <button
                 type="button"
                 data-testid="tab-games"
@@ -585,6 +658,328 @@ async function handleCopyReport() {
                 </div>
               </div>
             </div>
+          </div>
+
+          <!-- ========================================================================= -->
+          <!-- TAB 1B: "MAN VS CHESS" SELF-BENCHMARKED HARD-MOVE EXCESS DETECTOR         -->
+          <!-- ========================================================================= -->
+          <div v-if="activeViewTab === 'hardmove'" class="space-y-4" data-testid="hardmove-benchmark-view">
+            <div v-if="!hardMoveReport" class="p-6 text-center bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-400">
+              Click <strong>Run Inspection</strong> above to compute the Self-Benchmarked Hard-Move Excess Detector.
+            </div>
+
+            <template v-else>
+              <!-- Verdict Banner + Controls (Anonymous Toggle + Online Ban Check) -->
+              <div class="p-4 rounded-xl bg-emerald-950/35 border border-emerald-500/30 space-y-2.5">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div class="flex items-center gap-2">
+                    <Sparkles class="w-4 h-4 text-emerald-400" />
+                    <span class="font-bold text-sm text-emerald-200">
+                      Self-Benchmarked Hard-Move Detector ("Some of My Chess Opponents Cheated — Let's See How Many")
+                    </span>
+                  </div>
+
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      class="px-2.5 py-1 rounded-lg border text-[11px] font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                      :class="anonymousMode
+                        ? 'bg-amber-950/70 border-amber-500/50 text-amber-300'
+                        : 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:text-white'"
+                      title="Hide individual opponent handles (Opponent #001) for anonymous statistical sharing"
+                      @click="anonymousMode = !anonymousMode"
+                    >
+                      <EyeOff v-if="anonymousMode" class="w-3.5 h-3.5" />
+                      <Eye v-else class="w-3.5 h-3.5" />
+                      <span>{{ anonymousMode ? 'Anonymous Mode: ON' : 'Anonymous Mode: OFF' }}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      class="px-2.5 py-1 rounded-lg bg-cyan-950/70 hover:bg-cyan-900/70 border border-cyan-500/40 text-cyan-200 text-[11px] font-semibold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      :disabled="isCheckingOnlineBans"
+                      title="Query Chess.com & Lichess APIs to check which opponents in your Top 100 were later closed/banned for Fair Play violations"
+                      @click="handleRunHardMoveWithOnlineBanCheck"
+                    >
+                      <Globe class="w-3.5 h-3.5" />
+                      <span>{{ isCheckingOnlineBans ? 'Checking Accounts...' : '🔍 Verify Banned Opponents Online' }}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <p class="text-xs font-semibold text-white">
+                  {{ hardMoveReport.verdictHeadline }}
+                </p>
+
+                <ul class="space-y-1 text-[11px] text-zinc-300 list-disc list-inside">
+                  <li v-for="(finding, idx) in hardMoveReport.verdictFindings" :key="idx">
+                    {{ finding }}
+                  </li>
+                </ul>
+              </div>
+
+              <!-- 4 Key Benchmark Metrics Cards -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div class="bg-zinc-950 border border-zinc-800 rounded-xl p-3.5 space-y-1">
+                  <div class="text-[11px] text-zinc-400">Hard Moves Isolated (p ≤ 30%)</div>
+                  <div class="text-base font-mono font-bold text-white">
+                    {{ hardMoveReport.totalHardMovesAnalyzed?.toLocaleString() }} positions
+                  </div>
+                  <div class="text-[11px] text-zinc-400">
+                    Your hit rate: <strong class="text-emerald-400">{{ hardMoveReport.selfAvgHardHitRatePct }}%</strong>
+                    vs Opp: <strong class="text-amber-300">{{ hardMoveReport.opponentAvgHardHitRatePct }}%</strong>
+                  </div>
+                </div>
+
+                <div class="bg-zinc-950 border border-zinc-800 rounded-xl p-3.5 space-y-1">
+                  <div class="text-[11px] text-zinc-400">Top Two Bands (Your Most Unusual 1%)</div>
+                  <div class="text-base font-mono font-bold text-amber-300">
+                    {{ hardMoveReport.opponentInTopTwoBands }} opp games ({{ hardMoveReport.opponentTopTwoRatePct }}%)
+                  </div>
+                  <div class="text-[11px] text-zinc-400">
+                    Expected by chance: <strong class="text-zinc-200">{{ hardMoveReport.expectedOpponentTopTwo }}</strong>
+                    (Your rate: {{ hardMoveReport.selfTopTwoRatePct }}%)
+                  </div>
+                </div>
+
+                <div class="bg-zinc-950 border border-zinc-800 rounded-xl p-3.5 space-y-1">
+                  <div class="text-[11px] text-zinc-400">Estimated Excess Beyond Chance</div>
+                  <div class="text-base font-mono font-bold text-rose-300" data-testid="hardmove-excess-estimate">
+                    {{ hardMoveReport.excessGamesLowEstimate }}–{{ hardMoveReport.excessGamesHighEstimate }} games
+                    <span class="text-xs text-zinc-400">({{ hardMoveReport.excessPctOfAllGames }}%)</span>
+                  </div>
+                  <div class="text-[11px] text-zinc-400">
+                    Odds of being luck: <strong class="text-zinc-100">~1 in {{ hardMoveReport.oddsOneIn?.toLocaleString() }}</strong>
+                  </div>
+                </div>
+
+                <div class="bg-zinc-950 border border-zinc-800 rounded-xl p-3.5 space-y-1">
+                  <div class="text-[11px] text-zinc-400">Why You're in the Top 100</div>
+                  <div class="text-base font-mono font-bold text-sky-300">
+                    {{ hardMoveReport.selfInTop100Count }} Yours / {{ hardMoveReport.opponentInTop100Count }} Opponents
+                  </div>
+                  <div class="text-[11px] text-zinc-400">
+                    <template v-if="hardMoveReport.bannedValidation?.gamesVsBanned > 0">
+                      Banned opp rate: <strong class="text-rose-300">{{ hardMoveReport.bannedValidation.bannedTopTwoRatePct }}% ({{ hardMoveReport.bannedValidation.multiplierVsOpen }}x)</strong>
+                    </template>
+                    <template v-else>
+                      Single games can be luck; excess is statistical
+                    </template>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 5-Band Benchmark Distribution Table (Your Benchmark vs. Opponents) -->
+              <div class="bg-zinc-950 border border-zinc-800 rounded-xl p-4 space-y-3">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <h3 class="font-bold text-sm text-white">
+                      1. Unusualness Bands: Your Own Games (Benchmark) vs. Your Opponents
+                    </h3>
+                    <p class="text-[11px] text-zinc-400">
+                      Bands 4 &amp; 5 represent your most unusual 1% of games on Hard Moves (p ≤ 30%). Any significant opponent excess in Bands 4 &amp; 5 measures anomalous engine-like performance beyond chance.
+                    </p>
+                  </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                  <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr class="border-b border-zinc-800 text-[11px] text-zinc-400 bg-zinc-900/60">
+                        <th class="py-2 px-3">Unusualness Band</th>
+                        <th class="py-2 px-3">Score Cutoff (-log10 P)</th>
+                        <th class="py-2 px-3">Your Games (Benchmark)</th>
+                        <th class="py-2 px-3">Opponent Games</th>
+                        <th class="py-2 px-3">Expected Opp Games</th>
+                        <th class="py-2 px-3">Excess Beyond Chance</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-800/70 font-mono">
+                      <tr
+                        v-for="b in hardMoveReport.bands"
+                        :key="b.bandIndex"
+                        :class="b.bandIndex >= 4 ? 'bg-amber-950/20' : ''"
+                      >
+                        <td class="py-2.5 px-3 font-sans">
+                          <div class="font-bold" :class="b.bandIndex >= 4 ? 'text-amber-300' : 'text-zinc-200'">
+                            {{ b.bandName }}
+                          </div>
+                          <div class="text-[10px] text-zinc-500">{{ b.description }}</div>
+                        </td>
+                        <td class="py-2.5 px-3 text-zinc-300">≥ {{ b.thresholdScore }}</td>
+                        <td class="py-2.5 px-3 text-emerald-300">
+                          {{ b.selfCount }} <span class="text-zinc-500">({{ b.selfPct }}%)</span>
+                        </td>
+                        <td class="py-2.5 px-3 font-bold" :class="b.bandIndex >= 4 ? 'text-amber-300' : 'text-zinc-200'">
+                          {{ b.opponentCount }} <span class="text-zinc-500 font-normal">({{ b.opponentPct }}%)</span>
+                        </td>
+                        <td class="py-2.5 px-3 text-zinc-400">{{ b.expectedOppCount }}</td>
+                        <td class="py-2.5 px-3">
+                          <span
+                            v-if="b.excessOppCount > 0"
+                            class="px-2 py-0.5 rounded bg-rose-500/20 border border-rose-500/40 text-rose-300 font-bold"
+                          >
+                            +{{ b.excessOppCount }}
+                          </span>
+                          <span v-else class="text-zinc-500">0.0</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Selective Cheating Simulation ("What the Detector Might Miss") -->
+              <div class="bg-zinc-950 border border-zinc-800 rounded-xl p-4 space-y-3">
+                <div>
+                  <h3 class="font-bold text-sm text-white">
+                    2. Selective Cheating Simulation ("What the Detector Might Miss")
+                  </h3>
+                  <p class="text-[11px] text-zinc-400">
+                    Simulated by taking <strong>your own real games</strong> and swapping Stockfish's top choice into 1, 2, 50%, or 100% of your missed Hard Moves — showing what percentage of games get caught in the Top 1% (Top Two Bands) and Top 5%.
+                  </p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-2.5">
+                  <div
+                    v-for="(sim, sIdx) in hardMoveReport.selectiveSimulation"
+                    :key="sIdx"
+                    class="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between gap-2"
+                  >
+                    <div>
+                      <div class="font-bold text-zinc-100 text-xs">{{ sim.label }}</div>
+                      <div class="text-[10px] text-zinc-400 mt-0.5">
+                        Avg {{ sim.avgSwappedPerGame }} hard moves swapped/game
+                      </div>
+                    </div>
+
+                    <div class="space-y-1.5 pt-1">
+                      <div>
+                        <div class="flex justify-between text-[10px] font-mono">
+                          <span class="text-amber-300">Caught in Top 1%:</span>
+                          <span class="font-bold text-white">{{ sim.topTwoBandsCaughtPct }}%</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden mt-0.5">
+                          <div
+                            class="h-full bg-amber-500"
+                            :style="{ width: `${Math.min(100, Math.max(3, sim.topTwoBandsCaughtPct))}%` }"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div class="flex justify-between text-[10px] font-mono">
+                          <span class="text-sky-300">Caught in Top 5%:</span>
+                          <span class="font-bold text-zinc-200">{{ sim.topFivePctCaughtPct }}%</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden mt-0.5">
+                          <div
+                            class="h-full bg-sky-500"
+                            :style="{ width: `${Math.min(100, Math.max(3, sim.topFivePctCaughtPct))}%` }"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Top 100 Most Unusual Games Leaderboard (Both You & Opponents) -->
+              <div class="bg-zinc-950 border border-zinc-800 rounded-xl p-4 space-y-3">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <h3 class="font-bold text-sm text-white">
+                      3. Top {{ hardMoveReport.top100Games?.length || 0 }} Most Unusual Performances (Opponents &amp; Your Benchmark)
+                    </h3>
+                    <p class="text-[11px] text-zinc-400">
+                      Ranked by Hard-Move Unusualness Score (-log10 P). Click any game to inspect the exact Hard Moves on the analysis board.
+                    </p>
+                  </div>
+                </div>
+
+                <div class="overflow-x-auto max-h-[340px] overflow-y-auto">
+                  <table class="w-full text-left border-collapse text-xs">
+                    <thead class="sticky top-0 bg-zinc-900 z-10">
+                      <tr class="border-b border-zinc-800 text-[11px] text-zinc-400">
+                        <th class="py-2 px-2.5">#</th>
+                        <th class="py-2 px-2.5">Side</th>
+                        <th class="py-2 px-2.5">Player</th>
+                        <th class="py-2 px-2.5">Date &amp; Control</th>
+                        <th class="py-2 px-2.5">Hard Moves Found</th>
+                        <th class="py-2 px-2.5">Expected</th>
+                        <th class="py-2 px-2.5">Unusualness (-log10 P)</th>
+                        <th class="py-2 px-2.5">Band</th>
+                        <th class="py-2 px-2.5 text-right">Board</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-800/70 font-mono">
+                      <tr
+                        v-for="(perf, idx) in hardMoveReport.top100Games"
+                        :key="`${perf.gameId}-${perf.side}`"
+                        class="hover:bg-zinc-900/60"
+                      >
+                        <td class="py-2 px-2.5 text-zinc-400">#{{ idx + 1 }}</td>
+                        <td class="py-2 px-2.5 font-sans">
+                          <span
+                            class="px-2 py-0.5 rounded text-[10px] font-bold"
+                            :class="perf.side === 'self'
+                              ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40'
+                              : 'bg-amber-950/80 text-amber-300 border border-amber-500/40'"
+                          >
+                            {{ perf.side === 'self' ? '👤 You' : '⚔️ Opponent' }}
+                          </span>
+                        </td>
+                        <td class="py-2 px-2.5 font-sans">
+                          <div class="font-bold text-zinc-100 flex items-center gap-1.5">
+                            <span>{{ anonymousMode && perf.side === 'opponent' ? perf.anonymousLabel : perf.playerName }}</span>
+                            <span class="text-[10px] font-mono text-zinc-400">({{ perf.playerElo }})</span>
+                            <span
+                              v-if="perf.isBannedOpponent"
+                              class="px-1.5 py-0.2 rounded bg-rose-500/20 border border-rose-500/40 text-rose-300 text-[9px] font-bold"
+                              :title="perf.banSource"
+                            >
+                              BANNED
+                            </span>
+                          </div>
+                        </td>
+                        <td class="py-2 px-2.5 text-zinc-400 text-[11px]">
+                          {{ perf.date }} • {{ perf.timeControl }}
+                        </td>
+                        <td class="py-2 px-2.5 font-bold text-emerald-300">
+                          {{ perf.hardMovesFound }} / {{ perf.hardMoveCount }}
+                          <span class="text-zinc-400 font-normal">({{ perf.hardMoveHitRatePct }}%)</span>
+                        </td>
+                        <td class="py-2 px-2.5 text-zinc-400">
+                          {{ perf.expectedHardHits }}
+                        </td>
+                        <td class="py-2 px-2.5 font-bold text-amber-300">
+                          {{ perf.unusualnessScore }}
+                          <span class="text-[10px] text-zinc-500">({{ perf.zScore >= 0 ? `+${perf.zScore}` : perf.zScore }}σ)</span>
+                        </td>
+                        <td class="py-2 px-2.5 font-sans text-[10px]">
+                          <span
+                            class="px-1.5 py-0.5 rounded"
+                            :class="perf.bandIndex >= 4 ? 'bg-rose-500/20 text-rose-300 font-bold' : 'bg-zinc-800 text-zinc-300'"
+                          >
+                            Band {{ perf.bandIndex }}
+                          </span>
+                        </td>
+                        <td class="py-2 px-2.5 text-right">
+                          <button
+                            type="button"
+                            class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 text-[11px] inline-flex items-center gap-1 cursor-pointer"
+                            @click="emit('select-game', perf.gameId)"
+                          >
+                            <span>Game #{{ perf.gameId }}</span>
+                            <ExternalLink class="w-3 h-3" />
+                          </button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </template>
           </div>
 
           <!-- TAB 2: Everyday Consistency Timeline -->
@@ -721,7 +1116,7 @@ async function handleCopyReport() {
       <!-- Footer -->
       <div class="flex items-center justify-between px-5 py-3 bg-zinc-950 border-t border-zinc-800 text-[11px] text-zinc-400 shrink-0">
         <span>
-          Statistical indicators are objective mathematical correlations (ACPL, IPR &amp; Move-Time CV) for training &amp; fair-play review.
+          Statistical indicators are objective mathematical correlations (ACPL, IPR, Move-Time CV &amp; Hard-Move Excess) — single games never prove cheating on their own.
         </span>
         <button
           type="button"

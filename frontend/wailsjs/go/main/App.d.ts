@@ -431,3 +431,26 @@ export function UpdateGameHeaders(arg1:number,arg2:Record<string, string>):Promi
 export function VerifyDatabase():Promise<scid.VerificationReport>;
 
 export function VerifyRepertoireMove(arg1:string,arg2:string,arg3:string):Promise<main.RepertoireCheckResult>;
+
+export function ImportStandardDatabase(arg1:any):Promise<any>;
+
+export function EnsurePersonalUserDatabase(arg1:boolean):Promise<main.DatabaseInfo>;
+
+export function GetLivePortalCaptureStatus():Promise<any>;
+
+export function ConfigureLivePortalAutoCapture(arg1:string,arg2:string,arg3:boolean,arg4:boolean):Promise<any>;
+
+export function StartLivePortalWatcher():Promise<any>;
+
+export function StopLivePortalWatcher():Promise<any>;
+
+export function CheckAndCaptureLivePortalGames():Promise<any>;
+
+export function CaptureOnlineGameFromURLOrPGN(arg1:string):Promise<any>;
+
+export function AnalyzeHardMoveBenchmark(arg1:string,arg2:string,arg3:number,arg4:boolean):Promise<any>;
+
+export function DownloadAndAnalyzeHardMoveBenchmark(arg1:string,arg2:string,arg3:string,arg4:number,arg5:boolean):Promise<any>;
+
+
+

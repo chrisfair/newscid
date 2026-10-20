@@ -805,3 +805,46 @@ export function VerifyDatabase() {
 export function VerifyRepertoireMove(arg1, arg2, arg3) {
   return window['go']['main']['App']['VerifyRepertoireMove'](arg1, arg2, arg3);
 }
+
+export function ImportStandardDatabase(arg1) {
+  return window['go']['main']['App']['ImportStandardDatabase'](arg1);
+}
+
+export function EnsurePersonalUserDatabase(arg1) {
+  return window['go']['main']['App']['EnsurePersonalUserDatabase'](arg1);
+}
+
+export function GetLivePortalCaptureStatus() {
+  return window['go']['main']['App']['GetLivePortalCaptureStatus']();
+}
+
+export function ConfigureLivePortalAutoCapture(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['ConfigureLivePortalAutoCapture'](arg1, arg2, arg3, arg4);
+}
+
+export function StartLivePortalWatcher() {
+  return window['go']['main']['App']['StartLivePortalWatcher']();
+}
+
+export function StopLivePortalWatcher() {
+  return window['go']['main']['App']['StopLivePortalWatcher']();
+}
+
+export function CheckAndCaptureLivePortalGames() {
+  return window['go']['main']['App']['CheckAndCaptureLivePortalGames']();
+}
+
+export function CaptureOnlineGameFromURLOrPGN(arg1) {
+  return window['go']['main']['App']['CaptureOnlineGameFromURLOrPGN'](arg1);
+}
+
+export function AnalyzeHardMoveBenchmark(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['AnalyzeHardMoveBenchmark'](arg1, arg2, arg3, arg4);
+}
+
+export function DownloadAndAnalyzeHardMoveBenchmark(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['DownloadAndAnalyzeHardMoveBenchmark'](arg1, arg2, arg3, arg4, arg5);
+}
+
+
+
