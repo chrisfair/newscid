@@ -7,9 +7,9 @@ import {training} from '../models';
 import {stats} from '../models';
 import {fairplay} from '../models';
 import {engine} from '../models';
+import {main} from '../models';
 import {support} from '../models';
 import {eco} from '../models';
-import {main} from '../models';
 import {json} from '../models';
 import {online} from '../models';
 import {explainer} from '../models';
@@ -46,6 +46,8 @@ export function AnalyzeBoardSafety(arg1:string):Promise<training.BoardSafetyRepo
 
 export function AnalyzeGameTimeManagement(arg1:number):Promise<stats.GameTimeManagementReport>;
 
+export function AnalyzeHardMoveBenchmark(arg1:string,arg2:string,arg3:number,arg4:boolean):Promise<fairplay.HardMoveBenchmarkReport>;
+
 export function AnalyzePlayerFairPlay(arg1:string,arg2:number):Promise<fairplay.PlayerFairPlayDossier>;
 
 export function AnalyzePlayerTimeManagement(arg1:string,arg2:number):Promise<stats.PlayerTimeManagementDossier>;
@@ -62,6 +64,10 @@ export function BuildFocusedDatabase(arg1:scid.SubDatabaseFilter):Promise<scid.S
 
 export function CancelActiveOperation():Promise<boolean>;
 
+export function CaptureOnlineGameFromURLOrPGN(arg1:string):Promise<main.LivePortalCaptureResult>;
+
+export function CheckAndCaptureLivePortalGames():Promise<main.LivePortalCaptureResult>;
+
 export function CheckCyclicalEntitlement():Promise<support.FeatureEntitlement>;
 
 export function CheckTWICIssue(arg1:number):Promise<boolean>;
@@ -75,6 +81,8 @@ export function ClearGameNAGs(arg1:number):Promise<void>;
 export function CloseDatabase():Promise<void>;
 
 export function CompactDatabase():Promise<scid.CompactStats>;
+
+export function ConfigureLivePortalAutoCapture(arg1:string,arg2:string,arg3:boolean,arg4:boolean):Promise<main.LivePortalCaptureStatus>;
 
 export function ConsolidateOnlineCatalogDatabases(arg1:Array<string>,arg2:boolean,arg3:string,arg4:number,arg5:number,arg6:boolean):Promise<scid.ConsolidateDatabaseResult>;
 
@@ -102,11 +110,15 @@ export function DismissSupportNag():Promise<support.SupportStatus>;
 
 export function DispatchRPC(arg1:string,arg2:Array<json.RawMessage>):Promise<any>;
 
+export function DownloadAndAnalyzeHardMoveBenchmark(arg1:string,arg2:string,arg3:string,arg4:number,arg5:boolean):Promise<fairplay.HardMoveBenchmarkReport>;
+
 export function DownloadAndAnalyzePlayerFairPlay(arg1:string,arg2:string,arg3:number):Promise<fairplay.PlayerFairPlayDossier>;
 
 export function DownloadTWICIssue(arg1:number):Promise<online.TWICIssueResult>;
 
 export function DownloadTWICRange(arg1:number,arg2:number):Promise<online.TWICBatchResult>;
+
+export function EnsurePersonalUserDatabase(arg1:boolean):Promise<main.DatabaseInfo>;
 
 export function EvaluateOpponentWeaknesses(arg1:string,arg2:string,arg3:number,arg4:number):Promise<persona.AntiPersonaReport>;
 
@@ -216,6 +228,8 @@ export function GetLegalMoves(arg1:string):Promise<Array<string>>;
 
 export function GetLichessThemesCatalog():Promise<Array<training.LichessThemeInfo>>;
 
+export function GetLivePortalCaptureStatus():Promise<main.LivePortalCaptureStatus>;
+
 export function GetMegaDatabaseCatalog():Promise<Array<online.MegaDatabaseSource>>;
 
 export function GetNotablePlayersDropdown():Promise<Array<scid.DiscoveredNotablePlayer>>;
@@ -287,6 +301,8 @@ export function ImportPGNBatch(arg1:string):Promise<scid.ImportStats>;
 export function ImportPGNFileBatch(arg1:string):Promise<scid.ImportStats>;
 
 export function ImportPlayerGames(arg1:online.ImportPlayerOptions):Promise<online.SyncResult>;
+
+export function ImportStandardDatabase(arg1:main.StandardImportRequest):Promise<main.StandardImportResult>;
 
 export function IsEngineMatchRunning():Promise<boolean>;
 
@@ -406,11 +422,15 @@ export function StartEngineMatch(arg1:tournament.EngineMatchConfig):Promise<tour
 
 export function StartGuessTheMove(arg1:number,arg2:string):Promise<training.SolitaireSession>;
 
+export function StartLivePortalWatcher():Promise<main.LivePortalCaptureStatus>;
+
 export function StartNextCyclicalCycle(arg1:string):Promise<training.CycleSet>;
 
 export function StopEngine():Promise<void>;
 
 export function StopEngineMatch():Promise<boolean>;
+
+export function StopLivePortalWatcher():Promise<main.LivePortalCaptureStatus>;
 
 export function SubmitGuessTheMove(arg1:string):Promise<training.GuessFeedback>;
 
@@ -431,26 +451,3 @@ export function UpdateGameHeaders(arg1:number,arg2:Record<string, string>):Promi
 export function VerifyDatabase():Promise<scid.VerificationReport>;
 
 export function VerifyRepertoireMove(arg1:string,arg2:string,arg3:string):Promise<main.RepertoireCheckResult>;
-
-export function ImportStandardDatabase(arg1:any):Promise<any>;
-
-export function EnsurePersonalUserDatabase(arg1:boolean):Promise<main.DatabaseInfo>;
-
-export function GetLivePortalCaptureStatus():Promise<any>;
-
-export function ConfigureLivePortalAutoCapture(arg1:string,arg2:string,arg3:boolean,arg4:boolean):Promise<any>;
-
-export function StartLivePortalWatcher():Promise<any>;
-
-export function StopLivePortalWatcher():Promise<any>;
-
-export function CheckAndCaptureLivePortalGames():Promise<any>;
-
-export function CaptureOnlineGameFromURLOrPGN(arg1:string):Promise<any>;
-
-export function AnalyzeHardMoveBenchmark(arg1:string,arg2:string,arg3:number,arg4:boolean):Promise<any>;
-
-export function DownloadAndAnalyzeHardMoveBenchmark(arg1:string,arg2:string,arg3:string,arg4:number,arg5:boolean):Promise<any>;
-
-
-
