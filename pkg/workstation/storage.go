@@ -571,6 +571,10 @@ func FactoryResetWorkstation(opts FactoryResetOptions, dataRoot, configRoot, leg
 		dirs[CategoryDatabases],
 		dirs[CategoryPersonas],
 		dirs[CategoryRepertoires],
+		filepath.Join(dataRoot, "storage"),
+		filepath.Join(dataRoot, "localstorage"),
+		filepath.Join(dataRoot, "cache"),
+		filepath.Join(dataRoot, "mediakeys"),
 		filepath.Join(configRoot, "personas"),
 		filepath.Join(configRoot, "repertoires"),
 		filepath.Join(legacyConfigDir, "personas"),
@@ -595,6 +599,21 @@ func FactoryResetWorkstation(opts FactoryResetOptions, dataRoot, configRoot, leg
 		res.FilesRemoved += removed
 		res.BytesFreed += freed
 		res.WipedPaths = append(res.WipedPaths, d)
+	}
+
+	// 2b. Wipe loose files directly inside dataRoot (e.g. SQLite databases, temporary files, logs)
+	if entries, err := os.ReadDir(dataRoot); err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				fp := filepath.Join(dataRoot, entry.Name())
+				if info, err := entry.Info(); err == nil {
+					res.FilesRemoved++
+					res.BytesFreed += info.Size()
+				}
+				_ = os.Remove(fp)
+				res.WipedPaths = append(res.WipedPaths, fp)
+			}
+		}
 	}
 
 	// 3. Remove all JSON and state files in configRoot and legacyConfigDir

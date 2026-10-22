@@ -307,7 +307,7 @@ function formatCount(n: number): string {
               class="mt-1.5 w-full bg-zinc-950 border border-amber-500/30 rounded px-2 py-1 text-[11px] text-zinc-200"
               @change="(e) => emit('setDefaultDB', (e.target as HTMLSelectElement).value)"
             >
-              <option value="">-- Select Any DB as Default USER DB --</option>
+              <option value="">-- None (Start Empty at 0 Games) --</option>
               <option
                 v-for="db in discoveredDatabases"
                 :key="'def-' + db.basePath"
@@ -332,6 +332,14 @@ function formatCount(n: number): string {
               @click="emit('setDefaultDB', rolesStatus.activeDb.basePath)"
             >
               ⭐ Set Current as Default
+            </button>
+            <button
+              v-if="rolesStatus?.defaultDbPath"
+              class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-red-300 border border-zinc-700 font-semibold text-[11px] cursor-pointer transition-colors"
+              title="Clear Default Database so NewScid starts empty at 0 games"
+              @click="emit('setDefaultDB', '')"
+            >
+              Clear Default
             </button>
             <button
               v-if="rolesStatus?.defaultDbPath"

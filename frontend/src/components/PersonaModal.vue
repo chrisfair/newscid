@@ -495,7 +495,7 @@ function handleExploitPersona() {
                 <input
                   v-model="editDisplayName"
                   type="text"
-                  placeholder="e.g. Christopher Fair or Garry Kasparov"
+                  placeholder="e.g. John Smith or Garry Kasparov"
                   class="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg px-3 py-1.5 text-xs text-zinc-100 focus:outline-hidden focus:border-emerald-500"
                 />
               </div>
@@ -526,7 +526,7 @@ function handleExploitPersona() {
                 <input
                   v-model="editChessCom"
                   type="text"
-                  placeholder="e.g. ChristopherFair"
+                  placeholder="e.g. JohnSmith"
                   class="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg px-3 py-1.5 text-xs text-zinc-100 focus:outline-hidden focus:border-emerald-500"
                 />
               </div>
@@ -535,7 +535,7 @@ function handleExploitPersona() {
                 <input
                   v-model="editLichess"
                   type="text"
-                  placeholder="e.g. QuenyenHighElf"
+                  placeholder="e.g. JohnSmithChess"
                   class="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg px-3 py-1.5 text-xs text-zinc-100 focus:outline-hidden focus:border-emerald-500"
                 />
               </div>
@@ -616,7 +616,7 @@ function handleExploitPersona() {
               <input
                 v-model="newIdentifierInput"
                 type="text"
-                placeholder="Enter exact player name as found in database (e.g. Fair, Christopher)..."
+                placeholder="Enter exact player name as found in database (e.g. Smith, John)..."
                 class="flex-1 bg-zinc-900 border border-zinc-700/80 rounded-lg px-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-hidden focus:border-emerald-500"
                 @keyup.enter="handleAddIdentifier()"
               />

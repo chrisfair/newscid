@@ -176,7 +176,7 @@ const HELP_TOPICS: HelpTopic[] = [
         heading: 'Multi-Alias Consolidation',
         subheading: 'Combine FIDE OTB names, Lichess handles, and Chess.com accounts into one identity.',
         paragraphs: [
-          'Players frequently appear under different names across platforms (e.g. OTB "Fair, Christopher", Chess.com "ChristopherFair", and Lichess "QuenyenHighElf").',
+          'Players frequently appear under different names across platforms (e.g. OTB "Smith, John", Chess.com "JohnSmith", and Lichess "JohnSmithChess").',
           'Personas link all aliases under one profile to aggregate career statistics, opening repertoires, sparring bots, and dedicated .si4 databases.'
         ],
         bullets: [

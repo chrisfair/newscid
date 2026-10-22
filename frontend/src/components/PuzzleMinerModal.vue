@@ -33,7 +33,7 @@ const emit = defineEmits<{
 }>()
 
 // Mining Settings
-const playerName = ref('ChristopherFair')
+const playerName = ref('John Smith')
 const maxGames = ref(50)
 const isMining = ref(false)
 
@@ -218,7 +218,7 @@ function loadIntoMainApp() {
                 <input
                   v-model="playerName"
                   type="text"
-                  placeholder="Player name (or leave empty)"
+                  placeholder="e.g. John Smith (or leave empty)"
                   class="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-hidden focus:border-amber-500"
                 />
               </div>
