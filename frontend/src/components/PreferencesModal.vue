@@ -88,6 +88,7 @@ const props = defineProps<{
   leftColWidth: number
   bottomDrawerHeight: number
   isUpdatingFromLocal?: boolean
+  updatingDbPath?: string | null
   localMergeStatus?: string | null
 }>()
 
@@ -111,6 +112,7 @@ const emit = defineEmits<{
   (e: 'detachPanelScreen', panelId: PanelId, workspace?: string): void
   (e: 'moveMainToWorkspace', workspace: string): void
   (e: 'updateFromLocal', targetPath?: string): void
+  (e: 'cancelUpdateLocal'): void
   (e: 'launchPortalWindow', platform: 'lichess' | 'chesscom', url: string): void
 }>()
 
@@ -523,8 +525,8 @@ async function copyHyprlandSnippet() {
                     :disabled="isUpdatingFromLocal"
                     @click="emit('updateFromLocal', rolesStatus.activeDb.basePath)"
                   >
-                    <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': isUpdatingFromLocal }" />
-                    <span>Update Active DB ({{ rolesStatus.activeDb.name }})</span>
+                    <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': isUpdatingFromLocal && (!updatingDbPath || updatingDbPath === rolesStatus.activeDb.basePath) }" />
+                    <span>{{ isUpdatingFromLocal && (!updatingDbPath || updatingDbPath === rolesStatus.activeDb.basePath) ? 'Updating...' : `Update Active DB (${rolesStatus.activeDb.name})` }}</span>
                   </button>
                   <button
                     v-if="localPrefs.referenceDatabasePath"
@@ -532,16 +534,26 @@ async function copyHyprlandSnippet() {
                     :disabled="isUpdatingFromLocal"
                     @click="emit('updateFromLocal', localPrefs.referenceDatabasePath)"
                   >
-                    <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': isUpdatingFromLocal }" />
-                    <span>Update Reference / Mega DB</span>
+                    <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': isUpdatingFromLocal && updatingDbPath === localPrefs.referenceDatabasePath }" />
+                    <span>{{ isUpdatingFromLocal && updatingDbPath === localPrefs.referenceDatabasePath ? 'Updating...' : 'Update Reference / Mega DB' }}</span>
                   </button>
                 </div>
               </div>
               <div
                 v-if="localMergeStatus"
-                class="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/40 text-emerald-200 text-xs"
+                class="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/40 text-emerald-200 text-xs flex items-center justify-between gap-3"
               >
-                {{ localMergeStatus }}
+                <div class="flex items-center gap-2">
+                  <RefreshCw class="w-3.5 h-3.5 text-emerald-400 shrink-0" :class="{ 'animate-spin': isUpdatingFromLocal }" />
+                  <span>{{ localMergeStatus }}</span>
+                </div>
+                <button
+                  v-if="isUpdatingFromLocal"
+                  class="px-2.5 py-1 rounded bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-500/50 text-[11px] font-bold cursor-pointer transition-colors shrink-0"
+                  @click="emit('cancelUpdateLocal')"
+                >
+                  🛑 Cancel
+                </button>
               </div>
             </div>
           </section>

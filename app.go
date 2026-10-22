@@ -1421,6 +1421,9 @@ func (a *App) SyncOnlineProfile(profileID string) (*online.SyncResult, error) {
 		return nil, err
 	}
 
+	_, finish := a.startCancellableOperation("online-sync")
+	defer finish()
+
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -1435,6 +1438,10 @@ func (a *App) SyncOnlineProfile(profileID string) (*online.SyncResult, error) {
 		targetDB = a.db
 	} else {
 		basePath := strings.TrimSuffix(targetPath, ".si4")
+		targetPolicy := a.resolveDatabaseWritePolicy(basePath, 0, "")
+		if !targetPolicy.AllowsOnlineSync() {
+			return nil, fmt.Errorf("database %q is locked (%s); unlock or switch to Sync-Only", filepath.Base(basePath), targetPolicy.String())
+		}
 		if a.db != nil && a.db.IsOpen && filepath.Clean(a.db.BasePath) == filepath.Clean(basePath) {
 			targetDB = a.db
 		} else {

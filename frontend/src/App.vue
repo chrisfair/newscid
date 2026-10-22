@@ -142,6 +142,7 @@ import {
   LaunchPanelOnWorkspace,
   MoveCurrentWindowToWorkspace,
   UpdateDatabaseFromLocal,
+  CancelActiveOperation,
   LaunchPortalWindow,
   PublishWorkspaceState,
   GetSharedWorkspaceState,
@@ -432,6 +433,7 @@ const appPreferences = ref<AppPreferencesModel>({
 const prefsInitialized = ref(false)
 let persistConfigTimer: number | null = null
 const isUpdatingDbFromLocal = ref(false)
+const updatingDbPath = ref<string | null>(null)
 const localMergeStatusMsg = ref<string | null>(null)
 
 function schedulePersistUserConfig() {
@@ -670,17 +672,31 @@ async function handleMoveCurrentWindowToWorkspace(workspace: string) {
   }
 }
 
+async function handleCancelUpdateDatabaseFromLocal() {
+  try {
+    await CancelActiveOperation()
+    localMergeStatusMsg.value = 'Cancelling database update and saving games imported so far...'
+  } catch (err) {
+    console.error('Failed to cancel database update:', err)
+  }
+}
+
 async function handleUpdateDatabaseFromLocal(targetPath = '') {
   if (isUpdatingDbFromLocal.value) return
   isUpdatingDbFromLocal.value = true
-  localMergeStatusMsg.value = 'Scanning local databases and merging new games...'
+  const resolvedTarget = targetPath || dbInfo.value?.basePath || appPreferences.value.defaultDatabasePath || ''
+  updatingDbPath.value = resolvedTarget
+  const targetLabel = resolvedTarget ? resolvedTarget.split('/').pop()?.replace(/\.si4$/i, '') : 'Active DB'
+  localMergeStatusMsg.value = `Scanning local user databases to update "${targetLabel}"...`
   try {
-    const stats = await UpdateDatabaseFromLocal(targetPath, [])
+    const stats: any = await UpdateDatabaseFromLocal(targetPath, [])
     discoveredDatabases.value = (await GetDiscoveredDatabases()) as DiscoveredDatabase[]
     await refreshGames()
     await refreshDatabaseRolesStatus()
     fetchOpeningTree(currentFEN.value)
-    if (stats) {
+    if (stats?.cancelled) {
+      localMergeStatusMsg.value = `Update cancelled — saved ${stats.imported || 0} games imported so far into "${targetLabel}".`
+    } else if (stats) {
       localMergeStatusMsg.value = `Updated! +${stats.imported || 0} new games added (${stats.duplicatesSkipped || 0} existing skipped across ${stats.sourcesProcessed || 0} local DBs; total: ${stats.targetTotalGames || totalGames.value} games).`
     } else {
       localMergeStatusMsg.value = 'Database update completed.'
@@ -689,6 +705,7 @@ async function handleUpdateDatabaseFromLocal(targetPath = '') {
     localMergeStatusMsg.value = `Update error: ${err?.message || err}`
   } finally {
     isUpdatingDbFromLocal.value = false
+    updatingDbPath.value = null
   }
 }
 
@@ -1379,6 +1396,15 @@ onMounted(async () => {
     })
     EventsOn('portal:game-captured', (res: any) => {
       handlePortalGameCaptured(res)
+    })
+    EventsOn('db:merge-progress', (data: any) => {
+      if (isUpdatingDbFromLocal.value && data) {
+        const src = data.source || 'local database'
+        const proc = data.processed || 0
+        const add = data.added || 0
+        const skip = data.skipped || 0
+        localMergeStatusMsg.value = `Merging from ${src}: ${proc} games scanned (${add} added, ${skip} existing skipped)...`
+      }
     })
     if ((appPreferences.value as any).autoCapturePortalGames !== false) {
       StartLivePortalWatcher().catch(() => {})
@@ -3569,6 +3595,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           :roles-status="dbRolesStatus"
           :discovered-databases="discoveredDatabases"
           :is-updating-from-local="isUpdatingDbFromLocal"
+          :updating-db-path="updatingDbPath"
           :local-merge-status="localMergeStatusMsg"
           @open-d-b="handleOpenDB"
           @create-d-b="handleCreateDB"
@@ -3581,6 +3608,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           @open-online-sync="showOnlineSyncModal = true"
           @open-maintenance="showMaintenanceModal = true"
           @update-from-local="handleUpdateDatabaseFromLocal"
+          @cancel-update-local="handleCancelUpdateDatabaseFromLocal"
           @cycle-write-policy="handleCycleDatabaseWritePolicy"
           @open-workstation-manager="openWorkstationManagerModal"
           @open-standard-import="showImportModal = true"
@@ -4342,6 +4370,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
                 :roles-status="dbRolesStatus"
                 :discovered-databases="discoveredDatabases"
                 :is-updating-from-local="isUpdatingDbFromLocal"
+                :updating-db-path="updatingDbPath"
                 :local-merge-status="localMergeStatusMsg"
                 @open-d-b="handleOpenDB"
                 @create-d-b="handleCreateDB"
@@ -4354,6 +4383,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
                 @open-online-sync="showOnlineSyncModal = true"
                 @open-maintenance="showMaintenanceModal = true"
                 @update-from-local="handleUpdateDatabaseFromLocal"
+                @cancel-update-local="handleCancelUpdateDatabaseFromLocal"
                 @cycle-write-policy="handleCycleDatabaseWritePolicy"
                 @open-workstation-manager="openWorkstationManagerModal"
                 @open-standard-import="showImportModal = true"
@@ -4579,6 +4609,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
             :roles-status="dbRolesStatus"
             :discovered-databases="discoveredDatabases"
             :is-updating-from-local="isUpdatingDbFromLocal"
+            :updating-db-path="updatingDbPath"
             :local-merge-status="localMergeStatusMsg"
             @open-d-b="handleOpenDB"
             @create-d-b="handleCreateDB"
@@ -4591,6 +4622,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
             @open-online-sync="showOnlineSyncModal = true"
             @open-maintenance="showMaintenanceModal = true"
             @update-from-local="handleUpdateDatabaseFromLocal"
+            @cancel-update-local="handleCancelUpdateDatabaseFromLocal"
             @cycle-write-policy="handleCycleDatabaseWritePolicy"
             @open-workstation-manager="openWorkstationManagerModal"
             @open-standard-import="showImportModal = true"
@@ -4688,6 +4720,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       :left-col-width="leftColWidth"
       :bottom-drawer-height="bottomDrawerHeight"
       :is-updating-from-local="isUpdatingDbFromLocal"
+      :updating-db-path="updatingDbPath"
       :local-merge-status="localMergeStatusMsg"
       @close="showPreferencesModal = false"
       @save-preferences="handleSaveAppPreferences"

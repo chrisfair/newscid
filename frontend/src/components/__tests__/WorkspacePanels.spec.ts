@@ -131,6 +131,66 @@ describe('Workspace Customization, Database Roles, Floaters, Hyprland & Live Por
     expect(wrapper.text()).toContain('LumbrasGigaBase')
   })
 
+  it('spins only the target database button when updating and emits cancelUpdateLocal', async () => {
+    const wrapper = mount(DatabaseHubPanel, {
+      props: {
+        rolesStatus: {
+          activeDb: {
+            basePath: '/tmp/ChristopherFair',
+            name: 'ChristopherFair',
+            numGames: 420,
+            description: 'User Games',
+          },
+          defaultDbPath: '/tmp/ChristopherFair',
+          defaultDbName: 'ChristopherFair',
+          isActiveDefault: true,
+          referenceDb: null,
+          referenceDbPath: '',
+          referenceDbName: '',
+          useRefForTree: false,
+          clipbasePath: '/tmp/clipbase',
+          isClipbase: false,
+        },
+        discoveredDatabases: [
+          {
+            name: 'ChristopherFair',
+            basePath: '/tmp/ChristopherFair',
+            numGames: 420,
+            category: 'User Databases',
+            exists: true,
+            type: 'scid',
+            description: 'User Games',
+            sizeStr: '1.2 MB',
+          },
+          {
+            name: 'LumbrasGigaBase',
+            basePath: '/tmp/LumbrasGigaBase',
+            numGames: 15000000,
+            category: 'Master Databases',
+            exists: true,
+            type: 'scid',
+            description: 'Master Reference',
+            sizeStr: '3.4 GB',
+          },
+        ],
+        isUpdatingFromLocal: true,
+        updatingDbPath: '/tmp/ChristopherFair',
+        localMergeStatus: 'Merging from Ben_Gradsky: 450 games scanned...',
+      },
+    })
+
+    // The status banner should show the message and a Cancel Update button
+    expect(wrapper.text()).toContain('Merging from Ben_Gradsky: 450 games scanned...')
+    const cancelBtn = wrapper.find('button[title*="Cancel database update"]')
+    expect(cancelBtn.exists()).toBe(true)
+    await cancelBtn.trigger('click')
+    expect(wrapper.emitted('cancelUpdateLocal')).toBeTruthy()
+
+    // ChristopherFair button says "Updating...", while LumbrasGigaBase says "Update Local"
+    expect(wrapper.text()).toContain('Updating...')
+    expect(wrapper.text()).toContain('Update Local')
+  })
+
   it('renders LivePortalPanel for Lichess.org & Chess.com with Hyprland window launcher and embedded modes', async () => {
     const wrapper = mount(LivePortalPanel, {
       props: {

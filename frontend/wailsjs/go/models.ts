@@ -3057,6 +3057,7 @@ export namespace scid {
 	    errors: number;
 	    durationMs: number;
 	    targetTotalGames: number;
+	    cancelled: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new MergeStats(source);
@@ -3072,6 +3073,7 @@ export namespace scid {
 	        this.errors = source["errors"];
 	        this.durationMs = source["durationMs"];
 	        this.targetTotalGames = source["targetTotalGames"];
+	        this.cancelled = source["cancelled"];
 	    }
 	}
 	

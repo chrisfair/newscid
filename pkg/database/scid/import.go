@@ -356,6 +356,7 @@ type MergeStats struct {
 	Errors            int      `json:"errors"`
 	DurationMs        int64    `json:"durationMs"`
 	TargetTotalGames  int      `json:"targetTotalGames"`
+	Cancelled         bool     `json:"cancelled"`
 }
 
 // MergeFromDatabases updates db (even multi-million-game large databases) with all new, non-duplicate
@@ -364,6 +365,15 @@ type MergeStats struct {
 func (db *Database) MergeFromDatabases(
 	sourcePaths []string,
 	progressFn func(sourceName string, scanned, imported, skipped int),
+) (*MergeStats, error) {
+	return db.MergeFromDatabasesWithCancel(sourcePaths, progressFn, nil)
+}
+
+// MergeFromDatabasesWithCancel updates db while supporting live progress callbacks and cooperative cancellation.
+func (db *Database) MergeFromDatabasesWithCancel(
+	sourcePaths []string,
+	progressFn func(sourceName string, scanned, imported, skipped int),
+	cancelCheck func() bool,
 ) (*MergeStats, error) {
 	if db == nil || !db.IsOpen {
 		return nil, fmt.Errorf("target database is not open")
@@ -406,6 +416,10 @@ func (db *Database) MergeFromDatabases(
 	}
 
 	for _, rawSrc := range sourcePaths {
+		if cancelCheck != nil && cancelCheck() {
+			res.Cancelled = true
+			break
+		}
 		srcClean := strings.TrimSpace(rawSrc)
 		if srcClean == "" {
 			continue
@@ -436,6 +450,10 @@ func (db *Database) MergeFromDatabases(
 			res.SourceNames = append(res.SourceNames, srcName)
 
 			for _, g := range games {
+				if cancelCheck != nil && cancelCheck() {
+					res.Cancelled = true
+					break
+				}
 				if g == nil {
 					continue
 				}
@@ -496,6 +514,9 @@ func (db *Database) MergeFromDatabases(
 			if progressFn != nil {
 				progressFn(srcName, res.TotalScanned, res.Imported, res.DuplicatesSkipped)
 			}
+			if res.Cancelled {
+				break
+			}
 			continue
 		}
 
@@ -524,6 +545,10 @@ func (db *Database) MergeFromDatabases(
 		res.SourceNames = append(res.SourceNames, srcName)
 
 		for idx, srcEntry := range srcDB.Entries {
+			if cancelCheck != nil && (idx%500 == 0) && cancelCheck() {
+				res.Cancelled = true
+				break
+			}
 			if srcEntry == nil || (srcEntry.Flags&FlagDelete) != 0 {
 				continue
 			}
@@ -593,6 +618,9 @@ func (db *Database) MergeFromDatabases(
 
 		if progressFn != nil {
 			progressFn(srcName, res.TotalScanned, res.Imported, res.DuplicatesSkipped)
+		}
+		if res.Cancelled {
+			break
 		}
 	}
 
