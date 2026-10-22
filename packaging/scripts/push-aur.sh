@@ -7,6 +7,21 @@ VERSION=$(cat VERSION)
 
 echo "==> Pushing NewScid v${VERSION} to AUR (${AUR_REPO})..."
 
+# Ensure sha256sums and .SRCINFO accurately match the published tag tarball
+echo "==> Verifying source checksums for v${VERSION}..."
+if command -v updpkgsums >/dev/null 2>&1; then
+    (cd packaging/pacman && updpkgsums)
+else
+    TAG_URL="https://github.com/chrisfair/newscid/archive/refs/tags/v${VERSION}.tar.gz"
+    SUM=$(curl -sL "${TAG_URL}" | sha256sum | awk '{print $1}')
+    if [ -n "${SUM}" ] && [ "${#SUM}" -eq 64 ]; then
+        sed -i -E "s/sha256sums=\('[a-f0-9]+'\)/sha256sums=('${SUM}')/" packaging/pacman/PKGBUILD
+    fi
+fi
+if command -v makepkg >/dev/null 2>&1; then
+    (cd packaging/pacman && makepkg --printsrcinfo > .SRCINFO)
+fi
+
 if [ ! -d "${CLONE_DIR}/.git" ]; then
     rm -rf "${CLONE_DIR}"
     git clone "${AUR_REPO}" "${CLONE_DIR}"
