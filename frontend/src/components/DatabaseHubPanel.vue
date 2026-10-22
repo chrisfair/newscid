@@ -35,6 +35,7 @@ const props = defineProps<{
   rolesStatus: DatabaseRolesStatusView | null
   discoveredDatabases: DiscoveredDatabase[]
   isUpdatingFromLocal?: boolean
+  updatingDbPath?: string | null
   localMergeStatus?: string | null
 }>()
 
@@ -50,11 +51,19 @@ const emit = defineEmits<{
   (e: 'openOnlineSync'): void
   (e: 'openMaintenance'): void
   (e: 'updateFromLocal', targetPath?: string): void
+  (e: 'cancelUpdateLocal'): void
   (e: 'cycleWritePolicy', path: string, currentPolicy?: string): void
   (e: 'openWorkstationManager', tab?: 'builder' | 'storage' | 'reset'): void
   (e: 'openStandardImport'): void
   (e: 'ensureUserDB'): void
 }>()
+
+function isMatchingUpdatingPath(path?: string): boolean {
+  if (!props.isUpdatingFromLocal || !props.updatingDbPath || !path) return false
+  const cleanA = props.updatingDbPath.replace(/\.(si4|sg4|sn4|pgn)$/i, '')
+  const cleanB = path.replace(/\.(si4|sg4|sn4|pgn)$/i, '')
+  return cleanA === cleanB
+}
 
 const isConsolidating = ref(false)
 const consolidateOnly2026Latest = ref(true)
@@ -210,11 +219,11 @@ function formatCount(n: number): string {
           <button
             class="px-2.5 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
             :disabled="isUpdatingFromLocal"
-            title="Update the active database with all non-duplicate games from local databases already on your machine"
+            title="Update the active database with all non-duplicate games from other local user databases"
             @click="emit('updateFromLocal', rolesStatus?.activeDb?.basePath || '')"
           >
-            <RefreshCw class="w-3.5 h-3.5 text-emerald-400" :class="{ 'animate-spin': isUpdatingFromLocal }" />
-            <span>{{ isUpdatingFromLocal ? 'Updating from Local DBs...' : 'Update Active DB from Local' }}</span>
+            <RefreshCw class="w-3.5 h-3.5 text-emerald-400" :class="{ 'animate-spin': isUpdatingFromLocal && (!updatingDbPath || isMatchingUpdatingPath(rolesStatus?.activeDb?.basePath)) }" />
+            <span>{{ isUpdatingFromLocal && (!updatingDbPath || isMatchingUpdatingPath(rolesStatus?.activeDb?.basePath)) ? 'Updating Active DB...' : 'Update Active DB from Local' }}</span>
           </button>
           <button
             class="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700 font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
@@ -252,10 +261,20 @@ function formatCount(n: number): string {
 
       <div
         v-if="localMergeStatus"
-        class="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2"
+        class="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/40 text-emerald-200 text-xs flex items-center justify-between gap-3"
       >
-        <RefreshCw class="w-3.5 h-3.5 text-emerald-400 shrink-0" :class="{ 'animate-spin': isUpdatingFromLocal }" />
-        <span>{{ localMergeStatus }}</span>
+        <div class="flex items-center gap-2 min-w-0">
+          <RefreshCw class="w-3.5 h-3.5 text-emerald-400 shrink-0" :class="{ 'animate-spin': isUpdatingFromLocal }" />
+          <span class="truncate">{{ localMergeStatus }}</span>
+        </div>
+        <button
+          v-if="isUpdatingFromLocal"
+          class="px-2.5 py-1 rounded bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-500/50 text-[11px] font-bold cursor-pointer transition-colors shrink-0 flex items-center gap-1"
+          title="Cancel database update immediately and preserve games merged so far"
+          @click="emit('cancelUpdateLocal')"
+        >
+          <span>🛑 Cancel Update</span>
+        </button>
       </div>
 
       <!-- 4 Database Role Cards -->
@@ -318,11 +337,11 @@ function formatCount(n: number): string {
               v-if="rolesStatus?.defaultDbPath"
               class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-emerald-300 border border-emerald-500/30 font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
               :disabled="isUpdatingFromLocal"
-              title="Update Default DB with non-duplicate games from local databases"
+              title="Update Default DB with non-duplicate games from other local user databases"
               @click="emit('updateFromLocal', rolesStatus.defaultDbPath)"
             >
-              <RefreshCw class="w-3 h-3" :class="{ 'animate-spin': isUpdatingFromLocal }" />
-              <span>Update Local</span>
+              <RefreshCw class="w-3 h-3" :class="{ 'animate-spin': isUpdatingFromLocal && isMatchingUpdatingPath(rolesStatus.defaultDbPath) }" />
+              <span>{{ isUpdatingFromLocal && isMatchingUpdatingPath(rolesStatus.defaultDbPath) ? 'Updating...' : 'Update Local' }}</span>
             </button>
             <span
               v-if="rolesStatus?.isActiveDefault"
@@ -376,8 +395,8 @@ function formatCount(n: number): string {
               title="Merge all non-duplicate local games into Active DB"
               @click="emit('updateFromLocal', rolesStatus.activeDb.basePath)"
             >
-              <RefreshCw class="w-3 h-3" :class="{ 'animate-spin': isUpdatingFromLocal }" />
-              <span>Update Local</span>
+              <RefreshCw class="w-3 h-3" :class="{ 'animate-spin': isUpdatingFromLocal && isMatchingUpdatingPath(rolesStatus.activeDb.basePath) }" />
+              <span>{{ isUpdatingFromLocal && isMatchingUpdatingPath(rolesStatus.activeDb.basePath) ? 'Updating...' : 'Update Local' }}</span>
             </button>
           </div>
         </div>
@@ -438,8 +457,8 @@ function formatCount(n: number): string {
               title="Update Reference / Mega Database with all non-duplicate games from local databases"
               @click="emit('updateFromLocal', rolesStatus.referenceDbPath)"
             >
-              <RefreshCw class="w-3 h-3" :class="{ 'animate-spin': isUpdatingFromLocal }" />
-              <span>Update Local</span>
+              <RefreshCw class="w-3 h-3" :class="{ 'animate-spin': isUpdatingFromLocal && isMatchingUpdatingPath(rolesStatus.referenceDbPath) }" />
+              <span>{{ isUpdatingFromLocal && isMatchingUpdatingPath(rolesStatus.referenceDbPath) ? 'Updating...' : 'Update Local' }}</span>
             </button>
             <button
               v-if="rolesStatus?.activeDb?.basePath && !isReferencePath(rolesStatus.activeDb.basePath)"
@@ -601,11 +620,11 @@ function formatCount(n: number): string {
               <button
                 class="px-2 py-1 rounded-md text-[11px] font-semibold border border-emerald-500/40 bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300 flex items-center gap-1 transition-colors cursor-pointer"
                 :disabled="isUpdatingFromLocal"
-                title="Update this database with all non-duplicate games from other local databases already on your computer"
+                :title="`Update ${db.name} with non-duplicate games from other local user databases`"
                 @click="emit('updateFromLocal', db.basePath)"
               >
-                <RefreshCw class="w-3 h-3" :class="{ 'animate-spin': isUpdatingFromLocal }" />
-                <span>Update Local</span>
+                <RefreshCw class="w-3 h-3" :class="{ 'animate-spin': isUpdatingFromLocal && isMatchingUpdatingPath(db.basePath) }" />
+                <span>{{ isUpdatingFromLocal && isMatchingUpdatingPath(db.basePath) ? 'Updating...' : 'Update Local' }}</span>
               </button>
             </div>
           </div>

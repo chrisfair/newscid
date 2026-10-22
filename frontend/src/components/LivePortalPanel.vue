@@ -266,14 +266,18 @@ function handleLaunchCustomUrl() {
 
 onMounted(async () => {
   await refreshCaptureStatus()
-  EventsOn('portal:game-captured', (res: any) => {
-    if (res?.status) {
-      applyCaptureStatus(res.status)
+  try {
+    if (typeof window !== 'undefined' && (window as any).runtime?.EventsOnMultiple) {
+      EventsOn('portal:game-captured', (res: any) => {
+        if (res?.status) {
+          applyCaptureStatus(res.status)
+        }
+        if (res?.newGamesImported > 0) {
+          showToast(`🎉 Auto-added new finished game to '${res.targetDatabaseName}': ${res.latestGameSummary}`)
+        }
+      })
     }
-    if (res?.newGamesImported > 0) {
-      showToast(`🎉 Auto-added new finished game to '${res.targetDatabaseName}': ${res.latestGameSummary}`)
-    }
-  })
+  } catch {}
 })
 
 onUnmounted(() => {

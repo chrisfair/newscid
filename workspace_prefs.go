@@ -758,6 +758,17 @@ func (a *App) UpdateDatabaseFromLocal(targetBasePath string, sourceBasePaths []s
 		return nil, fmt.Errorf("database %q is strictly locked (%s); unlock it or set it to Sync-Only first", filepath.Base(targetClean), targetPolicy.String())
 	}
 
+	ctx, finish := a.startCancellableOperation("local-merge")
+	defer finish()
+	cancelCheck := func() bool {
+		select {
+		case <-ctx.Done():
+			return true
+		default:
+			return false
+		}
+	}
+
 	if len(sourceBasePaths) == 0 {
 		discovered := scid.DiscoverScidDatabases()
 		for _, d := range discovered {
@@ -768,8 +779,24 @@ func (a *App) UpdateDatabaseFromLocal(targetBasePath string, sourceBasePaths []s
 			if srcClean == "" || srcClean == targetClean {
 				continue
 			}
+			// Automatically exclude massive reference/archive databases (>100k games)
+			// and databases locked/sync_only to prevent accidentally freezing the UI or
+			// sucking multi-gigabyte master archives into personal databases unless explicitly chosen by path.
+			if d.NumGames > 100000 {
+				continue
+			}
+			policy := a.resolveDatabaseWritePolicy(srcClean, d.NumGames, d.Description)
+			if policy == scid.WritePolicyLocked || policy == scid.WritePolicySyncOnly {
+				continue
+			}
 			sourceBasePaths = append(sourceBasePaths, d.BasePath)
 		}
+	}
+
+	if len(sourceBasePaths) == 0 {
+		return &scid.MergeStats{
+			TargetTotalGames: 0,
+		}, nil
 	}
 
 	progressCb := func(sourceName string, processed int, added int, skipped int) {
@@ -789,7 +816,7 @@ func (a *App) UpdateDatabaseFromLocal(targetBasePath string, sourceBasePaths []s
 		if a.db == nil || !a.db.IsOpen {
 			return nil, fmt.Errorf("active database is not open")
 		}
-		return a.db.MergeFromDatabases(sourceBasePaths, progressCb)
+		return a.db.MergeFromDatabasesWithCancel(sourceBasePaths, progressCb, cancelCheck)
 	}
 
 	if targetClean == refClean {
@@ -798,7 +825,7 @@ func (a *App) UpdateDatabaseFromLocal(targetBasePath string, sourceBasePaths []s
 		if a.refDB == nil || !a.refDB.IsOpen {
 			return nil, fmt.Errorf("reference database is not open")
 		}
-		return a.refDB.MergeFromDatabases(sourceBasePaths, progressCb)
+		return a.refDB.MergeFromDatabasesWithCancel(sourceBasePaths, progressCb, cancelCheck)
 	}
 
 	targetDB := scid.NewDatabase()
@@ -807,7 +834,7 @@ func (a *App) UpdateDatabaseFromLocal(targetBasePath string, sourceBasePaths []s
 	}
 	defer targetDB.Close()
 
-	return targetDB.MergeFromDatabases(sourceBasePaths, progressCb)
+	return targetDB.MergeFromDatabasesWithCancel(sourceBasePaths, progressCb, cancelCheck)
 }
 
 // ==========================================

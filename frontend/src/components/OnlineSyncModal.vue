@@ -29,7 +29,8 @@ import {
   FetchLichessPreview,
   FetchChessComPreview,
   OpenFileDialog,
-  ImportPlayerGames
+  ImportPlayerGames,
+  CancelActiveOperation
 } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import { online } from '../../wailsjs/go/models'
@@ -432,6 +433,15 @@ async function handleSyncNow() {
   } finally {
     isSyncing.value = false
     syncProgressText.value = ''
+  }
+}
+
+async function handleCancelSync() {
+  try {
+    await CancelActiveOperation()
+    syncProgressText.value = 'Cancelling sync...'
+  } catch (err) {
+    console.error('Failed to cancel sync:', err)
   }
 }
 
@@ -1102,6 +1112,16 @@ function formatDate(ms: number): string {
             >
               <Save class="w-3.5 h-3.5" />
               <span>{{ isSaving ? 'Saving...' : 'Save Profile' }}</span>
+            </button>
+
+            <button
+              v-if="isSyncing"
+              class="px-4 py-2 text-xs font-semibold rounded-xl bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-700/50 flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Cancel online sync and save games retrieved so far"
+              @click="handleCancelSync"
+            >
+              <XCircle class="w-4 h-4 text-rose-400" />
+              <span>Cancel Sync</span>
             </button>
 
             <button
