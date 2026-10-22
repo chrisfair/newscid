@@ -20,8 +20,8 @@ import (
 // database designators, usernames, and tournament name formats.
 type Persona struct {
 	ID               string   `json:"id"`
-	DisplayName      string   `json:"displayName"`                // e.g. "Christopher Fair"
-	Identifiers      []string `json:"identifiers"`                // e.g. ["Fair, Christopher", "ChristopherFair", "QuenyenHighElf"]
+	DisplayName      string   `json:"displayName"`                // e.g. "John Smith"
+	Identifiers      []string `json:"identifiers"`                // e.g. ["Smith, John", "JohnSmith", "JohnSmithChess"]
 	DatabasePath     string   `json:"databasePath"`               // Dedicated .si4 database path for this persona
 	Title            string   `json:"title,omitempty"`            // e.g. "GM", "IM", "FM", "NM", "Club Player"
 	Bio              string   `json:"bio,omitempty"`              // Description or personal notes

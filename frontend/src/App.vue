@@ -762,8 +762,13 @@ async function handleFactoryResetCompleted() {
   totalGames.value = 0
   currentPage.value = 1
   searchFilter.value = {}
+  appPreferences.value.defaultDatabasePath = ''
+  appPreferences.value.referenceDatabasePath = ''
+  await handleSaveAppPreferences(appPreferences.value)
   handleNewGame()
   await handleRefreshDiscoveredDatabases()
+  await refreshDatabaseRolesStatus()
+  await publishCurrentWorkspaceState()
 }
 
 async function handleEnsurePersonalUserDatabase() {
@@ -1419,28 +1424,24 @@ onMounted(async () => {
 
     prefsInitialized.value = true
 
-    // 5. Auto-open Default Database (or initial DB passed via --db flag, or first discovered user base)
+    // 5. Auto-open Default Database (or initial DB passed via --db flag)
     let autoBase: string | null = null
     if (windowStartupMode.value.initialDb) {
       autoBase = windowStartupMode.value.initialDb
     } else if (appPreferences.value.autoOpenDefaultDb && appPreferences.value.defaultDatabasePath) {
-      autoBase = appPreferences.value.defaultDatabasePath
-    } else if (discoveredDatabases.value.length > 0) {
-      const userBase = discoveredDatabases.value.find(d => d.name === 'ChristopherFair' && d.exists)
-        || discoveredDatabases.value.find(d => d.category === 'User Databases' && d.exists && d.numGames > 0)
-        || discoveredDatabases.value.find(d => d.exists && d.numGames > 0 && d.numGames < 100000)
-      if (userBase) {
-        autoBase = userBase.basePath
+      const targetPath = appPreferences.value.defaultDatabasePath
+      const targetFound = discoveredDatabases.value.find(d => d.basePath === targetPath)
+      // Only auto-open if it actually exists; do not fallback to arbitrary databases
+      if (!targetFound || targetFound.exists) {
+        autoBase = targetPath
       }
-    }
-    if (!autoBase && systemBases.value.length > 0) {
-      autoBase = systemBases.value[0]
     }
 
     if (autoBase) {
-      await handleOpenDiscoveredBase(autoBase)
-      if (!appPreferences.value.defaultDatabasePath) {
-        await handleSetDefaultDatabase(autoBase)
+      try {
+        await handleOpenDiscoveredBase(autoBase)
+      } catch (err) {
+        console.warn('Could not auto-open database at startup:', err)
       }
     }
     await refreshDatabaseRolesStatus()

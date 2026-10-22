@@ -104,8 +104,8 @@ describe('PersonaModal.vue', () => {
 
     expect(wrapper.text()).toContain('Christopher Fair')
     expect(wrapper.text()).toContain('Garry Kasparov')
-    expect(wrapper.find('input[placeholder*="Christopher Fair"]').exists()).toBe(true)
-    const displayNameInput = wrapper.find('input[placeholder*="Christopher Fair"]').element as HTMLInputElement
+    expect(wrapper.find('input[placeholder*="John Smith"]').exists()).toBe(true)
+    const displayNameInput = wrapper.find('input[placeholder*="John Smith"]').element as HTMLInputElement
     expect(displayNameInput.value).toBe('Christopher Fair')
   })
 
@@ -175,7 +175,7 @@ describe('PersonaModal.vue', () => {
     expect(newBtn).toBeDefined()
     await newBtn!.trigger('click')
 
-    const displayNameInput = wrapper.find('input[placeholder*="Christopher Fair"]').element as HTMLInputElement
+    const displayNameInput = wrapper.find('input[placeholder*="John Smith"]').element as HTMLInputElement
     expect(displayNameInput.value).toBe('New Player Persona')
   })
 

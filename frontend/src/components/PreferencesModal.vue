@@ -427,6 +427,14 @@ async function copyHyprlandSnippet() {
                   >
                     Open Default DB Now
                   </button>
+                  <button
+                    v-if="localPrefs.defaultDatabasePath"
+                    class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-red-300 border border-zinc-700 font-semibold cursor-pointer transition-colors"
+                    title="Clear Default Database so NewScid starts empty at 0 games"
+                    @click="localPrefs.defaultDatabasePath = ''; emit('setDefaultDB', ''); handleSave()"
+                  >
+                    Clear Default DB
+                  </button>
                 </div>
               </div>
 
@@ -438,7 +446,7 @@ async function copyHyprlandSnippet() {
                     class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-amber-500"
                     @change="handleDefaultDbSelect"
                   >
-                    <option value="">-- Automatic (First User Database) --</option>
+                    <option value="">-- None (Start Empty at 0 Games) --</option>
                     <option
                       v-for="db in discoveredDatabases"
                       :key="db.basePath"

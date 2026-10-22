@@ -1404,6 +1404,10 @@ func (a *App) FactoryResetNewScid(opts workstation.FactoryResetOptions) (*workst
 		return nil, err
 	}
 
+	// Persist clean default preferences with empty DefaultDatabasePath & ReferenceDatabasePath
+	freshPrefs := defaultAppPreferences()
+	_, _ = a.SaveAppPreferences(*freshPrefs)
+
 	// Reinitialize clean managers pointing to the fresh empty config directory
 	a.mu.Lock()
 	a.profileMgr, _ = online.NewProfileManager("")
