@@ -451,3 +451,16 @@ export function UpdateGameHeaders(arg1:number,arg2:Record<string, string>):Promi
 export function VerifyDatabase():Promise<scid.VerificationReport>;
 
 export function VerifyRepertoireMove(arg1:string,arg2:string,arg3:string):Promise<main.RepertoireCheckResult>;
+
+export function GetUserProfileStatus():Promise<any>;
+
+export function SaveUserProfileSetup(arg1:any):Promise<any>;
+
+export function SyncUserHomeGames(arg1:number):Promise<online.SyncResult>;
+
+export function BuildPersonaOpeningBook(arg1:string,arg2:string,arg3:number):Promise<string>;
+
+export function AssignPersonaBooks(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<persona.Persona>;
+
+export function CompileRepertoireToPolyglotBook(arg1:string,arg2:boolean):Promise<string>;
+

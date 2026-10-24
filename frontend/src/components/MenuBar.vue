@@ -59,7 +59,8 @@ import {
   Monitor,
   Settings,
   ClipboardList,
-  RefreshCw
+  RefreshCw,
+  User
 } from '@lucide/vue'
 import { PieceSetOption, BoardThemeOption } from './HeaderBar.vue'
 import { useNotation } from '../utils/notation'
@@ -95,6 +96,7 @@ const props = defineProps<{
   showEvalBar?: boolean
   zenMode?: boolean
   compactLayout?: boolean
+  playerDisplayName?: string
 }>()
 
 const emit = defineEmits<{
@@ -182,6 +184,7 @@ const emit = defineEmits<{
   (e: 'fairPlayInspector'): void
   (e: 'cyclicalDrill'): void
   (e: 'openWorkstationManager', tab?: 'builder' | 'storage' | 'reset'): void
+  (e: 'openGettingStartedWizard'): void
 }>()
 
 const activeMenu = ref<string | null>(null)
@@ -259,6 +262,14 @@ onUnmounted(() => {
         v-if="activeMenu === 'file'"
         class="absolute top-full left-0 mt-1 min-w-[320px] w-max bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-2xl py-1.5 z-50 text-xs"
       >
+        <button
+          class="w-full text-left px-3.5 py-2.5 bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-200 font-bold flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap border-b border-zinc-800"
+          @click="selectItem(() => emit('openGettingStartedWizard'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><User class="w-4 h-4 shrink-0 text-emerald-400" /> Getting Started &amp; Player Profile Wizard...</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">Setup</span>
+        </button>
+
         <div class="px-3.5 py-1 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Game &amp; PGN</div>
         <button
           class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
@@ -1211,6 +1222,13 @@ onUnmounted(() => {
         class="absolute top-full left-0 mt-1 min-w-[300px] w-max bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-2xl py-1.5 z-50 text-xs"
       >
         <button
+          class="w-full text-left px-3.5 py-2.5 bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-200 font-bold flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap border-b border-zinc-800"
+          @click="selectItem(() => emit('openGettingStartedWizard'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Sparkles class="w-4 h-4 shrink-0 text-emerald-400" /> Getting Started &amp; Player Setup Wizard...</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">Wizard</span>
+        </button>
+        <button
           class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
           @click="selectItem(() => emit('showHelp'))"
         >
@@ -1250,6 +1268,19 @@ onUnmounted(() => {
 
     <!-- Right-Side Quick Triggers: Active DB (in compact mode), Flip, Compact Auto-Fit, Lichess/Chess.com, Preferences & Command Palette -->
     <div class="ml-auto mr-1 flex items-center gap-1">
+      <button
+        data-testid="menubar-profile-wizard-btn"
+        class="px-2 py-1 rounded-lg border text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+        :class="playerDisplayName
+          ? 'bg-zinc-900 border-emerald-500/40 hover:border-emerald-400 text-emerald-300'
+          : 'bg-emerald-950/60 border-emerald-500/60 hover:bg-emerald-900/60 text-emerald-200 font-semibold'"
+        title="Getting Started & Player Setup Wizard (Profile, Home DB, Focus Books & Persona Books)"
+        @click="emit('openGettingStartedWizard')"
+      >
+        <User class="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+        <span class="text-[11px] max-w-[130px] truncate">{{ playerDisplayName ? playerDisplayName : 'Setup Profile & Guide' }}</span>
+      </button>
+
       <button
         v-if="compactLayout"
         class="px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-emerald-500/50 text-zinc-200 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer transition-colors"

@@ -429,5 +429,108 @@ func TestStandardDatabaseImportThreeTierModel(t *testing.T) {
 	}
 }
 
+func TestUserProfileSetupWizardAndPersonaBooks(t *testing.T) {
+	fakeHome := t.TempDir()
+	t.Setenv("HOME", fakeHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(fakeHome, ".config"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(fakeHome, ".local", "share"))
+
+	app := NewApp()
+	defer app.shutdown(nil)
+
+	// 1. Initial status should have OnboardingCompleted = false
+	initStatus, err := app.GetUserProfileStatus()
+	if err != nil || initStatus == nil {
+		t.Fatalf("GetUserProfileStatus failed: %v", err)
+	}
+	if initStatus.OnboardingCompleted {
+		t.Errorf("expected initial OnboardingCompleted=false")
+	}
+
+	// 2. Compile starter White repertoire into a Polyglot .bin book
+	repBookPath, entryCount, err := app.CompileRepertoireToPolyglotBook("white-openings-italian", true)
+	if err != nil || entryCount == 0 || repBookPath == "" {
+		t.Fatalf("CompileRepertoireToPolyglotBook failed: path=%q count=%d err=%v", repBookPath, entryCount, err)
+	}
+
+	// 3. Save User Profile via wizard setup RPC
+	setupRes, err := app.SaveUserProfileSetup(UserProfileSetupRequest{
+		DisplayName:            "Christopher Fair",
+		Title:                  "Club Player",
+		EstimatedElo:           1750,
+		LichessUsername:        "chrisfair",
+		ChessComUsername:       "chrisfair_chess",
+		FideID:                 "12345678",
+		Aliases:                []string{"C. Fair"},
+		HomeDatabaseName:       "My_Games",
+		EnsureHomeDB:           true,
+		FocusWhiteRepertoireID: "white-openings-italian",
+		FocusBlackRepertoireID: "black-openings-sicilian-kid",
+		FocusPolyglotBookPath:  repBookPath,
+		CompleteOnboarding:     true,
+	})
+	if err != nil || setupRes == nil {
+		t.Fatalf("SaveUserProfileSetup failed: %v", err)
+	}
+	if !setupRes.OnboardingCompleted || setupRes.DisplayName != "Christopher Fair" || setupRes.HomeDBName != "My_Games" {
+		t.Fatalf("unexpected setup result: %+v", setupRes)
+	}
+	if setupRes.PersonaID == "" || setupRes.SyncProfileID == "" {
+		t.Fatalf("expected PersonaID and SyncProfileID to be created, got %+v", setupRes)
+	}
+	// Verify auto-generated "Last, First" alias was included
+	foundLastFirst := false
+	for _, al := range setupRes.Aliases {
+		if al == "Fair, Christopher" {
+			foundLastFirst = true
+			break
+		}
+	}
+	if !foundLastFirst {
+		t.Errorf("expected 'Fair, Christopher' in auto-generated aliases, got %v", setupRes.Aliases)
+	}
+
+	// 4. Add a game for this user into My_Games and compile their Persona Opening Book (.bin)
+	myGame, err := chess.ParsePGN(`[Event "Rapid Match"]
+[Site "Lichess"]
+[Date "2026.10.20"]
+[White "Fair, Christopher"]
+[Black "RivalPlayer"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 5. d4 exd4 1-0`)
+	if err != nil {
+		t.Fatalf("ParsePGN failed: %v", err)
+	}
+	if _, err := app.SaveGame(myGame); err != nil {
+		t.Fatalf("SaveGame to Home DB failed: %v", err)
+	}
+
+	personaBookPath, pBookCount, err := app.BuildPersonaOpeningBook(setupRes.PersonaID, "both", 12)
+	if err != nil || pBookCount == 0 || personaBookPath == "" {
+		t.Fatalf("BuildPersonaOpeningBook failed: path=%q count=%d err=%v", personaBookPath, pBookCount, err)
+	}
+
+	// 5. Create a brand new opponent Persona with 0 games in DB, assign the compiled book & repertoire,
+	// and verify GetPersonaSimulatedMove plays from the assigned book/repertoire immediately!
+	oppPersona, err := app.SavePersona(&persona.Persona{
+		DisplayName:  "Club Rival Bot",
+		EstimatedElo: 1650,
+	})
+	if err != nil || oppPersona == nil {
+		t.Fatalf("SavePersona(opponent) failed: %v", err)
+	}
+	oppPersona, err = app.AssignPersonaBooks(oppPersona.ID, personaBookPath, "", "white-openings-italian", "black-openings-sicilian-kid")
+	if err != nil || oppPersona.BookPath != personaBookPath {
+		t.Fatalf("AssignPersonaBooks failed: %+v, err=%v", oppPersona, err)
+	}
+
+	simMove, err := app.GetPersonaSimulatedMove(oppPersona.ID, chess.StartingFEN, true)
+	if err != nil || simMove == nil || !simMove.IsBook || simMove.SAN != "e4" {
+		t.Fatalf("expected simulated move e4 from assigned repertoire/book, got %+v, err=%v", simMove, err)
+	}
+}
+
+
 
 

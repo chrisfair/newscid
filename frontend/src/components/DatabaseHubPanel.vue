@@ -56,6 +56,7 @@ const emit = defineEmits<{
   (e: 'openWorkstationManager', tab?: 'builder' | 'storage' | 'reset'): void
   (e: 'openStandardImport'): void
   (e: 'ensureUserDB'): void
+  (e: 'openGettingStartedWizard'): void
 }>()
 
 function isMatchingUpdatingPath(path?: string): boolean {
@@ -163,6 +164,13 @@ function formatCount(n: number): string {
         </div>
 
         <div class="flex items-center gap-1.5 flex-wrap">
+          <button
+            class="px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-500/50 font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+            title="Open the 5-Step Getting Started & Player Setup Wizard (Profile, Home DB, Focus Books & Persona Books)"
+            @click="emit('openGettingStartedWizard')"
+          >
+            <span>🚀 Getting Started Wizard</span>
+          </button>
           <button
             class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
             title="Standard Import (.pgn or .si4) — Save untouched Original Archive (Locked), Merge into Master Reference DB, or Import into Personal User DB"

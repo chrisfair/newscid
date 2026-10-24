@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"newscid/pkg/chess"
+	"newscid/pkg/polyglot"
 )
 
 // RepertoireMove represents an approved move in an opening repertoire.
@@ -298,4 +299,63 @@ func (m *Manager) RecordPractice(repID, fen, uci string, wasCorrect bool) {
 		}
 	}
 }
+
+// CompileToPolyglotBook compiles a repertoire into a standard Polyglot (.bin) opening book at targetPath.
+func (m *Manager) CompileToPolyglotBook(repID string, targetPath string) (int, error) {
+	m.mu.RLock()
+	rep, ok := m.inMem[repID]
+	m.mu.RUnlock()
+	if !ok || rep == nil {
+		return 0, fmt.Errorf("repertoire %q not found", repID)
+	}
+
+	var entries []polyglot.BookEntry
+	for coreFEN, moves := range rep.Positions {
+		fullFEN := coreFEN + " - 0 1"
+		b, err := chess.ParseFEN(fullFEN)
+		if err != nil {
+			continue
+		}
+		hash := polyglot.HashBoard(b)
+		for idx, rm := range moves {
+			var mv chess.Move
+			var parseErr error
+			if rm.UCI != "" {
+				mv, parseErr = b.ParseUCI(rm.UCI)
+			} else if rm.SAN != "" {
+				mv, parseErr = b.ParseSAN(rm.SAN)
+			}
+			if parseErr != nil {
+				continue
+			}
+			raw := polyglot.EncodeRawMove(b, mv)
+			weight := uint16(100 - idx*15)
+			if idx >= 6 {
+				weight = 10
+			}
+			if rm.Correct > 0 {
+				bonus := rm.Correct * 5
+				if int(weight)+bonus <= 65535 {
+					weight += uint16(bonus)
+				}
+			}
+			entries = append(entries, polyglot.BookEntry{
+				Key:     hash,
+				RawMove: raw,
+				Weight:  weight,
+				Learn:   uint32(rm.Practice),
+			})
+		}
+	}
+
+	if len(entries) == 0 {
+		return 0, fmt.Errorf("repertoire %q has no valid moves to compile", rep.Name)
+	}
+
+	if err := polyglot.WriteBook(targetPath, entries); err != nil {
+		return 0, err
+	}
+	return len(entries), nil
+}
+
 
