@@ -45,6 +45,7 @@ import (
 	"newscid/pkg/training"
 	"newscid/pkg/tree"
 	"newscid/pkg/version"
+	"newscid/pkg/workstation"
 )
 
 // DatabaseInfo holds metadata about the currently opened database.
@@ -1934,6 +1935,11 @@ func (a *App) GetSimulatedMove(playerName string, fen string, isWhite bool) (*pl
 // historical move. If out of their historical games, it computes an engine move calibrated to their
 // human Elo, contempt rating, and tactical aggression style.
 func (a *App) GetPersonaSimulatedMove(personaID string, fen string, isWhite bool) (*playerbot.SimulatedMove, error) {
+	var pObj *persona.Persona
+	if a.personaMgr != nil {
+		pObj, _ = a.personaMgr.GetPersona(personaID)
+	}
+
 	a.mu.Lock()
 	if a.personaBotCache == nil {
 		a.personaBotCache = make(map[string]*playerbot.PlayerPersonality)
@@ -1945,11 +1951,60 @@ func (a *App) GetPersonaSimulatedMove(personaID string, fen string, isWhite bool
 	if personality == nil {
 		personality, err = a.GetPersonaPersonality(personaID)
 		if err != nil {
-			return nil, err
+			if pObj != nil {
+				elo := pObj.EstimatedElo
+				if elo <= 0 {
+					elo = 1500
+				}
+				personality = &playerbot.PlayerPersonality{
+					Name:         pObj.DisplayName,
+					EstimatedElo: elo,
+					PlayStyle:    "Universal",
+				}
+			} else {
+				return nil, err
+			}
+		} else {
+			a.mu.Lock()
+			a.personaBotCache[personaID] = personality
+			a.mu.Unlock()
 		}
-		a.mu.Lock()
-		a.personaBotCache[personaID] = personality
-		a.mu.Unlock()
+	}
+
+	// 0a. Check assigned Repertoire for this color if configured on the Persona
+	if pObj != nil && a.repMgr != nil {
+		repID := strings.TrimSpace(pObj.BlackRepertoireID)
+		if isWhite {
+			repID = strings.TrimSpace(pObj.WhiteRepertoireID)
+		}
+		if repID != "" {
+			if rep, rErr := a.repMgr.GetRepertoire(repID); rErr == nil && rep != nil {
+				core := repertoire.CoreFEN(fen)
+				if opts := rep.Positions[core]; len(opts) > 0 {
+					chosen := opts[0]
+					return &playerbot.SimulatedMove{
+						UCI:        chosen.UCI,
+						SAN:        chosen.SAN,
+						IsBook:     true,
+						EloTarget:  personality.EstimatedElo,
+						Commentary: fmt.Sprintf("📘 %s played repertoire move %s (%s)", personality.Name, chosen.SAN, rep.Name),
+					}, nil
+				}
+			}
+		}
+	}
+
+	// 0b. Check assigned Polyglot (.bin) book if configured on the Persona
+	if pObj != nil && strings.TrimSpace(pObj.BookPath) != "" {
+		if bm, bErr := a.GetPolyglotBookMove(fen, pObj.BookPath, false); bErr == nil && bm != nil {
+			return &playerbot.SimulatedMove{
+				UCI:        bm.UCI,
+				SAN:        bm.SAN,
+				IsBook:     true,
+				EloTarget:  personality.EstimatedElo,
+				Commentary: fmt.Sprintf("📖 %s played assigned book move %s (%.0f%% weight)", personality.Name, bm.SAN, bm.Percentage),
+			}, nil
+		}
 	}
 
 	// 1. Check personal full-game tree (plays most common response or sole response)
@@ -2927,11 +2982,8 @@ func (a *App) ExportAntiPersonaPolyglotBook(report *persona.AntiPersonaReport, f
 
 	target := strings.TrimSpace(filePath)
 	if target == "" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			homeDir = os.TempDir()
-		}
-		booksDir := filepath.Join(homeDir, ".local", "share", "newscid", "books")
+		dataRoot, _ := workstation.DefaultWorkstationDirs()
+		booksDir := filepath.Join(dataRoot, "books", "opening")
 		_ = os.MkdirAll(booksDir, 0755)
 
 		slug := strings.ReplaceAll(report.DisplayName, " ", "_")
@@ -2942,6 +2994,19 @@ func (a *App) ExportAntiPersonaPolyglotBook(report *persona.AntiPersonaReport, f
 	if err := persona.SaveAntiPersonaBook(report, target); err != nil {
 		return "", err
 	}
+
+	if report.PersonaID != "" && a.personaMgr != nil {
+		if p, pErr := a.personaMgr.GetPersona(report.PersonaID); pErr == nil && p != nil {
+			p.AntiBookPath = target
+			_, _ = a.personaMgr.SavePersona(p)
+		}
+	}
+
+	a.mu.Lock()
+	if a.polyglotBooks != nil {
+		delete(a.polyglotBooks, target)
+	}
+	a.mu.Unlock()
 
 	return target, nil
 }

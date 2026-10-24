@@ -31,6 +31,7 @@ const props = defineProps<{
   dbName?: string
   ecoCode?: string
   openingName?: string
+  focusBookPath?: string
   discoveredDatabases?: Array<{ name: string; basePath: string; numGames: number; category?: string }>
 }>()
 
@@ -58,10 +59,15 @@ const totalGames = computed(() => props.treeData?.totalGames || 0)
 
 async function loadAvailableBooks() {
   try {
-    const books = await GetPolyglotBooks()
-    if (books && books.length > 0) {
+    const books = (await GetPolyglotBooks()) || []
+    if (props.focusBookPath && !books.includes(props.focusBookPath)) {
+      books.unshift(props.focusBookPath)
+    }
+    if (books.length > 0) {
       availableBooks.value = books
-      if (!selectedBook.value) {
+      if (props.focusBookPath && books.includes(props.focusBookPath)) {
+        selectedBook.value = props.focusBookPath
+      } else if (!selectedBook.value) {
         selectedBook.value = books[0]
       }
     }
@@ -69,6 +75,15 @@ async function loadAvailableBooks() {
     console.error('Failed to load polyglot books:', err)
   }
 }
+
+watch(() => props.focusBookPath, (newFocus) => {
+  if (newFocus) {
+    if (!availableBooks.value.includes(newFocus)) {
+      availableBooks.value.unshift(newFocus)
+    }
+    selectedBook.value = newFocus
+  }
+})
 
 async function queryCurrentBook() {
   const targetFen = props.fen || props.treeData?.fen

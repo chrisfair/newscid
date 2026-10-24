@@ -82,6 +82,16 @@ type AppPreferences struct {
 	DatabasePolicies            map[string]string           `json:"databasePolicies,omitempty"`
 	CustomNotablePlayers        []scid.FamousPlayerEntry    `json:"customNotablePlayers,omitempty"`
 	HiddenFamousPlayers         []string                    `json:"hiddenFamousPlayers,omitempty"`
+	PlayerDisplayName           string                      `json:"playerDisplayName"`
+	PlayerPersonaID             string                      `json:"playerPersonaId"`
+	PlayerTitle                 string                      `json:"playerTitle"`
+	PlayerEstimatedElo          int                         `json:"playerEstimatedElo"`
+	PlayerFideID                string                      `json:"playerFideId"`
+	PlayerAliases               []string                    `json:"playerAliases,omitempty"`
+	FocusPolyglotBookPath       string                      `json:"focusPolyglotBookPath"`
+	FocusWhiteRepertoireID      string                      `json:"focusWhiteRepertoireId"`
+	FocusBlackRepertoireID      string                      `json:"focusBlackRepertoireId"`
+	OnboardingCompleted         bool                        `json:"onboardingCompleted"`
 }
 
 // DatabaseRolesStatus describes how the user's databases are currently assigned and related.
@@ -1831,4 +1841,591 @@ func (a *App) ImportStandardDatabase(req StandardImportRequest) (*StandardImport
 
 	return res, nil
 }
+
+// ==========================================
+// Unified User Profile, Home DB & Focus Book Setup Wizard
+// ==========================================
+
+// UserProfileSetupRequest defines the user's identity, home database, and focus books/repertoires.
+type UserProfileSetupRequest struct {
+	DisplayName            string   `json:"displayName"`
+	Title                  string   `json:"title"`
+	EstimatedElo           int      `json:"estimatedElo"`
+	LichessUsername        string   `json:"lichessUsername"`
+	ChessComUsername       string   `json:"chessComUsername"`
+	FideID                 string   `json:"fideId"`
+	Aliases                []string `json:"aliases"`
+	HomeDatabaseName       string   `json:"homeDatabaseName"`
+	EnsureHomeDB           bool     `json:"ensureHomeDb"`
+	FocusWhiteRepertoireID string   `json:"focusWhiteRepertoireId"`
+	FocusBlackRepertoireID string   `json:"focusBlackRepertoireId"`
+	FocusPolyglotBookPath  string   `json:"focusPolyglotBookPath"`
+	CompleteOnboarding     bool     `json:"completeOnboarding"`
+}
+
+// UserProfileSetupResult reports the current unified state of the user's profile, Home DB, Reference DB, and Focus Books.
+type UserProfileSetupResult struct {
+	DisplayName            string   `json:"displayName"`
+	Title                  string   `json:"title"`
+	EstimatedElo           int      `json:"estimatedElo"`
+	LichessUsername        string   `json:"lichessUsername"`
+	ChessComUsername       string   `json:"chessComUsername"`
+	FideID                 string   `json:"fideId"`
+	Aliases                []string `json:"aliases"`
+	PersonaID              string   `json:"personaId"`
+	SyncProfileID          string   `json:"syncProfileId"`
+	HomeDBPath             string   `json:"homeDbPath"`
+	HomeDBName             string   `json:"homeDbName"`
+	HomeDBGames            int      `json:"homeDbGames"`
+	ReferenceDBPath        string   `json:"referenceDbPath"`
+	ReferenceDBName        string   `json:"referenceDbName"`
+	ReferenceDBGames       int      `json:"referenceDbGames"`
+	FocusWhiteRepertoireID string   `json:"focusWhiteRepertoireId"`
+	FocusBlackRepertoireID string   `json:"focusBlackRepertoireId"`
+	FocusPolyglotBookPath  string   `json:"focusPolyglotBookPath"`
+	OnboardingCompleted    bool     `json:"onboardingCompleted"`
+}
+
+func buildAutomaticPlayerAliases(displayName, lichessUser, chessComUser string, extra []string) []string {
+	var raw []string
+	name := strings.TrimSpace(displayName)
+	if name != "" {
+		raw = append(raw, name)
+		// If "First Last" format, automatically add "Last, First" PGN standard format
+		if !strings.Contains(name, ",") {
+			parts := strings.Fields(name)
+			if len(parts) >= 2 {
+				last := parts[len(parts)-1]
+				first := strings.Join(parts[:len(parts)-1], " ")
+				raw = append(raw, fmt.Sprintf("%s, %s", last, first))
+				if len(first) > 0 {
+					raw = append(raw, fmt.Sprintf("%s, %c", last, first[0]))
+				}
+			}
+		}
+	}
+	if strings.TrimSpace(lichessUser) != "" {
+		raw = append(raw, strings.TrimSpace(lichessUser))
+	}
+	if strings.TrimSpace(chessComUser) != "" {
+		raw = append(raw, strings.TrimSpace(chessComUser))
+	}
+	raw = append(raw, extra...)
+	return persona.CleanIdentifiers(raw)
+}
+
+// GetUserProfileStatus returns the current state of the user's identity, Home DB, Reference DB, Persona, and Focus Books.
+func (a *App) GetUserProfileStatus() (*UserProfileSetupResult, error) {
+	prefs, _ := a.GetAppPreferences()
+	if prefs == nil {
+		prefs = defaultAppPreferences()
+	}
+
+	// Check if a user profile persona already exists in personaMgr
+	var userPersona *persona.Persona
+	if a.personaMgr != nil {
+		for _, p := range a.personaMgr.GetPersonas() {
+			if p.IsUserProfile || (prefs.PlayerPersonaID != "" && p.ID == prefs.PlayerPersonaID) {
+				userPersona = p
+				break
+			}
+		}
+	}
+
+	displayName := strings.TrimSpace(prefs.PlayerDisplayName)
+	title := strings.TrimSpace(prefs.PlayerTitle)
+	elo := prefs.PlayerEstimatedElo
+	lichess := strings.TrimSpace(prefs.LichessUsername)
+	chesscom := strings.TrimSpace(prefs.ChessComUsername)
+	fide := strings.TrimSpace(prefs.PlayerFideID)
+	aliases := prefs.PlayerAliases
+	personaID := strings.TrimSpace(prefs.PlayerPersonaID)
+	whiteRep := strings.TrimSpace(prefs.FocusWhiteRepertoireID)
+	blackRep := strings.TrimSpace(prefs.FocusBlackRepertoireID)
+	bookPath := strings.TrimSpace(prefs.FocusPolyglotBookPath)
+
+	if userPersona != nil {
+		personaID = userPersona.ID
+		if displayName == "" {
+			displayName = userPersona.DisplayName
+		}
+		if title == "" {
+			title = userPersona.Title
+		}
+		if elo <= 0 {
+			elo = userPersona.EstimatedElo
+		}
+		if lichess == "" {
+			lichess = userPersona.LichessUsername
+		}
+		if chesscom == "" {
+			chesscom = userPersona.ChessComUsername
+		}
+		if fide == "" {
+			fide = userPersona.FideID
+		}
+		if len(aliases) == 0 {
+			aliases = userPersona.Identifiers
+		}
+		if whiteRep == "" {
+			whiteRep = userPersona.WhiteRepertoireID
+		}
+		if blackRep == "" {
+			blackRep = userPersona.BlackRepertoireID
+		}
+		if bookPath == "" {
+			bookPath = userPersona.BookPath
+		}
+	}
+
+	if len(aliases) == 0 && (displayName != "" || lichess != "" || chesscom != "") {
+		aliases = buildAutomaticPlayerAliases(displayName, lichess, chesscom, nil)
+	}
+
+	// Default starter repertoires if none explicitly picked yet
+	if whiteRep == "" {
+		whiteRep = "white-openings-italian"
+	}
+	if blackRep == "" {
+		blackRep = "black-openings-sicilian-kid"
+	}
+
+	homePath := normalizeScidBasePath(prefs.DefaultDatabasePath)
+	homeName := ""
+	homeGames := 0
+	if homePath != "" {
+		homeName = filepath.Base(homePath)
+		if _, err := os.Stat(homePath + ".si4"); err == nil {
+			meta := scid.InspectDatabase(homePath, "")
+			homeGames = meta.NumGames
+		}
+	}
+
+	refPath := normalizeScidBasePath(prefs.ReferenceDatabasePath)
+	refName := ""
+	refGames := 0
+	if refPath != "" {
+		refName = filepath.Base(refPath)
+		if _, err := os.Stat(refPath + ".si4"); err == nil {
+			meta := scid.InspectDatabase(refPath, "")
+			refGames = meta.NumGames
+		}
+	}
+
+	syncID := ""
+	if pm := a.ensureProfileMgr(); pm != nil {
+		for _, sp := range pm.GetProfiles() {
+			if sp.ID == "user_home_sync" || !sp.IsStudyTarget {
+				syncID = sp.ID
+				break
+			}
+		}
+	}
+
+	return &UserProfileSetupResult{
+		DisplayName:            displayName,
+		Title:                  title,
+		EstimatedElo:           elo,
+		LichessUsername:        lichess,
+		ChessComUsername:       chesscom,
+		FideID:                 fide,
+		Aliases:                aliases,
+		PersonaID:              personaID,
+		SyncProfileID:          syncID,
+		HomeDBPath:             homePath,
+		HomeDBName:             homeName,
+		HomeDBGames:            homeGames,
+		ReferenceDBPath:        refPath,
+		ReferenceDBName:        refName,
+		ReferenceDBGames:       refGames,
+		FocusWhiteRepertoireID: whiteRep,
+		FocusBlackRepertoireID: blackRep,
+		FocusPolyglotBookPath:  bookPath,
+		OnboardingCompleted:    prefs.OnboardingCompleted,
+	}, nil
+}
+
+// SaveUserProfileSetup configures the user's identity, creates/links their Home Database,
+// unifies their Personal Persona across all PGN aliases, sets up their Online Sync Profile,
+// and saves their Focus Repertoires and Polyglot Opening Book in one step.
+func (a *App) SaveUserProfileSetup(req UserProfileSetupRequest) (*UserProfileSetupResult, error) {
+	prefs, _ := a.GetAppPreferences()
+	if prefs == nil {
+		prefs = defaultAppPreferences()
+	}
+
+	displayName := strings.TrimSpace(req.DisplayName)
+	if displayName == "" {
+		displayName = strings.TrimSpace(prefs.PlayerDisplayName)
+	}
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		title = "Club Player"
+	}
+	elo := req.EstimatedElo
+	if elo <= 0 {
+		elo = prefs.PlayerEstimatedElo
+	}
+	if elo <= 0 {
+		elo = 1500
+	}
+	lichess := strings.TrimSpace(req.LichessUsername)
+	chesscom := strings.TrimSpace(req.ChessComUsername)
+	fide := strings.TrimSpace(req.FideID)
+
+	aliases := buildAutomaticPlayerAliases(displayName, lichess, chesscom, req.Aliases)
+
+	// 1. Ensure Home Database (defaulting to My_Games) if requested or if none configured
+	dataRoot, _ := workstation.DefaultWorkstationDirs()
+	dbDir := filepath.Join(dataRoot, "databases")
+	_ = os.MkdirAll(dbDir, 0o755)
+
+	homeBase := normalizeScidBasePath(prefs.DefaultDatabasePath)
+	if strings.TrimSpace(req.HomeDatabaseName) != "" {
+		homeBase = filepath.Join(dbDir, sanitizeDBFilename(req.HomeDatabaseName, "My_Games"))
+	} else if homeBase == "" && (req.EnsureHomeDB || displayName != "") {
+		homeBase = filepath.Join(dbDir, "My_Games")
+	}
+
+	if homeBase != "" {
+		if _, err := os.Stat(homeBase + ".si4"); err != nil {
+			db := scid.NewDatabase()
+			desc := "Personal User Database (My Games, Annotations & Repertoire)"
+			if displayName != "" {
+				desc = fmt.Sprintf("%s — Home Database (My Games, Annotations & Repertoire)", displayName)
+			}
+			if err := db.Create(homeBase, desc); err != nil {
+				return nil, fmt.Errorf("creating home database: %w", err)
+			}
+			_ = db.Close()
+		}
+		prefs.DefaultDatabasePath = homeBase
+		prefs.AutoOpenDefaultDB = true
+		if prefs.DatabasePolicies == nil {
+			prefs.DatabasePolicies = make(map[string]string)
+		}
+		prefs.DatabasePolicies[homeBase] = scid.WritePolicyEditable.String()
+	}
+
+	// 2. Save User Profile fields onto AppPreferences
+	prefs.PlayerDisplayName = displayName
+	prefs.PlayerTitle = title
+	prefs.PlayerEstimatedElo = elo
+	prefs.LichessUsername = lichess
+	prefs.ChessComUsername = chesscom
+	prefs.PlayerFideID = fide
+	prefs.PlayerAliases = aliases
+	if strings.TrimSpace(req.FocusWhiteRepertoireID) != "" {
+		prefs.FocusWhiteRepertoireID = strings.TrimSpace(req.FocusWhiteRepertoireID)
+	} else if prefs.FocusWhiteRepertoireID == "" {
+		prefs.FocusWhiteRepertoireID = "white-openings-italian"
+	}
+	if strings.TrimSpace(req.FocusBlackRepertoireID) != "" {
+		prefs.FocusBlackRepertoireID = strings.TrimSpace(req.FocusBlackRepertoireID)
+	} else if prefs.FocusBlackRepertoireID == "" {
+		prefs.FocusBlackRepertoireID = "black-openings-sicilian-kid"
+	}
+	if strings.TrimSpace(req.FocusPolyglotBookPath) != "" {
+		prefs.FocusPolyglotBookPath = strings.TrimSpace(req.FocusPolyglotBookPath)
+	}
+	if req.CompleteOnboarding {
+		prefs.OnboardingCompleted = true
+	}
+
+	// 3. Create or update Personal Persona in PersonaManager
+	if displayName != "" && a.personaMgr != nil {
+		personaID := strings.TrimSpace(prefs.PlayerPersonaID)
+		if personaID == "" {
+			for _, existing := range a.personaMgr.GetPersonas() {
+				if existing.IsUserProfile || strings.EqualFold(existing.DisplayName, displayName) {
+					personaID = existing.ID
+					break
+				}
+			}
+		}
+		pObj := &persona.Persona{
+			ID:                personaID,
+			DisplayName:       displayName,
+			Identifiers:       aliases,
+			DatabasePath:      homeBase,
+			BookPath:          prefs.FocusPolyglotBookPath,
+			WhiteRepertoireID: prefs.FocusWhiteRepertoireID,
+			BlackRepertoireID: prefs.FocusBlackRepertoireID,
+			IsUserProfile:     true,
+			Title:             title,
+			Bio:               "Primary Local Player Profile & Home Repertoire",
+			EstimatedElo:      elo,
+			ChessComUsername:  chesscom,
+			LichessUsername:   lichess,
+			FideID:            fide,
+		}
+		if savedP, err := a.SavePersona(pObj); err == nil && savedP != nil {
+			prefs.PlayerPersonaID = savedP.ID
+		}
+	}
+
+	// 4. Create or update Online Sync Profile linked to Home DB
+	if (lichess != "" || chesscom != "") && a.ensureProfileMgr() != nil {
+		profName := displayName
+		if profName == "" {
+			if lichess != "" {
+				profName = lichess
+			} else {
+				profName = chesscom
+			}
+		}
+		_ = a.profileMgr.SaveProfile(&online.Profile{
+			ID:               "user_home_sync",
+			Name:             profName + " (Home DB Sync)",
+			TargetDatabase:   homeBase,
+			TargetMode:       online.TargetDedicatedBase,
+			IsStudyTarget:    false,
+			LichessUsername:  lichess,
+			ChessComUsername: chesscom,
+			AutoDeduplicate:  true,
+		})
+	}
+
+	// 5. Save preferences and add user to Notable Players dropdown
+	_, err := a.SaveAppPreferences(*prefs)
+	if err != nil {
+		return nil, err
+	}
+	if displayName != "" {
+		_, _ = a.AddCustomNotablePlayer(displayName, aliases, title, "My Profile")
+	}
+
+	// 6. If no database is currently open and homeBase exists, open it as Active DB
+	a.mu.RLock()
+	hasOpenDB := a.db != nil && a.db.IsOpen
+	a.mu.RUnlock()
+	if !hasOpenDB && homeBase != "" {
+		_, _ = a.OpenDatabase(homeBase)
+	}
+
+	return a.GetUserProfileStatus()
+}
+
+// SyncUserHomeGames fetches the user's latest Lichess and Chess.com games directly into their Home Database.
+func (a *App) SyncUserHomeGames(maxGames int) (*online.SyncResult, error) {
+	status, err := a.GetUserProfileStatus()
+	if err != nil {
+		return nil, err
+	}
+	if status.LichessUsername == "" && status.ChessComUsername == "" {
+		return nil, fmt.Errorf("no Lichess or Chess.com username configured in your profile")
+	}
+	if maxGames <= 0 {
+		maxGames = 250
+	}
+
+	// Ensure Home DB exists
+	homeInfo, err := a.EnsurePersonalUserDatabase(false)
+	if err != nil {
+		return nil, err
+	}
+
+	_, finish := a.startCancellableOperation("home-online-sync")
+	defer finish()
+
+	opts := online.ImportPlayerOptions{
+		PlayerName:       status.DisplayName,
+		LichessUsername:  status.LichessUsername,
+		ChessComUsername: status.ChessComUsername,
+		TargetMode:       online.TargetDedicatedBase,
+		DedicatedPath:    homeInfo.BasePath,
+		AutoDeduplicate:  true,
+		MaxGames:         maxGames,
+		ProgressFn: func(stage string, current, total int, message string) {
+			a.emitEvent("online:fetch-progress", map[string]interface{}{
+				"stage":   stage,
+				"current": current,
+				"total":   total,
+				"message": message,
+			})
+		},
+	}
+
+	a.mu.RLock()
+	activeDB := a.db
+	a.mu.RUnlock()
+
+	res, err := a.syncMgr.ImportPlayerGames(opts, activeDB)
+	if err != nil {
+		return nil, err
+	}
+
+	// Re-open Home DB if it is currently active so new games appear immediately
+	a.mu.RLock()
+	isHomeActive := a.db != nil && a.db.IsOpen && normalizeScidBasePath(a.db.BasePath) == normalizeScidBasePath(homeInfo.BasePath)
+	a.mu.RUnlock()
+	if isHomeActive || activeDB == nil || !activeDB.IsOpen {
+		_, _ = a.OpenDatabase(homeInfo.BasePath)
+	}
+
+	return res, nil
+}
+
+// BuildPersonaOpeningBook compiles a Polyglot (.bin) opening book representing the moves played
+// by the specified persona across their dedicated and active databases, saves it to NewScid's opening books
+// directory, and attaches it to the persona's BookPath.
+func (a *App) BuildPersonaOpeningBook(personaID string, targetColor string, maxDepth int) (string, int, error) {
+	if a.personaMgr == nil {
+		return "", 0, fmt.Errorf("persona manager not initialized")
+	}
+	p, err := a.personaMgr.GetPersona(personaID)
+	if err != nil {
+		return "", 0, err
+	}
+
+	a.mu.RLock()
+	activeDB := a.db
+	a.mu.RUnlock()
+
+	var allGames []*chess.Game
+	seenSigs := make(map[string]bool)
+
+	collectFromDB := func(db *scid.Database) {
+		if db == nil || !db.IsOpen {
+			return
+		}
+		nameLookup := make(map[string]bool)
+		for _, id := range p.Identifiers {
+			t := strings.ToLower(strings.TrimSpace(id))
+			if t != "" {
+				nameLookup[t] = true
+			}
+		}
+		if p.DisplayName != "" {
+			nameLookup[strings.ToLower(strings.TrimSpace(p.DisplayName))] = true
+		}
+
+		numGames := db.NumGames()
+		for i := 0; i < numGames; i++ {
+			db.RLock()
+			if i >= len(db.Entries) {
+				db.RUnlock()
+				break
+			}
+			entry := db.Entries[i]
+			if entry == nil || (entry.Flags&scid.FlagDelete) != 0 {
+				db.RUnlock()
+				continue
+			}
+			w := strings.ToLower(db.Names.GetName(scid.NamePlayer, entry.WhiteID))
+			b := strings.ToLower(db.Names.GetName(scid.NamePlayer, entry.BlackID))
+			entryDate := entry.Date
+			entryResult := entry.Result
+			entryHalfMoves := entry.NumHalfMoves
+			db.RUnlock()
+
+			if !matchPlayerLookup(w, nameLookup) && !matchPlayerLookup(b, nameLookup) {
+				continue
+			}
+			sig := fmt.Sprintf("%s|%s|%s|%s|%d", entryDate, w, b, entryResult, entryHalfMoves)
+			if seenSigs[sig] {
+				continue
+			}
+			seenSigs[sig] = true
+			if g, err := db.GetGame(i + 1); err == nil && g != nil {
+				allGames = append(allGames, g)
+			}
+		}
+	}
+
+	if activeDB != nil && activeDB.IsOpen {
+		collectFromDB(activeDB)
+	}
+	if p.DatabasePath != "" {
+		dedDB := &scid.Database{}
+		if err := dedDB.Open(p.DatabasePath); err == nil {
+			defer dedDB.Close()
+			collectFromDB(dedDB)
+		}
+	}
+
+	if len(allGames) == 0 {
+		return "", 0, fmt.Errorf("no games found for persona %q to compile a book from — import or fetch games first", p.DisplayName)
+	}
+
+	dataRoot, _ := workstation.DefaultWorkstationDirs()
+	booksDir := filepath.Join(dataRoot, "books", "opening")
+	_ = os.MkdirAll(booksDir, 0o755)
+
+	slug := sanitizeDBFilename(p.DisplayName, "Persona")
+	targetPath := filepath.Join(booksDir, fmt.Sprintf("%s_Book.bin", slug))
+
+	ids := append([]string{p.DisplayName}, p.Identifiers...)
+	count, err := persona.CompilePersonaPolyglotBook(allGames, ids, targetColor, maxDepth, targetPath)
+	if err != nil {
+		return "", 0, err
+	}
+
+	p.BookPath = targetPath
+	_, _ = a.SavePersona(p)
+
+	a.mu.Lock()
+	if a.polyglotBooks != nil {
+		delete(a.polyglotBooks, targetPath)
+	}
+	a.mu.Unlock()
+
+	return targetPath, count, nil
+}
+
+// AssignPersonaBooks assigns a Polyglot (.bin) opening book, anti-book, or White/Black repertoires to a Persona.
+func (a *App) AssignPersonaBooks(personaID string, bookPath string, antiBookPath string, whiteRepID string, blackRepID string) (*persona.Persona, error) {
+	if a.personaMgr == nil {
+		return nil, fmt.Errorf("persona manager not initialized")
+	}
+	p, err := a.personaMgr.GetPersona(personaID)
+	if err != nil {
+		return nil, err
+	}
+	p.BookPath = strings.TrimSpace(bookPath)
+	p.AntiBookPath = strings.TrimSpace(antiBookPath)
+	p.WhiteRepertoireID = strings.TrimSpace(whiteRepID)
+	p.BlackRepertoireID = strings.TrimSpace(blackRepID)
+	return a.SavePersona(p)
+}
+
+// CompileRepertoireToPolyglotBook compiles a curated Opening Repertoire into a Polyglot (.bin) book in NewScid's opening books folder.
+func (a *App) CompileRepertoireToPolyglotBook(repID string, setAsFocusBook bool) (string, int, error) {
+	if a.repMgr == nil {
+		return "", 0, fmt.Errorf("repertoire manager not initialized")
+	}
+	rep, err := a.repMgr.GetRepertoire(repID)
+	if err != nil {
+		return "", 0, err
+	}
+
+	dataRoot, _ := workstation.DefaultWorkstationDirs()
+	booksDir := filepath.Join(dataRoot, "books", "opening")
+	_ = os.MkdirAll(booksDir, 0o755)
+
+	slug := sanitizeDBFilename(rep.Name, rep.ID)
+	targetPath := filepath.Join(booksDir, fmt.Sprintf("Repertoire_%s.bin", slug))
+
+	count, err := a.repMgr.CompileToPolyglotBook(repID, targetPath)
+	if err != nil {
+		return "", 0, err
+	}
+
+	a.mu.Lock()
+	if a.polyglotBooks != nil {
+		delete(a.polyglotBooks, targetPath)
+	}
+	a.mu.Unlock()
+
+	if setAsFocusBook {
+		prefs, _ := a.GetAppPreferences()
+		if prefs != nil {
+			prefs.FocusPolyglotBookPath = targetPath
+			_, _ = a.SaveAppPreferences(*prefs)
+		}
+	}
+
+	return targetPath, count, nil
+}
+
 

@@ -18,7 +18,8 @@ import {
   RefreshCw,
   FolderOpen,
   Globe,
-  Crosshair
+  Crosshair,
+  BookOpen
 } from '@lucide/vue'
 import {
   GetPersonas,
@@ -31,7 +32,12 @@ import {
   GetPersonaStatistics,
   AggregatePersonaGames,
   OpenPersonaDatabase,
-  FetchPersonaOnlineGames
+  FetchPersonaOnlineGames,
+  BuildPersonaOpeningBook,
+  AssignPersonaBooks,
+  GetPolyglotBooks,
+  GetRepertoires,
+  SelectAndImportWorkstationAsset
 } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import { persona } from '../../wailsjs/go/models'
@@ -62,7 +68,17 @@ const editChessCom = ref('')
 const editLichess = ref('')
 const editFideId = ref('')
 const editDatabasePath = ref('')
+const editBookPath = ref('')
+const editAntiBookPath = ref('')
+const editWhiteRepId = ref('')
+const editBlackRepId = ref('')
 const newIdentifierInput = ref('')
+
+// Books & Repertoires
+const availableBooks = ref<string[]>([])
+const repertoiresList = ref<any[]>([])
+const isBuildingBook = ref(false)
+const buildBookColor = ref<'both' | 'white' | 'black'>('both')
 
 // Suggestions & Stats
 const suggestedAliases = ref<string[]>([])
@@ -75,8 +91,21 @@ const autoFetchOnline = ref(true)
 const onlineMaxGames = ref<number>(200)
 
 onMounted(async () => {
-  await loadPersonas()
+  await Promise.all([loadPersonas(), loadBooksAndRepertoires()])
 })
+
+async function loadBooksAndRepertoires() {
+  try {
+    const [books, reps] = await Promise.all([
+      GetPolyglotBooks().catch(() => []),
+      GetRepertoires().catch(() => []),
+    ])
+    availableBooks.value = books || []
+    repertoiresList.value = reps || []
+  } catch {
+    // ignore in minimal mock environments
+  }
+}
 
 async function loadPersonas() {
   loading.value = true
@@ -112,6 +141,10 @@ function selectPersona(p: persona.Persona, preserveStatus: boolean = false) {
   editLichess.value = p.lichessUsername || ''
   editFideId.value = p.fideId || ''
   editDatabasePath.value = p.databasePath || ''
+  editBookPath.value = (p as any).bookPath || ''
+  editAntiBookPath.value = (p as any).antiBookPath || ''
+  editWhiteRepId.value = (p as any).whiteRepertoireId || ''
+  editBlackRepId.value = (p as any).blackRepertoireId || ''
   if (!preserveStatus) {
     statusMessage.value = null
   }
@@ -136,6 +169,10 @@ function handleCreateNew() {
   editLichess.value = ''
   editFideId.value = ''
   editDatabasePath.value = ''
+  editBookPath.value = ''
+  editAntiBookPath.value = ''
+  editWhiteRepId.value = ''
+  editBlackRepId.value = ''
   personaStats.value = null
   suggestedAliases.value = []
 }
@@ -158,7 +195,12 @@ async function handleSave() {
       lichessUsername: editLichess.value.trim(),
       fideId: editFideId.value.trim(),
       databasePath: editDatabasePath.value.trim(),
-    })
+      bookPath: editBookPath.value.trim(),
+      antiBookPath: editAntiBookPath.value.trim(),
+      whiteRepertoireId: editWhiteRepId.value.trim(),
+      blackRepertoireId: editBlackRepId.value.trim(),
+      isUserProfile: Boolean((selectedPersona.value as any)?.isUserProfile),
+    } as any)
 
     const saved = await SavePersona(pToSave)
     await loadPersonas()
@@ -372,6 +414,66 @@ function handleExploitPersona() {
   emit('exploitPersona', selectedPersona.value)
   emit('close')
 }
+
+async function handleBuildPersonaBook() {
+  if (!selectedPersona.value?.id) return
+  isBuildingBook.value = true
+  statusMessage.value = null
+  try {
+    const res: any = await BuildPersonaOpeningBook(selectedPersona.value.id, buildBookColor.value, 24)
+    await Promise.all([loadPersonas(), loadBooksAndRepertoires()])
+    const updated = personasList.value.find(p => p.id === selectedPersona.value?.id)
+    if (updated) selectPersona(updated, true)
+    const outPath = typeof res === 'string' ? res : editBookPath.value
+    statusMessage.value = {
+      type: 'success',
+      text: `Compiled Persona Polyglot Opening Book (.bin): ${outPath ? outPath.split('/').pop() : 'saved'} and assigned to "${selectedPersona.value.displayName}"!`
+    }
+  } catch (err: any) {
+    statusMessage.value = { type: 'error', text: `Could not build persona book: ${err?.message || err}` }
+  } finally {
+    isBuildingBook.value = false
+  }
+}
+
+async function handleBrowseBookFile() {
+  try {
+    const asset: any = await SelectAndImportWorkstationAsset('opening_books')
+    const p = asset?.path || asset?.storedPath
+    if (!p) return
+    editBookPath.value = p
+    await loadBooksAndRepertoires()
+    if (selectedPersona.value?.id) {
+      await handleAssignBooks()
+    }
+  } catch (err: any) {
+    statusMessage.value = { type: 'error', text: `Could not browse book: ${err?.message || err}` }
+  }
+}
+
+async function handleAssignBooks() {
+  if (!selectedPersona.value?.id) return
+  try {
+    const updated = await AssignPersonaBooks(
+      selectedPersona.value.id,
+      editBookPath.value,
+      editAntiBookPath.value,
+      editWhiteRepId.value,
+      editBlackRepId.value
+    )
+    await loadPersonas()
+    if (updated) selectPersona(updated, true)
+    statusMessage.value = { type: 'success', text: `Updated opening books & repertoires for "${selectedPersona.value.displayName}".` }
+  } catch (err: any) {
+    statusMessage.value = { type: 'error', text: `Failed to assign books: ${err?.message || err}` }
+  }
+}
+
+function formatShortBookName(path?: string): string {
+  if (!path) return 'None'
+  const parts = path.replace(/\\/g, '/').split('/')
+  return parts[parts.length - 1] || path
+}
 </script>
 
 <template>
@@ -446,15 +548,24 @@ function handleExploitPersona() {
                 {{ p.displayName.charAt(0).toUpperCase() }}
               </div>
               <div class="min-w-0 flex-1">
-                <div class="flex items-center justify-between">
+                <div class="flex items-center justify-between gap-1">
                   <span class="font-bold text-xs text-zinc-200 truncate">{{ p.displayName }}</span>
-                  <span v-if="p.title" class="text-[10px] px-1 rounded bg-zinc-800 text-zinc-400 font-mono">
-                    {{ p.title }}
-                  </span>
+                  <div class="flex items-center gap-1 shrink-0">
+                    <span
+                      v-if="(p as any).isUserProfile"
+                      class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold"
+                    >
+                      YOU
+                    </span>
+                    <span v-if="p.title" class="text-[10px] px-1 rounded bg-zinc-800 text-zinc-400 font-mono">
+                      {{ p.title }}
+                    </span>
+                  </div>
                 </div>
                 <div class="flex items-center gap-2 text-[10px] text-zinc-400 mt-0.5">
                   <span>{{ p.identifiers?.length || 0 }} aliases</span>
                   <span v-if="p.estimatedElo" class="text-emerald-400 font-mono">~{{ p.estimatedElo }}</span>
+                  <span v-if="(p as any).bookPath" class="text-purple-400 font-mono truncate">📘 Book</span>
                 </div>
               </div>
             </div>
@@ -720,6 +831,109 @@ function handleExploitPersona() {
                   <Globe class="w-3.5 h-3.5 shrink-0" :class="{ 'animate-spin': isFetchingOnline }" />
                   <span class="truncate">{{ isFetchingOnline ? 'Fetching...' : 'Fetch Online Games' }}</span>
                 </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 3B: Persona Opening Book (.bin) & Assigned Repertoires -->
+          <div v-if="selectedPersona.id" class="bg-zinc-950/70 border border-purple-500/30 rounded-xl p-4 space-y-3">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <h3 class="text-xs font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
+                <BookOpen class="w-3.5 h-3.5 text-purple-400" />
+                <span>Persona Opening Book (.bin) &amp; Assigned Repertoires</span>
+              </h3>
+              <span class="text-[11px] text-zinc-400">
+                Used automatically when sparring against this Persona or exploring their opening tree
+              </span>
+            </div>
+
+            <!-- 1-Click Compile Persona's Own Polyglot Book -->
+            <div class="p-3 bg-zinc-900/80 border border-zinc-800 rounded-lg flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div>
+                <div class="font-bold text-zinc-200">Compile Persona's Own Polyglot Book (.bin)</div>
+                <div class="text-[11px] text-zinc-400">
+                  Extracts all opening moves played by this persona into <code class="text-purple-300">~/.local/share/newscid/books/opening/</code>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <select
+                  v-model="buildBookColor"
+                  class="bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs text-zinc-200"
+                >
+                  <option value="both">Both Colors</option>
+                  <option value="white">White Only</option>
+                  <option value="black">Black Only</option>
+                </select>
+                <button
+                  class="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                  :disabled="isBuildingBook"
+                  @click="handleBuildPersonaBook"
+                >
+                  <BookOpen class="w-3.5 h-3.5" :class="{ 'animate-spin': isBuildingBook }" />
+                  <span>{{ isBuildingBook ? 'Compiling...' : 'Compile Persona Book (.bin)' }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Assign Book (.bin) or Repertoire -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
+              <div class="space-y-1">
+                <label class="text-[11px] font-semibold text-zinc-400 block">Assigned Polyglot Book (.bin)</label>
+                <div class="flex items-center gap-1">
+                  <select
+                    v-model="editBookPath"
+                    class="flex-1 min-w-0 bg-zinc-900 border border-zinc-700/80 rounded-lg px-2 py-1.5 text-xs text-zinc-200"
+                    @change="handleAssignBooks"
+                  >
+                    <option value="">-- None --</option>
+                    <option v-for="b in availableBooks" :key="b" :value="b">
+                      📘 {{ formatShortBookName(b) }}
+                    </option>
+                  </select>
+                  <button
+                    class="px-2 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 text-[11px] shrink-0 cursor-pointer"
+                    title="Browse for a .bin Polyglot book file"
+                    @click="handleBrowseBookFile"
+                  >
+                    ...
+                  </button>
+                </div>
+              </div>
+
+              <div class="space-y-1">
+                <label class="text-[11px] font-semibold text-zinc-400 block">Assigned White Repertoire</label>
+                <select
+                  v-model="editWhiteRepId"
+                  class="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg px-2 py-1.5 text-xs text-zinc-200"
+                  @change="handleAssignBooks"
+                >
+                  <option value="">-- None --</option>
+                  <option
+                    v-for="r in repertoiresList.filter((x: any) => !x.color || x.color === 'white')"
+                    :key="r.id"
+                    :value="r.id"
+                  >
+                    ♔ {{ r.name }} ({{ Object.keys(r.nodes || {}).length }} pos)
+                  </option>
+                </select>
+              </div>
+
+              <div class="space-y-1">
+                <label class="text-[11px] font-semibold text-zinc-400 block">Assigned Black Repertoire</label>
+                <select
+                  v-model="editBlackRepId"
+                  class="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg px-2 py-1.5 text-xs text-zinc-200"
+                  @change="handleAssignBooks"
+                >
+                  <option value="">-- None --</option>
+                  <option
+                    v-for="r in repertoiresList.filter((x: any) => !x.color || x.color === 'black')"
+                    :key="r.id"
+                    :value="r.id"
+                  >
+                    ♚ {{ r.name }} ({{ Object.keys(r.nodes || {}).length }} pos)
+                  </option>
+                </select>
               </div>
             </div>
           </div>

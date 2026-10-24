@@ -50,6 +50,7 @@ import FairPlayModal from './components/FairPlayModal.vue'
 import CyclicalDrillModal from './components/CyclicalDrillModal.vue'
 import WorkstationManagerModal from './components/WorkstationManagerModal.vue'
 import StandardImportModal from './components/StandardImportModal.vue'
+import GettingStartedWizardModal from './components/GettingStartedWizardModal.vue'
 import FloatingPanel from './components/FloatingPanel.vue'
 import LivePortalPanel from './components/LivePortalPanel.vue'
 import DatabaseHubPanel, { type DatabaseRolesStatusView } from './components/DatabaseHubPanel.vue'
@@ -150,6 +151,7 @@ import {
   SetDatabaseWritePolicy,
   EnsurePersonalUserDatabase,
   StartLivePortalWatcher,
+  GetUserProfileStatus,
 } from '../wailsjs/go/main/App'
 import { EventsOn, EventsOff, ClipboardSetText, ClipboardGetText, BrowserOpenURL } from '../wailsjs/runtime/runtime'
 
@@ -379,6 +381,9 @@ const preferencesSection = ref('databases')
 const antiPersonaTargetId = ref<string>('')
 const antiPersonaTargetName = ref<string>('')
 const showOpeningTreeModal = ref(false)
+const showGettingStartedWizardModal = ref(false)
+const userProfileStatus = ref<any>(null)
+const onboardingBannerDismissed = ref(false)
 
 const activeDbWritePolicy = computed(() => {
   const fromInfo = (dbInfo.value as any)?.writePolicy
@@ -504,6 +509,36 @@ async function refreshDatabaseRolesStatus() {
   } catch {
     // Ignore in test/mock environments
   }
+}
+
+async function refreshUserProfileStatus() {
+  try {
+    if (typeof GetUserProfileStatus === 'function') {
+      const status = await GetUserProfileStatus()
+      if (status) {
+        userProfileStatus.value = status
+      }
+    }
+  } catch {
+    // Ignore in test/mock environments
+  }
+}
+
+async function handleProfileWizardUpdated(status: any) {
+  if (status) {
+    userProfileStatus.value = status
+  }
+  try {
+    const prefs = await GetAppPreferences()
+    if (prefs) {
+      appPreferences.value = prefs as AppPreferencesModel
+    }
+  } catch {
+    // ignore
+  }
+  await handleRefreshDiscoveredDatabases()
+  await refreshGames()
+  fetchOpeningTree(currentFEN.value)
 }
 
 async function publishCurrentWorkspaceState() {
@@ -1445,6 +1480,7 @@ onMounted(async () => {
       }
     }
     await refreshDatabaseRolesStatus()
+    await refreshUserProfileStatus()
 
     if (windowStartupMode.value.initialFen) {
       await updateBoardState(windowStartupMode.value.initialFen)
@@ -1890,7 +1926,8 @@ function handleKeydown(e: KeyboardEvent) {
     showCyclicalDrillModal.value ||
     showWorkstationManagerModal.value ||
     showPreferencesModal.value ||
-    showImportModal.value
+    showImportModal.value ||
+    showGettingStartedWizardModal.value
   ) {
     return
   }
@@ -2928,6 +2965,14 @@ async function handleStandardizeNames() {
 // Universal Command Palette & Spotlight Commands List
 const commandPaletteItems = computed<CommandItem[]>(() => [
   {
+    id: 'getting-started-wizard',
+    title: 'Getting Started & Player Setup Wizard',
+    subtitle: 'Set up your Player Profile, Home Database (My_Games), Focus Opening Books, Persona Books & Daily Workflows',
+    icon: 'sparkles',
+    category: 'Actions',
+    action: () => { showGettingStartedWizardModal.value = true },
+  },
+  {
     id: 'cmd-palette',
     title: 'Command Palette',
     subtitle: 'Search all commands, study tools, and database features',
@@ -3591,6 +3636,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           @load-pgn-to-board="handleLoadPgnOnBoardFromModal"
         />
 
+        <!-- DatabaseHubPanel in Mode A -->
         <DatabaseHubPanel
           v-else-if="windowStartupMode.panelId === 'db-roles'"
           :roles-status="dbRolesStatus"
@@ -3614,6 +3660,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           @open-workstation-manager="openWorkstationManagerModal"
           @open-standard-import="showImportModal = true"
           @ensure-user-d-b="handleEnsurePersonalUserDatabase"
+          @open-getting-started-wizard="showGettingStartedWizardModal = true"
         />
       </div>
     </div>
@@ -3700,6 +3747,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         :show-eval-bar="showEvalBar"
         :zen-mode="zenMode"
         :compact-layout="effectiveCompact"
+        :player-display-name="userProfileStatus?.displayName || (appPreferences as any).playerDisplayName"
+        @open-getting-started-wizard="showGettingStartedWizardModal = true"
         @toggle-sound="toggleSound"
         @toggle-blindfold="toggleBlindfold"
         @toggle-threat-mode="toggleThreatMode"
@@ -3767,6 +3816,36 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         @launch-portal-window="handleLaunchPortalWindow"
         @open-preferences="openPreferencesModal"
       />
+
+      <!-- Non-Intrusive First-Time Player Onboarding Callout Banner -->
+      <div
+        v-if="!zenMode && !onboardingBannerDismissed && userProfileStatus && !userProfileStatus.onboardingCompleted && !userProfileStatus.displayName"
+        data-testid="onboarding-callout-banner"
+        class="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-gradient-to-r from-emerald-950/80 via-zinc-900 to-cyan-950/70 border-b border-emerald-500/30 text-xs shrink-0"
+      >
+        <div class="flex items-center gap-2 min-w-0">
+          <Sparkles class="w-4 h-4 text-emerald-400 shrink-0" />
+          <span class="text-zinc-200 truncate">
+            <strong>New to NewScid?</strong> Set up your Player Profile, Home Database (<code class="text-amber-300">My_Games</code>), Focus Opening Book, and Persona Books in 60 seconds.
+          </span>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button
+            data-testid="launch-wizard-banner-btn"
+            class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] cursor-pointer transition-colors"
+            @click="showGettingStartedWizardModal = true"
+          >
+            🚀 Launch Getting Started Wizard
+          </button>
+          <button
+            class="text-zinc-400 hover:text-zinc-200 px-1.5 py-0.5 text-[11px] cursor-pointer"
+            title="Dismiss banner"
+            @click="onboardingBannerDismissed = true"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
 
       <!-- Multi-Game Tabbed Workspace Strip (Auto-hidden on compact screens when only 1 game tab is open) -->
       <div
@@ -4306,6 +4385,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
                 :db-name="dbRolesStatus?.useRefForTree && dbRolesStatus?.referenceDbName ? `${dbRolesStatus.referenceDbName} (Reference)` : dbInfo?.name"
                 :eco-code="gameTags.ECO"
                 :opening-name="gameTags.Opening || gameTags.Event"
+                :focus-book-path="userProfileStatus?.focusPolyglotBookPath || (appPreferences as any).focusPolyglotBookPath"
                 :discovered-databases="discoveredDatabases"
                 @play-move="handleMove"
                 @refresh="fetchOpeningTree(currentFEN)"
@@ -4389,6 +4469,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
                 @open-workstation-manager="openWorkstationManagerModal"
                 @open-standard-import="showImportModal = true"
                 @ensure-user-d-b="handleEnsurePersonalUserDatabase"
+                @open-getting-started-wizard="showGettingStartedWizardModal = true"
               />
             </div>
 
@@ -5144,6 +5225,20 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       @open-database="(p) => { showWorkstationManagerModal = false; handleOpenDiscoveredBase(p) }"
       @refresh-databases="handleRefreshDiscoveredDatabases"
       @factory-reset-completed="handleFactoryResetCompleted"
+    />
+
+    <!-- Getting Started & Player Profile Setup Wizard Modal -->
+    <GettingStartedWizardModal
+      v-if="showGettingStartedWizardModal"
+      :discovered-databases="discoveredDatabases"
+      @close="showGettingStartedWizardModal = false"
+      @profile-updated="handleProfileWizardUpdated"
+      @open-home-d-b="() => { showGettingStartedWizardModal = false; handleOpenDefaultDatabase() }"
+      @open-opening-trainer="() => { showGettingStartedWizardModal = false; showOpeningTrainerModal = true }"
+      @open-portal="(platform) => { showGettingStartedWizardModal = false; openPortalView() }"
+      @open-simulate-player="(p) => { showGettingStartedWizardModal = false; selectedSimulationPersona = p; showPlayerSimulationModal = true }"
+      @open-personas="() => { showGettingStartedWizardModal = false; showPersonaModal = true }"
+      @open-mega-catalog="() => { showGettingStartedWizardModal = false; showMegaDatabaseModal = true }"
     />
   </div>
 </template>

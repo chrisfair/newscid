@@ -845,3 +845,28 @@ export function VerifyDatabase() {
 export function VerifyRepertoireMove(arg1, arg2, arg3) {
   return window['go']['main']['App']['VerifyRepertoireMove'](arg1, arg2, arg3);
 }
+
+export function GetUserProfileStatus() {
+  return window['go']['main']['App']['GetUserProfileStatus']();
+}
+
+export function SaveUserProfileSetup(arg1) {
+  return window['go']['main']['App']['SaveUserProfileSetup'](arg1);
+}
+
+export function SyncUserHomeGames(arg1) {
+  return window['go']['main']['App']['SyncUserHomeGames'](arg1);
+}
+
+export function BuildPersonaOpeningBook(arg1, arg2, arg3) {
+  return window['go']['main']['App']['BuildPersonaOpeningBook'](arg1, arg2, arg3);
+}
+
+export function AssignPersonaBooks(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['AssignPersonaBooks'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function CompileRepertoireToPolyglotBook(arg1, arg2) {
+  return window['go']['main']['App']['CompileRepertoireToPolyglotBook'](arg1, arg2);
+}
+

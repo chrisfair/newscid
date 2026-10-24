@@ -19,19 +19,24 @@ import (
 // Persona represents a unified user or player identity mapping together multiple
 // database designators, usernames, and tournament name formats.
 type Persona struct {
-	ID               string   `json:"id"`
-	DisplayName      string   `json:"displayName"`                // e.g. "John Smith"
-	Identifiers      []string `json:"identifiers"`                // e.g. ["Smith, John", "JohnSmith", "JohnSmithChess"]
-	DatabasePath     string   `json:"databasePath"`               // Dedicated .si4 database path for this persona
-	Title            string   `json:"title,omitempty"`            // e.g. "GM", "IM", "FM", "NM", "Club Player"
-	Bio              string   `json:"bio,omitempty"`              // Description or personal notes
-	AvatarColor      string   `json:"avatarColor,omitempty"`      // CSS color or theme
-	EstimatedElo     int      `json:"estimatedElo,omitempty"`     // User-specified or auto-calculated Elo
-	ChessComUsername string   `json:"chessComUsername,omitempty"` // Linked Chess.com handle
-	LichessUsername  string   `json:"lichessUsername,omitempty"`  // Linked Lichess handle
-	FideID           string   `json:"fideId,omitempty"`           // Linked FIDE ID
-	CreatedAt        int64    `json:"createdAt"`                  // Unix ms
-	UpdatedAt        int64    `json:"updatedAt"`                  // Unix ms
+	ID                string   `json:"id"`
+	DisplayName       string   `json:"displayName"`                 // e.g. "John Smith"
+	Identifiers       []string `json:"identifiers"`                 // e.g. ["Smith, John", "JohnSmith", "JohnSmithChess"]
+	DatabasePath      string   `json:"databasePath"`                // Dedicated .si4 database path for this persona
+	BookPath          string   `json:"bookPath,omitempty"`          // Assigned or compiled Polyglot (.bin) opening book for this persona
+	AntiBookPath      string   `json:"antiBookPath,omitempty"`      // Generated Anti-Persona (.bin) counter-book path
+	WhiteRepertoireID string   `json:"whiteRepertoireId,omitempty"` // Assigned White repertoire ID
+	BlackRepertoireID string   `json:"blackRepertoireId,omitempty"` // Assigned Black repertoire ID
+	IsUserProfile     bool     `json:"isUserProfile,omitempty"`     // True when this persona represents the primary local user
+	Title             string   `json:"title,omitempty"`             // e.g. "GM", "IM", "FM", "NM", "Club Player"
+	Bio               string   `json:"bio,omitempty"`               // Description or personal notes
+	AvatarColor       string   `json:"avatarColor,omitempty"`       // CSS color or theme
+	EstimatedElo      int      `json:"estimatedElo,omitempty"`      // User-specified or auto-calculated Elo
+	ChessComUsername  string   `json:"chessComUsername,omitempty"`  // Linked Chess.com handle
+	LichessUsername   string   `json:"lichessUsername,omitempty"`   // Linked Lichess handle
+	FideID            string   `json:"fideId,omitempty"`            // Linked FIDE ID
+	CreatedAt         int64    `json:"createdAt"`                   // Unix ms
+	UpdatedAt         int64    `json:"updatedAt"`                   // Unix ms
 }
 
 // AggregateResult summarizes the result of extracting/merging games into the persona's dedicated database.
@@ -272,20 +277,53 @@ func (pm *PersonaManager) SavePersona(p *Persona) (*Persona, error) {
 		createdAt = p.CreatedAt
 	}
 
+	bookPath := strings.TrimSpace(p.BookPath)
+	if bookPath == "" && exists {
+		bookPath = existing.BookPath
+	}
+	antiBookPath := strings.TrimSpace(p.AntiBookPath)
+	if antiBookPath == "" && exists {
+		antiBookPath = existing.AntiBookPath
+	}
+	whiteRepID := strings.TrimSpace(p.WhiteRepertoireID)
+	if whiteRepID == "" && exists {
+		whiteRepID = existing.WhiteRepertoireID
+	}
+	blackRepID := strings.TrimSpace(p.BlackRepertoireID)
+	if blackRepID == "" && exists {
+		blackRepID = existing.BlackRepertoireID
+	}
+	isUserProfile := p.IsUserProfile
+	if !isUserProfile && exists && existing.IsUserProfile {
+		isUserProfile = true
+	}
+	if isUserProfile {
+		for otherID, other := range pm.personas {
+			if otherID != id && other != nil && other.IsUserProfile {
+				other.IsUserProfile = false
+			}
+		}
+	}
+
 	stored := &Persona{
-		ID:               id,
-		DisplayName:      cleanDisplayName,
-		Identifiers:      cleanIdentifiers,
-		DatabasePath:     strings.TrimSpace(p.DatabasePath),
-		Title:            strings.TrimSpace(p.Title),
-		Bio:              strings.TrimSpace(p.Bio),
-		AvatarColor:      avatarColor,
-		EstimatedElo:     p.EstimatedElo,
-		ChessComUsername: cleanChessCom,
-		LichessUsername:  cleanLichess,
-		FideID:           strings.TrimSpace(p.FideID),
-		CreatedAt:        createdAt,
-		UpdatedAt:        now,
+		ID:                id,
+		DisplayName:       cleanDisplayName,
+		Identifiers:       cleanIdentifiers,
+		DatabasePath:      strings.TrimSpace(p.DatabasePath),
+		BookPath:          bookPath,
+		AntiBookPath:      antiBookPath,
+		WhiteRepertoireID: whiteRepID,
+		BlackRepertoireID: blackRepID,
+		IsUserProfile:     isUserProfile,
+		Title:             strings.TrimSpace(p.Title),
+		Bio:               strings.TrimSpace(p.Bio),
+		AvatarColor:       avatarColor,
+		EstimatedElo:      p.EstimatedElo,
+		ChessComUsername:  cleanChessCom,
+		LichessUsername:   cleanLichess,
+		FideID:            strings.TrimSpace(p.FideID),
+		CreatedAt:         createdAt,
+		UpdatedAt:         now,
 	}
 
 	pm.personas[id] = stored
