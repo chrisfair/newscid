@@ -10,7 +10,7 @@ echo "==> Pushing NewScid v${VERSION} to AUR (${AUR_REPO})..."
 # Ensure sha256sums and .SRCINFO accurately match the published tag tarball
 echo "==> Verifying source checksums for v${VERSION}..."
 if command -v updpkgsums >/dev/null 2>&1; then
-    (cd packaging/pacman && updpkgsums)
+    (cd packaging/pacman && updpkgsums && rm -rf src pkg newscid-*.tar.gz)
 else
     TAG_URL="https://github.com/chrisfair/newscid/archive/refs/tags/v${VERSION}.tar.gz"
     SUM=$(curl -sL "${TAG_URL}" | sha256sum | awk '{print $1}')

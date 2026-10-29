@@ -68,9 +68,15 @@ if [ -f "${PKG_VERSION_FILE}" ]; then
     sed -i -E "s/Version *= *\"[^\"]+\"/Version = \"${NEW_VERSION}\"/" "${PKG_VERSION_FILE}"
 fi
 
-# 4. Update frontend/package.json
+# 4. Update frontend/package.json, package-lock.json, and package.json.md5
 if [ -f "${FRONTEND_PKG}" ]; then
     sed -i -E "s/\"version\": *\"[^\"]+\"/\"version\": \"${NEW_VERSION}\"/" "${FRONTEND_PKG}"
+    if [ -f "frontend/package-lock.json" ]; then
+        sed -i -E "1,15s/\"version\": *\"[^\"]+\"/\"version\": \"${NEW_VERSION}\"/" "frontend/package-lock.json"
+    fi
+    if [ -f "frontend/package.json.md5" ]; then
+        md5sum "${FRONTEND_PKG}" | awk '{printf "%s", $1}' > "frontend/package.json.md5"
+    fi
 fi
 
 # 5. Update packaging metadata files

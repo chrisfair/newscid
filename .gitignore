@@ -5,6 +5,10 @@ build/staging/
 build/.cache/
 /newscid
 coverage.out
+packaging/pacman/*.tar.gz
+packaging/pacman/*.pkg.tar.*
+packaging/pacman/src/
+packaging/pacman/pkg/
 
 # Android Build Artifacts
 packaging/android/.gradle/
