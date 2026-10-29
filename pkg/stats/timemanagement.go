@@ -772,22 +772,21 @@ func formatSeconds(sec float64) string {
 }
 
 func generateRecommendations(report *GameTimeManagementReport) {
-	// White recommendations
 	if report.WhiteStats.TankBlunderCount > 0 {
 		report.Recommendations = append(report.Recommendations,
-			fmt.Sprintf("⚠️ White suffered %d tank blunders (deep thinking episodes that still resulted in mistakes). Practice identifying 'candidate move exhaustion' when thinking beyond 3 minutes.", report.WhiteStats.TankBlunderCount),
+			fmt.Sprintf("White suffered %d tank blunders (deep thinking episodes that still resulted in mistakes). Practice identifying candidate move exhaustion when thinking beyond 3 minutes.", report.WhiteStats.TankBlunderCount),
 		)
 	}
 
 	if report.WhiteStats.PanicMoveCount > 0 {
 		report.Recommendations = append(report.Recommendations,
-			fmt.Sprintf("⚡ White played %d panic moves (<5s with severe drops). Maintain a 10-second minimum 'blunder check' breath in critical positions.", report.WhiteStats.PanicMoveCount),
+			fmt.Sprintf("White played %d panic moves (<5s with severe drops). Maintain a 10-second minimum blunder check in critical positions.", report.WhiteStats.PanicMoveCount),
 		)
 	}
 
 	if report.ScrambleSummary.WhiteEnteredScramblePly > 0 {
 		report.Recommendations = append(report.Recommendations,
-			fmt.Sprintf("⏱️ White entered severe time trouble at ply %d (%s moves in zeitnot, %d blunders). Aim to bank at least 2 minutes for the middlegame transition.",
+			fmt.Sprintf("White entered severe time trouble at ply %d (%s moves in zeitnot, %d blunders). Aim to bank at least 2 minutes for the middlegame transition.",
 				report.ScrambleSummary.WhiteEnteredScramblePly,
 				formatSeconds(float64(report.ScrambleSummary.WhiteScrambleMoves)),
 				report.ScrambleSummary.WhiteScrambleBlunders,
@@ -795,22 +794,21 @@ func generateRecommendations(report *GameTimeManagementReport) {
 		)
 	}
 
-	// Black recommendations
 	if report.BlackStats.TankBlunderCount > 0 {
 		report.Recommendations = append(report.Recommendations,
-			fmt.Sprintf("⚠️ Black suffered %d tank blunders. Long tanks often correlate with emotional fatigue or trying to find wins in dry positions.", report.BlackStats.TankBlunderCount),
+			fmt.Sprintf("Black suffered %d tank blunders. Long tanks often correlate with fatigue or trying to force wins in equal positions.", report.BlackStats.TankBlunderCount),
 		)
 	}
 
 	if report.BlackStats.PanicMoveCount > 0 {
 		report.Recommendations = append(report.Recommendations,
-			fmt.Sprintf("⚡ Black rushed %d critical decisions under 5 seconds. Resist the urge to blitz back instantly when under pressure.", report.BlackStats.PanicMoveCount),
+			fmt.Sprintf("Black rushed %d critical decisions under 5 seconds. Avoid playing back immediately when under pressure.", report.BlackStats.PanicMoveCount),
 		)
 	}
 
 	if report.ScrambleSummary.BlackEnteredScramblePly > 0 {
 		report.Recommendations = append(report.Recommendations,
-			fmt.Sprintf("⏱️ Black fought in time trouble for %d moves with %d errors. Shift to solid, prophylactic moves early to avoid clock bleed.",
+			fmt.Sprintf("Black fought in time trouble for %d moves with %d errors. Shift to solid, prophylactic moves early to avoid clock bleed.",
 				report.ScrambleSummary.BlackScrambleMoves,
 				report.ScrambleSummary.BlackScrambleBlunders,
 			),
@@ -819,7 +817,7 @@ func generateRecommendations(report *GameTimeManagementReport) {
 
 	if len(report.Recommendations) == 0 {
 		report.Recommendations = append(report.Recommendations,
-			"✅ Clean clock discipline demonstrated by both sides! Moves were paced evenly with no chronic zeitnot or impulsive blunder bursts.",
+			"Clean clock discipline demonstrated by both sides. Moves were paced evenly with no chronic zeitnot or impulsive blunder bursts.",
 		)
 	}
 }

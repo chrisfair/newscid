@@ -100,7 +100,7 @@ describe('GettingStartedWizardModal.vue', () => {
 
     await flushPromises()
 
-    // Step 1: Player Profile
+    // Player Profile
     expect(wrapper.text()).toContain('Why Define Your Player Identity?')
     const nameInput = wrapper.find('[data-testid="wizard-display-name-input"]')
     expect((nameInput.element as HTMLInputElement).value).toBe('Christopher Fair')
@@ -118,7 +118,7 @@ describe('GettingStartedWizardModal.vue', () => {
 
     expect(AppAPI.SaveUserProfileSetup).toHaveBeenCalledTimes(1)
 
-    // Step 2: Home Database & Migrating Games
+    // Home Database & Migrating Games
     expect(wrapper.text()).toContain('1. Home DB (My_Games)')
     expect(wrapper.text()).toContain('42 games')
 

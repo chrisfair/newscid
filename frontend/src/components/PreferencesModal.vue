@@ -418,7 +418,7 @@ async function copyHyprlandSnippet() {
                     class="px-3 py-1.5 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 font-semibold cursor-pointer transition-colors"
                     @click="localPrefs.defaultDatabasePath = rolesStatus.activeDb.basePath; emit('setDefaultDB', rolesStatus.activeDb.basePath); handleSave()"
                   >
-                    ⭐ Set Current Active DB ({{ rolesStatus.activeDb.name }}) as Default
+                    Set Current Active DB ({{ rolesStatus.activeDb.name }}) as Default
                   </button>
                   <button
                     v-if="localPrefs.defaultDatabasePath"
@@ -560,7 +560,7 @@ async function copyHyprlandSnippet() {
                   class="px-2.5 py-1 rounded bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-500/50 text-[11px] font-bold cursor-pointer transition-colors shrink-0"
                   @click="emit('cancelUpdateLocal')"
                 >
-                  🛑 Cancel
+                  Cancel
                 </button>
               </div>
             </div>

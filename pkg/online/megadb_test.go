@@ -237,7 +237,7 @@ func TestMegaDatabase_FetchLichessFeedAndCatalogImport(t *testing.T) {
 		}, nil
 	})
 
-	// 1. FetchLichessFeed with default feedType and limit
+	// FetchLichessFeed with default feedType and limit
 	urls, err := client.FetchLichessFeed(context.Background(), "other", 2)
 	require.NoError(t, err)
 	assert.Len(t, urls, 2)
@@ -246,11 +246,11 @@ func TestMegaDatabase_FetchLichessFeedAndCatalogImport(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, urlsDefaultLimit, 3)
 
-	// 2. FetchLichessFeed non-200 error
+	// FetchLichessFeed non-200 error
 	_, err = client.FetchLichessFeed(context.Background(), "standard", 5)
 	assert.Error(t, err)
 
-	// 3. DownloadAndImport using catalog SourceID ("lichess-open-2026-09" with MaxGames=0 -> defaults to 25000)
+	// DownloadAndImport using catalog SourceID ("lichess-open-2026-09" with MaxGames=0 -> defaults to 25000)
 	tmpDir := t.TempDir()
 	db := scid.NewDatabase()
 	require.NoError(t, db.Create(filepath.Join(tmpDir, "cat_db"), "Catalog DB"))
@@ -276,7 +276,7 @@ func TestMegaDatabase_7zPGNAnd7zNativeSI4(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
-	// 1. Build a .7z archive containing games.pgn and readme.txt
+	// Build a .7z archive containing games.pgn and readme.txt
 	srcPgnDir := filepath.Join(tmpDir, "src_pgn")
 	require.NoError(t, os.MkdirAll(srcPgnDir, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(srcPgnDir, "games.pgn"), []byte(sampleMegaPGN), 0644))
@@ -288,7 +288,7 @@ func TestMegaDatabase_7zPGNAnd7zNativeSI4(t *testing.T) {
 	sevenZipPGNBytes, err := os.ReadFile(sevenZipPGN)
 	require.NoError(t, err)
 
-	// 2. Build a .7z archive containing a native Scid database (.si4, .sn4, .sg4) and readme.txt
+	// Build a .7z archive containing a native Scid database (.si4, .sn4, .sg4) and readme.txt
 	srcSi4Dir := filepath.Join(tmpDir, "src_si4")
 	require.NoError(t, os.MkdirAll(srcSi4Dir, 0755))
 	srcDB := scid.NewDatabase()
@@ -375,7 +375,7 @@ func TestMegaDatabase_ErrorsAndMinEloHelpers(t *testing.T) {
 	assert.True(t, gameMeetsMinElo(&chess.Game{Tags: map[string]string{"WhiteElo": "2000", "BlackElo": "2450"}}, 2400))
 	assert.False(t, gameMeetsMinElo(&chess.Game{Tags: map[string]string{"WhiteElo": "2000", "BlackElo": "2100"}}, 2400))
 
-	// 2. Error paths in DownloadAndImport, extractAndImportZip, extractAndImport7zPGN, extract7zNativeSI4
+	// Error paths in DownloadAndImport, extractAndImportZip, extractAndImport7zPGN, extract7zNativeSI4
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "404") {
 			w.WriteHeader(http.StatusNotFound)

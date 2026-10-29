@@ -57,7 +57,7 @@ func TestGenerateReport(t *testing.T) {
 }
 
 func TestGenerateReport_Comprehensive(t *testing.T) {
-	// 1. Empty games list
+	// Empty games list
 	emptyReport := GenerateReport("Carlsen", nil)
 	if emptyReport.TotalGames != 0 {
 		t.Errorf("expected 0 games, got %d", emptyReport.TotalGames)
@@ -66,7 +66,7 @@ func TestGenerateReport_Comprehensive(t *testing.T) {
 		t.Errorf("expected insufficient games recommendation, got %v", emptyReport.RepertoireRecommendations)
 	}
 
-	// 2. Diverse games with nil entries, non-matching players, empty ECO, losses, draws, >3 lines, and padded results
+	// Diverse games with nil entries, non-matching players, empty ECO, losses, draws, >3 lines, and padded results
 	games := []*scid.GameSummary{
 		nil,
 		{ID: 1, White: "Other1", Black: "Other2", Result: "1-0", ECO: "A00"},

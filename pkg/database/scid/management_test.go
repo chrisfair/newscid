@@ -240,7 +240,7 @@ func TestBuildFocusedSubDatabase(t *testing.T) {
 `
 	require.NoError(t, os.WriteFile(src2PGN, []byte(pgn2), 0o644))
 
-	// 1. Build sub-database for Bobby Fischer in Sicilian (B80-B99) with 1.e4 c5 2.Nf3 and deduplication
+	// Build sub-database for Bobby Fischer in Sicilian (B80-B99) with 1.e4 c5 2.Nf3 and deduplication
 	var progressCalls int
 	outDir := filepath.Join(tmpDir, "output")
 	res, err := BuildFocusedSubDatabase(SubDatabaseFilter{
@@ -272,7 +272,7 @@ func TestBuildFocusedSubDatabase(t *testing.T) {
 	assert.Equal(t, 3, builtDB.NumGames())
 	require.NoError(t, builtDB.Close())
 
-	// 2. Test PlayerColor = "black", UCI opening moves, explicit TargetBasePath, and MaxGames = 1
+	// Test PlayerColor = "black", UCI opening moves, explicit TargetBasePath, and MaxGames = 1
 	explicitTarget := filepath.Join(tmpDir, "explicit_target.si4")
 	res2, err := BuildFocusedSubDatabase(SubDatabaseFilter{
 		TargetBasePath:  explicitTarget,
@@ -286,7 +286,7 @@ func TestBuildFocusedSubDatabase(t *testing.T) {
 	assert.Equal(t, 1, res2.GamesMatched)
 	assert.Equal(t, "explicit_target", res2.TargetName)
 
-	// 3. Test PlayerColor = "white" and MaxGames reached across PGN
+	// Test PlayerColor = "white" and MaxGames reached across PGN
 	res3, err := BuildFocusedSubDatabase(SubDatabaseFilter{
 		SourceBasePaths: []string{src2PGN, src1Base},
 		Players:         []string{"Fischer"},

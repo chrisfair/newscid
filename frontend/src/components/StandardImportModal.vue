@@ -174,7 +174,7 @@ onUnmounted(() => {
                 <Lock class="w-3.5 h-3.5 text-rose-400" />
                 <span>1. Original Archive</span>
               </span>
-              <span class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-rose-950/70 text-rose-300 border border-rose-700/40">🔒 Locked</span>
+              <span class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-rose-950/70 text-rose-300 border border-rose-700/40">Locked</span>
             </div>
             <p class="text-[11px] text-zinc-400 leading-relaxed">
               Untouched copy of the imported database or PGN archive. Locked so your original source is never contaminated by manual edits.
@@ -187,7 +187,7 @@ onUnmounted(() => {
                 <BookOpen class="w-3.5 h-3.5 text-cyan-400" />
                 <span>2. Master Reference</span>
               </span>
-              <span class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-cyan-950/70 text-cyan-300 border border-cyan-700/40">🔄 Sync-Only</span>
+              <span class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-cyan-950/70 text-cyan-300 border border-cyan-700/40">Sync-Only</span>
             </div>
             <p class="text-[11px] text-zinc-400 leading-relaxed">
               Unified, deduplicated encyclopedia built from your Original Archives. Queried in the background by the <strong>Opening Tree</strong> &amp; <strong>ECO Explorer</strong>.
@@ -200,7 +200,7 @@ onUnmounted(() => {
                 <UserCheck class="w-3.5 h-3.5 text-amber-400" />
                 <span>3. Personal User DB</span>
               </span>
-              <span class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-emerald-950/70 text-emerald-300 border border-emerald-700/40">🔓 Editable</span>
+              <span class="px-1.5 py-0.2 rounded text-[9px] font-mono bg-emerald-950/70 text-emerald-300 border border-emerald-700/40">Editable</span>
             </div>
             <p class="text-[11px] text-zinc-400 leading-relaxed">
               <strong>Your personal chess life</strong> (your own games, repertoire notes &amp; annotations). Opened at startup and powers Cyclical Drill &amp; Blunder Vault.
@@ -208,7 +208,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Step 1: Choose How to Import -->
+        <!-- Choose How to Import -->
         <div>
           <label class="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2">
             Step 1 — Choose Destination Tier
@@ -296,7 +296,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Step 2: Select Source File or Paste PGN -->
+        <!-- Select Source File or Paste PGN -->
         <div class="space-y-3 bg-zinc-950/70 border border-zinc-800 rounded-xl p-3.5">
           <label class="block text-[11px] font-bold uppercase tracking-wider text-zinc-400">
             Step 2 — Select Source File (.si4 / .pgn) or Paste PGN Text

@@ -361,7 +361,7 @@ async function handleStartImport() {
             @click="activeTab = 'consolidate'"
           >
             <Layers class="w-3.5 h-3.5" />
-            <span>⚡ Consolidate All Online DBs</span>
+            <span>Consolidate All Online DBs</span>
           </button>
         </div>
 

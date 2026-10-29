@@ -302,7 +302,7 @@ func BuildPlayerFairPlayDossier(playerName string, games []*chess.Game, gameIDs 
 		return dossier
 	}
 
-	// 1. Group by Calendar Date (Daily Timeline)
+	// Group by Calendar Date (Daily Timeline)
 	byDate := make(map[string][]GameFairPlayRecord)
 	for _, r := range records {
 		d := normalizeDateStr(r.Date)
@@ -319,7 +319,7 @@ func BuildPlayerFairPlayDossier(playerName string, games []*chess.Game, gameIDs 
 	dossier.DailyTimeline = dailyList
 	dossier.TotalDaysActive = len(dailyList)
 
-	// 2. Group by Time Control using integer TimeControlID array indexing (TCBullet..TCClassical)
+	// Group by Time Control using integer TimeControlID array indexing (TCBullet..TCClassical)
 	var byTC [tcCount][]GameFairPlayRecord
 	for _, r := range records {
 		tcID := ParseTimeControlID(r.TimeControlCategory)
@@ -336,7 +336,7 @@ func BuildPlayerFairPlayDossier(playerName string, games []*chess.Game, gameIDs 
 		profiles = append(profiles, prof)
 	}
 
-	// 3. Compute Cross-Time-Control Divergence (e.g., Rapid vs Bullet/Blitz baseline)
+	// Compute Cross-Time-Control Divergence (e.g., Rapid vs Bullet/Blitz baseline)
 	div := computeCrossControlDivergence(profiles)
 	dossier.CrossDivergence = div
 
@@ -353,7 +353,7 @@ func BuildPlayerFairPlayDossier(playerName string, games []*chess.Game, gameIDs 
 
 	dossier.TimeControlProfiles = profiles
 
-	// 4. Identify Highest Risk Time Control & Overall Score
+	// Identify Highest Risk Time Control & Overall Score
 	bestTC := ""
 	bestTCScore := 0.0
 	weightedSum := 0.0
@@ -379,7 +379,7 @@ func BuildPlayerFairPlayDossier(playerName string, games []*chess.Game, gameIDs 
 	dossier.OverallIssueScore = overall
 	dossier.OverallClassification = classifyIssueScore(overall)
 
-	// 5. Collect Flagged Games (sorted by GameIssueScore descending)
+	// Collect Flagged Games (sorted by GameIssueScore descending)
 	sortedGames := make([]GameFairPlayRecord, len(records))
 	copy(sortedGames, records)
 	sort.Slice(sortedGames, func(i, j int) bool {
@@ -401,7 +401,7 @@ func BuildPlayerFairPlayDossier(playerName string, games []*chess.Game, gameIDs 
 		dossier.FlaggedGames = sortedGames[:limit]
 	}
 
-	// 6. Synthesize Key Findings & Official Markdown Report
+	// Synthesize Key Findings & Official Markdown Report
 	dossier.KeyFindings = buildKeyFindings(dossier)
 	dossier.ReportMarkdown = generateFairPlayMarkdown(dossier)
 
@@ -968,7 +968,7 @@ func scoreSingleGameAnomaly(
 
 	eloDiff := ipr - playerElo
 
-	// 1. Move Accuracy & ACPL vs Official Rating
+	// Move Accuracy & ACPL vs Official Rating
 	if hasEval {
 		// Engine-annotated moves ([%eval] tags present)
 		if acpl <= 14.0 && nonBookMoves >= 12 {
@@ -1000,7 +1000,7 @@ func scoreSingleGameAnomaly(
 		score += 8.0
 	}
 
-	// 2. Move-Time Cadence ("Robotic Pacing" / External Consultation Signature)
+	// Move-Time Cadence ("Robotic Pacing" / External Consultation Signature)
 	if hasClock {
 		if cvTime > 0 && cvTime <= 0.35 && avgTime >= 2.2 {
 			score += 28.0

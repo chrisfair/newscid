@@ -157,10 +157,7 @@ async function handleMove(uci: string) {
     console.error('Move handling error:', err)
   }
 }
-
-// ------------------------------------
 // DRILL MODE (Spaced Repetition Test)
-// ------------------------------------
 async function handleDrillMove(uci: string) {
   if (!activeRep.value) return
 
@@ -240,11 +237,7 @@ async function handleOpponentMove() {
     }
   }
 }
-
-
-// ------------------------------------
 // BUILDER MODE (Add & Curate Lines)
-// ------------------------------------
 async function handleBuilderMove(uci: string) {
   const fenBefore = currentFEN.value
   const nextState = await MakeMove(fenBefore, uci)

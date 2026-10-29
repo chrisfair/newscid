@@ -1,18 +1,6 @@
 #!/usr/bin/env python3
 """
-Comprehensive Functional Playthrough and Verification Harness for NewScid.
-Tests all 108 exported methods across all subsystems:
-- Board & Chess Rules (FEN parsing, legal moves, castling, promotion, en passant, checkmate, stalemate)
-- Notation Formatting & Languages
-- Database Engine (CRUD, searching, sorting, duplicate detection, compaction, verification, statistics)
-- Variations, Comments, NAGs
-- Solitaire Chess / Guess the Move
-- Repertoire Management & Spaced Repetition
-- Polyglot Books & Opening Tree
-- Personas & Playstyle Reproduction
-- Tournament Crosstables
-- Export Formats (PGN, HTML, LaTeX)
-- Engine & Tablebase RPCs
+RPC integration test runner for newscid-server.
 """
 
 import json
@@ -76,9 +64,7 @@ def run_test(test_name, method, *params, expect_error=False):
         return True, res
 
 def main():
-    print("=====================================================================")
-    print(" Starting Comprehensive Functional Playthrough of NewScid Subsystems ")
-    print("=====================================================================")
+    print("Running newscid-server RPC integration tests...")
     failures = []
 
     server_proc = ensure_server()
@@ -601,15 +587,13 @@ def main():
                 pass
 
 
-    print("\n=====================================================================")
     if failures:
-        print(f"[-] Functional testing completed with {len(failures)} defects/failures:")
+        print(f"[-] {len(failures)} test failure(s):")
         for idx, f in enumerate(failures, 1):
             print(f"  {idx}. {f}")
         sys.exit(1)
     else:
-        print("[+] ALL FUNCTIONAL PLAYTHROUGH CHECKS PASSED WITH 100% SUCCESS!")
-        print("=====================================================================")
+        print("[+] All RPC integration checks passed.")
         sys.exit(0)
 
 if __name__ == "__main__":

@@ -136,10 +136,7 @@ const activeTab = ref<TabType>(props.initialTab || 'builder')
 const loading = ref(false)
 const statusMessage = ref('')
 const errorMessage = ref('')
-
-// ==========================================
 // Tab 1: Multi-Database Sub-Database Builder
-// ==========================================
 const localPolicies = ref<Record<string, string>>({})
 
 const allAvailableDatabases = computed<DiscoveredDBItem[]>(() => {
@@ -369,10 +366,7 @@ function handleOpenBuiltDatabase() {
     emit('openDatabase', buildResult.value.targetBasePath)
   }
 }
-
-// ==========================================
 // Tab 2: Managed Storage & Asset Importer
-// ==========================================
 const storageReport = ref<StorageReport | null>(null)
 const customAssetPaths = ref<Record<string, string>>({})
 const copiedPathKey = ref<string>('')
@@ -451,10 +445,7 @@ async function handleCopyCustomPathIntoNewScid(categoryKey: string) {
     loading.value = false
   }
 }
-
-// ==========================================
 // Tab 3: Factory Reset (with Opt-In Backup)
-// ==========================================
 const createOptInBackup = ref<boolean>(false) // MUST default to false (opt-in!)
 const keepEngines = ref<boolean>(false)
 const keepBooks = ref<boolean>(false)

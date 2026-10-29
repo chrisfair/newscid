@@ -71,7 +71,7 @@ func TestSyzygyProbeMock(t *testing.T) {
 	client := NewClient()
 	client.baseURL = server.URL
 
-	// 1. Probe winning position
+	// Probe winning position
 	fenWin := "4k3/8/8/8/8/8/4P3/4K3 w - - 0 1"
 	res, err := client.Probe(fenWin)
 	require.NoError(t, err)
@@ -83,38 +83,38 @@ func TestSyzygyProbeMock(t *testing.T) {
 	require.Len(t, res.Moves, 1)
 	assert.Equal(t, "e4", res.Moves[0].SAN)
 
-	// 2. Cache test (second probe should hit cache, callCount remains 1)
+	// Cache test (second probe should hit cache, callCount remains 1)
 	resCached, err := client.Probe(fenWin)
 	require.NoError(t, err)
 	assert.Equal(t, res, resCached)
 	assert.Equal(t, 1, callCount)
 
-	// 3. Draw position
+	// Draw position
 	resDraw, err := client.Probe("draw_fen")
 	require.NoError(t, err)
 	assert.Equal(t, "draw", resDraw.Category)
 	assert.Contains(t, resDraw.SummaryText, "Tablebase Draw")
 
-	// 4. Over piece limit (> 7 pieces)
+	// Over piece limit (> 7 pieces)
 	_, err = client.Probe("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "tablebases support up to 7 pieces")
 
-	// 5. Empty FEN
+	// Empty FEN
 	_, err = client.Probe("")
 	assert.Error(t, err)
 
-	// 6. HTTP 404
+	// HTTP 404
 	_, err = client.Probe("404_fen")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "HTTP 404")
 
-	// 7. Invalid JSON
+	// Invalid JSON
 	_, err = client.Probe("bad_json")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "decoding tablebase response")
 
-	// 8. Network error (closed server)
+	// Network error (closed server)
 	clientBadURL := NewClient()
 	clientBadURL.baseURL = "http://127.0.0.1:1"
 	_, err = clientBadURL.Probe("4k3/8/8/8/8/8/8/4K3 w - - 0 1")

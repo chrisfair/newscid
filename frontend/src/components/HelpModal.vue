@@ -79,10 +79,10 @@ const HELP_TOPICS: HelpTopic[] = [
     content: [
       {
         heading: 'Welcome to the NewScid Chess Workstation',
-        subheading: '100% local, ultra-fast chess information database, analysis workbench, and training suite.',
+        subheading: 'Local chess information database, analysis workbench, and training suite.',
         paragraphs: [
-          'NewScid is engineered in pure Go and Vue 3 to provide blisteringly fast native SCID (.si4) database management, grandmaster preparation, longitudinal fair-play inspection, and interactive training.',
-          'All documentation, manuals, man pages, and contextual help are stored 100% locally on your machine—no internet connection is ever required to consult the manual.'
+          'NewScid is written in Go and Vue 3 for native SCID (.si4) database management, opponent preparation, longitudinal fair-play inspection, and interactive training.',
+          'All documentation, manuals, man pages, and contextual help are stored locally on your machine—no internet connection is required to consult the manual.'
         ],
         bullets: [
           'Play Moves: Click or drag pieces on the board, or use the Left/Right arrow keys to step through moves.',
@@ -449,9 +449,9 @@ const HELP_TOPICS: HelpTopic[] = [
     content: [
       {
         heading: 'Unix Philosophy Chess Workstation Utilities',
-        subheading: 'Run heavy batch imports, fair-play audits, and opponent scouting directly from the terminal.',
+        subheading: 'Run batch imports, fair-play audits, and opponent scouting directly from the terminal.',
         paragraphs: [
-          'Alongside the main newscid GUI binary, NewScid installs three dedicated, zero-GUI companion command-line programs for ultra-fast batch scripting and headless operation:'
+          'Alongside the main newscid GUI binary, NewScid installs three standalone companion command-line programs for batch scripting and headless operation:'
         ],
         bullets: [
           'newscid-import: High-speed PGN and Online (Lichess/Chess.com) incremental importer, signature deduplicator, and physical database compactor. Example: newscid-import -db master.si4 -pgn twic.pgn -dedup -compact',
@@ -479,10 +479,9 @@ SYNOPSIS
        newscid-scout -db <base.si4> [-player <Name>] [-exploit-color white|black] [-book-out <out.bin>] [-crosstable <Event>] [-json]
 
 DESCRIPTION
-       NewScid is a complete, 100% local Linux chess workstation engineered in
-       Go and Vue 3. It reads and writes native SCID v4 binary databases (.si4,
-       .sg4, .sn4) capable of searching millions of games in milliseconds, while
-       integrating UCI multi-PV analysis, natural-language coaching, longitudinal
+       NewScid is a local Linux chess workstation written in Go and Vue 3.
+       It reads and writes native SCID v4 binary databases (.si4, .sg4, .sn4)
+       while integrating UCI multi-PV analysis, position coaching, longitudinal
        fair-play inspection, opponent preparation, and cognitive training drills.
 
        All documentation is stored locally via the interactive manual (F1),
@@ -603,7 +602,7 @@ function selectTopic(id: string) {
             <h2 class="text-base font-bold text-zinc-100 flex items-center gap-2">
               <span>NewScid Local Workstation Manual & Contextual Help</span>
               <span class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-950/80 border border-emerald-800/60 text-emerald-300">
-                100% Offline Local Docs
+                Offline Local Docs
               </span>
             </h2>
             <p class="text-xs text-zinc-400">
@@ -746,13 +745,13 @@ function selectTopic(id: string) {
                 </li>
               </ul>
 
-              <!-- Pro Tip Box -->
+              <!-- Tip Box -->
               <div
                 v-if="section.tip"
                 class="mt-3 p-3 rounded-lg bg-emerald-950/40 border border-emerald-800/40 text-xs text-emerald-300 flex items-start gap-2"
               >
                 <Sparkles class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <span class="leading-relaxed"><strong>ProTip:</strong> {{ section.tip }}</span>
+                <span class="leading-relaxed"><strong>Tip:</strong> {{ section.tip }}</span>
               </div>
             </div>
           </div>

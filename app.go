@@ -260,11 +260,7 @@ func (a *App) DispatchRPC(method string, params []json.RawMessage) (interface{},
 
 	return nil, nil
 }
-
-// ==========================================
 // Database Operations
-// ==========================================
-
 func (a *App) checkActiveDBEditableLocked() error {
 	if a.db == nil || !a.db.IsOpen {
 		return fmt.Errorf("no database open")
@@ -629,11 +625,7 @@ func (a *App) SaveFileDialog(defaultName string) (string, error) {
 		},
 	})
 }
-
-// ==========================================
 // Chess Board & Move Operations
-// ==========================================
-
 func (a *App) ParseFEN(fen string) (*BoardState, error) {
 	b, err := chess.ParseFEN(fen)
 	if err != nil {
@@ -835,12 +827,7 @@ func (a *App) SearchPosition(fen string) ([]*scid.GameSummary, error) {
 func (a *App) ClassifyOpening(moves []string) *eco.Entry {
 	return a.eco.Classify(moves)
 }
-
-
-// ==========================================
 // UCI Engine Operations & Scid Configuration
-// ==========================================
-
 func (a *App) GetDiscoveredEngines() []engine.EngineConfig {
 	return engine.DiscoverScidEngines()
 }
@@ -1081,12 +1068,7 @@ func (a *App) AnnotatePGN(pgnContent string, movetimeMs int) (*engine.GameAnalys
 		})
 	})
 }
-
-
-// ==========================================
 // Piece Sets & Board Themes
-// ==========================================
-
 func (a *App) GetPieceSets() []sets.PieceSetInfo {
 	return sets.GetAvailablePieceSets()
 }
@@ -1272,11 +1254,7 @@ func (a *App) GetProgressivePuzzle(level int) (*TacticsPuzzle, error) {
 	puzzle.Theme = fmt.Sprintf("Level %d (%s)", level, filepath.Base(base))
 	return puzzle, nil
 }
-
-// ==========================================
 // Opening Repertoire Operations
-// ==========================================
-
 func (a *App) GetRepertoires() []repertoire.RepertoireSummary {
 	return a.repMgr.ListRepertoires()
 }
@@ -1338,11 +1316,7 @@ func (a *App) ShortenRepertoire(opts repertoire.ShortenerOptions) (*repertoire.S
 
 	return a.repMgr.ShortenRepertoire(opts, db)
 }
-
-// ==========================================
 // Database Puzzle Miner Operations
-// ==========================================
-
 func (a *App) MinePuzzlesFromDatabase(playerName string, maxGames int) ([]puzzleminer.MinedPuzzle, error) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
@@ -1368,11 +1342,7 @@ func (a *App) IsScidDriverAvailable() bool {
 func (a *App) GetVersionInfo() version.Info {
 	return version.Get()
 }
-
-// ==========================================
 // Online Account Sync (Chess.com & Lichess)
-// ==========================================
-
 func (a *App) ensureProfileMgr() *online.ProfileManager {
 	if a.profileMgr == nil {
 		a.profileMgr, _ = online.NewProfileManager("")
@@ -1478,11 +1448,7 @@ func (a *App) FetchLichessPreview(username string, count int) (string, error) {
 func (a *App) FetchChessComPreview(username string) ([]string, error) {
 	return a.syncMgr.ChessCom.FetchArchives(username)
 }
-
-// ==========================================
 // TWIC (The Week In Chess) Bulletins
-// ==========================================
-
 // DownloadTWICIssue downloads and imports a single TWIC issue into the currently active database.
 func (a *App) DownloadTWICIssue(issue int) (*online.TWICIssueResult, error) {
 	a.mu.Lock()
@@ -1537,11 +1503,7 @@ func (a *App) CheckTWICIssue(issue int) (bool, error) {
 func (a *App) GetLatestTWICIssue() (int, error) {
 	return a.twicClient.FindLatestIssue(context.Background(), 1560)
 }
-
-// ==========================================
 // Engine vs. Engine Match & Tournament
-// ==========================================
-
 // StartEngineMatch launches an automated engine vs engine match.
 func (a *App) StartEngineMatch(cfg tournament.EngineMatchConfig) (*tournament.EngineMatchSummary, error) {
 	a.mu.Lock()
@@ -1562,7 +1524,7 @@ func (a *App) StartEngineMatch(cfg tournament.EngineMatchConfig) (*tournament.En
 		a.mu.Unlock()
 	}()
 
-	// 1. Resolve Player 1
+	// Resolve Player 1
 	var p1 tournament.EnginePlayer
 	var err error
 	if cfg.Engine1.Path != "" {
@@ -1575,7 +1537,7 @@ func (a *App) StartEngineMatch(cfg tournament.EngineMatchConfig) (*tournament.En
 		p1 = tournament.NewMockEnginePlayer(cfg.Engine1.Name)
 	}
 
-	// 2. Resolve Player 2
+	// Resolve Player 2
 	var p2 tournament.EnginePlayer
 	if cfg.Engine2.Path != "" {
 		p2, err = tournament.NewUCIEnginePlayer(cfg.Engine2.Name, cfg.Engine2.Path, cfg.Engine2.Options)
@@ -1622,12 +1584,7 @@ func (a *App) IsEngineMatchRunning() bool {
 	defer a.mu.RUnlock()
 	return a.matchRunning
 }
-
-
-// ==========================================
 // Notation Styles & Formatting
-// ==========================================
-
 // SetNotationStyle sets the active notation style (san, fan, lan, descriptive, uci, iccf).
 func (a *App) SetNotationStyle(style string) error {
 	a.mu.Lock()
@@ -1676,11 +1633,7 @@ func (a *App) FormatMoveSequence(fen string, movesUCI []string, style string) (s
 	}
 	return chess.FormatPVWithStyle(fen, movesUCI, st), nil
 }
-
-// ==========================================
 // Game Annotations & Variations
-// ==========================================
-
 // AddGameComment attaches a comment to the move node at the given 1-based ply in activeGame.
 func (a *App) AddGameComment(ply int, comment string) error {
 	a.mu.Lock()
@@ -1797,11 +1750,7 @@ func (a *App) DeleteVariation(ply int, varIndex int) error {
 	curr.Variations = append(curr.Variations[:varIndex], curr.Variations[varIndex+1:]...)
 	return nil
 }
-
-// ==========================================
 // Player Import & Dedicated / Blended Sync
-// ==========================================
-
 // ImportPlayerGames downloads games for any player and merges them into dedicated, active, or blended databases.
 func (a *App) ImportPlayerGames(opts online.ImportPlayerOptions) (*online.SyncResult, error) {
 	a.mu.Lock()
@@ -1819,11 +1768,7 @@ func (a *App) ImportPlayerGames(opts online.ImportPlayerOptions) (*online.SyncRe
 
 	return a.syncMgr.ImportPlayerGames(opts, activeDB)
 }
-
-// ==========================================
 // Player Simulation & Training Module
-// ==========================================
-
 // GetDatabasePlayers returns a sorted list of unique player names in the active database.
 func (a *App) GetDatabasePlayers() ([]string, error) {
 	a.mu.RLock()
@@ -1863,12 +1808,10 @@ func (a *App) GetSimulatedMove(playerName string, fen string, isWhite bool) (*pl
 		return nil, err
 	}
 
-	// 1. Check personal opening book
 	if simMove, inBook := personality.SelectSimulatedMove(fen, isWhite); inBook {
 		return simMove, nil
 	}
 
-	// 2. Out of book: ensure engine is started and calibrate engine with player's estimated Elo and style
 	limit, uciElo, skill, contempt := personality.CalibrateEngineSettingsForPersona()
 
 	a.mu.Lock()
@@ -1908,12 +1851,12 @@ func (a *App) GetSimulatedMove(playerName string, fen string, isWhite bool) (*pl
 				SAN:        san,
 				IsBook:     false,
 				EloTarget:  personality.EstimatedElo,
-				Commentary: fmt.Sprintf("🧠 %s (%s, %d Elo) calculated move", personality.Name, personality.PlayStyle, personality.EstimatedElo),
+				Commentary: fmt.Sprintf("%s (%s, %d Elo) calculated move", personality.Name, personality.PlayStyle, personality.EstimatedElo),
 			}, nil
 		}
 	}
 
-	// Smart tactical fallback if engine is unavailable: evaluates checks, captures, defenses, and center control
+	// Tactical fallback when no UCI engine is running
 	b, err := chess.ParseFEN(fen)
 	if err != nil {
 		return nil, err
@@ -1927,7 +1870,7 @@ func (a *App) GetSimulatedMove(playerName string, fen string, isWhite bool) (*pl
 		SAN:        b.MoveToSAN(tacticalMove),
 		IsBook:     false,
 		EloTarget:  personality.EstimatedElo,
-		Commentary: fmt.Sprintf("🛡️ %s (%d Elo) played tactical heuristic move", personality.Name, personality.EstimatedElo),
+		Commentary: fmt.Sprintf("%s (%d Elo) played tactical heuristic move", personality.Name, personality.EstimatedElo),
 	}, nil
 }
 
@@ -1971,7 +1914,6 @@ func (a *App) GetPersonaSimulatedMove(personaID string, fen string, isWhite bool
 		}
 	}
 
-	// 0a. Check assigned Repertoire for this color if configured on the Persona
 	if pObj != nil && a.repMgr != nil {
 		repID := strings.TrimSpace(pObj.BlackRepertoireID)
 		if isWhite {
@@ -1987,14 +1929,13 @@ func (a *App) GetPersonaSimulatedMove(personaID string, fen string, isWhite bool
 						SAN:        chosen.SAN,
 						IsBook:     true,
 						EloTarget:  personality.EstimatedElo,
-						Commentary: fmt.Sprintf("📘 %s played repertoire move %s (%s)", personality.Name, chosen.SAN, rep.Name),
+						Commentary: fmt.Sprintf("%s played repertoire move %s (%s)", personality.Name, chosen.SAN, rep.Name),
 					}, nil
 				}
 			}
 		}
 	}
 
-	// 0b. Check assigned Polyglot (.bin) book if configured on the Persona
 	if pObj != nil && strings.TrimSpace(pObj.BookPath) != "" {
 		if bm, bErr := a.GetPolyglotBookMove(fen, pObj.BookPath, false); bErr == nil && bm != nil {
 			return &playerbot.SimulatedMove{
@@ -2002,17 +1943,15 @@ func (a *App) GetPersonaSimulatedMove(personaID string, fen string, isWhite bool
 				SAN:        bm.SAN,
 				IsBook:     true,
 				EloTarget:  personality.EstimatedElo,
-				Commentary: fmt.Sprintf("📖 %s played assigned book move %s (%.0f%% weight)", personality.Name, bm.SAN, bm.Percentage),
+				Commentary: fmt.Sprintf("%s played assigned book move %s (%.0f%% weight)", personality.Name, bm.SAN, bm.Percentage),
 			}, nil
 		}
 	}
 
-	// 1. Check personal full-game tree (plays most common response or sole response)
 	if simMove, inBook := personality.SelectSimulatedMove(fen, isWhite); inBook {
 		return simMove, nil
 	}
 
-	// 2. Out of personal game tree: ensure engine is started and calibrate settings with style, contempt, and Elo
 	limit, uciElo, skill, contempt := personality.CalibrateEngineSettingsForPersona()
 
 	a.mu.Lock()
@@ -2052,12 +1991,11 @@ func (a *App) GetPersonaSimulatedMove(personaID string, fen string, isWhite bool
 				SAN:        san,
 				IsBook:     false,
 				EloTarget:  personality.EstimatedElo,
-				Commentary: fmt.Sprintf("🧠 %s (%s, %d Elo) calculated move", personality.Name, personality.PlayStyle, personality.EstimatedElo),
+				Commentary: fmt.Sprintf("%s (%s, %d Elo) calculated move", personality.Name, personality.PlayStyle, personality.EstimatedElo),
 			}, nil
 		}
 	}
 
-	// Smart tactical fallback if engine is unavailable: evaluates checks, captures, defenses, and center control
 	b, err := chess.ParseFEN(fen)
 	if err != nil {
 		return nil, err
@@ -2071,14 +2009,10 @@ func (a *App) GetPersonaSimulatedMove(personaID string, fen string, isWhite bool
 		SAN:        b.MoveToSAN(tacticalMove),
 		IsBook:     false,
 		EloTarget:  personality.EstimatedElo,
-		Commentary: fmt.Sprintf("🛡️ %s (%d Elo) played tactical heuristic move", personality.Name, personality.EstimatedElo),
+		Commentary: fmt.Sprintf("%s (%d Elo) played tactical heuristic move", personality.Name, personality.EstimatedElo),
 	}, nil
 }
-
-// ==========================================
 // Persona Management & Multi-Alias Aggregation
-// ==========================================
-
 // GetPersonas returns all configured personas sorted by display name, ensuring each has a dedicated .si4 database.
 func (a *App) GetPersonas() ([]*persona.Persona, error) {
 	if a.personaMgr == nil {
@@ -2719,11 +2653,7 @@ func (a *App) SaveExportFile(filePath, content string) error {
 	}
 	return os.WriteFile(filePath, []byte(content), 0644)
 }
-
-// ==========================================
 // Chess960 (Fischer Random Chess)
-// ==========================================
-
 // GetChess960Position generates the Chess960 position for a given index (0-959).
 func (a *App) GetChess960Position(id int) (*chess960.Position, error) {
 	return chess960.GeneratePosition(id)
@@ -2734,11 +2664,7 @@ func (a *App) GenerateRandomChess960() (*chess960.Position, error) {
 	pos := chess960.RandomPosition()
 	return pos, nil
 }
-
-// ==========================================
 // EPD (Extended Position Description)
-// ==========================================
-
 // ParseEPD parses an EPD string into structured fields with opcodes.
 func (a *App) ParseEPD(epdString string) (*epd.EPDRecord, error) {
 	return epd.Parse(epdString)
@@ -2748,11 +2674,7 @@ func (a *App) ParseEPD(epdString string) (*epd.EPDRecord, error) {
 func (a *App) ExportEPD(fen string, opcodes map[string]string) (string, error) {
 	return epd.Format(fen, opcodes), nil
 }
-
-// ==========================================
 // Positional & Material Imbalance
-// ==========================================
-
 // GetPositionalImbalance analyzes the material, pawn structure, king safety, and territory control.
 func (a *App) GetPositionalImbalance(fen string) (*imbalance.Report, error) {
 	b, err := chess.ParseFEN(fen)
@@ -2761,20 +2683,12 @@ func (a *App) GetPositionalImbalance(fen string) (*imbalance.Report, error) {
 	}
 	return imbalance.AnalyzeBoard(b), nil
 }
-
-// ==========================================
 // Natural Language Move Explainer
-// ==========================================
-
 // ExplainMove generates plain-English coaching explanations of a move and its motifs.
 func (a *App) ExplainMove(beforeFEN, moveUCI string, scoreCp int, bestMove string) (*explainer.Explanation, error) {
 	return explainer.ExplainMove(beforeFEN, moveUCI, scoreCp, bestMove)
 }
-
-// ==========================================
 // Personal Blunder Spaced-Repetition Vault
-// ==========================================
-
 // GetDueBlunderPuzzles returns blunder flashcards due for spaced-repetition review.
 func (a *App) GetDueBlunderPuzzles() ([]*blundervault.Puzzle, error) {
 	a.mu.RLock()
@@ -2814,11 +2728,7 @@ func (a *App) AddBlunderToVault(p *blundervault.Puzzle) error {
 	}
 	return a.blunderVault.AddPuzzle(p)
 }
-
-// ==========================================
 // Opponent Scouting & Prep Matrix
-// ==========================================
-
 // GenerateOpponentScoutingReport builds an in-depth dossier on a player from the current database.
 func (a *App) GenerateOpponentScoutingReport(playerName string) (*scout.Report, error) {
 	a.mu.RLock()
@@ -2833,11 +2743,7 @@ func (a *App) GenerateOpponentScoutingReport(playerName string) (*scout.Report, 
 	}
 	return scout.GenerateReport(playerName, games), nil
 }
-
-// ==========================================
 // Opponent Opening Exploiter & Custom Book Generator
-// ==========================================
-
 // EvaluateOpponentWeaknesses performs opening tree evaluation for any player in the active database.
 func (a *App) EvaluateOpponentWeaknesses(playerName string, targetColor string, maxDepth int, minGames int) (*persona.AntiPersonaReport, error) {
 	a.mu.RLock()
@@ -3064,11 +2970,7 @@ func (a *App) SavePGNFileDialog(defaultFilename string) (string, error) {
 		},
 	})
 }
-
-// ==========================================
 // Piece Safety Scanner & Drill Module
-// ==========================================
-
 // AnalyzeBoardSafety calculates square safety, attackers, defenders, and hanging pieces for the given FEN.
 func (a *App) AnalyzeBoardSafety(fen string) (*training.BoardSafetyReport, error) {
 	if strings.TrimSpace(fen) == "" {
@@ -3512,11 +3414,7 @@ func (a *App) DownloadAndAnalyzeHardMoveBenchmark(
 	}
 	return a.AnalyzeHardMoveBenchmark(username, timeControlFilter, maxGames, checkOnlineBans)
 }
-
-// ==========================================
 // Cyclical Tactical Drill & Lichess Theme Mastery
-// ==========================================
-
 // GetCyclicalDashboard returns the user's cyclical drill sets, improvement history, and Lichess-style theme performance radar.
 func (a *App) GetCyclicalDashboard() training.CyclicalDashboard {
 	if a.cyclicalMgr == nil {

@@ -523,7 +523,7 @@ func ClassifyPositionThemes(startFEN string, solutionUCI []string, evalDeltaCp i
 	solverColor := b.Turn
 	enemyColor := solverColor.Other()
 
-	// 1. Classify Game Phase
+	// Classify Game Phase
 	classifyPhaseThemes(b, &mask)
 
 	// Check if solver starts in check (defensive / check escape resource)
@@ -1074,7 +1074,7 @@ func classifySpecificMatePattern(b *chess.Board, winnerColor chess.Color, mating
 	kf, kr := ksq.File(), ksq.Rank()
 	matingPiece := b.Squares[matingMove.To].Type()
 
-	// 1. Smothered Mate: Knight delivers mate and all adjacent squares around the King are occupied by friendly pieces
+	// Smothered Mate: Knight delivers mate and all adjacent squares around the King are occupied by friendly pieces
 	if matingPiece == chess.Knight {
 		allBlockedByOwn := true
 		for df := -1; df <= 1; df++ {
@@ -1098,7 +1098,7 @@ func classifySpecificMatePattern(b *chess.Board, winnerColor chess.Color, mating
 		}
 	}
 
-	// 2. Back Rank Mate: King on rank 0 (White) or rank 7 (Black), mated along back rank by Rook/Queen, blocked by own pawns
+	// Back Rank Mate: King on rank 0 (White) or rank 7 (Black), mated along back rank by Rook/Queen, blocked by own pawns
 	backRank := 0
 	pawnShieldRank := 1
 	if loserColor == chess.Black {
@@ -1118,7 +1118,7 @@ func classifySpecificMatePattern(b *chess.Board, winnerColor chess.Color, mating
 		}
 	}
 
-	// 3. Arabian Mate & Hook Mate: Rook delivers checkmate Adjacent/Orthogonal to King, defended by a friendly Knight
+	// Arabian Mate & Hook Mate: Rook delivers checkmate Adjacent/Orthogonal to King, defended by a friendly Knight
 	if matingPiece == chess.Rook {
 		defendedByKnight := false
 		for sq := chess.A1; sq <= chess.H8; sq++ {
@@ -1506,7 +1506,7 @@ func extractFromSingleGame(g *chess.Game, defaultGameID int, filterMask ThemeMas
 			var blunderUCI string
 			evalDelta := 320
 
-			// 1. Check if move has a variation (refutation / better line)
+			// Check if move has a variation (refutation / better line)
 			if len(curr.Variations) > 0 && curr.Variations[0] != nil {
 				vNode := curr.Variations[0]
 				for vNode != nil && len(solUCI) < 5 {
@@ -1521,7 +1521,7 @@ func extractFromSingleGame(g *chess.Game, defaultGameID int, filterMask ThemeMas
 				evalDelta = 420
 			}
 
-			// 2. Check for [%eval] swing or NAG annotations (?, ??, !, !!)
+			// Check for [%eval] swing or NAG annotations (?, ??, !, !!)
 			curEvalCp := parseEvalCommentCp(curr.Comment, turnColor)
 			hasBlunderNAG := hasAnyNAG(curr.NAGs, 2, 4, 6) || strings.Contains(curr.Comment, "?")
 			hasBrilliancyNAG := hasAnyNAG(curr.NAGs, 1, 3) || strings.Contains(curr.Comment, "!")
@@ -1537,7 +1537,7 @@ func extractFromSingleGame(g *chess.Game, defaultGameID int, filterMask ThemeMas
 				prevEvalCp = curEvalCp
 			}
 
-			// 3. Look for a tactical best move in the position before curr.Move
+			// Look for a tactical best move in the position before curr.Move
 			if len(solUCI) == 0 && (hasBlunderNAG || hasBrilliancyNAG || ply >= 4) {
 				bestTactic, tacticDelta, isMissed := findBestTacticalSequence(b, curr)
 				if len(bestTactic) > 0 {
@@ -2348,7 +2348,7 @@ func (cm *CyclicalManager) CreateCycleSet(
 	var combined []CyclicalPuzzle
 	seenFENs := make(map[string]bool)
 
-	// 1. Convert matching Blunder Vault flashcards first (personal blunders)
+	// Convert matching Blunder Vault flashcards first (personal blunders)
 	for _, vp := range vaultPuzzles {
 		cp, ok := ConvertBlunderVaultPuzzle(vp)
 		if !ok || seenFENs[cp.FEN] {
@@ -2364,7 +2364,7 @@ func (cm *CyclicalManager) CreateCycleSet(
 		}
 	}
 
-	// 2. Extract from player games and built-in library for the remaining slots
+	// Extract from player games and built-in library for the remaining slots
 	if len(combined) < setSize {
 		var playerNames []string
 		if strings.TrimSpace(playerName) != "" {

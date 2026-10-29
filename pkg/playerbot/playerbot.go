@@ -369,14 +369,14 @@ func (p *PlayerPersonality) SelectSimulatedMove(fen string, isWhite bool) (*Simu
 
 	var comment string
 	if len(candidates) == 1 {
-		comment = fmt.Sprintf("📖 %s's sole historical response: %s (%d game, %.1f%% score)",
+		comment = fmt.Sprintf("%s's sole historical response: %s (%d game, %.1f%% score)",
 			p.Name, chosen.SAN, chosen.PlayedCount, chosen.WinRate)
 	} else {
 		pct := 0.0
 		if totalGamesAtPos > 0 {
 			pct = float64(chosen.PlayedCount) * 100.0 / float64(totalGamesAtPos)
 		}
-		comment = fmt.Sprintf("📖 %s's most frequent response: %s (played in %d of %d games, %.0f%% freq, %.1f%% score)",
+		comment = fmt.Sprintf("%s's most frequent response: %s (played in %d of %d games, %.0f%% freq, %.1f%% score)",
 			p.Name, chosen.SAN, chosen.PlayedCount, totalGamesAtPos, pct, chosen.WinRate)
 	}
 

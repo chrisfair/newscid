@@ -122,7 +122,7 @@ func TestImportAssetToWorkstation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 1. Create a 3-file Scid database bundle (.si4, .sg4, .sn4) in external dir
+	// Create a 3-file Scid database bundle (.si4, .sg4, .sn4) in external dir
 	scidBase := filepath.Join(extDir, "masters2026")
 	if err := os.WriteFile(scidBase+".si4", []byte("SI4_HEADER_DATA"), 0o644); err != nil {
 		t.Fatal(err)
@@ -157,7 +157,7 @@ func TestImportAssetToWorkstation(t *testing.T) {
 		t.Errorf("ImportAssetToWorkstation same-path idempotent copy failed: %v", err)
 	}
 
-	// 2. Import an engine binary and verify 0755 executable permissions
+	// Import an engine binary and verify 0755 executable permissions
 	engineSrc := filepath.Join(extDir, "stockfish-18-avx2")
 	if err := os.WriteFile(engineSrc, []byte("#!/bin/sh\necho uciok\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -174,7 +174,7 @@ func TestImportAssetToWorkstation(t *testing.T) {
 		t.Errorf("expected imported engine binary to be executable, got mode %v", st.Mode())
 	}
 
-	// 3. Import opening book (.bin), endgame tablebase (.rtbw), persona (.json), repertoire (.json)
+	// Import opening book (.bin), endgame tablebase (.rtbw), persona (.json), repertoire (.json)
 	bookSrc := filepath.Join(extDir, "gm_openings.bin")
 	_ = os.WriteFile(bookSrc, []byte("POLYGLOT_BOOK_BYTES"), 0o644)
 	if _, err := ImportAssetToWorkstation("opening_books", bookSrc, dataRoot, cfgRoot); err != nil {
@@ -199,7 +199,7 @@ func TestImportAssetToWorkstation(t *testing.T) {
 		t.Errorf("repertoire import failed: %v", err)
 	}
 
-	// 4. Inspect storage and verify counts
+	// Inspect storage and verify counts
 	report, err := InspectStorage(dataRoot, cfgRoot)
 	if err != nil {
 		t.Fatalf("InspectStorage failed: %v", err)
@@ -209,7 +209,7 @@ func TestImportAssetToWorkstation(t *testing.T) {
 		t.Errorf("expected 8 total files in storage report, got %d", report.TotalFiles)
 	}
 
-	// 5. Error paths
+	// Error paths
 	if _, err := ImportAssetToWorkstation("bad_cat", bookSrc, dataRoot, cfgRoot); err == nil {
 		t.Errorf("expected error for invalid category")
 	}
@@ -248,7 +248,7 @@ func TestFactoryResetWorkstationWithAndWithoutOptInBackup(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(legacyRoot, "blunder_vault.json"), []byte(`[]`), 0o644)
 	_ = os.WriteFile(filepath.Join(legacyRoot, "personas", "old_bot.json"), []byte(`{}`), 0o644)
 
-	// 1. Test FactoryResetWorkstation WITH Opt-In Backup AND KeepEngines/KeepBooks = true
+	// Test FactoryResetWorkstation WITH Opt-In Backup AND KeepEngines/KeepBooks = true
 	resBackup, err := FactoryResetWorkstation(FactoryResetOptions{
 		CreateOptInBackup: true,
 		KeepEngines:       true,
@@ -304,7 +304,7 @@ func TestFactoryResetWorkstationWithAndWithoutOptInBackup(t *testing.T) {
 		t.Errorf("expected preferences.json to be removed by factory reset")
 	}
 
-	// 2. Test FactoryResetWorkstation WITHOUT Backup (default opt-out) and full wipe (KeepEngines=false, KeepBooks=false)
+	// Test FactoryResetWorkstation WITHOUT Backup (default opt-out) and full wipe (KeepEngines=false, KeepBooks=false)
 	resNoBackup, err := FactoryResetWorkstation(FactoryResetOptions{
 		CreateOptInBackup: false,
 		KeepEngines:       false,
@@ -323,7 +323,7 @@ func TestFactoryResetWorkstationWithAndWithoutOptInBackup(t *testing.T) {
 		t.Errorf("expected opening book to be removed when KeepBooks=false")
 	}
 
-	// 3. Test FactoryResetWorkstation with default empty roots (using HOME env)
+	// Test FactoryResetWorkstation with default empty roots (using HOME env)
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
 	t.Setenv("XDG_DATA_HOME", filepath.Join(tmpHome, "xdg_data"))

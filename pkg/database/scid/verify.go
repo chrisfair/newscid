@@ -40,7 +40,7 @@ func (db *Database) Verify() (*VerificationReport, error) {
 	sn4Path := db.BasePath + ".sn4"
 	sg4Path := db.BasePath + ".sg4"
 
-	// 1. Stat files
+	// Stat files
 	siStat, err := os.Stat(si4Path)
 	if err != nil {
 		report.Errors = append(report.Errors, fmt.Sprintf("Missing .si4 file: %v", err))
@@ -62,7 +62,7 @@ func (db *Database) Verify() (*VerificationReport, error) {
 		report.FileSizes["sg4"] = sgStat.Size()
 	}
 
-	// 2. Validate .si4 header and file length
+	// Validate .si4 header and file length
 	if siStat != nil && db.Header != nil {
 		expectedSiSize := int64(IndexHeaderSize + len(db.Entries)*IndexEntrySize)
 		if siStat.Size() != expectedSiSize {
@@ -75,7 +75,7 @@ func (db *Database) Verify() (*VerificationReport, error) {
 		}
 	}
 
-	// 3. Validate NameBase
+	// Validate NameBase
 	if db.Names != nil {
 		pCount := len(db.Names.NamesByID[NamePlayer])
 		eCount := len(db.Names.NamesByID[NameEvent])
@@ -88,7 +88,7 @@ func (db *Database) Verify() (*VerificationReport, error) {
 		report.NameCounts["rounds"] = rCount
 	}
 
-	// 4. Validate entries and .sg4 offsets
+	// Validate entries and .sg4 offsets
 	var sgSize int64 = 0
 	if sgStat != nil {
 		sgSize = sgStat.Size()

@@ -54,11 +54,11 @@ func TestSubmitProphylaxisAnswer_NotFound(t *testing.T) {
 }
 
 func TestGenerateProphylaxisDrillsFromDatabase(t *testing.T) {
-	// 1. Nil DB
+	// Nil DB
 	_, err := GenerateProphylaxisDrillsFromDatabase(nil, 5)
 	assert.Error(t, err)
 
-	// 2. Open DB with games
+	// Open DB with games
 	tmpDir, err := os.MkdirTemp("", "scid_pro_test_*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
@@ -119,7 +119,7 @@ func TestGenerateProphylaxisDrillsFromDatabase(t *testing.T) {
 	assert.True(t, resAlt.IsCorrect)
 	assert.Equal(t, 150, resAlt.PointsAwarded)
 
-	// 3. Empty DB falls back to batch
+	// Empty DB falls back to batch
 	emptyDir := t.TempDir()
 	emptyDB := scid.NewDatabase()
 	err = emptyDB.Create(filepath.Join(emptyDir, "pro_empty"), "Pro Empty")
@@ -129,7 +129,7 @@ func TestGenerateProphylaxisDrillsFromDatabase(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, fallbackDrills)
 
-	// 4. DB with quiet king move (Kh8 by Black at ply >= 14) and custom StartFEN
+	// DB with quiet king move (Kh8 by Black at ply >= 14) and custom StartFEN
 	kingDB := scid.NewDatabase()
 	require.NoError(t, kingDB.Create(filepath.Join(t.TempDir(), "pro_king"), "Pro King"))
 	gKing, err := chess.ParsePGN("1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. O-O Nf6 5. d3 O-O 6. c3 d6 7. b4 Bb6 8. a4 a6 9. Kh1 Kh8 1-0")
@@ -142,7 +142,7 @@ func TestGenerateProphylaxisDrillsFromDatabase(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, kingDrills)
 
-	// 5. DB with short game (<14 plies) that yields 0 drills -> fallback to batch
+	// DB with short game (<14 plies) that yields 0 drills -> fallback to batch
 	shortDB := scid.NewDatabase()
 	require.NoError(t, shortDB.Create(filepath.Join(t.TempDir(), "pro_short"), "Pro Short"))
 	gShort, _ := chess.ParsePGN("1. e4 e5 1-0")

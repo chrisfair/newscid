@@ -79,19 +79,19 @@ func TestSearchPositionInGames(t *testing.T) {
 }
 
 func TestBuildTreeFromDatabaseAndCoreFEN(t *testing.T) {
-	// 1. Closed database
+	// Closed database
 	resClosed, err := tree.BuildTreeFromDatabase(nil, chess.StartingFEN, 50)
 	require.NoError(t, err)
 	assert.Empty(t, resClosed.Moves)
 
-	// 2. Open empty database
+	// Open empty database
 	db := scid.NewDatabase()
 	db.IsOpen = true
 	resOpen, err := tree.BuildTreeFromDatabase(db, chess.StartingFEN, 50)
 	require.NoError(t, err)
 	assert.Empty(t, resOpen.Moves)
 
-	// 3. Invalid FEN passed
+	// Invalid FEN passed
 	resInvalid := tree.BuildTreeFromGames("invalid fen string", nil)
 	assert.NotNil(t, resInvalid)
 	assert.Empty(t, resInvalid.Moves)
@@ -99,13 +99,13 @@ func TestBuildTreeFromDatabaseAndCoreFEN(t *testing.T) {
 	matchesInvalid := tree.SearchPositionInGames("invalid fen string", nil)
 	assert.Empty(t, matchesInvalid)
 
-	// 4. CoreFEN helper
+	// CoreFEN helper
 	core := tree.CoreFEN(chess.StartingFEN)
 	assert.Equal(t, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq", core)
 	shortFEN := "rnbqkbnr/pppppppp"
 	assert.Equal(t, shortFEN, tree.CoreFEN(shortFEN))
 
-	// 5. Populated database with maxGames limit + Custom StartFEN + Terminal position match
+	// Populated database with maxGames limit + Custom StartFEN + Terminal position match
 	tmpBase := t.TempDir() + "/treetest"
 	realDB := scid.NewDatabase()
 	require.NoError(t, realDB.Create(tmpBase, "Tree Test"))

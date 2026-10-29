@@ -130,19 +130,19 @@ func TestPuzzleMinerWithEngineAndDatabase(t *testing.T) {
 	// Custom non-default StartFEN (same board with halfmove clock 1)
 	game.StartFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 1 1"
 
-	// 1. Engine returning Decisive Advantage (+600 cp)
+	// Engine returning Decisive Advantage (+600 cp)
 	engDecisive := createMockUCIEngine(t, "info depth 12 multipv 1 score cp 600 nodes 1000 nps 10000 pv e4d5")
 	puzzlesDec := puzzleminer.MineFromGames([]*chess.Game{game}, engDecisive, puzzleminer.MiningFilter{})
 	require.NotEmpty(t, puzzlesDec)
 	assert.Equal(t, "Decisive Advantage (+5.0)", puzzlesDec[0].Theme)
 
-	// 2. Engine returning Mate in 3
+	// Engine returning Mate in 3
 	engMate := createMockUCIEngine(t, "info depth 12 multipv 1 score mate 3 nodes 1000 nps 10000 pv e4d5")
 	puzzlesMate := puzzleminer.MineFromGames([]*chess.Game{game}, engMate, puzzleminer.MiningFilter{})
 	require.NotEmpty(t, puzzlesMate)
 	assert.Equal(t, "Mate in 3", puzzlesMate[0].Theme)
 
-	// 3. Engine returning Tactical Advantage (+350 cp) on Black's turn (ply 8: score cp 350 from Black POV -> negated by ParseInfoLine to -350, then negated back to +350 for Black)
+	// Engine returning Tactical Advantage (+350 cp) on Black's turn (ply 8: score cp 350 from Black POV -> negated by ParseInfoLine to -350, then negated back to +350 for Black)
 	engBlackTac := createMockUCIEngine(t, "info depth 12 multipv 1 score cp -350 nodes 1000 nps 10000 pv e4d5")
 	// With -350 from mover POV: on ply 7 (White), White gets -350 (ignored), then advances to ply 8 (Black), where ParseInfoLine negates -350 to +350, and mineGame negates to -350.
 	// Conversely with +350: on ply 8 (Black), ParseInfoLine negates +350 to -350, and mineGame negates to +350!
@@ -153,7 +153,7 @@ func TestPuzzleMinerWithEngineAndDatabase(t *testing.T) {
 	require.NotEmpty(t, puzzlesTac)
 	assert.Equal(t, "Tactical Advantage", puzzlesTac[0].Theme)
 
-	// 4. Test custom StartFEN and >= 50 puzzles limit
+	// Test custom StartFEN and >= 50 puzzles limit
 	mateGame, err := chess.ParsePGN("1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0")
 	require.NoError(t, err)
 	var manyGames []*chess.Game
@@ -163,7 +163,7 @@ func TestPuzzleMinerWithEngineAndDatabase(t *testing.T) {
 	cappedPuzzles := puzzleminer.MineFromGames(manyGames, nil, puzzleminer.MiningFilter{OnlyCheckmate: true})
 	assert.Len(t, cappedPuzzles, 50)
 
-	// 5. MineFromDatabase with closed and open DB (including > 200 games limit check)
+	// MineFromDatabase with closed and open DB (including > 200 games limit check)
 	_, err = puzzleminer.MineFromDatabase(nil, nil, puzzleminer.MiningFilter{})
 	assert.Error(t, err)
 

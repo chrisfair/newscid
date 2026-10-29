@@ -108,7 +108,7 @@ vi.mock('../../wailsjs/go/main/App', () => ({
       blackScrambleBlunders: 0,
     },
     recommendations: [
-      '✅ Clean clock discipline demonstrated by both sides!',
+      'Clean clock discipline demonstrated by both sides!',
     ],
   }),
   AnalyzePlayerTimeManagement: vi.fn().mockResolvedValue({

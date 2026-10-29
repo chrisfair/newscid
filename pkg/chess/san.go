@@ -10,7 +10,7 @@ func (b *Board) MoveToSAN(m Move) string {
 	fromPiece := b.Squares[m.From]
 	pt := fromPiece.Type()
 
-	// 1. Castling
+	// Castling
 	if pt == King {
 		if m.From == E1 && m.To == G1 || m.From == E8 && m.To == G8 {
 			san := "O-O"
@@ -24,7 +24,7 @@ func (b *Board) MoveToSAN(m Move) string {
 
 	var sb strings.Builder
 
-	// 2. Pawn moves
+	// Pawn moves
 	if pt == Pawn {
 		if m.From.File() != m.To.File() {
 			// Pawn capture
@@ -39,7 +39,7 @@ func (b *Board) MoveToSAN(m Move) string {
 		return b.appendCheckSuffix(m, sb.String())
 	}
 
-	// 3. Piece moves: King, Queen, Rook, Bishop, Knight
+	// Piece moves: King, Queen, Rook, Bishop, Knight
 	sb.WriteString(pt.String())
 
 	// Disambiguation

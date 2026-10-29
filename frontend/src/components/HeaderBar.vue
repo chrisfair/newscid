@@ -218,13 +218,13 @@ defineExpose({
                       v-if="db.writePolicy === 'locked' || db.isLocked"
                       class="px-1 py-0.2 rounded text-[9px] font-mono bg-rose-950/60 text-rose-300 border border-rose-700/50"
                     >
-                      🔒 Locked
+                      Locked
                     </span>
                     <span
                       v-else-if="db.writePolicy === 'sync_only'"
                       class="px-1 py-0.2 rounded text-[9px] font-mono bg-cyan-950/60 text-cyan-300 border border-cyan-700/50"
                     >
-                      🔄 Sync-Only
+                      Sync-Only
                     </span>
                   </div>
                   <span v-if="db.description" class="text-[10px] text-zinc-400 truncate mt-0.5">{{ db.description }}</span>
@@ -236,14 +236,14 @@ defineExpose({
                       title="Set as Default Personal User DB"
                       @click.stop="emit('setDefaultDB', db.basePath); showBasesDropdown = false"
                     >
-                      👤 User
+                      User
                     </span>
                     <span
                       class="px-1.5 py-0.5 rounded bg-cyan-950/70 hover:bg-cyan-800 border border-cyan-500/40 text-cyan-200 text-[9px] font-semibold"
                       title="Set as Default Master Reference DB (for Opening Tree)"
                       @click.stop="emit('setReferenceDB', db.basePath); showBasesDropdown = false"
                     >
-                      🏛️ Ref
+                      Ref
                     </span>
                   </div>
                   <div class="flex flex-col items-end shrink-0 text-[10px] font-mono">
@@ -278,9 +278,9 @@ defineExpose({
 
     <!-- Center: Interactive 3-Role Database Switcher Pill (Active • Personal User DB • Master Reference DB) -->
     <div class="hidden md:flex items-center gap-1.5 bg-zinc-900/80 border border-zinc-800 rounded-xl px-2.5 py-1">
-      <!-- 1. Active Working DB -->
+      <!-- Active Working DB -->
       <div class="flex items-center gap-1.5">
-        <span class="text-[10px] text-zinc-400 uppercase tracking-wider font-bold">📂 Active:</span>
+        <span class="text-[10px] text-zinc-400 uppercase tracking-wider font-bold">Active:</span>
         <span class="text-xs font-mono font-bold text-zinc-100">
           {{ dbName || 'No Base Loaded' }}
         </span>
@@ -295,13 +295,13 @@ defineExpose({
           :title="`Database Write Policy: ${activeWritePolicy || 'editable'} — Click to cycle lock mode`"
           @click="emit('cycleWritePolicy', activeDbPath)"
         >
-          <span>{{ activeWritePolicy === 'locked' ? '🔒 Locked' : activeWritePolicy === 'sync_only' ? '🔄 Sync-Only' : '🔓 Editable' }}</span>
+          <span>{{ activeWritePolicy === 'locked' ? 'Locked' : activeWritePolicy === 'sync_only' ? 'Sync-Only' : 'Editable' }}</span>
         </button>
       </div>
 
       <div class="h-3.5 w-px bg-zinc-800 mx-1" />
 
-      <!-- 2. Personal User DB (Editable Default Startup DB) -->
+      <!-- Personal User DB (Editable Default Startup DB) -->
       <div class="flex items-center gap-1">
         <button
           class="px-2 py-0.5 rounded-md text-[11px] font-semibold border flex items-center gap-1 transition-colors cursor-pointer"
@@ -312,7 +312,7 @@ defineExpose({
           @click="emit('ensureUserDB')"
         >
           <Star class="w-3 h-3" :class="isActiveDefaultDb ? 'fill-amber-400 text-amber-400' : 'text-amber-400'" />
-          <span>👤 User DB: {{ defaultDbName || 'My_Games' }}</span>
+          <span>User DB: {{ defaultDbName || 'My_Games' }}</span>
         </button>
         <button
           v-if="dbName && activeDbPath && !isActiveDefaultDb"
@@ -326,7 +326,7 @@ defineExpose({
 
       <div class="hidden xl:block h-3.5 w-px bg-zinc-800 mx-1" />
 
-      <!-- 3. Master Reference DB (Background Opening Tree Encyclopedia) -->
+      <!-- Master Reference DB (Background Opening Tree Encyclopedia) -->
       <div class="hidden xl:flex items-center gap-1">
         <button
           class="px-2 py-0.5 rounded-md bg-cyan-950/40 hover:bg-cyan-900/50 border border-cyan-500/30 text-[11px] font-mono text-cyan-300 flex items-center gap-1 cursor-pointer transition-colors"
@@ -334,7 +334,7 @@ defineExpose({
           @click="emit('openDatabaseHub')"
         >
           <BookOpen class="w-3 h-3 text-cyan-400" />
-          <span>🏛️ Master Ref: {{ referenceDbName || 'Uses Active DB' }}</span>
+          <span>Master Ref: {{ referenceDbName || 'Uses Active DB' }}</span>
         </button>
         <button
           v-if="dbName && activeDbPath && referenceDbName !== dbName"

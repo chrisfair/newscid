@@ -30,25 +30,25 @@ func TestGeneratePosition_All960(t *testing.T) {
 		p := pos.Pieces
 		require.Len(t, p, 8)
 
-		// 1. Verify exact piece counts
+		// Verify exact piece counts
 		assert.Equal(t, 2, strings.Count(p, "R"), "id %d should have 2 rooks", id)
 		assert.Equal(t, 2, strings.Count(p, "N"), "id %d should have 2 knights", id)
 		assert.Equal(t, 2, strings.Count(p, "B"), "id %d should have 2 bishops", id)
 		assert.Equal(t, 1, strings.Count(p, "Q"), "id %d should have 1 queen", id)
 		assert.Equal(t, 1, strings.Count(p, "K"), "id %d should have 1 king", id)
 
-		// 2. Bishops must be on opposite colored squares (one on odd index, one on even index)
+		// Bishops must be on opposite colored squares (one on odd index, one on even index)
 		b1 := strings.Index(p, "B")
 		b2 := strings.LastIndex(p, "B")
 		assert.NotEqual(t, b1%2, b2%2, "id %d bishops must be on opposite colors", id)
 
-		// 3. King must be between the two Rooks
+		// King must be between the two Rooks
 		r1 := strings.Index(p, "R")
 		r2 := strings.LastIndex(p, "R")
 		k := strings.Index(p, "K")
 		assert.True(t, r1 < k && k < r2, "id %d King must be between the two Rooks (r1=%d, k=%d, r2=%d)", id, r1, k, r2)
 
-		// 4. Verify uniqueness of all 960 positions
+		// Verify uniqueness of all 960 positions
 		seenPieces[p]++
 	}
 

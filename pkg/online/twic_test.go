@@ -131,13 +131,13 @@ func TestTWICClient_DownloadAndExtract(t *testing.T) {
 func TestTWICClient_ExtractErrors(t *testing.T) {
 	client := NewTWICClient()
 
-	// 1. Invalid zip bytes
+	// Invalid zip bytes
 	_, err := client.extractGamesFromZip([]byte("not-a-zip-file"), 100)
 	if err == nil {
 		t.Error("expected error for invalid zip data")
 	}
 
-	// 2. Zip with no PGN file inside
+	// Zip with no PGN file inside
 	nonPgnZip := createTestZip(t, "readme.txt", "Some text file without PGN")
 	_, err = client.extractGamesFromZip(nonPgnZip, 100)
 	if err == nil || !bytes.Contains([]byte(err.Error()), []byte("no .pgn file found")) {
@@ -341,7 +341,7 @@ func TestTWICClient_CheckIssueExistsFallback(t *testing.T) {
 }
 
 func TestTWICClient_AdditionalEdgeCases(t *testing.T) {
-	// 1. ImportIssue with empty PGN zip (0 games) and duplicate game skipping, plus DownloadIssue failure
+	// ImportIssue with empty PGN zip (0 games) and duplicate game skipping, plus DownloadIssue failure
 	emptyPgnZip := createTestZip(t, "empty.pgn", "")
 	validZip := createTestZip(t, "games.pgn", sampleTWICPGN)
 

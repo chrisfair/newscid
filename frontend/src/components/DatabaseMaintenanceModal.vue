@@ -421,7 +421,7 @@ async function handleUpdateFromLocal() {
       <!-- TAB CONTENTS -->
       <div class="flex-1 overflow-y-auto p-6 space-y-6">
 
-        <!-- 1. OVERVIEW & STATS -->
+        <!-- OVERVIEW & STATS -->
         <div v-if="activeTab === 'overview'" class="space-y-6">
           <div class="flex items-center justify-between">
             <h3 class="font-bold text-sm text-zinc-100 flex items-center gap-2">
@@ -541,7 +541,7 @@ async function handleUpdateFromLocal() {
           </div>
         </div>
 
-        <!-- 2. COMPACT & DEFRAGMENT -->
+        <!-- COMPACT & DEFRAGMENT -->
         <div v-if="activeTab === 'compact'" class="space-y-5">
           <div class="bg-zinc-950/50 border border-zinc-800 p-5 rounded-2xl space-y-3">
             <h3 class="font-bold text-sm text-zinc-100 flex items-center gap-2">
@@ -585,7 +585,7 @@ async function handleUpdateFromLocal() {
           </div>
         </div>
 
-        <!-- 3. SORT DATABASE -->
+        <!-- SORT DATABASE -->
         <div v-if="activeTab === 'sort'" class="space-y-5">
           <div class="bg-zinc-950/50 border border-zinc-800 p-5 rounded-2xl space-y-4">
             <h3 class="font-bold text-sm text-zinc-100 flex items-center gap-2">
@@ -648,7 +648,7 @@ async function handleUpdateFromLocal() {
           </div>
         </div>
 
-        <!-- 4. DUPLICATE GAMES -->
+        <!-- DUPLICATE GAMES -->
         <div v-if="activeTab === 'duplicates'" class="space-y-5">
           <div class="bg-zinc-950/50 border border-zinc-800 p-5 rounded-2xl space-y-4">
             <h3 class="font-bold text-sm text-zinc-100 flex items-center gap-2">
@@ -730,7 +730,7 @@ async function handleUpdateFromLocal() {
           </div>
         </div>
 
-        <!-- 5. INTEGRITY CHECK (VERIFY) -->
+        <!-- INTEGRITY CHECK (VERIFY) -->
         <div v-if="activeTab === 'verify'" class="space-y-5">
           <div class="bg-zinc-950/50 border border-zinc-800 p-5 rounded-2xl space-y-4">
             <h3 class="font-bold text-sm text-zinc-100 flex items-center gap-2">
@@ -790,7 +790,7 @@ async function handleUpdateFromLocal() {
           </div>
         </div>
 
-        <!-- 6. BATCH PGN IMPORT -->
+        <!-- BATCH PGN IMPORT -->
         <div v-if="activeTab === 'import'" class="space-y-5">
           <div class="bg-zinc-950/50 border border-zinc-800 p-5 rounded-2xl space-y-4">
             <h3 class="font-bold text-sm text-zinc-100 flex items-center gap-2">

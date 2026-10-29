@@ -75,7 +75,7 @@ type MegaImportResult struct {
 // Most recent (2026 / Latest) cumulative & current archives are marked with Year: 2026 and IsLatest: true so UI defaults to only the most recent archives.
 func DefaultMegaDatabaseCatalog() []MegaDatabaseSource {
 	return []MegaDatabaseSource{
-		// 1. LumbrasGigaBase (HuggingFace CDN) — 2026 & Latest Cumulative Releases First
+		// LumbrasGigaBase (HuggingFace CDN) — 2026 & Latest Cumulative Releases First
 		{
 			ID:            "lumbras-otb-2026",
 			Name:          "Lumbra's GigaBase — OTB 2026 Release (Latest)",
@@ -147,7 +147,7 @@ func DefaultMegaDatabaseCatalog() []MegaDatabaseSource {
 			IsLatest:      true,
 		},
 
-		// 2. Lichess OTB Broadcasts & Open Streams — Most Recent (2026)
+		// Lichess OTB Broadcasts & Open Streams — Most Recent (2026)
 		{
 			ID:            "lichess-broadcast-2026-09",
 			Name:          "Lichess OTB Master Broadcasts — Sep 2026 (Latest)",
@@ -191,7 +191,7 @@ func DefaultMegaDatabaseCatalog() []MegaDatabaseSource {
 			IsLatest:      true,
 		},
 
-		// 3. Older / 2025 & Historical Individual Archives (Hidden by default when '2026 / Latest Only' is active)
+		// Older / 2025 & Historical Individual Archives (Hidden by default when '2026 / Latest Only' is active)
 		{
 			ID:            "lumbras-otb-2025",
 			Name:          "Lumbra's GigaBase — OTB 2025 Complete (Older Archive)",

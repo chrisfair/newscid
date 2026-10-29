@@ -36,21 +36,21 @@
               :class="format === 'html' ? 'bg-zinc-800 text-emerald-400 font-semibold shadow-sm' : 'text-zinc-400 hover:text-zinc-200'"
               class="px-4 py-1.5 rounded-md text-sm transition-all flex items-center gap-2"
             >
-              <span>🌐 Modern HTML</span>
+              <span>Modern HTML</span>
             </button>
             <button
               @click="format = 'latex'"
               :class="format === 'latex' ? 'bg-zinc-800 text-emerald-400 font-semibold shadow-sm' : 'text-zinc-400 hover:text-zinc-200'"
               class="px-4 py-1.5 rounded-md text-sm transition-all flex items-center gap-2"
             >
-              <span>📄 LaTeX Article</span>
+              <span>LaTeX Article</span>
             </button>
             <button
               @click="format = 'card'"
               :class="format === 'card' ? 'bg-zinc-800 text-emerald-400 font-semibold shadow-sm' : 'text-zinc-400 hover:text-zinc-200'"
               class="px-4 py-1.5 rounded-md text-sm transition-all flex items-center gap-2"
             >
-              <span>🎨 Social / Study Card (SVG)</span>
+              <span>Social / Study Card (SVG)</span>
             </button>
           </div>
 
@@ -124,13 +124,13 @@
             :title="'Copy full ' + format.toUpperCase() + ' to clipboard'"
           >
             <span v-if="copied" class="text-emerald-400">✓ Copied!</span>
-            <span v-else>📋 Copy Code</span>
+            <span v-else>Copy Code</span>
           </button>
           <button
             @click="downloadFile"
             class="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-medium transition-colors flex items-center gap-1.5"
           >
-            <span>💾 Save File</span>
+            <span>Save File</span>
           </button>
         </div>
       </div>

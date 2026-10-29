@@ -146,10 +146,10 @@ func TestDiscoverScidEngines(t *testing.T) {
 func TestMultiPVAndOptionConfiguration(t *testing.T) {
 	eng := engine.NewEngine("/nonexistent/path")
 
-	// 1. Initial MultiPV
+	// Initial MultiPV
 	assert.Equal(t, 1, eng.GetMultiPV())
 
-	// 2. SetMultiPV with clamping
+	// SetMultiPV with clamping
 	err := eng.SetMultiPV(3)
 	require.NoError(t, err)
 	assert.Equal(t, 3, eng.GetMultiPV())
@@ -162,7 +162,7 @@ func TestMultiPVAndOptionConfiguration(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 10, eng.GetMultiPV())
 
-	// 3. SetThreads and SetHash clamping
+	// SetThreads and SetHash clamping
 	err = eng.SetThreads(4)
 	require.NoError(t, err)
 	err = eng.SetThreads(0)
@@ -176,11 +176,11 @@ func TestMultiPVAndOptionConfiguration(t *testing.T) {
 	err = eng.SetOption("Contempt", "10")
 	require.NoError(t, err)
 
-	// 4. GetLastEval
+	// GetLastEval
 	eval := eng.GetLastEval()
 	assert.Equal(t, 10, eval.MultiPV)
 
-	// 5. Unstarted engine error cases
+	// Unstarted engine error cases
 	err = eng.Analyze("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", nil, 10)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "engine not started")
@@ -193,7 +193,7 @@ func TestMultiPVAndOptionConfiguration(t *testing.T) {
 func TestParseInfoLineMultiPV(t *testing.T) {
 	startFEN := "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
-	// 1. MultiPV Line 1
+	// MultiPV Line 1
 	line1 := "info depth 16 seldepth 22 multipv 1 score cp 35 nodes 87654 nps 450000 pv e2e4 e7e5 g1f3 b8c6"
 	pvLine1, hasPV := engine.ParseInfoLine(line1, startFEN)
 	require.True(t, hasPV)
@@ -206,7 +206,7 @@ func TestParseInfoLineMultiPV(t *testing.T) {
 	assert.Equal(t, "e4", pvLine1.SAN)
 	assert.Contains(t, pvLine1.PVFormatted, "1. e4")
 
-	// 2. MultiPV Line 2
+	// MultiPV Line 2
 	line2 := "info depth 16 seldepth 20 multipv 2 score cp 15 nodes 87654 nps 450000 pv d2d4 d7d5 c2c4 e7e6"
 	pvLine2, hasPV := engine.ParseInfoLine(line2, startFEN)
 	require.True(t, hasPV)
@@ -216,14 +216,14 @@ func TestParseInfoLineMultiPV(t *testing.T) {
 	assert.Equal(t, "d2d4", pvLine2.MoveUCI)
 	assert.Equal(t, "d4", pvLine2.SAN)
 
-	// 3. MultiPV Line 3 with Mate score
+	// MultiPV Line 3 with Mate score
 	line3 := "info depth 12 multipv 3 score mate -3 nodes 54321 nps 300000 pv f2f3 e7e5 g2g4 d8h4"
 	pvLine3, hasPV := engine.ParseInfoLine(line3, startFEN)
 	require.True(t, hasPV)
 	assert.Equal(t, 3, pvLine3.MultiPV)
 	assert.Equal(t, -3, pvLine3.MateIn)
 
-	// 4. Non-PV Info Line (currmove or stats only)
+	// Non-PV Info Line (currmove or stats only)
 	lineNonPV := "info depth 12 currmove e2e4 currmovenumber 1"
 	_, hasPV = engine.ParseInfoLine(lineNonPV, startFEN)
 	assert.False(t, hasPV)
@@ -303,7 +303,7 @@ func TestLiveMultiPVWithEngine(t *testing.T) {
 }
 
 func TestAnnotateGameVariations(t *testing.T) {
-	// 1. Error checks
+	// Error checks
 	_, err := engine.AnnotateGame(nil, nil, 100)
 	assert.Error(t, err)
 
@@ -311,14 +311,14 @@ func TestAnnotateGameVariations(t *testing.T) {
 	_, err = engine.AnnotateGame(game, nil, 100)
 	assert.Error(t, err)
 
-	// 2. Empty game
+	// Empty game
 	emptyGame := chess.NewGame()
 	engMock := engine.NewEngine("/mock")
 	analysis, err := engine.AnnotateGame(emptyGame, engMock, 100)
 	require.NoError(t, err)
 	assert.Empty(t, analysis.MoveAnalyses)
 
-	// 3. Annotate Fool's Mate game with blunders and checkmate
+	// Annotate Fool's Mate game with blunders and checkmate
 	engines := engine.FindAvailableEngines()
 	if len(engines) > 0 {
 		activeEng := engine.NewEngine(engines[0])
@@ -396,27 +396,27 @@ func TestParseInfoLinePerspectiveNormalization(t *testing.T) {
 	whiteTurnFEN := "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1"
 	blackTurnFEN := "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
 
-	// 1. White to move, UCI engine reports +450 cp (White winning)
+	// White to move, UCI engine reports +450 cp (White winning)
 	lineW, okW := engine.ParseInfoLine("info depth 18 multipv 1 score cp 450 nodes 120000 nps 500000 pv e2e4 e7e5", whiteTurnFEN)
 	require.True(t, okW)
 	assert.Equal(t, 450, lineW.ScoreCp, "White-to-move +450 cp should remain +450 cp (White advantage)")
 
-	// 2. Black to move, UCI engine reports +450 cp (Black winning from Black's POV -> -450 cp from White's POV)
+	// Black to move, UCI engine reports +450 cp (Black winning from Black's POV -> -450 cp from White's POV)
 	lineB, okB := engine.ParseInfoLine("info depth 18 multipv 1 score cp 450 nodes 120000 nps 500000 pv e7e5 g1f3", blackTurnFEN)
 	require.True(t, okB)
 	assert.Equal(t, -450, lineB.ScoreCp, "Black-to-move +450 cp must be negated to -450 cp (Black advantage)")
 
-	// 3. Black to move, UCI engine reports -300 cp (Black losing from Black's POV -> +300 cp from White's POV)
+	// Black to move, UCI engine reports -300 cp (Black losing from Black's POV -> +300 cp from White's POV)
 	lineBLosing, okBLosing := engine.ParseInfoLine("info depth 18 multipv 1 score cp -300 nodes 120000 nps 500000 pv e7e5 g1f3", blackTurnFEN)
 	require.True(t, okBLosing)
 	assert.Equal(t, 300, lineBLosing.ScoreCp, "Black-to-move -300 cp must be negated to +300 cp (White advantage)")
 
-	// 4. Black to move, UCI engine reports mate 3 (Black mates White in 3 -> -3 from White's POV)
+	// Black to move, UCI engine reports mate 3 (Black mates White in 3 -> -3 from White's POV)
 	lineBMate, okBMate := engine.ParseInfoLine("info depth 20 multipv 1 score mate 3 nodes 50000 nps 250000 pv d8h4", blackTurnFEN)
 	require.True(t, okBMate)
 	assert.Equal(t, -3, lineBMate.MateIn, "Black-to-move mate 3 must be negated to -3 (Black mates White)")
 
-	// 5. Long PV (>12 moves) and unknown score kind
+	// Long PV (>12 moves) and unknown score kind
 	longPV := "info depth 10 score unknown 10 pv e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 c2c3 g8f6 d2d4 e5d4 c3d4 f8b4 b1c3 f6e4"
 	pvLong, okLong := engine.ParseInfoLine(longPV, whiteTurnFEN)
 	require.True(t, okLong)

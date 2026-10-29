@@ -16,18 +16,18 @@ func TestPersonaManagerCRUD(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "test_personas.json")
 
-	// 1. Initialize PersonaManager
+	// Initialize PersonaManager
 	pm, err := NewPersonaManager(configPath)
 	require.NoError(t, err)
 	assert.Empty(t, pm.GetPersonas())
 
-	// 2. SavePersona validation: empty display name should fail
+	// SavePersona validation: empty display name should fail
 	_, err = pm.SavePersona(&Persona{DisplayName: "  "})
 	assert.Error(t, err)
 	_, err = pm.SavePersona(nil)
 	assert.Error(t, err)
 
-	// 3. Create Persona 1
+	// Create Persona 1
 	p1, err := pm.SavePersona(&Persona{
 		DisplayName: "Christopher Fair",
 		Identifiers: []string{"Fair, Christopher", "ChristopherFair", "QuenyenHighElf", "Fair, Christopher"}, // duplicate should be cleaned
@@ -42,7 +42,7 @@ func TestPersonaManagerCRUD(t *testing.T) {
 	assert.NotEmpty(t, p1.AvatarColor)
 	assert.Greater(t, p1.CreatedAt, int64(0))
 
-	// 4. Create Persona 2
+	// Create Persona 2
 	p2, err := pm.SavePersona(&Persona{
 		DisplayName: "Magnus Carlsen",
 		Identifiers: []string{"Carlsen, Magnus", "MagnusCarlsen", "DrNykterstein"},
@@ -52,13 +52,13 @@ func TestPersonaManagerCRUD(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, p2.ID)
 
-	// 5. GetPersonas should return 2 sorted alphabetically
+	// GetPersonas should return 2 sorted alphabetically
 	personas := pm.GetPersonas()
 	require.Len(t, personas, 2)
 	assert.Equal(t, "Christopher Fair", personas[0].DisplayName)
 	assert.Equal(t, "Magnus Carlsen", personas[1].DisplayName)
 
-	// 6. GetPersona by ID
+	// GetPersona by ID
 	fetched, err := pm.GetPersona(p1.ID)
 	require.NoError(t, err)
 	assert.Equal(t, p1.DisplayName, fetched.DisplayName)
@@ -66,7 +66,7 @@ func TestPersonaManagerCRUD(t *testing.T) {
 	_, err = pm.GetPersona("non-existent-id")
 	assert.Error(t, err)
 
-	// 7. GetPersonaByDisplayName
+	// GetPersonaByDisplayName
 	byName, err := pm.GetPersonaByDisplayName("christopher fair")
 	require.NoError(t, err)
 	assert.Equal(t, p1.ID, byName.ID)
@@ -74,7 +74,7 @@ func TestPersonaManagerCRUD(t *testing.T) {
 	_, err = pm.GetPersonaByDisplayName("Unknown Player")
 	assert.Error(t, err)
 
-	// 8. FindPersonaForIdentifier
+	// FindPersonaForIdentifier
 	found1 := pm.FindPersonaForIdentifier("quenyenhighelf")
 	require.NotNil(t, found1)
 	assert.Equal(t, p1.ID, found1.ID)
@@ -86,7 +86,7 @@ func TestPersonaManagerCRUD(t *testing.T) {
 	assert.Nil(t, pm.FindPersonaForIdentifier("UnknownAlias"))
 	assert.Nil(t, pm.FindPersonaForIdentifier(""))
 
-	// 9. AddIdentifier
+	// AddIdentifier
 	updated, err := pm.AddIdentifier(p1.ID, "Fair, C.")
 	require.NoError(t, err)
 	assert.Contains(t, updated.Identifiers, "Fair, C.")
@@ -101,7 +101,7 @@ func TestPersonaManagerCRUD(t *testing.T) {
 	_, err = pm.AddIdentifier("bad-id", "some_alias")
 	assert.Error(t, err)
 
-	// 10. RemoveIdentifier
+	// RemoveIdentifier
 	removed, err := pm.RemoveIdentifier(p1.ID, "Fair, C.")
 	require.NoError(t, err)
 	assert.NotContains(t, removed.Identifiers, "Fair, C.")
@@ -113,7 +113,7 @@ func TestPersonaManagerCRUD(t *testing.T) {
 	_, err = pm.RemoveIdentifier("bad-id", "some_alias")
 	assert.Error(t, err)
 
-	// 11. Persistence verification: re-open manager from disk
+	// Persistence verification: re-open manager from disk
 	pm2, err := NewPersonaManager(configPath)
 	require.NoError(t, err)
 	assert.Len(t, pm2.GetPersonas(), 2)
@@ -121,7 +121,7 @@ func TestPersonaManagerCRUD(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Christopher Fair", persistedP1.DisplayName)
 
-	// 12. DeletePersona
+	// DeletePersona
 	err = pm.DeletePersona(p2.ID)
 	require.NoError(t, err)
 	assert.Len(t, pm.GetPersonas(), 1)
@@ -129,7 +129,7 @@ func TestPersonaManagerCRUD(t *testing.T) {
 	err = pm.DeletePersona("bad-id")
 	assert.Error(t, err)
 
-	// 13. DefaultConfigPath should not be empty
+	// DefaultConfigPath should not be empty
 	assert.NotEmpty(t, DefaultConfigPath())
 }
 
@@ -215,7 +215,7 @@ func TestPersonaStatisticsAndSuggestions(t *testing.T) {
 		Identifiers: []string{"Fair, Christopher", "ChristopherFair", "QuenyenHighElf"},
 	}
 
-	// 1. CalculatePersonaStatistics
+	// CalculatePersonaStatistics
 	stats := CalculatePersonaStatistics(db, persona)
 	require.NotNil(t, stats)
 	assert.Equal(t, "p-chris", stats.PersonaID)
@@ -246,7 +246,7 @@ func TestPersonaStatisticsAndSuggestions(t *testing.T) {
 	assert.Equal(t, 1, statMap["QuenyenHighElf"].GameCount)
 	assert.Equal(t, 1, statMap["QuenyenHighElf"].Wins)
 
-	// 2. SuggestIdentifiers
+	// SuggestIdentifiers
 	// Query "Fair" should suggest "Fair, Christopher" and "ChristopherFair"
 	suggestions := SuggestIdentifiers(db, "Fair", []string{})
 	assert.Contains(t, suggestions, "Fair, Christopher")
@@ -335,7 +335,7 @@ func TestPersonaDedicatedDatabaseAndAggregation(t *testing.T) {
 	pm, err := NewPersonaManager(configPath)
 	require.NoError(t, err)
 
-	// 1. Create a source database with games
+	// Create a source database with games
 	sourceBasePath := filepath.Join(tempDir, "source_db")
 	sourceDB := &scid.Database{}
 	err = sourceDB.Create(sourceBasePath, "Source Big Base")
@@ -367,7 +367,7 @@ func TestPersonaDedicatedDatabaseAndAggregation(t *testing.T) {
 	_, err = sourceDB.SaveGame(g3)
 	require.NoError(t, err)
 
-	// 2. Create Persona with dedicated database path in tempDir
+	// Create Persona with dedicated database path in tempDir
 	personaBasePath := filepath.Join(tempDir, "ChristopherFair_Dedicated")
 	p, err := pm.SavePersona(&Persona{
 		DisplayName:  "Christopher Fair",
@@ -376,13 +376,13 @@ func TestPersonaDedicatedDatabaseAndAggregation(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// 3. EnsurePersonaDatabase creates .si4 if not present
+	// EnsurePersonaDatabase creates .si4 if not present
 	ensuredPath, err := pm.EnsurePersonaDatabase(p)
 	require.NoError(t, err)
 	assert.Equal(t, personaBasePath, ensuredPath)
 	assert.FileExists(t, personaBasePath+".si4")
 
-	// 4. AggregateGames: extracts 2 matching games into dedicated base
+	// AggregateGames: extracts 2 matching games into dedicated base
 	res, err := pm.AggregateGames(sourceDB, p.ID)
 	require.NoError(t, err)
 	assert.Equal(t, 2, res.TotalFound)
@@ -390,7 +390,7 @@ func TestPersonaDedicatedDatabaseAndAggregation(t *testing.T) {
 	assert.Equal(t, 0, res.DuplicatesSkipped)
 	assert.Equal(t, 2, res.TotalPersonaGames)
 
-	// 5. AggregateGames again: should skip both as duplicates!
+	// AggregateGames again: should skip both as duplicates!
 	res2, err := pm.AggregateGames(sourceDB, p.ID)
 	require.NoError(t, err)
 	assert.Equal(t, 2, res2.TotalFound)
@@ -398,7 +398,7 @@ func TestPersonaDedicatedDatabaseAndAggregation(t *testing.T) {
 	assert.Equal(t, 2, res2.DuplicatesSkipped)
 	assert.Equal(t, 2, res2.TotalPersonaGames)
 
-	// 6. Aggregate errors
+	// Aggregate errors
 	_, err = pm.AggregateGames(nil, p.ID)
 	assert.Error(t, err)
 	_, err = pm.AggregateGames(sourceDB, "non-existent-id")
@@ -406,14 +406,14 @@ func TestPersonaDedicatedDatabaseAndAggregation(t *testing.T) {
 	_, err = pm.EnsurePersonaDatabase(nil)
 	assert.Error(t, err)
 
-	// 7. Test directory helpers
+	// Test directory helpers
 	dir := DefaultPersonaDirectory()
 	assert.NotEmpty(t, dir)
 	dbPath := DefaultPersonaDatabasePath("Garry Kasparov")
 	assert.Contains(t, dbPath, "Garry_Kasparov")
 	assert.Contains(t, DefaultPersonaDatabasePath(""), "persona")
 
-	// 8. EnsurePersonaDatabase with empty DatabasePath
+	// EnsurePersonaDatabase with empty DatabasePath
 	pEmptyPath, err := pm.SavePersona(&Persona{
 		DisplayName: "Temporary Player",
 	})
@@ -422,7 +422,7 @@ func TestPersonaDedicatedDatabaseAndAggregation(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, ensuredEmpty)
 
-	// 9. NewPersonaManager with empty configPath (uses default)
+	// NewPersonaManager with empty configPath (uses default)
 	pmDefault, err := NewPersonaManager("")
 	require.NoError(t, err)
 	assert.NotNil(t, pmDefault)

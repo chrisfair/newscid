@@ -61,7 +61,7 @@ func (sm *SyncManager) SyncProfile(p *Profile, targetDB *scid.Database) (*SyncRe
 	existingSigs := targetDB.BuildGameSignatureSet()
 	var allGames []*chess.Game
 
-	// 1. Fetch from Lichess.org (newest first, continuing into older games, skipping existing)
+	// Fetch from Lichess.org (newest first, continuing into older games, skipping existing)
 	if strings.TrimSpace(p.LichessUsername) != "" {
 		games, skipped, err := sm.Lichess.FetchUserGamesIncremental(
 			p.LichessUsername,
@@ -79,7 +79,7 @@ func (sm *SyncManager) SyncProfile(p *Profile, targetDB *scid.Database) (*SyncRe
 		}
 	}
 
-	// 2. Fetch from Chess.com (newest archives first, continuing into older archives, skipping existing)
+	// Fetch from Chess.com (newest archives first, continuing into older archives, skipping existing)
 	if strings.TrimSpace(p.ChessComUsername) != "" {
 		games, skipped, err := sm.ChessCom.FetchUserGamesIncremental(
 			p.ChessComUsername,
@@ -107,7 +107,7 @@ func (sm *SyncManager) SyncProfile(p *Profile, targetDB *scid.Database) (*SyncRe
 		return res, nil
 	}
 
-	// 3. Batch import into target database
+	// Batch import into target database
 	importStats, err := targetDB.ImportGames(allGames)
 	if err != nil {
 		return nil, fmt.Errorf("importing games to database: %w", err)
@@ -118,7 +118,7 @@ func (sm *SyncManager) SyncProfile(p *Profile, targetDB *scid.Database) (*SyncRe
 		res.Errors = append(res.Errors, fmt.Sprintf("%d games failed during binary encoding", importStats.Errors))
 	}
 
-	// 4. Auto-deduplication if enabled
+	// Auto-deduplication if enabled
 	if p.AutoDeduplicate {
 		deletedDups, err := targetDB.DeleteDuplicates(scid.DuplicateCriteria{ExactMoves: true})
 		if err != nil {
@@ -128,7 +128,7 @@ func (sm *SyncManager) SyncProfile(p *Profile, targetDB *scid.Database) (*SyncRe
 		}
 	}
 
-	// 5. Blended database synchronization if configured
+	// Blended database synchronization if configured
 	if p.TargetMode == TargetBlendedBase && strings.TrimSpace(p.BlendedDatabase) != "" {
 		blendedDB, err := openOrCreateDatabase(p.BlendedDatabase, fmt.Sprintf("Blended Master Database for %s", p.Name))
 		if err != nil {
@@ -146,7 +146,7 @@ func (sm *SyncManager) SyncProfile(p *Profile, targetDB *scid.Database) (*SyncRe
 		}
 	}
 
-	// 6. Update Profile sync metrics
+	// Update Profile sync metrics
 	p.LastSyncTime = startTime.UnixMilli()
 	p.LastSyncGames = res.Imported
 	if sm.Profiles != nil {
@@ -234,7 +234,7 @@ func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *sci
 
 	var allGames []*chess.Game
 
-	// 1. Fetch from Lichess (newest first, continuing into older games, skipping existing)
+	// Fetch from Lichess (newest first, continuing into older games, skipping existing)
 	if strings.TrimSpace(opts.LichessUsername) != "" {
 		if opts.ProgressFn != nil {
 			opts.ProgressFn("connecting", 0, 0, fmt.Sprintf("Connecting to Lichess for %s (%d existing games in DB)...", opts.LichessUsername, existingSigs.Count()))
@@ -256,7 +256,7 @@ func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *sci
 		}
 	}
 
-	// 2. Fetch from Chess.com (newest archives first, continuing into older archives, skipping existing)
+	// Fetch from Chess.com (newest archives first, continuing into older archives, skipping existing)
 	if strings.TrimSpace(opts.ChessComUsername) != "" {
 		if opts.ProgressFn != nil {
 			opts.ProgressFn("connecting", 0, 0, fmt.Sprintf("Connecting to Chess.com for %s (%d existing games in DB)...", opts.ChessComUsername, existingSigs.Count()))
@@ -312,7 +312,7 @@ func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *sci
 		return nil
 	}
 
-	// 3. Import according to TargetMode
+	// Import according to TargetMode
 	switch mode {
 	case TargetActiveBase:
 		if activeDB == nil || !activeDB.IsOpen {
@@ -375,7 +375,7 @@ func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *sci
 		}
 	}
 
-	// 4. Optionally register as tracked study profile
+	// Optionally register as tracked study profile
 	if opts.CreateProfile && sm.Profiles != nil {
 		prof := &Profile{
 			Name:             displayName,

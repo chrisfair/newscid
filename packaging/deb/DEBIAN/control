@@ -1,5 +1,5 @@
 Package: newscid
-Version: 1.3.29-1
+Version: 1.3.30-1
 Section: games
 Priority: optional
 Architecture: amd64
@@ -7,9 +7,9 @@ Maintainer: Christopher Patrick Fair <christopherpatrickfair@gmail.com>
 Depends: libc6 (>= 2.34), libgtk-3-0 (>= 3.24.0), libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37
 Recommends: stockfish | fruit
 Homepage: https://github.com/chrisfair/newscid
-Description: Modern Chess Information Database (Scid vs. PC Rewrite)
- NewScid is a fresh, database-compatible rewrite of Scid vs. PC featuring a modern,
- intuitive user interface built with Wails v2 (Go backend) and Vue 3 (TypeScript + Vite).
+Description: Chess Information Database (Scid v4 compatible)
+ NewScid is a Scid v4 database-compatible chess application built with Wails v2
+ (Go backend) and Vue 3 (TypeScript).
  .
- Features full native compatibility with Scid .si4/.sn4/.sg4 databases, PGN import/export,
- real-time UCI chess engine analysis, opening tree explorer, and tactics training.
+ Supports Scid .si4/.sn4/.sg4 databases, PGN import/export, UCI chess engine
+ analysis, opening tree exploration, and tactical training.

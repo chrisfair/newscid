@@ -546,7 +546,7 @@ func FactoryResetWorkstation(opts FactoryResetOptions, dataRoot, configRoot, leg
 		WipedPaths:       []string{},
 	}
 
-	// 1. Optional (opt-in) backup before wiping any data
+	// Optional (opt-in) backup before wiping any data
 	if opts.CreateOptInBackup {
 		backupDir := strings.TrimSpace(opts.BackupDestDir)
 		if backupDir == "" {
@@ -566,7 +566,7 @@ func FactoryResetWorkstation(opts FactoryResetOptions, dataRoot, configRoot, leg
 		res.BackupArchivePath = archivePath
 	}
 
-	// 2. Determine directories to wipe
+	// Determine directories to wipe
 	targetDirs := []string{
 		dirs[CategoryDatabases],
 		dirs[CategoryPersonas],
@@ -601,7 +601,7 @@ func FactoryResetWorkstation(opts FactoryResetOptions, dataRoot, configRoot, leg
 		res.WipedPaths = append(res.WipedPaths, d)
 	}
 
-	// 2b. Wipe loose files directly inside dataRoot (e.g. SQLite databases, temporary files, logs)
+	// Wipe loose files directly inside dataRoot (e.g. SQLite databases, temporary files, logs)
 	if entries, err := os.ReadDir(dataRoot); err == nil {
 		for _, entry := range entries {
 			if !entry.IsDir() {
@@ -616,7 +616,7 @@ func FactoryResetWorkstation(opts FactoryResetOptions, dataRoot, configRoot, leg
 		}
 	}
 
-	// 3. Remove all JSON and state files in configRoot and legacyConfigDir
+	// Remove all JSON and state files in configRoot and legacyConfigDir
 	for _, cfgDir := range []string{configRoot, legacyConfigDir} {
 		entries, err := os.ReadDir(cfgDir)
 		if err != nil {
@@ -636,7 +636,7 @@ func FactoryResetWorkstation(opts FactoryResetOptions, dataRoot, configRoot, leg
 		}
 	}
 
-	// 4. Re-create clean skeleton directories
+	// Re-create clean skeleton directories
 	_, _ = EnsureWorkstationDirs(dataRoot, configRoot)
 
 	res.SizeFreedStr = FormatByteSize(res.BytesFreed)

@@ -196,7 +196,7 @@ function handleCopyPGN() {
 
 function handleTrainRepertoire() {
   if (!report.value || !report.value.pgnRepertoire) return
-  const title = `Anti-${report.value.displayName} Weaponized Repertoire`
+  const title = `Anti-${report.value.displayName} Counter Repertoire`
   emit('trainRepertoire', report.value.pgnRepertoire, title)
 }
 
@@ -230,7 +230,7 @@ function handleSparBot() {
               </span>
             </div>
             <p class="text-xs text-zinc-400">
-              Evaluates statistical vulnerabilities across opponent games and compiles a weaponized Polyglot counter-book
+              Evaluates statistical vulnerabilities across opponent games and compiles a Polyglot counter-book
             </p>
           </div>
         </div>
@@ -408,7 +408,7 @@ function handleSparBot() {
           </div>
 
           <div class="bg-zinc-950 p-2.5 rounded-xl border border-zinc-800 flex flex-col justify-between">
-            <span class="text-zinc-400 text-[11px]">Weaponized Book</span>
+            <span class="text-zinc-400 text-[11px]">Counter Book</span>
             <div class="text-base font-bold text-cyan-400 mt-0.5 flex items-center gap-1.5">
               <BookOpen class="w-4 h-4" />
               <span>{{ report.polyglotEntryCount }} Entries</span>

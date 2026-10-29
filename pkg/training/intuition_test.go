@@ -36,7 +36,7 @@ func TestSubmitIntuitionAnswer_Correct(t *testing.T) {
 	assert.Equal(t, IntuitionWhiteWinning, res.ActualCategory)
 	assert.Greater(t, res.PointsAwarded, 100) // Base 100 + speed bonus
 	assert.Greater(t, res.SpeedBonus, 0)
-	assert.Contains(t, res.Explanation, "Spot on!")
+	assert.Contains(t, res.Explanation, "Correct.")
 }
 
 func TestSubmitIntuitionAnswer_Wrong(t *testing.T) {
@@ -45,7 +45,7 @@ func TestSubmitIntuitionAnswer_Wrong(t *testing.T) {
 	assert.False(t, res.IsCorrect)
 	assert.Equal(t, 0, res.PointsAwarded)
 	assert.Equal(t, 0, res.SpeedBonus)
-	assert.Contains(t, res.Explanation, "Misjudgment")
+	assert.Contains(t, res.Explanation, "Incorrect.")
 }
 
 func TestSubmitIntuitionAnswer_Equal(t *testing.T) {
@@ -61,11 +61,11 @@ func TestSubmitIntuitionAnswer_NotFound(t *testing.T) {
 }
 
 func TestGenerateIntuitionDrillsFromDatabase(t *testing.T) {
-	// 1. Nil or closed DB
+	// Nil or closed DB
 	_, err := GenerateIntuitionDrillsFromDatabase(nil, 5)
 	assert.Error(t, err)
 
-	// 2. Open DB with games
+	// Open DB with games
 	tmpDir, err := os.MkdirTemp("", "scid_int_test_*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)

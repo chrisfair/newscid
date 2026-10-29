@@ -61,7 +61,7 @@ func TestWorkstationCLIs(t *testing.T) {
 
 	var out, errBuf bytes.Buffer
 
-	// 1. Version flags
+	// Version flags
 	if code := RunImportCLI([]string{"-version"}, &out, &errBuf); code != 0 {
 		t.Errorf("RunImportCLI -version failed: %d", code)
 	}
@@ -72,7 +72,7 @@ func TestWorkstationCLIs(t *testing.T) {
 		t.Errorf("RunScoutCLI -version failed: %d", code)
 	}
 
-	// 2. Argument validation errors
+	// Argument validation errors
 	if code := RunImportCLI([]string{"-badflag"}, &out, &errBuf); code != 2 {
 		t.Errorf("expected exit code 2 for bad flag, got %d", code)
 	}
@@ -92,7 +92,7 @@ func TestWorkstationCLIs(t *testing.T) {
 		t.Errorf("expected exit code 2 for missing -db, got %d", code)
 	}
 
-	// 3. Missing database errors for read-only tools
+	// Missing database errors for read-only tools
 	if code := RunFairPlayCLI([]string{"-db", filepath.Join(tmpDir, "nonexistent"), "-player", "AlphaPlayer"}, &out, &errBuf); code != 1 {
 		t.Errorf("expected exit code 1 for nonexistent db, got %d", code)
 	}
@@ -100,7 +100,7 @@ func TestWorkstationCLIs(t *testing.T) {
 		t.Errorf("expected exit code 1 for nonexistent db, got %d", code)
 	}
 
-	// 4. Import PGN into new database, then re-import (testing incremental signature deduplication) + compact
+	// Import PGN into new database, then re-import (testing incremental signature deduplication) + compact
 	out.Reset()
 	if code := RunImportCLI([]string{"-db", dbBase, "-pgn", pgnFile, "-dedup=true", "-compact=true"}, &out, &errBuf); code != 0 {
 		t.Fatalf("RunImportCLI PGN failed (%d): %s", code, errBuf.String())
@@ -128,7 +128,7 @@ func TestWorkstationCLIs(t *testing.T) {
 		t.Errorf("expected exit code 1 for missing pgn file, got %d", code)
 	}
 
-	// 5. RunFairPlayCLI (Markdown and JSON modes, plus missing player error)
+	// RunFairPlayCLI (Markdown and JSON modes, plus missing player error)
 	out.Reset()
 	if code := RunFairPlayCLI([]string{"-db", dbBase, "-player", "AlphaPlayer"}, &out, &errBuf); code != 0 {
 		t.Fatalf("RunFairPlayCLI markdown failed (%d): %s", code, errBuf.String())
@@ -149,7 +149,7 @@ func TestWorkstationCLIs(t *testing.T) {
 		t.Errorf("expected exit code 1 for missing player in fairplay")
 	}
 
-	// 6. RunScoutCLI: Dossier (Markdown & JSON), Exploit Opening (Markdown, JSON, & Polyglot book), and Crosstable (Markdown & JSON)
+	// RunScoutCLI: Dossier (Markdown & JSON), Exploit Opening (Markdown, JSON, & Polyglot book), and Crosstable (Markdown & JSON)
 	out.Reset()
 	if code := RunScoutCLI([]string{"-db", dbBase, "-player", "AlphaPlayer"}, &out, &errBuf); code != 0 {
 		t.Fatalf("RunScoutCLI dossier failed (%d): %s", code, errBuf.String())
@@ -201,7 +201,7 @@ func TestWorkstationCLIs(t *testing.T) {
 		t.Errorf("expected error for empty dbPath")
 	}
 
-	// 7. Online import via NewSyncManagerFn
+	// Online import via NewSyncManagerFn
 	if sm := NewSyncManagerFn(); sm == nil {
 		t.Errorf("expected default NewSyncManagerFn to return non-nil SyncManager")
 	}
@@ -230,7 +230,7 @@ func TestWorkstationCLIs(t *testing.T) {
 		t.Errorf("expected exit code 1 when online sync returns error, got %d", code)
 	}
 
-	// 8. Error path when book-out is an unwritable directory & exploit-color black with refutation lines
+	// Error path when book-out is an unwritable directory & exploit-color black with refutation lines
 	if code := RunScoutCLI([]string{"-db", dbBase, "-player", "BetaPlayer", "-exploit-color", "black", "-book-out", bookPath}, &out, &errBuf); code != 0 {
 		t.Errorf("expected exit code 0 for BetaPlayer black exploit, got %d", code)
 	}
@@ -238,7 +238,7 @@ func TestWorkstationCLIs(t *testing.T) {
 		t.Errorf("expected exit code 1 when book-out is a directory, got %d", code)
 	}
 
-	// 9. Corrupt database file and uncreatable directory error paths and default description
+	// Corrupt database file and uncreatable directory error paths and default description
 	corruptBase := filepath.Join(tmpDir, "corrupt_db")
 	_ = os.WriteFile(corruptBase+".si4", []byte("corrupt"), 0o644)
 	if code := RunImportCLI([]string{"-db", corruptBase}, &out, &errBuf); code != 1 {

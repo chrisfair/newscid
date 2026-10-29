@@ -5,11 +5,11 @@ import HelpModal from './HelpModal.vue'
 describe('HelpModal.vue', () => {
   beforeEach(() => {})
 
-  it('renders 100% local manual topics list and initial Getting Started section with no external links', () => {
+  it('renders local manual topics list and initial Getting Started section with no external links', () => {
     const wrapper = mount(HelpModal)
 
     expect(wrapper.text()).toContain('NewScid Local Workstation Manual & Contextual Help')
-    expect(wrapper.text()).toContain('100% Offline Local Docs')
+    expect(wrapper.text()).toContain('Offline Local Docs')
     expect(wrapper.text()).toContain('Getting Started')
     expect(wrapper.text()).toContain('Workspaces & Detachable Panels')
     expect(wrapper.text()).toContain('Databases, PGN & Mega Updates')

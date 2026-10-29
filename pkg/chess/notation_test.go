@@ -50,7 +50,7 @@ func TestNotationStylesForStandardMoves(t *testing.T) {
 
 	b.MakeMove(m2)
 
-	// 2. Nf3 (g1f3)
+	// Nf3 (g1f3)
 	m3, err := b.ParseUCI("g1f3")
 	require.NoError(t, err)
 

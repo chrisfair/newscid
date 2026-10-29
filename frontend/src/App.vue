@@ -1162,7 +1162,7 @@ function updateResponsiveBoardSize() {
     bottomDrawerHeight.value = maxDrawerH
   }
 
-  // 1. Measure available workspace & left-column dimensions
+  // Measure available workspace & left-column dimensions
   const topBarsH = zenMode.value
     ? 0
     : (34 + (effectiveCompact.value ? 0 : 48) + ((effectiveCompact.value && openGameTabs.value.length <= 1) ? 0 : 34))
@@ -1181,7 +1181,7 @@ function updateResponsiveBoardSize() {
     ? (wsClientW - 16)
     : Math.max(280, screenW - 16)
 
-  // 2. Measure actual DOM height + fallback estimates for non-board items inside left-col
+  // Measure actual DOM height + fallback estimates for non-board items inside left-col
   let measuredNonBoardH = 0
   let measuredCount = 0
   if (leftColRef.value) {
@@ -1360,7 +1360,7 @@ onMounted(async () => {
     initUITheme()
     window.addEventListener('resize', handleWindowResize)
 
-    // 0. Check window startup config (main workspace vs detached Hyprland screen panel vs live portal)
+    // Check window startup config (main workspace vs detached Hyprland screen panel vs live portal)
     try {
       const winCfg = await GetWindowStartupConfig()
       if (winCfg && winCfg.mode) {
@@ -1404,15 +1404,15 @@ onMounted(async () => {
       // Ignore in test environment
     }
 
-    // 1. Load sets and themes
+    // Load sets and themes
     pieceSets.value = (await GetPieceSets()) as PieceSetOption[]
     boardThemes.value = (await GetBoardThemes()) as BoardThemeOption[]
 
-    // 2. Discover user databases and system bases
+    // Discover user databases and system bases
     discoveredDatabases.value = (await GetDiscoveredDatabases()) as DiscoveredDatabase[]
     systemBases.value = await GetScidSystemBases()
 
-    // 3. Discover available UCI engines and configured Scid engines
+    // Discover available UCI engines and configured Scid engines
     discoveredEngines.value = (await GetDiscoveredEngines()) as EngineOption[]
     availableEngines.value = await GetAvailableEngines()
 
@@ -1427,7 +1427,7 @@ onMounted(async () => {
       selectedEngine.value = availableEngines.value[0]
     }
 
-    // 4. Listen to live engine events, annotation progress & live portal auto-captured games
+    // Listen to live engine events, annotation progress & live portal auto-captured games
     EventsOn('engine:eval', (data: EvalInfo) => {
       evalInfo.value = data
     })
@@ -1459,7 +1459,7 @@ onMounted(async () => {
 
     prefsInitialized.value = true
 
-    // 5. Auto-open Default Database (or initial DB passed via --db flag)
+    // Auto-open Default Database (or initial DB passed via --db flag)
     let autoBase: string | null = null
     if (windowStartupMode.value.initialDb) {
       autoBase = windowStartupMode.value.initialDb
@@ -1525,7 +1525,7 @@ onMounted(async () => {
       }
     }, 550)
 
-    // 6. Check voluntary support status (exempts author machine via Chess.com & Lichess IDs; 24h cooldown on dismiss)
+    // Check voluntary support status (exempts author machine via Chess.com & Lichess IDs; 24h cooldown on dismiss)
     const checkSupportNag = async () => {
       try {
         const supStatus = await GetSupportStatus()
@@ -1611,11 +1611,7 @@ watch(activeTab, (newTab) => {
     refreshDatabaseRolesStatus()
   }
 })
-
-// ==========================================
 // Board & Move Logic
-// ==========================================
-
 async function updateBoardState(fen: string) {
   try {
     const state = await ParseFEN(fen)
@@ -1691,7 +1687,7 @@ async function handleMove(moveInput: string) {
     const evalAfter = evalScore.value
     const swing = isWhite ? (evalBefore - evalAfter) : (evalAfter - evalBefore)
     if (swing >= 200) {
-      triggerBlunderRadar(`⚠️ Blunder Radar: Move dropped evaluation by ${(swing / 100).toFixed(1)} pawns!`)
+      triggerBlunderRadar(`Blunder Radar: Move dropped evaluation by ${(swing / 100).toFixed(1)} pawns!`)
     }
 
     // If simulated match is active and game is not finished, trigger bot response!
@@ -1962,11 +1958,7 @@ async function fetchOpeningTree(fen?: any) {
     treeLoading.value = false
   }
 }
-
-// ==========================================
 // Database Operations
-// ==========================================
-
 async function refreshGames() {
   try {
     const offset = (currentPage.value - 1) * pageSize.value
@@ -2502,11 +2494,7 @@ function handleSearchEcoInDb(ecoCode: string) {
   currentPage.value = 1
   refreshGames()
 }
-
-// ==========================================
 // PGN Import / Export
-// ==========================================
-
 async function handleImportPGN() {
   showImportModal.value = true
 }
@@ -2578,11 +2566,7 @@ async function handleExportPGN() {
     alert(`Error exporting PGN: ${err}`)
   }
 }
-
-// ==========================================
 // Engine Control
-// ==========================================
-
 async function toggleAnalysis() {
   if (isAnalyzing.value) {
     await StopEngine()
@@ -2645,11 +2629,7 @@ function handlePreviewCandidateMove(uci: string) {
   const to = uci.slice(2, 4)
   lastMove.value = { from, to }
 }
-
-// ==========================================
 // Annotation, NAG & Variation Operations
-// ==========================================
-
 async function handleSetNAG(ply: number, nag: number) {
   const move = flatMoves.value.find(m => m.ply === ply)
   if (move) {
@@ -2707,11 +2687,7 @@ async function handleDeleteVariation(ply: number, varIdx: number) {
     alert(`Could not delete variation: ${err}`)
   }
 }
-
-// ==========================================
 // Player Simulation Sparring Bot Logic
-// ==========================================
-
 async function handleStartSimulationMatch(payload: {
   playerName: string
   personaId?: string
@@ -3034,7 +3010,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
   {
     id: 'anti-persona-exploiter',
     title: 'Opponent Opening Exploiter & Custom Book',
-    subtitle: 'Evaluate opponent vulnerabilities and compile weaponized Polyglot opening book',
+    subtitle: 'Evaluate opponent vulnerabilities and compile Polyglot opening book',
     icon: 'crosshair',
     category: 'Training',
     action: () => { openAntiPersonaModal() }
@@ -3835,7 +3811,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
             class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] cursor-pointer transition-colors"
             @click="showGettingStartedWizardModal = true"
           >
-            🚀 Launch Getting Started Wizard
+            Launch Getting Started Wizard
           </button>
           <button
             class="text-zinc-400 hover:text-zinc-200 px-1.5 py-0.5 text-[11px] cursor-pointer"
@@ -4340,7 +4316,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
 
           <!-- Tab Content -->
           <div class="tab-content flex-1 overflow-hidden p-2 min-h-0">
-            <!-- 1. Notation & Evaluation Curve View -->
+            <!-- Notation & Evaluation Curve View -->
             <div v-show="activeTab === 'notation'" class="h-full flex flex-col gap-2">
               <EvaluationGraph
                 :analysis="gameAnalysis"
@@ -4375,7 +4351,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
               </div>
             </div>
 
-            <!-- 2. Opening Tree View -->
+            <!-- Opening Tree View -->
             <div v-show="activeTab === 'tree'" class="h-full">
               <OpeningTree
                 :fen="currentFEN"
@@ -4445,7 +4421,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
               <ImbalanceBar :report="imbalanceReport" />
             </div>
 
-            <!-- 3. Databases & Roles Hub View (Default / Active / Reference / Clipbase) -->
+            <!-- Databases & Roles Hub View (Default / Active / Reference / Clipbase) -->
             <div v-show="activeTab === 'db-roles'" class="h-full overflow-hidden">
               <DatabaseHubPanel
                 :roles-status="dbRolesStatus"
@@ -4473,7 +4449,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
               />
             </div>
 
-            <!-- 4. Lichess.org & Chess.com Live Portal View -->
+            <!-- Lichess.org & Chess.com Live Portal View -->
             <div v-show="activeTab === 'portal'" class="h-full overflow-hidden">
               <LivePortalPanel
                 :current-fen="currentFEN"
@@ -4490,7 +4466,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
               />
             </div>
 
-            <!-- 5. Game Info & Header View -->
+            <!-- Game Info & Header View -->
             <div v-show="activeTab === 'info'" class="h-full overflow-y-auto p-4 space-y-4">
               <div class="grid grid-cols-2 gap-3 text-xs font-mono">
                 <div class="p-3 bg-zinc-950 rounded-lg border border-zinc-800">
@@ -5144,7 +5120,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       @close="showOpponentScoutModal = false"
     />
 
-    <!-- Opponent Opening Exploiter & Custom Weaponized Book Generator Modal -->
+    <!-- Opponent Opening Exploiter & Counter-Book Generator Modal -->
     <AntiPersonaModal
       v-if="showAntiPersonaModal"
       :initial-persona-id="antiPersonaTargetId"

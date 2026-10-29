@@ -1,7 +1,7 @@
 Name:           newscid
-Version:        1.3.29
+Version:        1.3.30
 Release:        1%{?dist}
-Summary:        Modern Chess Information Database (Scid vs. PC Rewrite)
+Summary:        Chess Information Database (Scid v4 compatible)
 
 License:        GPL-3.0-or-later
 URL:            https://github.com/chrisfair/newscid
@@ -21,16 +21,16 @@ Requires:       shared-mime-info
 Recommends:     stockfish
 
 %description
-NewScid is a fresh, database-compatible rewrite of Scid vs. PC featuring a modern,
-intuitive user interface built with Wails v2 (Go backend) and Vue 3 (TypeScript + Vite).
+NewScid is a Scid v4 database-compatible chess application built with Wails v2
+(Go backend) and Vue 3 (TypeScript).
 
 Features include:
 - Native binary support for .si4, .sn4, and .sg4 databases
-- PGN parser and exporter with full variations and annotation support
-- Opening Tree Explorer dynamically calculating move frequencies and score percentages
-- Real-time UCI chess engine analysis with evaluation graphs and blunder alerts
-- Opponent and Persona Opening Exploiter with custom Polyglot .bin book generation
-- Tactics challenge ladder, Blunder Vault, and automated database puzzle miner
+- PGN parser and exporter with variations and annotation support
+- Opening Tree Explorer calculating move frequencies and score percentages
+- UCI chess engine analysis with evaluation graphs and blunder alerts
+- Opponent opening vulnerability scanner with Polyglot .bin book generation
+- Tactical puzzle trainer, Blunder Vault, and database puzzle extraction
 - 17 piece vector sets, customizable board themes, and dark/light UI modes
 
 %prep

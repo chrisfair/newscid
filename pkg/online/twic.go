@@ -48,7 +48,7 @@ func NewTWICClient() *TWICClient {
 		HTTPClient: &http.Client{
 			Timeout: 45 * time.Second,
 		},
-		UserAgent: "NewScid/1.0 (Chess Database; https://github.com/christopherpatrickfair/newscid)",
+		UserAgent: "NewScid/1.0 (Chess Database; https://github.com/chrisfair/newscid)",
 	}
 }
 
@@ -284,7 +284,7 @@ func (c *TWICClient) FindLatestIssue(ctx context.Context, probeStart int) (int, 
 		probeStart = 1500
 	}
 
-	// 1. Verify if probeStart exists. If not, binary search downwards.
+	// Verify if probeStart exists. If not, binary search downwards.
 	exists, err := c.CheckIssueExists(ctx, probeStart)
 	if err != nil {
 		return 0, fmt.Errorf("probing initial issue %d: %w", probeStart, err)

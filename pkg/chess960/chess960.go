@@ -32,27 +32,27 @@ func GeneratePosition(id int) (*Position, error) {
 	board := [8]rune{}
 	n := id
 
-	// 1. Light-square Bishop (files b, d, f, h -> indices 1, 3, 5, 7)
+	// Light-square Bishop (files b, d, f, h -> indices 1, 3, 5, 7)
 	b1 := (n % 4) * 2 + 1
 	board[b1] = 'B'
 	n /= 4
 
-	// 2. Dark-square Bishop (files a, c, e, g -> indices 0, 2, 4, 6)
+	// Dark-square Bishop (files a, c, e, g -> indices 0, 2, 4, 6)
 	b2 := (n % 4) * 2
 	board[b2] = 'B'
 	n /= 4
 
-	// 3. Queen placed on Q-th remaining empty square (0..5)
+	// Queen placed on Q-th remaining empty square (0..5)
 	q := n % 6
 	n /= 6
 	placeInEmpty(&board, q, 'Q')
 
-	// 4. Two Knights placed on remaining 5 empty squares using combination index (0..9)
+	// Two Knights placed on remaining 5 empty squares using combination index (0..9)
 	kPair := knightPairs[n]
 	placeInEmpty(&board, kPair[0], 'N')
 	placeInEmpty(&board, kPair[1]-1, 'N')
 
-	// 5. Remaining 3 empty squares are filled with Rook, King, Rook (King between Rooks)
+	// Remaining 3 empty squares are filled with Rook, King, Rook (King between Rooks)
 	placeInEmpty(&board, 0, 'R')
 	placeInEmpty(&board, 0, 'K')
 	placeInEmpty(&board, 0, 'R')

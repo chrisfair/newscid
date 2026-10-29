@@ -91,7 +91,7 @@ func CheckEngineAvailability(cfg *EngineConfig) {
 		return
 	}
 
-	// 1. Direct path check
+	// Direct path check
 	if filepath.IsAbs(cfg.Cmd) {
 		fi, err := os.Stat(cfg.Cmd)
 		if err == nil && !fi.IsDir() && (fi.Mode()&0111 != 0) {
@@ -101,14 +101,14 @@ func CheckEngineAvailability(cfg *EngineConfig) {
 		}
 	}
 
-	// 2. Look in PATH
+	// Look in PATH
 	if resolved, err := exec.LookPath(cfg.Cmd); err == nil {
 		cfg.Available = true
 		cfg.ResolvedCmd = resolved
 		return
 	}
 
-	// 3. Expand ~ if path starts with ~/
+	// Expand ~ if path starts with ~/
 	if strings.HasPrefix(cfg.Cmd, "~/") {
 		home, err := os.UserHomeDir()
 		if err == nil {
@@ -158,7 +158,7 @@ func DiscoverScidEngines() []EngineConfig {
 		)
 	}
 
-	// 1. Load from engines.dat files
+	// Load from engines.dat files
 	for _, cfgPath := range configFiles {
 		f, err := os.Open(cfgPath)
 		if err != nil {
@@ -181,7 +181,7 @@ func DiscoverScidEngines() []EngineConfig {
 		}
 	}
 
-	// 2. Scan standard system and known user engine paths
+	// Scan standard system and known user engine paths
 	standardEngines := []struct {
 		name string
 		cmd  string

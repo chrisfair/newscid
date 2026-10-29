@@ -231,7 +231,7 @@ function formatBookName(path: string) {
 
       <!-- Main Body -->
       <div class="flex-1 overflow-y-auto p-4 min-h-[350px]">
-        <!-- 1. DB Tree Content -->
+        <!-- DB Tree Content -->
         <div v-if="activeTab === 'db'" class="h-full flex flex-col">
           <!-- State: No Database Open -->
           <div v-if="!dbOpen" class="flex-1 flex flex-col items-center justify-center py-10 px-4 text-center space-y-4">
@@ -406,7 +406,7 @@ function formatBookName(path: string) {
           </div>
         </div>
 
-        <!-- 2. Polyglot Book Content -->
+        <!-- Polyglot Book Content -->
         <div v-else-if="activeTab === 'book'" class="h-full flex flex-col">
           <div v-if="availableBooks.length === 0" class="flex-1 flex flex-col items-center justify-center py-10 px-4 text-center space-y-2">
             <BookOpen class="w-8 h-8 text-zinc-600" />

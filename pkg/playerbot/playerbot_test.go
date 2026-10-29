@@ -89,7 +89,7 @@ func TestBuildPersonality(t *testing.T) {
 	db, _ := createTestDatabaseWithGames(t)
 	defer db.Close()
 
-	// 1. Build personality for Kasparov
+	// Build personality for Kasparov
 	personality, err := playerbot.BuildPersonality(db, "Kasparov")
 	require.NoError(t, err)
 	assert.Equal(t, "Kasparov", personality.Name)
@@ -133,15 +133,15 @@ func TestBuildPersonalityErrors(t *testing.T) {
 	db, _ := createTestDatabaseWithGames(t)
 	defer db.Close()
 
-	// 1. Nil database
+	// Nil database
 	_, err := playerbot.BuildPersonality(nil, "Kasparov")
 	assert.Error(t, err)
 
-	// 2. Empty player name
+	// Empty player name
 	_, err = playerbot.BuildPersonality(db, "   ")
 	assert.Error(t, err)
 
-	// 3. Player not found
+	// Player not found
 	_, err = playerbot.BuildPersonality(db, "NonExistentPlayer12345")
 	assert.Error(t, err)
 }

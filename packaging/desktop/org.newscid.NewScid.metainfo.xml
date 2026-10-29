@@ -4,27 +4,27 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <name>NewScid</name>
-  <summary>Modern Chess Information Database (Scid vs. PC Rewrite)</summary>
+  <summary>Chess Information Database (Scid v4 compatible)</summary>
   <description>
     <p>
-      NewScid is a fresh, database-compatible rewrite of Scid vs. PC featuring a modern,
-      responsive user interface powered by Wails v2 (Go backend) and Vue 3 (TypeScript + Vite).
+      NewScid is a Scid v4 database-compatible chess application written in Go (Wails v2)
+      and Vue 3 (TypeScript).
     </p>
     <p>Features include:</p>
     <ul>
-      <li>Native binary compatibility with Scid .si4, .sn4, and .sg4 databases</li>
-      <li>Lightning fast index search and Huffman/coordinate game decompression</li>
-      <li>Comprehensive PGN parsing and export with NAGs, commentary, and variations</li>
-      <li>Opening Tree Explorer with live move statistics and candidate scoring</li>
-      <li>Real-time UCI chess engine analysis with evaluation curve graphs and blunder detection</li>
-      <li>Opening Repertoire Trainer with spaced-repetition move recall</li>
-      <li>Tactics challenge ladder and automated database puzzle miner</li>
-      <li>Multiple chessboard themes and 17 vector piece sets</li>
+      <li>Native binary reading and writing for Scid .si4, .sn4, and .sg4 databases</li>
+      <li>Position, header, material, and pattern search across Huffman-compressed games</li>
+      <li>PGN parsing and export with NAGs, commentary, and variations</li>
+      <li>Opening Tree Explorer with move statistics and Polyglot book support</li>
+      <li>UCI chess engine analysis with evaluation graphs and blunder detection</li>
+      <li>Opening repertoire trainer with spaced-repetition scheduling</li>
+      <li>Tactical puzzle drills and database puzzle extraction</li>
+      <li>Customizable chessboard themes and 17 vector piece sets</li>
     </ul>
   </description>
   <launchable type="desktop-id">newscid.desktop</launchable>
-  <url type="homepage">https://github.com/christopherpatrickfair/newscid</url>
-  <url type="bugtracker">https://github.com/christopherpatrickfair/newscid/issues</url>
+  <url type="homepage">https://github.com/chrisfair/newscid</url>
+  <url type="bugtracker">https://github.com/chrisfair/newscid/issues</url>
   <developer id="org.newscid">
     <name>Christopher Patrick Fair</name>
   </developer>

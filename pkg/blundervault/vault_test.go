@@ -41,7 +41,7 @@ func TestVault_AddAndReviewSM2(t *testing.T) {
 		t.Fatalf("expected 1 due puzzle, got %d", len(due))
 	}
 
-	// 1. Pass review with quality 4 (good recall)
+	// Pass review with quality 4 (good recall)
 	updated, err := vault.RecordReview("test-p1", 4)
 	if err != nil {
 		t.Fatalf("RecordReview failed: %v", err)
@@ -54,7 +54,7 @@ func TestVault_AddAndReviewSM2(t *testing.T) {
 		t.Errorf("expected 1 interval day on first success, got %d", updated.IntervalDays)
 	}
 
-	// 2. Pass review with quality 5 (perfect recall)
+	// Pass review with quality 5 (perfect recall)
 	updated2, err := vault.RecordReview("test-p1", 5)
 	if err != nil {
 		t.Fatalf("RecordReview failed: %v", err)

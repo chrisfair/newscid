@@ -801,7 +801,7 @@ func DiscoverNotablePlayersInDatabase(
 	if db != nil {
 		db.mu.RLock()
 		if db.IsOpen && db.Names != nil {
-			// 1. Scan NamePlayer dictionary once to map player NameID -> catalog entry indices
+			// Scan NamePlayer dictionary once to map player NameID -> catalog entry indices
 			idToCatalogIdx := make(map[uint32][]int)
 			for nameID, playerName := range db.Names.NamesByID[NamePlayer] {
 				for idx, entry := range combined {
@@ -811,7 +811,7 @@ func DiscoverNotablePlayersInDatabase(
 				}
 			}
 
-			// 2. Scan db.Entries in a single fast pass using integer NameIDs
+			// Scan db.Entries in a single fast pass using integer NameIDs
 			if len(idToCatalogIdx) > 0 {
 				for _, entry := range db.Entries {
 					if entry == nil || (entry.Flags&FlagDelete) != 0 {
@@ -905,11 +905,7 @@ func DiscoverNotablePlayersInDatabase(
 
 	return results
 }
-
-// ============================================================================
 // Consolidated Database Builder & Dual-Layer Game Deduplicator (ID + Content)
-// ============================================================================
-
 // ConsolidateDatabaseOptions configures merging multiple online/local databases into a single deduplicated database.
 type ConsolidateDatabaseOptions struct {
 	TargetName             string      `json:"targetName"`

@@ -133,7 +133,7 @@ func FindAttackers(b *chess.Board, sq chess.Square, by chess.Color) []chess.Squa
 	f := sq.File()
 	r := sq.Rank()
 
-	// 1. Pawn attacks
+	// Pawn attacks
 	if by == chess.White {
 		if r > 0 {
 			if f > 0 && b.Squares[chess.MakeSquare(f-1, r-1)] == chess.WP {
@@ -154,7 +154,7 @@ func FindAttackers(b *chess.Board, sq chess.Square, by chess.Color) []chess.Squa
 		}
 	}
 
-	// 2. Knight attacks
+	// Knight attacks
 	knightOffsets := [][2]int{
 		{-2, -1}, {-2, 1}, {-1, -2}, {-1, 2},
 		{1, -2}, {1, 2}, {2, -1}, {2, 1},
@@ -174,7 +174,7 @@ func FindAttackers(b *chess.Board, sq chess.Square, by chess.Color) []chess.Squa
 		}
 	}
 
-	// 3. King attacks
+	// King attacks
 	kingOffsets := [][2]int{
 		{-1, -1}, {-1, 0}, {-1, 1},
 		{0, -1}, {0, 1},
@@ -195,7 +195,7 @@ func FindAttackers(b *chess.Board, sq chess.Square, by chess.Color) []chess.Squa
 		}
 	}
 
-	// 4. Diagonal sliders (Bishops and Queens)
+	// Diagonal sliders (Bishops and Queens)
 	diagDirs := [][2]int{{-1, -1}, {-1, 1}, {1, -1}, {1, 1}}
 	enemyB := chess.WB
 	enemyQ := chess.WQ
@@ -221,7 +221,7 @@ func FindAttackers(b *chess.Board, sq chess.Square, by chess.Color) []chess.Squa
 		}
 	}
 
-	// 5. Orthogonal sliders (Rooks and Queens)
+	// Orthogonal sliders (Rooks and Queens)
 	orthoDirs := [][2]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}
 	enemyR := chess.WR
 	if by == chess.Black {
@@ -664,7 +664,7 @@ func EvaluateSafetySubmission(drill *SafetyDrill, selectedSquares []string, move
 		return &SafetyDrillFeedback{IsCorrect: false, Explanation: "Drill not found"}
 	}
 
-	// 1. Move capture mode
+	// Move capture mode
 	if drill.WinningMoveUCI != "" && moveUCI != "" {
 		isMatch := strings.EqualFold(strings.TrimSpace(drill.WinningMoveUCI), strings.TrimSpace(moveUCI))
 		score := 0
@@ -681,7 +681,7 @@ func EvaluateSafetySubmission(drill *SafetyDrill, selectedSquares []string, move
 		}
 	}
 
-	// 2. Square selection mode (Click all hanging pieces)
+	// Square selection mode (Click all hanging pieces)
 	correctSet := make(map[string]bool)
 	for _, sq := range drill.CorrectSquares {
 		correctSet[strings.ToLower(strings.TrimSpace(sq))] = true

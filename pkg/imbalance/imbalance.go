@@ -99,7 +99,7 @@ func AnalyzeBoard(board *chess.Board) *Report {
 func analyzeSide(board *chess.Board, color chess.Color) SideEvaluation {
 	var eval SideEvaluation
 
-	// 1. Material Points & Bishop Pair
+	// Material Points & Bishop Pair
 	bishops := 0
 	for sq := chess.A1; sq <= chess.H8; sq++ {
 		p := board.Squares[sq]
@@ -114,13 +114,13 @@ func analyzeSide(board *chess.Board, color chess.Color) SideEvaluation {
 
 	eval.HasBishopPair = (bishops >= 2)
 
-	// 2. Pawn Structure Analysis
+	// Pawn Structure Analysis
 	eval.PawnStructure = analyzePawns(board, color)
 
-	// 3. King Safety Shield
+	// King Safety Shield
 	eval.KingSafety = analyzeKingSafety(board, color)
 
-	// 4. Territory Control & Open Files
+	// Territory Control & Open Files
 	eval.ControlledTerritory = analyzeTerritory(board, color)
 	eval.OpenFilesControlled = analyzeOpenFiles(board, color)
 

@@ -12,7 +12,7 @@ const StartingFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 func (b *Board) FEN() string {
 	var sb strings.Builder
 
-	// 1. Piece placement
+	// Piece placement
 	for rank := 7; rank >= 0; rank-- {
 		emptyCount := 0
 		for file := 0; file < 8; file++ {
@@ -35,7 +35,7 @@ func (b *Board) FEN() string {
 		}
 	}
 
-	// 2. Active color
+	// Active color
 	sb.WriteByte(' ')
 	if b.Turn == White {
 		sb.WriteByte('w')
@@ -43,7 +43,7 @@ func (b *Board) FEN() string {
 		sb.WriteByte('b')
 	}
 
-	// 3. Castling availability
+	// Castling availability
 	sb.WriteByte(' ')
 	if b.Castling == 0 {
 		sb.WriteByte('-')
@@ -62,7 +62,7 @@ func (b *Board) FEN() string {
 		}
 	}
 
-	// 4. En passant target square
+	// En passant target square
 	sb.WriteByte(' ')
 	if b.EPSquare != NoSquare {
 		sb.WriteString(b.EPSquare.String())
@@ -70,11 +70,11 @@ func (b *Board) FEN() string {
 		sb.WriteByte('-')
 	}
 
-	// 5. Halfmove clock
+	// Halfmove clock
 	sb.WriteByte(' ')
 	sb.WriteString(strconv.Itoa(b.HalfMove))
 
-	// 6. Fullmove number
+	// Fullmove number
 	sb.WriteByte(' ')
 	sb.WriteString(strconv.Itoa(b.FullMove))
 
@@ -94,7 +94,7 @@ func ParseFEN(fen string) (*Board, error) {
 		FullMove: 1,
 	}
 
-	// 1. Piece placement
+	// Piece placement
 	ranks := strings.Split(parts[0], "/")
 	if len(ranks) != 8 {
 		return nil, fmt.Errorf("invalid FEN: expected 8 ranks, got %d", len(ranks))
@@ -130,7 +130,7 @@ func ParseFEN(fen string) (*Board, error) {
 		}
 	}
 
-	// 2. Active color
+	// Active color
 	if len(parts) > 1 {
 		if len(parts[1]) == 1 && (parts[1][0] == 'w' || parts[1][0] == 'W') {
 			b.Turn = White
@@ -143,7 +143,7 @@ func ParseFEN(fen string) (*Board, error) {
 		b.Turn = White
 	}
 
-	// 3. Castling
+	// Castling
 	b.Castling = 0
 	if len(parts) > 2 {
 		for _, ch := range parts[2] {
@@ -162,19 +162,19 @@ func ParseFEN(fen string) (*Board, error) {
 		}
 	}
 
-	// 4. En passant
+	// En passant
 	if len(parts) > 3 && parts[3] != "-" {
 		b.EPSquare = SquareFromString(parts[3])
 	}
 
-	// 5. Halfmove clock
+	// Halfmove clock
 	if len(parts) > 4 {
 		if hm, err := strconv.Atoi(parts[4]); err == nil {
 			b.HalfMove = hm
 		}
 	}
 
-	// 6. Fullmove number
+	// Fullmove number
 	if len(parts) > 5 {
 		if fm, err := strconv.Atoi(parts[5]); err == nil {
 			b.FullMove = fm

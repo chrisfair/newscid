@@ -433,12 +433,12 @@ func BuildCrosstableFromGames(games []*scid.GameSummary, eventName, site, date s
 	}
 
 	// Sort standings by chess ranking criteria:
-	// 1. Total Points (descending)
-	// 2. Direct encounter (head-to-head) if 2 tied
-	// 3. Sonneborn-Berger (descending)
-	// 4. Buchholz (descending)
-	// 5. Total Wins (descending)
-	// 6. Name (ascending)
+	// Total Points (descending)
+	// Direct encounter (head-to-head) if 2 tied
+	// Sonneborn-Berger (descending)
+	// Buchholz (descending)
+	// Total Wins (descending)
+	// Name (ascending)
 	sort.Slice(preStandings, func(i, j int) bool {
 		pi := preStandings[i]
 		pj := preStandings[j]

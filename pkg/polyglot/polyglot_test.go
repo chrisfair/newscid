@@ -30,7 +30,7 @@ func TestPolyglotZobristHash(t *testing.T) {
 	b.MakeMove(mE5)
 	assert.Equal(t, uint64(0x0844931a6ef4b9a0), HashBoard(b))
 
-	// 2. Nf3
+	// Nf3
 	mNf3, err := b.ParseSAN("Nf3")
 	require.NoError(t, err)
 	b.MakeMove(mNf3)
@@ -42,7 +42,7 @@ func TestPolyglotZobristHash(t *testing.T) {
 	b.MakeMove(mNc6)
 	assert.Equal(t, uint64(0x78cda70e17837d9e), HashBoard(b))
 
-	// 3. Bb5
+	// Bb5
 	mBb5, err := b.ParseSAN("Bb5")
 	require.NoError(t, err)
 	b.MakeMove(mBb5)
@@ -197,18 +197,18 @@ func TestCastlingAndPromotionDecoding(t *testing.T) {
 }
 
 func TestPolyglotErrorsAndEdgeCases(t *testing.T) {
-	// 1. Non-existent file
+	// Non-existent file
 	_, err := OpenBook("/non/existent/file.bin")
 	assert.Error(t, err)
 
-	// 2. Invalid size
+	// Invalid size
 	tmpDir := t.TempDir()
 	badSizeFile := filepath.Join(tmpDir, "bad_size.bin")
 	require.NoError(t, os.WriteFile(badSizeFile, []byte{1, 2, 3}, 0644))
 	_, err = OpenBook(badSizeFile)
 	assert.Error(t, err)
 
-	// 3. Empty book
+	// Empty book
 	emptyFile := filepath.Join(tmpDir, "empty.bin")
 	require.NoError(t, os.WriteFile(emptyFile, []byte{}, 0644))
 	emptyBook, err := OpenBook(emptyFile)
@@ -221,19 +221,19 @@ func TestPolyglotErrorsAndEdgeCases(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, pick)
 
-	// 4. En passant on White turn (Black played f5, White pawn on e5 can capture)
+	// En passant on White turn (Black played f5, White pawn on e5 can capture)
 	bEPWhite, err := chess.ParseFEN("rnbqkbnr/ppp1p1pp/8/3pPp2/8/8/PPPP1PPP/RNBQKBNR w KQkq f6 0 3")
 	require.NoError(t, err)
 	hashEPWhite := HashBoard(bEPWhite)
 	assert.NotZero(t, hashEPWhite)
 
-	// 5. En passant on Black turn (White played d4, Black pawn on e4 can capture)
+	// En passant on Black turn (White played d4, Black pawn on e4 can capture)
 	bEPBlack, err := chess.ParseFEN("rnbqkbnr/ppp1pppp/8/8/3pP3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 2")
 	require.NoError(t, err)
 	hashEPBlack := HashBoard(bEPBlack)
 	assert.NotZero(t, hashEPBlack)
 
-	// 6. DiscoverBooks with extra custom dir
+	// DiscoverBooks with extra custom dir
 	discovered := DiscoverBooks(tmpDir)
 	assert.NotEmpty(t, discovered)
 
@@ -244,13 +244,13 @@ func TestPolyglotErrorsAndEdgeCases(t *testing.T) {
 func TestEncodeRawMoveAndWriteBook(t *testing.T) {
 	b := chess.NewBoard()
 
-	// 1. Regular moves: e2e4
+	// Regular moves: e2e4
 	mE4, err := b.ParseSAN("e4")
 	require.NoError(t, err)
 	rawE4 := EncodeRawMove(b, mE4)
 	assert.Equal(t, "e2e4", decodeRawMove(b, rawE4))
 
-	// 2. Castling: e1g1 (White O-O)
+	// Castling: e1g1 (White O-O)
 	bCastle, err := chess.ParseFEN("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1")
 	require.NoError(t, err)
 	mCastleWhite, err := bCastle.ParseSAN("O-O")
@@ -278,7 +278,7 @@ func TestEncodeRawMoveAndWriteBook(t *testing.T) {
 	rawBlackCastleQ := EncodeRawMove(bCastleBlack, mCastleBlackQ)
 	assert.Equal(t, "e8c8", decodeRawMove(bCastleBlack, rawBlackCastleQ))
 
-	// 3. Promotion: e7e8q
+	// Promotion: e7e8q
 	bPromo, err := chess.ParseFEN("8/4P3/8/8/8/8/8/4K2k w - - 0 1")
 	require.NoError(t, err)
 	mPromoQ, err := bPromo.ParseSAN("e8=Q")
@@ -301,7 +301,7 @@ func TestEncodeRawMoveAndWriteBook(t *testing.T) {
 	rawPromoR := EncodeRawMove(bPromo, mPromoR)
 	assert.Equal(t, "e7e8r", decodeRawMove(bPromo, rawPromoR))
 
-	// 4. Test WriteBook, NumEntries, EncodeBook sorting, and OpenBook round-trip
+	// Test WriteBook, NumEntries, EncodeBook sorting, and OpenBook round-trip
 	var nilBook *Book
 	assert.Equal(t, 0, nilBook.NumEntries())
 

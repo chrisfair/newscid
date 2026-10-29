@@ -66,12 +66,12 @@ func TestAnalyzeBoard_KingSafety(t *testing.T) {
 }
 
 func TestAnalyzeBoard_ComprehensiveImbalances(t *testing.T) {
-	// 1. Nil board
+	// Nil board
 	if r := AnalyzeBoard(nil); r == nil || r.FEN != "" {
 		t.Errorf("expected empty report for nil board")
 	}
 
-	// 2. Board without kings (kingSq == -1) & doubled/isolated pawns & corner files (a/h)
+	// Board without kings (kingSq == -1) & doubled/isolated pawns & corner files (a/h)
 	bNoKing := &chess.Board{}
 	bNoKing.Squares[chess.A2] = chess.WP
 	bNoKing.Squares[chess.A3] = chess.WP // doubled & isolated on a-file
@@ -85,11 +85,11 @@ func TestAnalyzeBoard_ComprehensiveImbalances(t *testing.T) {
 		t.Errorf("expected 1 doubled pawn, got %d", rNoKing.White.PawnStructure.DoubledPawns)
 	}
 
-	// 3. King on a1 and h8 to cover kf-1 < 0 and kf+1 > 7
+	// King on a1 and h8 to cover kf-1 < 0 and kf+1 > 7
 	bCornerKings, _ := chess.ParseFEN("7k/8/8/8/8/8/8/K7 w - - 0 1")
 	_ = AnalyzeBoard(bCornerKings)
 
-	// 4. All summary branches & bishop pairs
+	// All summary branches & bishop pairs
 	cases := []struct {
 		fen  string
 		want string

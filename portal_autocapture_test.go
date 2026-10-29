@@ -64,7 +64,7 @@ func TestLivePortalAutoCaptureLichessAndChessCom(t *testing.T) {
 	app.syncMgr.Lichess.BaseURL = srv.URL
 	app.syncMgr.ChessCom.BaseURL = srv.URL
 
-	// 1. Configure auto-capture usernames
+	// Configure auto-capture usernames
 	status, err := app.ConfigureLivePortalAutoCapture("PortalHero", "PortalHero", false, true)
 	if err != nil {
 		t.Fatalf("ConfigureLivePortalAutoCapture failed: %v", err)
@@ -73,7 +73,7 @@ func TestLivePortalAutoCaptureLichessAndChessCom(t *testing.T) {
 		t.Fatalf("expected PortalHero usernames, got %+v", status)
 	}
 
-	// 2. Run CheckAndCaptureLivePortalGames — should automatically create My_Games and import 2 games
+	// Run CheckAndCaptureLivePortalGames — should automatically create My_Games and import 2 games
 	res1, err := app.CheckAndCaptureLivePortalGames()
 	if err != nil {
 		t.Fatalf("CheckAndCaptureLivePortalGames failed: %v", err)
@@ -88,7 +88,7 @@ func TestLivePortalAutoCaptureLichessAndChessCom(t *testing.T) {
 		t.Fatalf("expected LatestGameID=2, got %d", res1.LatestGameID)
 	}
 
-	// 3. Second poll with identical server games should skip both duplicates (0 new games)
+	// Second poll with identical server games should skip both duplicates (0 new games)
 	res2, err := app.CheckAndCaptureLivePortalGames()
 	if err != nil {
 		t.Fatalf("second CheckAndCaptureLivePortalGames failed: %v", err)
@@ -100,7 +100,7 @@ func TestLivePortalAutoCaptureLichessAndChessCom(t *testing.T) {
 		t.Fatalf("expected 2 duplicates skipped, got %d", res2.DuplicatesSkipped)
 	}
 
-	// 4. Test direct URL capture for a Lichess game URL and Chess.com URL
+	// Test direct URL capture for a Lichess game URL and Chess.com URL
 	resURL, err := app.CaptureOnlineGameFromURLOrPGN("https://lichess.org/AbCdEfGh/black")
 	if err != nil {
 		t.Fatalf("CaptureOnlineGameFromURLOrPGN(lichess) failed: %v", err)

@@ -120,28 +120,28 @@ func (sc *SpellChecker) LoadDictionary(r io.Reader) error {
 }
 
 // StandardizeName formats a player name cleanly:
-// 1. Strips titles (GM, IM, etc.)
-// 2. Normalizes spacing, commas, and casing
-// 3. Resolves known aliases and canonical dictionary matches
-// 4. Converts "Firstname Lastname" to "Lastname, Firstname"
+// Strips titles (GM, IM, etc.)
+// Normalizes spacing, commas, and casing
+// Resolves known aliases and canonical dictionary matches
+// Converts "Firstname Lastname" to "Lastname, Firstname"
 func (sc *SpellChecker) StandardizeName(raw string) string {
 	cleaned := CleanPlayerName(raw)
 	if cleaned == "" {
 		return raw
 	}
 
-	// 1. Direct canonical match
+	// Direct canonical match
 	lower := strings.ToLower(cleaned)
 	if canon, ok := sc.CanonicalMap[lower]; ok {
 		return canon
 	}
 
-	// 2. Direct alias match
+	// Direct alias match
 	if canon, ok := sc.Aliases[lower]; ok {
 		return canon
 	}
 
-	// 3. Invert "Firstname Lastname" if no comma
+	// Invert "Firstname Lastname" if no comma
 	if !strings.Contains(cleaned, ",") {
 		words := strings.Fields(cleaned)
 		if len(words) == 2 {
@@ -319,7 +319,7 @@ func (sc *SpellChecker) StandardizeDatabase(db *Database) (*SpellCheckSummary, e
 		return summary, nil
 	}
 
-	// 1. Identify all corrections needed
+	// Identify all corrections needed
 	idRemap := make(map[uint32]uint32)
 	playerNames := db.Names.NamesByID[NamePlayer]
 	summary.TotalPlayersChecked = len(playerNames)
@@ -346,7 +346,7 @@ func (sc *SpellChecker) StandardizeDatabase(db *Database) (*SpellCheckSummary, e
 		return summary, nil
 	}
 
-	// 2. Remap entries in database
+	// Remap entries in database
 	for _, entry := range db.Entries {
 		if entry == nil || (entry.Flags&FlagDelete) != 0 {
 			continue
@@ -365,7 +365,7 @@ func (sc *SpellChecker) StandardizeDatabase(db *Database) (*SpellCheckSummary, e
 		}
 	}
 
-	// 3. Write back updated index and namebase
+	// Write back updated index and namebase
 	if db.BasePath != "" {
 		sn4Path := db.BasePath + ".sn4"
 		if err := db.Names.WriteToFile(sn4Path); err != nil {

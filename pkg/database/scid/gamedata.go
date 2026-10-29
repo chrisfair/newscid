@@ -74,7 +74,7 @@ func DecodeGameData(raw []byte, entry *IndexEntry, nb *NameBase) (*chess.Game, e
 
 	r := bytes.NewReader(raw)
 
-	// 1. Decode non-standard / extra tags
+	// Decode non-standard / extra tags
 	for {
 		b, err := r.ReadByte()
 		if err != nil {
@@ -113,14 +113,14 @@ func DecodeGameData(raw []byte, entry *IndexEntry, nb *NameBase) (*chess.Game, e
 		game.SetTag(tagName, string(valBytes))
 	}
 
-	// 2. Decode Game Flags
+	// Decode Game Flags
 	gflags, err := r.ReadByte()
 	if err != nil {
 		return nil, err
 	}
 	nonStandardStart := (gflags & 1) != 0
 
-	// 3. Start position
+	// Start position
 	var startBoard *chess.Board
 	if nonStandardStart {
 		var fenBytes []byte
@@ -146,14 +146,14 @@ func DecodeGameData(raw []byte, entry *IndexEntry, nb *NameBase) (*chess.Game, e
 		game.StartFEN = chess.StartingFEN
 	}
 
-	// 4. Decode moves
+	// Decode moves
 	var commentNodes []*chess.MoveNode
 	rootMove, plyCount, err := decodeVariation(r, startBoard.Clone(), 0, &commentNodes)
 	if err != nil && err != io.EOF {
 		return nil, err
 	}
 
-	// 5. Decode comments (null-terminated UTF-8 strings following moves)
+	// Decode comments (null-terminated UTF-8 strings following moves)
 	for _, node := range commentNodes {
 		var commentBytes []byte
 		for {
@@ -355,7 +355,7 @@ func decodePieceMove(r *bytes.Reader, b *chess.Board, val byte) (chess.Move, err
 func EncodeGameData(game *chess.Game) ([]byte, error) {
 	var buf bytes.Buffer
 
-	// 1. Tags
+	// Tags
 	for k, v := range game.Tags {
 		// Skip index-stored tags
 		if k == "White" || k == "Black" || k == "Event" || k == "Site" || k == "Round" || k == "Date" || k == "Result" || k == "WhiteElo" || k == "BlackElo" {
@@ -381,7 +381,7 @@ func EncodeGameData(game *chess.Game) ([]byte, error) {
 	}
 	buf.WriteByte(0) // End of tags
 
-	// 2. Flags & Start FEN
+	// Flags & Start FEN
 	isCustomFEN := game.StartFEN != "" && game.StartFEN != chess.StartingFEN
 	var flags byte = 0
 	if isCustomFEN {
@@ -402,14 +402,14 @@ func EncodeGameData(game *chess.Game) ([]byte, error) {
 		b = chess.NewBoard()
 	}
 
-	// 3. Encode Moves
+	// Encode Moves
 	var comments []string
 	if game.RootMove != nil {
 		encodeNodeTree(&buf, b, game.RootMove, &comments)
 	}
 	buf.WriteByte(EncodeEndGame)
 
-	// 4. Encode Comments
+	// Encode Comments
 	for _, c := range comments {
 		buf.WriteString(c)
 		buf.WriteByte(0)

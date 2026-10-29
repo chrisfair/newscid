@@ -77,7 +77,7 @@ func TestMaterialSearch(t *testing.T) {
 }
 
 func TestPawnStructureSearch(t *testing.T) {
-	// 1. Carlsbad structure
+	// Carlsbad structure
 	bCarlsbad := chess.NewBoard()
 	bCarlsbad.Clear()
 	bCarlsbad.SetPiece(chess.C3, chess.WP)
@@ -90,7 +90,7 @@ func TestPawnStructureSearch(t *testing.T) {
 	assert.True(t, MatchesPawnStructure(bCarlsbad, "carlsbad"))
 	assert.False(t, MatchesPawnStructure(bCarlsbad, "french_chain"))
 
-	// 2. Isolani (IQP) on d4
+	// Isolani (IQP) on d4
 	bIQP := chess.NewBoard()
 	bIQP.Clear()
 	bIQP.SetPiece(chess.D4, chess.WP)
@@ -102,7 +102,7 @@ func TestPawnStructureSearch(t *testing.T) {
 	bIQP.SetPiece(chess.C2, chess.WP)
 	assert.False(t, MatchesPawnStructure(bIQP, "isolani"))
 
-	// 3. French Chain (d4, e5 vs d5, e6)
+	// French Chain (d4, e5 vs d5, e6)
 	bFrench := chess.NewBoard()
 	bFrench.Clear()
 	bFrench.SetPiece(chess.D4, chess.WP)
@@ -112,7 +112,7 @@ func TestPawnStructureSearch(t *testing.T) {
 	assert.True(t, MatchesPawnStructure(bFrench, "french_chain"))
 	assert.True(t, MatchesPawnStructure(bFrench, "french"))
 
-	// 4. Maroczy Bind (c4, e4 vs d6)
+	// Maroczy Bind (c4, e4 vs d6)
 	bMaroczy := chess.NewBoard()
 	bMaroczy.Clear()
 	bMaroczy.SetPiece(chess.C4, chess.WP)
@@ -121,7 +121,7 @@ func TestPawnStructureSearch(t *testing.T) {
 	assert.True(t, MatchesPawnStructure(bMaroczy, "maroczy"))
 	assert.True(t, MatchesPawnStructure(bMaroczy, "maroczy_bind"))
 
-	// 5. Stonewall (c3, d4, e3, f4)
+	// Stonewall (c3, d4, e3, f4)
 	bStonewall := chess.NewBoard()
 	bStonewall.Clear()
 	bStonewall.SetPiece(chess.C3, chess.WP)
@@ -130,7 +130,7 @@ func TestPawnStructureSearch(t *testing.T) {
 	bStonewall.SetPiece(chess.F4, chess.WP)
 	assert.True(t, MatchesPawnStructure(bStonewall, "stonewall"))
 
-	// 6. Unknown / empty
+	// Unknown / empty
 	assert.True(t, MatchesPawnStructure(bStonewall, ""))
 	assert.False(t, MatchesPawnStructure(bStonewall, "unknown_structure"))
 }
@@ -150,16 +150,16 @@ func TestAnnotationSearch(t *testing.T) {
 	node1.Next = node2
 	g.RootMove = node1
 
-	// 1. Keyword search in commentary
+	// Keyword search in commentary
 	assert.True(t, MatchesGameAnnotation(g, "tactical", ""))
 	assert.True(t, MatchesGameAnnotation(g, "sicilian", ""))
 	assert.False(t, MatchesGameAnnotation(g, "blunder", ""))
 
-	// 2. Annotator tag search
+	// Annotator tag search
 	assert.True(t, MatchesGameAnnotation(g, "", "Kasparov"))
 	assert.False(t, MatchesGameAnnotation(g, "", "Fischer"))
 
-	// 3. Combined keyword + annotator
+	// Combined keyword + annotator
 	assert.True(t, MatchesGameAnnotation(g, "tactical", "Kasparov"))
 	assert.False(t, MatchesGameAnnotation(g, "tactical", "Carlsen"))
 }
@@ -205,7 +205,7 @@ func TestDatabaseAdvancedSearchIntegration(t *testing.T) {
 	_, err = db.SaveGame(g2)
 	require.NoError(t, err)
 
-	// 1. Search by Pawn Structure: "french_chain"
+	// Search by Pawn Structure: "french_chain"
 	resFrench, countFrench, err := db.GetGameSummaries(0, 10, SearchCriteria{
 		PawnStructure: "french_chain",
 	})
@@ -214,7 +214,7 @@ func TestDatabaseAdvancedSearchIntegration(t *testing.T) {
 	require.Len(t, resFrench, 1)
 	assert.Contains(t, resFrench[0].White, "Grischuk")
 
-	// 2. Search by Annotation keyword: "pawn chain"
+	// Search by Annotation keyword: "pawn chain"
 	resComm, countComm, err := db.GetGameSummaries(0, 10, SearchCriteria{
 		CommentText: "pawn chain",
 	})
@@ -222,7 +222,7 @@ func TestDatabaseAdvancedSearchIntegration(t *testing.T) {
 	assert.Equal(t, 1, countComm)
 	assert.Contains(t, resComm[0].White, "Grischuk")
 
-	// 3. Search by Annotator: "Shipov"
+	// Search by Annotator: "Shipov"
 	resAnn, countAnn, err := db.GetGameSummaries(0, 10, SearchCriteria{
 		Annotator: "Shipov",
 	})
@@ -231,7 +231,7 @@ func TestDatabaseAdvancedSearchIntegration(t *testing.T) {
 	require.Len(t, resAnn, 1)
 	assert.Contains(t, resAnn[0].White, "Grischuk")
 
-	// 4. Search by Material: 2 Queens (1 White, 1 Black)
+	// Search by Material: 2 Queens (1 White, 1 Black)
 	matCrit := DefaultMaterialCriteria()
 	matCrit.WhiteQ = 1
 	matCrit.BlackQ = 1

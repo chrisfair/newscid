@@ -174,7 +174,7 @@ func TestAppNewFeatures(t *testing.T) {
 	app := NewApp()
 	app.startup(context.Background())
 
-	// 1. Repertoires
+	// Repertoires
 	reps := app.GetRepertoires()
 	require.NotEmpty(t, reps)
 	assert.GreaterOrEqual(t, len(reps), 2)
@@ -183,7 +183,7 @@ func TestAppNewFeatures(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, check)
 
-	// 2. Progressive Tactics Puzzle
+	// Progressive Tactics Puzzle
 	progPuzzle, err := app.GetProgressivePuzzle(1)
 	if err == nil {
 		assert.NotEmpty(t, progPuzzle.StartFEN)
@@ -191,7 +191,7 @@ func TestAppNewFeatures(t *testing.T) {
 		t.Logf("Progressive Puzzle Level 1: %s (%s)", progPuzzle.Theme, progPuzzle.StartFEN)
 	}
 
-	// 3. Database Puzzle Mining
+	// Database Puzzle Mining
 	userBase := "/home/christopher/ChessDataBases/ChristopherFair/ChristopherFair"
 	if _, err := os.Stat(userBase + ".si4"); err == nil {
 		_, err := app.OpenDatabase(userBase)
@@ -248,7 +248,7 @@ func TestAppDatabaseMaintenanceOperations(t *testing.T) {
 	app := NewApp()
 	app.startup(context.Background())
 
-	// 1. Errors when no database open
+	// Errors when no database open
 	_, err := app.CompactDatabase()
 	assert.Error(t, err)
 	assert.Error(t, app.SortDatabase(scid.SortCriteria{Field: scid.SortByDate}))
@@ -265,14 +265,14 @@ func TestAppDatabaseMaintenanceOperations(t *testing.T) {
 	_, err = app.ImportPGNFileBatch("somefile.pgn")
 	assert.Error(t, err)
 
-	// 2. Create a test database
+	// Create a test database
 	tmpDir := t.TempDir()
 	basePath := filepath.Join(tmpDir, "app_test_db")
 	dbInfo, err := app.CreateDatabase(basePath, "App Maintenance Test DB")
 	require.NoError(t, err)
 	assert.Equal(t, 0, dbInfo.NumGames)
 
-	// 3. Batch PGN Import
+	// Batch PGN Import
 	pgnBatch := `[Event "Round 1"]
 [Site "City A"]
 [Date "2024.01.01"]
@@ -316,7 +316,7 @@ func TestAppDatabaseMaintenanceOperations(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 3, importStats.Imported)
 
-	// 4. Database Statistics
+	// Database Statistics
 	stats, err := app.GetDatabaseStatistics()
 	require.NoError(t, err)
 	assert.Equal(t, 3, stats.TotalGames)
@@ -324,7 +324,7 @@ func TestAppDatabaseMaintenanceOperations(t *testing.T) {
 	assert.Equal(t, 1, stats.BlackWins)
 	assert.Equal(t, 2830, stats.MaxElo)
 
-	// 5. Duplicate Detection & Deletion
+	// Duplicate Detection & Deletion
 	dupGroups, err := app.FindDuplicateGames(scid.DuplicateCriteria{ExactMoves: true})
 	require.NoError(t, err)
 	assert.Len(t, dupGroups, 1)
@@ -334,11 +334,11 @@ func TestAppDatabaseMaintenanceOperations(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, deletedCount)
 
-	// 6. Sort Database
+	// Sort Database
 	err = app.SortDatabase(scid.SortCriteria{Field: scid.SortByDate, Ascending: true})
 	require.NoError(t, err)
 
-	// 7. Verify Database
+	// Verify Database
 	report, err := app.VerifyDatabase()
 	require.NoError(t, err)
 	assert.Equal(t, 3, report.TotalGames)
@@ -346,14 +346,14 @@ func TestAppDatabaseMaintenanceOperations(t *testing.T) {
 	assert.Equal(t, 1, report.DeletedGames)
 	assert.Equal(t, "OK", report.Status)
 
-	// 8. Compact Database
+	// Compact Database
 	compactStats, err := app.CompactDatabase()
 	require.NoError(t, err)
 	assert.Equal(t, 3, compactStats.OriginalGames)
 	assert.Equal(t, 2, compactStats.CompactedGames)
 	assert.Equal(t, 1, compactStats.PurgedGames)
 
-	// 9. Batch PGN File Import
+	// Batch PGN File Import
 	filePGN := filepath.Join(tmpDir, "single.pgn")
 	err = os.WriteFile(filePGN, []byte("[Event \"Extra\"]\n[White \"A\"]\n[Black \"B\"]\n[Result \"*\"]\n\n1. d4 *"), 0644)
 	require.NoError(t, err)
@@ -374,12 +374,12 @@ func TestAppOnlineSyncOperations(t *testing.T) {
 	app.profileMgr = pm
 	app.syncMgr = online.NewSyncManager(pm)
 
-	// 1. Initial list should be empty
+	// Initial list should be empty
 	profiles, err := app.GetSyncProfiles()
 	require.NoError(t, err)
 	assert.Empty(t, profiles)
 
-	// 2. Save profile
+	// Save profile
 	p := &online.Profile{
 		Name:             "Grandmaster Sync",
 		ChessComUsername: "testplayer",
@@ -390,7 +390,7 @@ func TestAppOnlineSyncOperations(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, p.ID)
 
-	// 3. Query profiles
+	// Query profiles
 	profiles, err = app.GetSyncProfiles()
 	require.NoError(t, err)
 	assert.Len(t, profiles, 1)
@@ -403,7 +403,7 @@ func TestAppOnlineSyncOperations(t *testing.T) {
 	_, err = app.GetSyncProfile("nonexistent_id")
 	assert.Error(t, err)
 
-	// 4. Set up mock HTTP server for Lichess and Chess.com
+	// Set up mock HTTP server for Lichess and Chess.com
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch {
@@ -446,7 +446,7 @@ func TestAppOnlineSyncOperations(t *testing.T) {
 	app.syncMgr.Lichess.BaseURL = server.URL
 	app.syncMgr.ChessCom.BaseURL = server.URL
 
-	// 5. Test Previews
+	// Test Previews
 	previewLichess, err := app.FetchLichessPreview("testuser", 2)
 	require.NoError(t, err)
 	assert.Contains(t, previewLichess, "Lichess Round 1")
@@ -455,7 +455,7 @@ func TestAppOnlineSyncOperations(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, archivesChessCom, 1)
 
-	// 6. Test SyncOnlineProfile error cases
+	// Test SyncOnlineProfile error cases
 	_, err = app.SyncOnlineProfile("nonexistent_id")
 	assert.Error(t, err)
 
@@ -464,7 +464,7 @@ func TestAppOnlineSyncOperations(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no target database specified")
 
-	// 7. Sync into a new target database file
+	// Sync into a new target database file
 	targetDBPath := filepath.Join(tmpDir, "online_merged")
 	p.TargetDatabase = targetDBPath
 	err = app.SaveSyncProfile(p)
@@ -491,7 +491,7 @@ func TestAppOnlineSyncOperations(t *testing.T) {
 	assert.Equal(t, 3, verifyDB.NumGames())
 	_ = verifyDB.Close()
 
-	// 8. Sync into currently active open database
+	// Sync into currently active open database
 	activePath := filepath.Join(tmpDir, "active_base")
 	_, err = app.CreateDatabase(activePath, "Active Test Base")
 	require.NoError(t, err)
@@ -509,7 +509,7 @@ func TestAppOnlineSyncOperations(t *testing.T) {
 	assert.Equal(t, 2, activeRes.TotalDownloaded)
 	assert.Equal(t, 2, app.db.NumGames())
 
-	// 9. Delete Profile
+	// Delete Profile
 	err = app.DeleteSyncProfile(p.ID)
 	require.NoError(t, err)
 	_, err = app.GetSyncProfile(p.ID)
@@ -571,7 +571,7 @@ func TestAppNotationAndAnnotations(t *testing.T) {
 	app := NewApp()
 	app.startup(context.Background())
 
-	// 1. Notation style getter/setter
+	// Notation style getter/setter
 	assert.Equal(t, "san", app.GetNotationStyle())
 	err := app.SetNotationStyle("fan")
 	require.NoError(t, err)
@@ -580,17 +580,17 @@ func TestAppNotationAndAnnotations(t *testing.T) {
 	err = app.SetNotationStyle("invalid_style")
 	assert.Error(t, err)
 
-	// 2. FormatMove
+	// FormatMove
 	formatted, err := app.FormatMove(chess.StartingFEN, "g1f3", "")
 	require.NoError(t, err)
 	assert.Equal(t, "♘f3", formatted)
 
-	// 3. FormatMoveSequence
+	// FormatMoveSequence
 	seq, err := app.FormatMoveSequence(chess.StartingFEN, []string{"e2e4", "e7e5"}, "lan")
 	require.NoError(t, err)
 	assert.Equal(t, "1. e2-e4 e7-e5", seq)
 
-	// 4. Game Comments and NAGs
+	// Game Comments and NAGs
 	pgnSample := `[Event "World Championship"]
 [Site "Reykjavik"]
 [Date "1972.07.11"]
@@ -701,12 +701,12 @@ func TestAppPersonaOperations(t *testing.T) {
 	require.NoError(t, err)
 	app.personaMgr = pMgr
 
-	// 1. Initial state
+	// Initial state
 	personas, err := app.GetPersonas()
 	require.NoError(t, err)
 	assert.Empty(t, personas)
 
-	// 2. SavePersona
+	// SavePersona
 	p, err := app.SavePersona(&persona.Persona{
 		DisplayName:  "Christopher Fair",
 		Identifiers:  []string{"Fair, Christopher", "ChristopherFair"},
@@ -719,7 +719,7 @@ func TestAppPersonaOperations(t *testing.T) {
 	assert.Equal(t, "Christopher Fair", p.DisplayName)
 	assert.NotEmpty(t, p.DatabasePath)
 
-	// 3. GetPersonas and GetPersona
+	// GetPersonas and GetPersona
 	list, err := app.GetPersonas()
 	require.NoError(t, err)
 	assert.Len(t, list, 1)
@@ -731,7 +731,7 @@ func TestAppPersonaOperations(t *testing.T) {
 	_, err = app.GetPersona("non-existent")
 	assert.Error(t, err)
 
-	// 4. AddPersonaIdentifier & RemovePersonaIdentifier
+	// AddPersonaIdentifier & RemovePersonaIdentifier
 	pUpdated, err := app.AddPersonaIdentifier(p.ID, "QuenyenHighElf")
 	require.NoError(t, err)
 	assert.Contains(t, pUpdated.Identifiers, "QuenyenHighElf")
@@ -740,7 +740,7 @@ func TestAppPersonaOperations(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, pRemoved.Identifiers, "QuenyenHighElf")
 
-	// 5. Create active database with games for this persona
+	// Create active database with games for this persona
 	dbPath := filepath.Join(tempDir, "active_db")
 	err = app.db.Create(dbPath, "Active Base")
 	require.NoError(t, err)
@@ -775,13 +775,13 @@ func TestAppPersonaOperations(t *testing.T) {
 	_, err = app.db.SaveGame(g2)
 	require.NoError(t, err)
 
-	// 6. SuggestPersonaIdentifiers
+	// SuggestPersonaIdentifiers
 	suggestions, err := app.SuggestPersonaIdentifiers("Fair", []string{})
 	require.NoError(t, err)
 	assert.Contains(t, suggestions, "Fair, Christopher")
 	assert.Contains(t, suggestions, "ChristopherFair")
 
-	// 7. GetPersonaStatistics
+	// GetPersonaStatistics
 	stats, err := app.GetPersonaStatistics(p.ID)
 	require.NoError(t, err)
 	assert.Equal(t, 2, stats.TotalGames)
@@ -791,7 +791,7 @@ func TestAppPersonaOperations(t *testing.T) {
 	assert.Equal(t, 1, stats.Draws)
 	assert.Equal(t, 2420, stats.PeakElo)
 
-	// 8. AggregatePersonaGames into dedicated persona database
+	// AggregatePersonaGames into dedicated persona database
 	aggRes, err := app.AggregatePersonaGames(p.ID)
 	require.NoError(t, err)
 	assert.Equal(t, 2, aggRes.TotalFound)
@@ -804,25 +804,25 @@ func TestAppPersonaOperations(t *testing.T) {
 	assert.Equal(t, 0, aggRes2.NewlyAdded)
 	assert.Equal(t, 2, aggRes2.DuplicatesSkipped)
 
-	// 9. GetPersonaPersonality
+	// GetPersonaPersonality
 	personality, err := app.GetPersonaPersonality(p.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "Christopher Fair", personality.Name)
 	assert.Equal(t, 2, personality.TotalGames)
 	assert.Equal(t, 2400, personality.EstimatedElo)
 
-	// 10. OpenPersonaDatabase
+	// OpenPersonaDatabase
 	info, err := app.OpenPersonaDatabase(p.ID)
 	require.NoError(t, err)
 	assert.Equal(t, 2, info.NumGames)
 
-	// 11. DeletePersona
+	// DeletePersona
 	err = app.DeletePersona(p.ID)
 	require.NoError(t, err)
 	personasAfter, _ := app.GetPersonas()
 	assert.Empty(t, personasAfter)
 
-	// 12. Test FetchPersonaOnlineGames with mock Lichess server
+	// Test FetchPersonaOnlineGames with mock Lichess server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/x-chess-pgn")
 		w.WriteHeader(http.StatusOK)
@@ -894,14 +894,14 @@ func TestBenGradskySparringLive(t *testing.T) {
 		t.Skip("Ben Gradsky persona not configured on system, skipping")
 	}
 
-	// 1. Move 1 as Black vs 1.e4 (should be in book: c5)
+	// Move 1 as Black vs 1.e4 (should be in book: c5)
 	move1, err := app.GetPersonaSimulatedMove(benID, "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1", false)
 	require.NoError(t, err)
 	assert.True(t, move1.IsBook)
 	assert.Equal(t, "c5", move1.SAN)
 	t.Logf("Ben played: %s (%s) | %s", move1.SAN, move1.UCI, move1.Commentary)
 
-	// 2. Move out of book (should calculate using engine or smart tactical heuristics)
+	// Move out of book (should calculate using engine or smart tactical heuristics)
 	outOfBookFEN := "rnbqk2r/pp2ppbp/3p1np1/8/3NP3/2N1B3/PPPK1PPP/R2Q1B1R b kq - 3 7"
 	calcMove, err := app.GetPersonaSimulatedMove(benID, outOfBookFEN, false)
 	require.NoError(t, err)
@@ -959,11 +959,11 @@ func TestAppTablebaseAndSolitaire(t *testing.T) {
 	app := NewApp()
 	app.startup(context.Background())
 
-	// 1. Test Tablebase probe (too many pieces error)
+	// Test Tablebase probe (too many pieces error)
 	_, err := app.ProbeTablebase(chess.StartingFEN)
 	assert.Error(t, err) // 32 pieces > 7
 
-	// 2. Solitaire with no game loaded
+	// Solitaire with no game loaded
 	_, err = app.StartGuessTheMove(0, "white")
 	assert.Error(t, err)
 
@@ -1137,14 +1137,14 @@ func TestAppTWICDownloader(t *testing.T) {
 	app := NewApp()
 	app.startup(context.Background())
 
-	// 1. Errors when db not open
+	// Errors when db not open
 	_, err := app.DownloadTWICIssue(100)
 	assert.Error(t, err)
 
 	_, err = app.DownloadTWICRange(100, 102)
 	assert.Error(t, err)
 
-	// 2. Open test db
+	// Open test db
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "app_twic_test")
 	db := scid.NewDatabase()
@@ -1153,7 +1153,7 @@ func TestAppTWICDownloader(t *testing.T) {
 	defer db.Close()
 	app.db = db
 
-	// 3. Mock TWIC server serving distinct games per issue
+	// Mock TWIC server serving distinct games per issue
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
 			w.WriteHeader(http.StatusOK)
@@ -1370,21 +1370,21 @@ func TestAppChess960AndEPD(t *testing.T) {
 	app := NewApp()
 	app.startup(context.Background())
 
-	// 1. Chess960 Classic
+	// Chess960 Classic
 	pos518, err := app.GetChess960Position(518)
 	require.NoError(t, err)
 	assert.Equal(t, 518, pos518.ID)
 	assert.Equal(t, "RNBQKBNR", pos518.Pieces)
 	assert.True(t, pos518.IsClassic)
 
-	// 2. Chess960 Random
+	// Chess960 Random
 	posRand, err := app.GenerateRandomChess960()
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, posRand.ID, 0)
 	assert.Less(t, posRand.ID, 960)
 	assert.Len(t, posRand.Pieces, 8)
 
-	// 3. EPD Parse
+	// EPD Parse
 	epdLine := `r1bqkb1r/pppp1ppp/2n5/4p3/2B1n3/8/PPPP1PPP/RNBQK1NR b KQkq - bm d5; id "Puzzle-01"; c0 "Fork threat"; ce 50;`
 	rec, err := app.ParseEPD(epdLine)
 	require.NoError(t, err)
@@ -1394,7 +1394,7 @@ func TestAppChess960AndEPD(t *testing.T) {
 	require.NotNil(t, rec.EvalCP)
 	assert.Equal(t, 50, *rec.EvalCP)
 
-	// 4. EPD Export
+	// EPD Export
 	exportedEPD, err := app.ExportEPD("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", map[string]string{
 		"bm": "e4",
 		"id": "Start-Pos",
@@ -1408,19 +1408,19 @@ func TestAppChess960AndEPD(t *testing.T) {
 func TestAppImbalanceExplainerVaultScout(t *testing.T) {
 	app := NewApp()
 
-	// 1. Imbalance Report
+	// Imbalance Report
 	imb, err := app.GetPositionalImbalance("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 	require.NoError(t, err)
 	assert.Equal(t, 0, imb.MaterialDelta)
 	assert.True(t, imb.White.HasBishopPair)
 
-	// 2. Move Explainer
+	// Move Explainer
 	exp, err := app.ExplainMove("r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 1 5", "e1g1", 30, "e1g1")
 	require.NoError(t, err)
 	assert.Equal(t, "O-O", exp.MoveSAN)
 	assert.Contains(t, exp.DetailedText, "castles")
 
-	// 3. Blunder Vault
+	// Blunder Vault
 	err = app.AddBlunderToVault(&blundervault.Puzzle{
 		ID:         "app-p1",
 		FEN:        chess.StartingFEN,
@@ -1439,7 +1439,7 @@ func TestAppImbalanceExplainerVaultScout(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, reviewed.Repetitions)
 
-	// 4. Opponent Scouting (requires DB)
+	// Opponent Scouting (requires DB)
 	tmpDir, _ := os.MkdirTemp("", "scout_test*")
 	defer os.RemoveAll(tmpDir)
 	dbPath := filepath.Join(tmpDir, "scout_test.si4")
@@ -1465,7 +1465,7 @@ func TestAppNovelTrainingAndStatsFeatures(t *testing.T) {
 	app := NewApp()
 	app.startup(context.Background())
 
-	// 1. Intuition Storm methods
+	// Intuition Storm methods
 	iBatch, err := app.GetIntuitionDrillBatch(3)
 	require.NoError(t, err)
 	assert.NotEmpty(t, iBatch)
@@ -1479,7 +1479,7 @@ func TestAppNovelTrainingAndStatsFeatures(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, idrills)
 
-	// 2. Prophylaxis Drill methods
+	// Prophylaxis Drill methods
 	pBatch, err := app.GetProphylaxisDrillBatch(3, "all")
 	require.NoError(t, err)
 	assert.NotEmpty(t, pBatch)
@@ -1492,7 +1492,7 @@ func TestAppNovelTrainingAndStatsFeatures(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, pdrills)
 
-	// 3. Repertoire Shortener method
+	// Repertoire Shortener method
 	shortRes, err := app.ShortenRepertoire(repertoire.ShortenerOptions{
 		RepertoireID:      "white-openings-italian",
 		TargetCoveragePct: 80,
@@ -1505,7 +1505,7 @@ func TestAppNovelTrainingAndStatsFeatures(t *testing.T) {
 	assert.NotNil(t, shortRes)
 	assert.Equal(t, "white-openings-italian", shortRes.OriginalID)
 
-	// 4. Time Management methods
+	// Time Management methods
 	app.activeGame = chess.NewGame()
 	tmRes, err := app.AnalyzeGameTimeManagement(0)
 	require.NoError(t, err)

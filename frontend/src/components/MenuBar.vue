@@ -247,7 +247,7 @@ onUnmounted(() => {
 
 <template>
   <div class="app-menubar relative z-40 bg-zinc-950 border-b border-zinc-800/80 px-2.5 py-1 flex items-center gap-0.5 text-xs select-none flex-wrap">
-    <!-- 1. FILE MENU -->
+    <!-- FILE MENU -->
     <div class="relative">
       <button
         class="px-2.5 py-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer font-medium"
@@ -333,7 +333,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- 2. DATABASES MENU (Dedicated Menu for Database Roles, Default DB, Mega Imports & Maintenance) -->
+    <!-- DATABASES MENU (Dedicated Menu for Database Roles, Default DB, Mega Imports & Maintenance) -->
     <div class="relative">
       <button
         class="px-2.5 py-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer font-medium flex items-center gap-1"
@@ -351,15 +351,15 @@ onUnmounted(() => {
         <!-- Database Relationship Summary Box -->
         <div class="mx-2.5 my-1 p-2.5 rounded-lg bg-zinc-950 border border-zinc-800 space-y-1 text-[11px]">
           <div class="flex items-center justify-between">
-            <span class="text-zinc-400">📂 Active Working DB:</span>
+            <span class="text-zinc-400">Active Working DB:</span>
             <span class="font-bold text-emerald-400 font-mono">{{ dbName || 'None' }}</span>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-zinc-400">⭐ Default Startup DB:</span>
+            <span class="text-zinc-400">Default Startup DB:</span>
             <span class="font-bold text-amber-400 font-mono">{{ defaultDbName || 'Auto' }}</span>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-zinc-400">📚 Reference Tree DB:</span>
+            <span class="text-zinc-400">Reference Tree DB:</span>
             <span class="font-bold text-cyan-400 font-mono">{{ referenceDbName || 'Uses Active DB' }}</span>
           </div>
         </div>
@@ -402,7 +402,7 @@ onUnmounted(() => {
         >
           <span class="flex items-center gap-2.5 whitespace-nowrap">
             <Star class="w-4 h-4 shrink-0 text-amber-400" :class="{ 'fill-amber-400': isActiveDefaultDb }" />
-            <span>{{ isActiveDefaultDb ? `⭐ '${dbName}' is Default Startup DB` : `Set '${dbName}' as Default Startup DB` }}</span>
+            <span>{{ isActiveDefaultDb ? `'${dbName}' is Default Startup DB` : `Set '${dbName}' as Default Startup DB` }}</span>
           </span>
         </button>
         <button
@@ -509,7 +509,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- 3. EDIT MENU -->
+    <!-- EDIT MENU -->
     <div class="relative">
       <button
         class="px-2.5 py-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer font-medium"
@@ -561,7 +561,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- 4. GAME MENU -->
+    <!-- GAME MENU -->
     <div class="relative">
       <button
         class="px-2.5 py-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer font-medium"
@@ -645,7 +645,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- 5. SEARCH MENU -->
+    <!-- SEARCH MENU -->
     <div class="relative">
       <button
         class="px-2.5 py-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer font-medium"
@@ -676,7 +676,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- 6. TOOLS MENU (Cleanly Organized into Engine, Openings & Opponent/Fair-Play Sections) -->
+    <!-- TOOLS MENU (Cleanly Organized into Engine, Openings & Opponent/Fair-Play Sections) -->
     <div class="relative">
       <button
         class="px-2.5 py-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer font-medium"
@@ -785,7 +785,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- 7. PLAY MENU (Live Portals, Sparring, Tactics & Drills) -->
+    <!-- PLAY MENU (Live Portals, Sparring, Tactics & Drills) -->
     <div class="relative">
       <button
         class="px-2.5 py-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer font-medium"
@@ -925,7 +925,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- 8. WINDOWS & PANELS MENU (Dockable Panels, Floaters & Multi-Screen Hyprland) -->
+    <!-- WINDOWS & PANELS MENU (Dockable Panels, Floaters & Multi-Screen Hyprland) -->
     <div class="relative">
       <button
         class="px-2.5 py-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer font-medium"
@@ -1020,7 +1020,7 @@ onUnmounted(() => {
             class="px-2.5 py-1.5 rounded bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 font-semibold text-left text-[11px] cursor-pointer col-span-2"
             @click="selectItem(() => { applyLayoutPreset('compact'); emit('toggleCompactLayout') })"
           >
-            ⚡ Compact / Small-Screen Auto-Fit (Maximize Board)
+            Compact / Small-Screen Auto-Fit (Maximize Board)
           </button>
           <button
             class="px-2.5 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-left text-[11px] cursor-pointer"
@@ -1050,7 +1050,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- 9. OPTIONS / PREFERENCES MENU -->
+    <!-- OPTIONS / PREFERENCES MENU -->
     <div class="relative">
       <button
         class="px-2.5 py-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer font-medium"
@@ -1206,7 +1206,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- 10. HELP MENU -->
+    <!-- HELP MENU -->
     <div class="relative">
       <button
         class="px-2.5 py-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer font-medium"

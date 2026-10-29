@@ -91,7 +91,7 @@ func (m *Manager) ensureStarterRepertoires() {
 		return
 	}
 
-	// 1. White Starter: Italian Game & Vienna Repertoire
+	// White Starter: Italian Game & Vienna Repertoire
 	repWhite := &Repertoire{
 		ID:          "white-openings-italian",
 		Name:        "White: Italian Game & Open Repertoire",
@@ -106,7 +106,7 @@ func (m *Manager) ensureStarterRepertoires() {
 	m.populateLine(repWhite, []string{"e4", "c6", "d4", "d5", "Nc3"}, "Caro-Kann: Classical")
 	_ = m.SaveRepertoire(repWhite)
 
-	// 2. Black Starter: Sicilian Najdorf & King's Indian
+	// Black Starter: Sicilian Najdorf & King's Indian
 	repBlack := &Repertoire{
 		ID:          "black-openings-sicilian-kid",
 		Name:        "Black: Sicilian Najdorf & King's Indian",

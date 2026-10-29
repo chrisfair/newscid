@@ -69,14 +69,14 @@ func TestDatabaseCompact(t *testing.T) {
 	db, basePath := createTestDatabase(t, 10)
 	defer db.Close()
 
-	// 1. Initial compaction when 0 deleted games
+	// Initial compaction when 0 deleted games
 	stats, err := db.Compact()
 	require.NoError(t, err)
 	assert.Equal(t, 10, stats.OriginalGames)
 	assert.Equal(t, 10, stats.CompactedGames)
 	assert.Equal(t, 0, stats.PurgedGames)
 
-	// 2. Mark 3 games deleted: games 2, 5, 8
+	// Mark 3 games deleted: games 2, 5, 8
 	err = db.DeleteGame(2, true)
 	require.NoError(t, err)
 	err = db.DeleteGame(5, true)
@@ -89,7 +89,7 @@ func TestDatabaseCompact(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, s2.Deleted)
 
-	// 3. Compact database
+	// Compact database
 	compactStats, err := db.Compact()
 	require.NoError(t, err)
 	assert.Equal(t, 10, compactStats.OriginalGames)
@@ -98,7 +98,7 @@ func TestDatabaseCompact(t *testing.T) {
 	assert.Greater(t, compactStats.BytesReclaimed, int64(0))
 	assert.Equal(t, 7, db.NumGames())
 
-	// 4. Verify re-opening compacted database
+	// Verify re-opening compacted database
 	reopened := NewDatabase()
 	err = reopened.Open(basePath)
 	require.NoError(t, err)
@@ -128,26 +128,26 @@ func TestDatabaseSort(t *testing.T) {
 		db.Entries[i].Date = d
 	}
 
-	// 1. Sort by Date Ascending
+	// Sort by Date Ascending
 	err := db.Sort(SortCriteria{Field: SortByDate, Ascending: true})
 	require.NoError(t, err)
 	assert.Equal(t, "2015.03.15", db.Entries[0].Date)
 	assert.Equal(t, "2024.12.31", db.Entries[5].Date)
 
-	// 2. Sort by Date Descending
+	// Sort by Date Descending
 	err = db.Sort(SortCriteria{Field: SortByDate, Ascending: false})
 	require.NoError(t, err)
 	assert.Equal(t, "2024.12.31", db.Entries[0].Date)
 	assert.Equal(t, "2015.03.15", db.Entries[5].Date)
 
-	// 3. Sort by White player
+	// Sort by White player
 	err = db.Sort(SortCriteria{Field: SortByWhite, Ascending: true})
 	require.NoError(t, err)
 	w0 := db.Names.GetName(NamePlayer, db.Entries[0].WhiteID)
 	wLast := db.Names.GetName(NamePlayer, db.Entries[5].WhiteID)
 	assert.LessOrEqual(t, w0, wLast)
 
-	// 4. Test other sort fields for full coverage
+	// Test other sort fields for full coverage
 	fields := []SortField{
 		SortByECO, SortByBlack, SortByPlayer, SortByWhiteElo, SortByBlackElo,
 		SortByMaxElo, SortByEvent, SortBySite, SortByRound, SortByResult, SortByMoves,
@@ -170,13 +170,13 @@ func TestDatabaseDuplicates(t *testing.T) {
 
 	assert.Equal(t, 5, db.NumGames())
 
-	// 1. Find exact move duplicates
+	// Find exact move duplicates
 	dupGroups, err := db.FindDuplicates(DuplicateCriteria{ExactMoves: true})
 	require.NoError(t, err)
 	assert.NotEmpty(t, dupGroups)
 	assert.GreaterOrEqual(t, len(dupGroups[0].GameIDs), 2)
 
-	// 2. Find metadata duplicates
+	// Find metadata duplicates
 	metaGroups, err := db.FindDuplicates(DuplicateCriteria{
 		MatchPlayers: true,
 		MatchDate:    true,
@@ -185,7 +185,7 @@ func TestDatabaseDuplicates(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, metaGroups)
 
-	// 3. Delete duplicates
+	// Delete duplicates
 	deleted, err := db.DeleteDuplicates(DuplicateCriteria{ExactMoves: true})
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, deleted, 1)
@@ -254,7 +254,7 @@ func TestDatabaseBatchImport(t *testing.T) {
 1. Nf3 d5 2. c4 c6 3. g3 Nf6 4. Bg2 Bf5 1-0
 `
 
-	// 1. Test ImportPGNText
+	// Test ImportPGNText
 	importStats, err := db.ImportPGNText(pgnData)
 	require.NoError(t, err)
 	assert.Equal(t, 2, importStats.TotalParsed)
@@ -268,7 +268,7 @@ func TestDatabaseBatchImport(t *testing.T) {
 	assert.Equal(t, "Steinitz, William", g3.Tag("White"))
 	assert.Equal(t, "Von Bardeleben, Curt", g3.Tag("Black"))
 
-	// 2. Test ImportPGNFile
+	// Test ImportPGNFile
 	tmpFile := filepath.Join(t.TempDir(), "batch.pgn")
 	err = os.WriteFile(tmpFile, []byte(pgnData), 0644)
 	require.NoError(t, err)
@@ -797,12 +797,12 @@ func TestDatabaseErrorHandling(t *testing.T) {
 }
 
 func TestIndexHeaderAndEntriesErrors(t *testing.T) {
-	// 1. ReadIndexHeader with invalid magic
+	// ReadIndexHeader with invalid magic
 	badMagic := bytes.NewReader([]byte("InvalidMagicBytesHere1234567890"))
 	_, err := ReadIndexHeader(badMagic)
 	assert.Error(t, err)
 
-	// 2. ReadIndexHeader with truncated stream
+	// ReadIndexHeader with truncated stream
 	truncated := bytes.NewReader([]byte("Scid.si\x00"))
 	_, err = ReadIndexHeader(truncated)
 	assert.Error(t, err)
@@ -811,7 +811,7 @@ func TestIndexHeaderAndEntriesErrors(t *testing.T) {
 	_, err = ReadIndexHeader(bytes.NewReader([]byte("Scid.si\x00\x01\x90\x00")))
 	assert.Error(t, err)
 
-	// 3. ReadIndexEntry with truncated stream
+	// ReadIndexEntry with truncated stream
 	_, err = ReadIndexEntry(bytes.NewReader([]byte{1, 2, 3}))
 	assert.Error(t, err)
 
@@ -819,11 +819,11 @@ func TestIndexHeaderAndEntriesErrors(t *testing.T) {
 	_, err = read3(bytes.NewReader([]byte{1, 2}))
 	assert.Error(t, err)
 
-	// 4. LoadAllEntries with nonexistent file
+	// LoadAllEntries with nonexistent file
 	_, _, err = LoadAllEntries("/nonexistent/file.si4")
 	assert.Error(t, err)
 
-	// 5. LoadAllEntries with valid file
+	// LoadAllEntries with valid file
 	db, basePath := createTestDatabase(t, 2)
 	db.Close()
 
@@ -832,7 +832,7 @@ func TestIndexHeaderAndEntriesErrors(t *testing.T) {
 	assert.NotNil(t, hdr)
 	assert.Len(t, entries, 2)
 
-	// 6. LoadAllEntries where entry reading fails (truncated file after header)
+	// LoadAllEntries where entry reading fails (truncated file after header)
 	truncPath := filepath.Join(t.TempDir(), "trunc.si4")
 	var buf bytes.Buffer
 	err = WriteIndexHeader(&buf, hdr)
@@ -1001,25 +1001,25 @@ func TestIndexAndGamedataEdgeCases(t *testing.T) {
 	entryDummy := &IndexEntry{}
 	nbDummy := NewNameBase()
 
-	// 1. Unknown tag code > 240
+	// Unknown tag code > 240
 	rawCustomTag := []byte{251, 4, 't', 'e', 's', 't', 0, 0, 0}
 	gDecoded, err := DecodeGameData(rawCustomTag, entryDummy, nbDummy)
 	require.NoError(t, err)
 	assert.Equal(t, "test", gDecoded.Tag("Tag_251"))
 
-	// 2. Truncated custom tag name
+	// Truncated custom tag name
 	_, err = DecodeGameData([]byte{5, 'a', 'b'}, entryDummy, nbDummy)
 	assert.Error(t, err)
 
-	// 3. Truncated value length
+	// Truncated value length
 	_, err = DecodeGameData([]byte{4, 't', 'e', 's', 't'}, entryDummy, nbDummy)
 	assert.Error(t, err)
 
-	// 4. Truncated value bytes
+	// Truncated value bytes
 	_, err = DecodeGameData([]byte{4, 't', 'e', 's', 't', 5, 'a'}, entryDummy, nbDummy)
 	assert.Error(t, err)
 
-	// 5. Truncated flags byte
+	// Truncated flags byte
 	_, err = DecodeGameData([]byte{0}, entryDummy, nbDummy)
 	assert.Error(t, err)
 }
@@ -1086,11 +1086,11 @@ func TestDatabaseOpenEdgeCasesAndUndelete(t *testing.T) {
 }
 
 func TestInspectDatabaseAndFileSizes(t *testing.T) {
-	// 1. Nonexistent database
+	// Nonexistent database
 	res := InspectDatabase("/nonexistent/path/db", "User")
 	assert.False(t, res.Exists)
 
-	// 2. PGN file inspection
+	// PGN file inspection
 	tmpDir := t.TempDir()
 	pgnPath := filepath.Join(tmpDir, "test.pgn")
 	err := os.WriteFile(pgnPath, []byte("[Event \"Test\"]\n\n1. e4 *"), 0644)
@@ -1100,7 +1100,7 @@ func TestInspectDatabaseAndFileSizes(t *testing.T) {
 	assert.True(t, resPgn.Exists)
 	assert.Equal(t, "pgn", resPgn.Type)
 
-	// 3. FormatFileSize coverage
+	// FormatFileSize coverage
 	assert.Equal(t, "500 B", FormatFileSize(500))
 	assert.Equal(t, "1.5 KB", FormatFileSize(1536))
 	assert.Equal(t, "2.0 MB", FormatFileSize(2*1024*1024))
@@ -1140,17 +1140,17 @@ func TestDatabaseUpdateGameTagsAndSpellcheck(t *testing.T) {
 	db, _ := createTestDatabase(t, 3)
 	defer db.Close()
 
-	// 1. FormatECO
+	// FormatECO
 	ecoStr := FormatECO(150)
 	assert.Equal(t, "B50", ecoStr)
 
-	// 2. RLock & RUnlock
+	// RLock & RUnlock
 	db.RLock()
 	cnt := db.NumGames()
 	db.RUnlock()
 	assert.Equal(t, 3, cnt)
 
-	// 3. UpdateGameTags valid
+	// UpdateGameTags valid
 	tags := map[string]string{
 		"White":    "Fischer, Robert J.",
 		"Black":    "Spassky, Boris V.",
@@ -1173,14 +1173,14 @@ func TestDatabaseUpdateGameTagsAndSpellcheck(t *testing.T) {
 	assert.Equal(t, "Reykjavik", summary.Site)
 	assert.Equal(t, 2785, summary.WhiteElo)
 
-	// 4. UpdateGameTags error cases
+	// UpdateGameTags error cases
 	assert.Error(t, db.UpdateGameTags(0, tags))
 	assert.Error(t, db.UpdateGameTags(999, tags))
 
 	closedDB := NewDatabase()
 	assert.Error(t, closedDB.UpdateGameTags(1, tags))
 
-	// 5. StandardizePlayerNames on Database
+	// StandardizePlayerNames on Database
 	spellSummary, err := db.StandardizePlayerNames()
 	require.NoError(t, err)
 	assert.NotNil(t, spellSummary)
@@ -1443,7 +1443,7 @@ func TestSearchAdvAndSpellCheckRemainingBranches(t *testing.T) {
 }
 
 func TestAdditionalErrorAndEdgeBranches(t *testing.T) {
-	// 1. NameBase low/mid/high frequency & long name > 255 write/read & stepFailWriter
+	// NameBase low/mid/high frequency & long name > 255 write/read & stepFailWriter
 	nbLow := NewNameBase()
 	nbLow.AddName(NamePlayer, strings.Repeat("A", 260))
 	nbLow.AddName(NamePlayer, "SecondPlayer")
@@ -1479,7 +1479,7 @@ func TestAdditionalErrorAndEdgeBranches(t *testing.T) {
 		_ = NewNameBase().Read(bytes.NewReader(highBuf.Bytes()[:cut]))
 	}
 
-	// 2. MaterialCriteria WhiteR and BlackQ mismatches
+	// MaterialCriteria WhiteR and BlackQ mismatches
 	b := chess.NewBoard()
 	mcWR := DefaultMaterialCriteria()
 	mcWR.WhiteR = 9
@@ -1488,7 +1488,7 @@ func TestAdditionalErrorAndEdgeBranches(t *testing.T) {
 	mcBQ.BlackQ = 9
 	assert.False(t, mcBQ.MatchesBoard(b))
 
-	// 3. Statistics with > 8 ECOs and > 8 Players, plus invalid short date for parseYear
+	// Statistics with > 8 ECOs and > 8 Players, plus invalid short date for parseYear
 	dbStats, _ := createTestDatabase(t, 10)
 	defer dbStats.Close()
 	for i := 0; i < 10; i++ {
@@ -1504,7 +1504,7 @@ func TestAdditionalErrorAndEdgeBranches(t *testing.T) {
 	assert.Len(t, st.TopPlayers, 8)
 	assert.Equal(t, 0, dbStats.CountMatches(SearchCriteria{YearFrom: 2000, ECO: "A00"}))
 
-	// 4. Verify with invalid BlackID, size mismatch, and missing si4/sn4
+	// Verify with invalid BlackID, size mismatch, and missing si4/sn4
 	dbVer, verPath := createTestDatabase(t, 2)
 	defer dbVer.Close()
 	dbVer.Entries[0].BlackID = 999999
@@ -1523,7 +1523,7 @@ func TestAdditionalErrorAndEdgeBranches(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "CORRUPTED", rep2.Status)
 
-	// 5. InspectDatabase fallback when si4 header is invalid but size > IndexHeaderSize
+	// InspectDatabase fallback when si4 header is invalid but size > IndexHeaderSize
 	corruptSiDir := t.TempDir()
 	corruptSiBase := filepath.Join(corruptSiDir, "badhdr")
 	require.NoError(t, os.WriteFile(corruptSiBase+".si4", make([]byte, IndexHeaderSize+IndexEntrySize*3), 0644))
@@ -1533,13 +1533,13 @@ func TestAdditionalErrorAndEdgeBranches(t *testing.T) {
 	assert.True(t, insp.Exists)
 	assert.Equal(t, 3, insp.NumGames)
 
-	// 6. Open with corrupt .sn4 and corrupt .si4
+	// Open with corrupt .sn4 and corrupt .si4
 	require.Error(t, NewDatabase().Open(corruptSiBase))
 	validNB := NewNameBase()
 	require.NoError(t, validNB.WriteToFile(corruptSiBase+".sn4"))
 	require.Error(t, NewDatabase().Open(corruptSiBase))
 
-	// 7. File I/O error branches when BasePath points to invalid path on open DB
+	// File I/O error branches when BasePath points to invalid path on open DB
 	dbBadIO, _ := createTestDatabase(t, 2)
 	defer dbBadIO.Close()
 	_ = dbBadIO.DeleteGame(1, true)
@@ -1565,7 +1565,7 @@ func TestAdditionalErrorAndEdgeBranches(t *testing.T) {
 	_, err = dbBadIO.StandardizePlayerNames()
 	assert.Error(t, err)
 
-	// 8. DecodeGameData with non-standard start FEN (valid & invalid)
+	// DecodeGameData with non-standard start FEN (valid & invalid)
 	gCustomFEN := chess.NewGame()
 	gCustomFEN.StartFEN = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
 	rawCustom, err := EncodeGameData(gCustomFEN)
@@ -1600,7 +1600,7 @@ func TestAdditionalErrorAndEdgeBranches(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "c1 c2", gDual.RootMove.Comment)
 
-	// 10. Missing .si4 error paths while .sg4/.sn4 exist
+	// Missing .si4 error paths while .sg4/.sn4 exist
 	dbNoSi, noSiBase := createTestDatabase(t, 2)
 	defer dbNoSi.Close()
 	// Save a custom FEN game for matchesCriteria custom FEN + bad offset
@@ -1627,7 +1627,7 @@ func TestAdditionalErrorAndEdgeBranches(t *testing.T) {
 	_, err = dbNoSi.StandardizePlayerNames()
 	assert.Error(t, err)
 
-	// 11. MergeFromDatabases with corrupt .si4 source and source with deleted + bad-offset entries
+	// MergeFromDatabases with corrupt .si4 source and source with deleted + bad-offset entries
 	dbMergeTarget, _ := createTestDatabase(t, 1)
 	defer dbMergeTarget.Close()
 	dbSrcWithErrs, srcErrBase := createTestDatabase(t, 2)

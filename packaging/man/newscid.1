@@ -1,4 +1,4 @@
-.TH NEWSCID 1 "October 2026" "NewScid 1.3.29" "User Commands"
+.TH NEWSCID 1 "October 2026" "NewScid 1.3.30" "User Commands"
 .SH NAME
 newscid \- Modern Chess Workstation and .si4 Information Database
 .br
@@ -21,12 +21,12 @@ newscid-scout \- Standalone opponent scouting dossier, opening exploiter & cross
 \fB\-db\fR \fIDATABASE.si4\fR [\fB\-player\fR \fINAME\fR] [\fB\-exploit-color\fR \fIwhite|black\fR] [\fB\-book-out\fR \fIFILE.bin\fR] [\fB\-crosstable\fR \fIEVENT\fR] [\fB\-json\fR]
 .SH DESCRIPTION
 .B NewScid
-is a complete, ultra-fast Linux chess workstation and graphical analysis suite engineered in Go and Vue 3.
-It provides native reading and writing support for high-capacity SCID v4 binary databases (\fB.si4\fR index, \fB.sg4\fR Huffman-compressed games, \fB.sn4\fR front-coded namebase tries), multi-million-game PGN/Zstandard streams, and real-time UCI chess engine analysis.
+is a Linux chess database and graphical analysis program written in Go and Vue 3.
+It provides native reading and writing support for SCID v4 binary databases (\fB.si4\fR index, \fB.sg4\fR Huffman-compressed games, \fB.sn4\fR front-coded namebase tries), PGN/Zstandard streams, and UCI chess engine analysis.
 .PP
-All user documentation, interactive guides, contextual feature help (\fBF1\fR), and system manual pages (\fBman 1 newscid\fR) are stored 100% locally on your machine with zero external web dependencies.
+All user documentation, contextual feature help (\fBF1\fR), and system manual pages (\fBman 1 newscid\fR) are stored locally on the system.
 .PP
-Alongside the main graphical workstation (\fBnewscid\fR), three standalone companion CLI programs (\fBnewscid-import\fR, \fBnewscid-fairplay\fR, and \fBnewscid-scout\fR) are installed for high-speed batch database maintenance, fair-play screening, and tournament preparation from the terminal.
+Alongside the main graphical application (\fBnewscid\fR), three standalone CLI utilities (\fBnewscid-import\fR, \fBnewscid-fairplay\fR, and \fBnewscid-scout\fR) are installed for batch database maintenance, statistical screening, and tournament preparation from the terminal.
 .SH OPTIONS (newscid)
 .TP
 .BR \-h ", " \-\-help
@@ -106,30 +106,30 @@ Emit output as formatted JSON.
 \fBAll Panels Relocatable & Detachable\fR: Every workstation panel—including the \fBChessboard\fR, \fBScorebook\fR, \fBUCI Engine & Coach\fR, \fBOpening Tree & Tablebase\fR, \fBDatabase Game Browser\fR, \fBEval Graph\fR, and \fBStudy/Filter\fR—can be docked Left, Right, or Bottom, reordered, hidden, or detached into a draggable floating window or dedicated Hyprland workspace window.
 .IP \(bu 2
 \fBPersistent User Configuration\fR: Any change to panel docking/floating geometry, default startup database, reference database, board theme, piece set, UI theme, or notation style is immediately persisted to \fI~/.config/newscid/preferences.json\fR.
-.SH MAJOR WORKSTATION MODULES
-.SS 1. Native SCID Binary Database Engine, Intuitive Search, Write Locking & Sub-DB Builder
+.SH WORKSTATION MODULES
+.SS Native SCID Binary Database Engine, Search, Write Locking & Sub-DB Builder
 Reads and writes 47-byte index records (\fB.si4\fR), Huffman-compressed move streams (\fB.sg4\fR), and front-coded namebase tries (\fB.sn4\fR).
-Provides 1-click board position search (\fBMatch Board\fR), opening move-sequence and ECO range filtering, and a customizable \fBFamous Players\fR selector (Bobby Fischer, Magnus Carlsen, Garry Kasparov, Mikhail Tal, etc.) with automatic FIDE alias resolution.
-Every database enforces a configurable write policy (\fBEditable\fR for personal/persona databases, \fBSync-Only\fR for imported reference databases, or \fBLocked\fR read-only) to prevent accidental contamination.
-Supports extracting focused sub-databases across multiple source \fB.si4\fR/\fB.pgn\fR databases and performing a complete \fBFactory Reset\fR (with opt-in \fB.tar.gz\fR backup) to start from a clean slate.
-.SS 2. Player Personas & Incremental Online Synchronization
-Unifies disparate database identifiers (FIDE OTB name, Chess.com username, Lichess handle) under a single consolidated Persona profile with its own dedicated \fB.si4\fR database. Syncing any player or persona fetches the newest games since the last sync first, then backfills older historical games while skipping all games already present in the database.
-.SS 3. Longitudinal Fair-Play & Time-Control Consistency Inspector
-Evaluates player move quality, Average Centipawn Loss (ACPL), top-move rank distribution, blunder rates, and consistency across Bullet, Blitz, Rapid, and Classical time controls using calibrated human baselines so normal human variance is accurately distinguished from statistical anomalies.
-.SS 4. Opponent Scouting & Anti-Persona Opening Exploiter
-Generates pre-game scouting dossiers and scans an opponent's opening tree to identify statistically weak nodes where they score poorly, exporting custom weaponized Polyglot (\fB.bin\fR) opening books.
-.SS 5. AI Player Simulation Bot & Engine Sparring
-Simulates any database player or Unified Persona by playing their historical opening repertoire probabilistically and transitioning to a rating-calibrated UCI engine with tactical blunder protection. Both the board evaluation bar and the 6-pillar Positional & Material Imbalance bar report from an absolute White perspective (+ = White advantage, \- = Black advantage).
-.SS 6. Natural-Language Coach, Blunder Radar & 7-Piece Tablebases
-Explains the strategic and tactical rationale behind moves in plain English, highlights undefended/hanging pieces in real time via the Blunder Radar, and probes 7-piece Syzygy/Lichess endgame tablebases for exact WDL and DTZ.
-.SS 7. Cyclical Tactical Drill, Lichess Theme Radar & Cognitive Drills
-Includes the \fBCyclical Tactical Drill & Theme Mastery\fR module—implementing high-frequency cyclical puzzle-set repetition (similar to the training regimen popularized by GM Axel Smith and IM Hans Tikkanen's book "The Woodpecker Method") where puzzles extracted from the user's own game history are sorted from \fBEasy to Hard\fR and solved across repeated cycles with halved target times, alongside a 30+ theme Lichess-compatible tactical tagger and 9-axis Performance Radar chart (\fIRatingAvg \- 500 + 1000 * FirstWins / Attempts\fR). Also includes the Coordinate Speed Trainer (with 8x8 accuracy heatmap), Piece Safety Scanner, Intuition Evaluation Storm, Prophylaxis ("What Is Threatening?") Drill, Progressive Blindfold Tactics, Solitaire Chess (Guess the Move), Practical Repertoire Shortener, SM-2 Personal Blunder Vault, and \fB%clk\fR Time-Trouble & Clock-Management Dossier.
-.SS 8. Universal Notation Styles & Print-Ready Publishing
-Dynamically switches across 6 notation formats (\fBSAN\fR, \fBFAN\fR, \fBLAN\fR, \fBDescriptive\fR, \fBUCI\fR, \fBICCF\fR), provides a 16-NAG annotation palette, and exports annotated games to print-ready \fBLaTeX\fR, \fBHTML\fR, and \fBPDF\fR scorebooks.
+Provides board position search (\fBMatch Board\fR), opening move-sequence and ECO range filtering, and a customizable \fBFamous Players\fR selector (Bobby Fischer, Magnus Carlsen, Garry Kasparov, Mikhail Tal, etc.) with automatic FIDE alias resolution.
+Every database enforces a configurable write policy (\fBEditable\fR for personal/persona databases, \fBSync-Only\fR for imported reference databases, or \fBLocked\fR read-only) to prevent accidental edits.
+Supports extracting sub-databases across multiple source \fB.si4\fR/\fB.pgn\fR databases and performing a \fBFactory Reset\fR (with optional \fB.tar.gz\fR backup).
+.SS Player Personas & Incremental Online Synchronization
+Unifies disparate database identifiers (FIDE OTB name, Chess.com username, Lichess handle) under a single Persona profile with its own dedicated \fB.si4\fR database. Syncing a player or persona fetches the newest games since the last sync first, then backfills older historical games while skipping games already present in the database.
+.SS Longitudinal Fair-Play & Time-Control Consistency Inspector
+Evaluates player move quality, Average Centipawn Loss (ACPL), top-move rank distribution, blunder rates, and consistency across Bullet, Blitz, Rapid, and Classical time controls using calibrated human baselines.
+.SS Opponent Scouting & Anti-Persona Opening Exploiter
+Generates pre-game scouting dossiers and scans an opponent's opening tree to identify statistically weak nodes where they score poorly, exporting Polyglot (\fB.bin\fR) opening books.
+.SS Player Simulation Bot & Engine Sparring
+Simulates any database player or Persona by playing their historical opening repertoire probabilistically and transitioning to a rating-calibrated UCI engine with tactical blunder protection. Both the board evaluation bar and the 6-pillar Positional & Material Imbalance bar report from an absolute White perspective (+ = White advantage, \- = Black advantage).
+.SS Position Coach, Blunder Radar & 7-Piece Tablebases
+Explains the strategic and tactical rationale behind moves, highlights undefended/hanging pieces via the Blunder Radar, and probes 7-piece Syzygy/Lichess endgame tablebases for exact WDL and DTZ.
+.SS Cyclical Tactical Drill, Lichess Theme Radar & Cognitive Drills
+Includes the \fBCyclical Tactical Drill & Theme Mastery\fR module—implementing cyclical puzzle-set repetition (similar to the training regimen popularized by GM Axel Smith and IM Hans Tikkanen's book "The Woodpecker Method") where puzzles extracted from the user's own game history are sorted from \fBEasy to Hard\fR and solved across repeated cycles with halved target times, alongside a 30+ theme Lichess-compatible tactical tagger and 9-axis Performance Radar chart (\fIRatingAvg \- 500 + 1000 * FirstWins / Attempts\fR). Also includes the Coordinate Speed Trainer (with 8x8 accuracy heatmap), Piece Safety Scanner, Intuition Evaluation Storm, Prophylaxis ("What Is Threatening?") Drill, Progressive Blindfold Tactics, Solitaire Chess (Guess the Move), Practical Repertoire Shortener, SM-2 Personal Blunder Vault, and \fB%clk\fR Time-Trouble & Clock-Management Dossier.
+.SS Notation Styles & Game Publishing
+Switches across 6 notation formats (\fBSAN\fR, \fBFAN\fR, \fBLAN\fR, \fBDescriptive\fR, \fBUCI\fR, \fBICCF\fR), provides a 16-NAG annotation palette, and exports annotated games to \fBLaTeX\fR, \fBHTML\fR, and \fBPDF\fR scorebooks.
 .SH KEYBOARD SHORTCUTS
 .TP
 .B F1
-Open 100% Local Manual & Contextual Help for the active dialog or workspace.
+Open Local Manual & Contextual Help for the active dialog or workspace.
 .TP
 .B F2
 Toggle live UCI engine analysis.

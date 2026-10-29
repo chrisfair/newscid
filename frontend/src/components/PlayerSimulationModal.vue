@@ -235,7 +235,7 @@ function handleStartMatch() {
           </button>
         </div>
 
-        <!-- 1. Database Opponents Selection -->
+        <!-- Database Opponents Selection -->
         <div v-if="activeTab === 'database'" class="space-y-1.5">
           <label class="text-xs font-semibold text-zinc-300 flex items-center justify-between">
             <span>Select Player to Simulate:</span>
@@ -278,7 +278,7 @@ function handleStartMatch() {
           </div>
         </div>
 
-        <!-- 2. Unified Personas Selection -->
+        <!-- Unified Personas Selection -->
         <div v-else class="space-y-2">
           <label class="text-xs font-semibold text-zinc-300 flex items-center justify-between">
             <span>Choose Persona to Spar Against:</span>

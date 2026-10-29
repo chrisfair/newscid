@@ -41,8 +41,8 @@ vi.mock('../../wailsjs/go/main/App', () => ({
       pointsAwarded: isCorrect ? 220 : 0,
       speedBonus: isCorrect ? 120 : 0,
       explanation: isCorrect
-        ? '🎯 Spot on! Evaluated in 1000ms (+0.15).'
-        : '❌ Misjudgment. The correct assessment is Equal (=) (+0.15).',
+        ? 'Spot on! Evaluated in 1000ms (+0.15).'
+        : 'Misjudgment. The correct assessment is Equal (=) (+0.15).',
       keyFeature: "Symmetrical Queen's Gambit: equal central presence and harmonious development."
     })
   })

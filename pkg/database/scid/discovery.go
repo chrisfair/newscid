@@ -133,7 +133,7 @@ func DiscoverScidDatabases() []DiscoveredDatabase {
 
 	home, _ := os.UserHomeDir()
 
-	// 1. Check recent files from Scid config
+	// Check recent files from Scid config
 	if home != "" {
 		recentFilesList := []string{
 			filepath.Join(home, ".scidvspc", "config", "recent.dat"),
@@ -159,7 +159,7 @@ func DiscoverScidDatabases() []DiscoveredDatabase {
 		}
 	}
 
-	// 2. Check ~/ChessDataBases
+	// Check ~/ChessDataBases
 	if home != "" {
 		chessBasesDir := filepath.Join(home, "ChessDataBases")
 		if fi, err := os.Stat(chessBasesDir); err == nil && fi.IsDir() {
@@ -182,7 +182,7 @@ func DiscoverScidDatabases() []DiscoveredDatabase {
 		}
 	}
 
-	// 3. Check ~/.scidvspc/data, ~/.local/share/newscid/databases, and persona folders
+	// Check ~/.scidvspc/data, ~/.local/share/newscid/databases, and persona folders
 	if home != "" {
 		extraDirs := []struct {
 			dir      string
@@ -214,7 +214,7 @@ func DiscoverScidDatabases() []DiscoveredDatabase {
 		}
 	}
 
-	// 4. System training bases
+	// System training bases
 	systemBases := []struct {
 		name string
 		path string

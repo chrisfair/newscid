@@ -154,7 +154,7 @@ func (b *Board) IsSquareAttacked(sq Square, by Color) bool {
 	f := sq.File()
 	r := sq.Rank()
 
-	// 1. Pawn attacks
+	// Pawn attacks
 	if by == White {
 		if r > 0 {
 			if f > 0 && b.Squares[MakeSquare(f-1, r-1)] == WP {
@@ -175,7 +175,7 @@ func (b *Board) IsSquareAttacked(sq Square, by Color) bool {
 		}
 	}
 
-	// 2. Knight attacks
+	// Knight attacks
 	knightOffsets := [][2]int{
 		{-2, -1}, {-2, 1}, {-1, -2}, {-1, 2},
 		{1, -2}, {1, 2}, {2, -1}, {2, 1},
@@ -194,7 +194,7 @@ func (b *Board) IsSquareAttacked(sq Square, by Color) bool {
 		}
 	}
 
-	// 3. King attacks
+	// King attacks
 	enemyKing := WK
 	if by == Black {
 		enemyKing = BK
@@ -214,7 +214,7 @@ func (b *Board) IsSquareAttacked(sq Square, by Color) bool {
 		}
 	}
 
-	// 4. Sliding rays (Rook/Queen)
+	// Sliding rays (Rook/Queen)
 	enemyRook := WR
 	enemyQueen := WQ
 	if by == Black {
@@ -239,7 +239,7 @@ func (b *Board) IsSquareAttacked(sq Square, by Color) bool {
 		}
 	}
 
-	// 5. Sliding rays (Bishop/Queen)
+	// Sliding rays (Bishop/Queen)
 	enemyBishop := WB
 	if by == Black {
 		enemyBishop = BB

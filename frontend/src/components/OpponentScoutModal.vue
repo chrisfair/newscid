@@ -124,7 +124,7 @@ onMounted(() => {
             @click="emit('exploitPlayer', playerName)"
           >
             <Sword class="w-3.5 h-3.5" />
-            Generate Weaponized Anti-Book
+            Generate Counter-Book
           </button>
         </div>
 

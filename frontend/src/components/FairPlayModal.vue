@@ -534,7 +534,7 @@ async function handleCopyReport() {
                 @click="activeViewTab = 'hardmove'"
               >
                 <Crosshair class="w-3.5 h-3.5 text-emerald-400" />
-                <span>🎯 Hard-Move &amp; Self-Benchmark (Opponents vs. You)</span>
+                <span>Hard-Move &amp; Self-Benchmark (Opponents vs. You)</span>
               </button>
 
               <button
@@ -702,7 +702,7 @@ async function handleCopyReport() {
                       @click="handleRunHardMoveWithOnlineBanCheck"
                     >
                       <Globe class="w-3.5 h-3.5" />
-                      <span>{{ isCheckingOnlineBans ? 'Checking Accounts...' : '🔍 Verify Banned Opponents Online' }}</span>
+                      <span>{{ isCheckingOnlineBans ? 'Checking Accounts...' : 'Verify Banned Opponents Online' }}</span>
                     </button>
                   </div>
                 </div>
@@ -926,7 +926,7 @@ async function handleCopyReport() {
                               ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40'
                               : 'bg-amber-950/80 text-amber-300 border border-amber-500/40'"
                           >
-                            {{ perf.side === 'self' ? '👤 You' : '⚔️ Opponent' }}
+                            {{ perf.side === 'self' ? 'You' : 'Opponent' }}
                           </span>
                         </td>
                         <td class="py-2 px-2.5 font-sans">

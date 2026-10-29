@@ -75,7 +75,7 @@ func evaluateMoveTactics(b *chess.Board, m chess.Move, isWhite bool) int {
 	pt := movingPiece.Type()
 	score := 0
 
-	// 1. Captures & Material evaluation via Static Exchange Evaluation (SEE)
+	// Captures & Material evaluation via Static Exchange Evaluation (SEE)
 	if targetPiece != chess.Empty || m.To == b.EPSquare {
 		see := training.CalculateSEE(b, m.From, m.To)
 		victimVal := pieceValues[targetPiece.Type()]
@@ -92,12 +92,12 @@ func evaluateMoveTactics(b *chess.Board, m chess.Move, isWhite bool) int {
 		}
 	}
 
-	// 2. Promotion bonus
+	// Promotion bonus
 	if m.Promo != chess.None {
 		score += pieceValues[m.Promo] * 8
 	}
 
-	// 3. Make move on cloned board to check resulting tactical state
+	// Make move on cloned board to check resulting tactical state
 	nextB := b.Clone()
 	nextB.MakeMove(m)
 
@@ -131,7 +131,7 @@ func evaluateMoveTactics(b *chess.Board, m chess.Move, isWhite bool) int {
 		}
 	}
 
-	// 4. Center control (e4, d4, e5, d5, c4, f4, c5, f5)
+	// Center control (e4, d4, e5, d5, c4, f4, c5, f5)
 	toFile := m.To.File()
 	toRank := m.To.Rank()
 	if (toFile == 3 || toFile == 4) && (toRank == 3 || toRank == 4) {
@@ -140,7 +140,7 @@ func evaluateMoveTactics(b *chess.Board, m chess.Move, isWhite bool) int {
 		score += 15 // Extended center
 	}
 
-	// 5. Castling & King safety
+	// Castling & King safety
 	if pt == chess.King {
 		fromFile := m.From.File()
 		if fromFile == 4 && (toFile == 6 || toFile == 2) {
@@ -148,7 +148,7 @@ func evaluateMoveTactics(b *chess.Board, m chess.Move, isWhite bool) int {
 		}
 	}
 
-	// 6. Minor piece development in opening
+	// Minor piece development in opening
 	if pt == chess.Knight || pt == chess.Bishop {
 		if isWhite && m.From.Rank() == 0 {
 			score += 30 // Moving off back rank

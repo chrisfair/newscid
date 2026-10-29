@@ -20,15 +20,15 @@ func TestProfileManager(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "profiles.json")
 
-	// 1. Initial creation with non-existent file
+	// Initial creation with non-existent file
 	pm, err := NewProfileManager(configPath)
 	require.NoError(t, err)
 	assert.Empty(t, pm.GetProfiles())
 
-	// 2. Default config path
+	// Default config path
 	assert.NotEmpty(t, DefaultConfigPath())
 
-	// 3. Save a new profile
+	// Save a new profile
 	p1 := &Profile{
 		Name:             "Main Profile",
 		ChessComUsername: "west17",
@@ -41,33 +41,33 @@ func TestProfileManager(t *testing.T) {
 	assert.NotEmpty(t, p1.ID)
 	assert.Greater(t, p1.CreatedAt, int64(0))
 
-	// 4. Get profile
+	// Get profile
 	got, err := pm.GetProfile(p1.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "Main Profile", got.Name)
 	assert.Equal(t, "west17", got.ChessComUsername)
 
-	// 5. Get non-existent
+	// Get non-existent
 	_, err = pm.GetProfile("nonexistent_id")
 	assert.Error(t, err)
 
-	// 6. Reload from disk
+	// Reload from disk
 	pm2, err := NewProfileManager(configPath)
 	require.NoError(t, err)
 	profiles := pm2.GetProfiles()
 	require.Len(t, profiles, 1)
 	assert.Equal(t, "Main Profile", profiles[0].Name)
 
-	// 7. Delete profile
+	// Delete profile
 	err = pm2.DeleteProfile(p1.ID)
 	require.NoError(t, err)
 	assert.Empty(t, pm2.GetProfiles())
 
-	// 8. Delete non-existent
+	// Delete non-existent
 	err = pm2.DeleteProfile("already_deleted")
 	assert.Error(t, err)
 
-	// 9. Corrupted config file error
+	// Corrupted config file error
 	corruptPath := filepath.Join(tmpDir, "corrupted.json")
 	err = os.WriteFile(corruptPath, []byte("invalid json {} []"), 0644)
 	require.NoError(t, err)
@@ -79,11 +79,11 @@ func TestLichessClient(t *testing.T) {
 	client := NewLichessClient()
 	assert.NotEmpty(t, client.UserAgent)
 
-	// 1. Empty username error
+	// Empty username error
 	_, err := client.FetchUserGames("", 0, "", false, 0)
 	assert.Error(t, err)
 
-	// 2. Mock Lichess server
+	// Mock Lichess server
 	samplePGN := `[Event "Rated Blitz game"]
 [Site "https://lichess.org/abcd1234"]
 [Date "2026.05.01"]
@@ -144,13 +144,13 @@ func TestLichessClient(t *testing.T) {
 
 	client.BaseURL = server.URL
 
-	// 3. User game count
+	// User game count
 	assert.Equal(t, 0, client.GetUserGameCount("", false))
 	assert.Equal(t, 0, client.GetUserGameCount("notfound", false))
 	assert.Equal(t, 14182, client.GetUserGameCount("QuenyenHighElf", false))
 	assert.Equal(t, 9977, client.GetUserGameCount("QuenyenHighElf", true))
 
-	// 4. Successful fetch with progress (constrained)
+	// Successful fetch with progress (constrained)
 	var progressEvents []string
 	progressCallback := func(stage string, current, total int, message string) {
 		progressEvents = append(progressEvents, stage)
@@ -162,22 +162,22 @@ func TestLichessClient(t *testing.T) {
 	assert.Contains(t, pgn, "QuenyenHighElf")
 	assert.NotEmpty(t, progressEvents)
 
-	// 4b. Successful fetch with progress (unconstrained maxGames = 0)
+	// Successful fetch with progress (unconstrained maxGames = 0)
 	pgnAll, err := client.FetchUserGames("QuenyenHighElf", 0, "", false, 0, progressCallback)
 	require.NoError(t, err)
 	assert.Contains(t, pgnAll, "QuenyenHighElf")
 
-	// 5. Not found
+	// Not found
 	_, err = client.FetchUserGames("notfound", 0, "", false, 0)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 
-	// 6. Rate limit
+	// Rate limit
 	_, err = client.FetchUserGames("ratelimited", 0, "", false, 0)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "rate limit")
 
-	// 7. Server error
+	// Server error
 	_, err = client.FetchUserGames("servererror", 0, "", false, 0)
 	assert.Error(t, err)
 }
@@ -186,7 +186,7 @@ func TestChessComClient(t *testing.T) {
 	client := NewChessComClient()
 	assert.NotEmpty(t, client.UserAgent)
 
-	// 1. Errors on empty parameters
+	// Errors on empty parameters
 	_, err := client.FetchArchives("")
 	assert.Error(t, err)
 	_, err = client.FetchMonthlyPGN("")
@@ -241,27 +241,27 @@ func TestChessComClient(t *testing.T) {
 	serverURL = server.URL
 	client.BaseURL = server.URL
 
-	// 2. Fetch Archives
+	// Fetch Archives
 	archives, err := client.FetchArchives("west17")
 	require.NoError(t, err)
 	assert.Len(t, archives, 2)
 
-	// 3. Fetch Monthly PGN
+	// Fetch Monthly PGN
 	monthPGN, err := client.FetchMonthlyPGN(archives[0])
 	require.NoError(t, err)
 	assert.Contains(t, monthPGN, "west17")
 
-	// 4. FetchUserGames with filtering (since 2026/03 -> only 2026/04 included)
+	// FetchUserGames with filtering (since 2026/03 -> only 2026/04 included)
 	filteredPGN, err := client.FetchUserGames("west17", 2026, 3)
 	require.NoError(t, err)
 	assert.Contains(t, filteredPGN, "west17")
 
-	// 5. FetchUserGames with maxLimit (reverse chronological processing)
+	// FetchUserGames with maxLimit (reverse chronological processing)
 	limitedPGN, err := client.FetchUserGames("west17", 0, 0, 1)
 	require.NoError(t, err)
 	assert.Contains(t, limitedPGN, "west17")
 
-	// 6. FetchUserGamesWithProgress with callback
+	// FetchUserGamesWithProgress with callback
 	var chessProgressCalled bool
 	chessPGN, err := client.FetchUserGamesWithProgress("west17", 0, 0, 1, func(stage string, current, total int, message string) {
 		chessProgressCalled = true
@@ -271,12 +271,12 @@ func TestChessComClient(t *testing.T) {
 	assert.Contains(t, chessPGN, "west17")
 	assert.True(t, chessProgressCalled)
 
-	// 7. User not found
+	// User not found
 	_, err = client.FetchArchives("notfound")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 
-	// 6. Rate limited
+	// Rate limited
 	_, err = client.FetchArchives("ratelimited")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "rate limit")
@@ -290,7 +290,7 @@ func TestSyncManager(t *testing.T) {
 
 	sm := NewSyncManager(pm)
 
-	// 1. Errors on nil profile or closed database
+	// Errors on nil profile or closed database
 	_, err = sm.SyncProfile(nil, nil)
 	assert.Error(t, err)
 
@@ -304,7 +304,7 @@ func TestSyncManager(t *testing.T) {
 	_, err = sm.SyncProfile(profile, closedDb)
 	assert.Error(t, err)
 
-	// 2. Setup mock servers for Lichess and Chess.com
+	// Setup mock servers for Lichess and Chess.com
 	lichessPGN := `[Event "Lichess Game"]
 [Site "https://lichess.org/game1"]
 [Date "2026.06.01"]
@@ -349,14 +349,14 @@ func TestSyncManager(t *testing.T) {
 	sm.Lichess.BaseURL = server.URL
 	sm.ChessCom.BaseURL = server.URL
 
-	// 3. Create target SCID database
+	// Create target SCID database
 	targetPath := filepath.Join(tmpDir, "target_db")
 	db := scid.NewDatabase()
 	err = db.Create(targetPath, "Target Sync DB")
 	require.NoError(t, err)
 	defer db.Close()
 
-	// 4. Save and sync profile
+	// Save and sync profile
 	err = pm.SaveProfile(profile)
 	require.NoError(t, err)
 
@@ -375,7 +375,7 @@ func TestSyncManager(t *testing.T) {
 	assert.Greater(t, updatedProfile.LastSyncTime, int64(0))
 	assert.Equal(t, 2, updatedProfile.LastSyncGames)
 
-	// 5. Test Auto-deduplication on subsequent sync (existing games skipped during incremental fetch)
+	// Test Auto-deduplication on subsequent sync (existing games skipped during incremental fetch)
 	res2, err := sm.SyncProfile(profile, db)
 	require.NoError(t, err)
 	assert.Equal(t, 0, res2.TotalDownloaded)
@@ -383,18 +383,18 @@ func TestSyncManager(t *testing.T) {
 }
 
 func TestOnlineEdgeCasesAndErrors(t *testing.T) {
-	// 1. NewProfileManager with empty config path uses DefaultConfigPath
+	// NewProfileManager with empty config path uses DefaultConfigPath
 	pmDefault, err := NewProfileManager("")
 	require.NoError(t, err)
 	assert.NotNil(t, pmDefault)
 
-	// 2. LichessClient invalid URL request failure
+	// LichessClient invalid URL request failure
 	badLichess := NewLichessClient()
 	badLichess.BaseURL = "http://invalid-nonexistent-domain-12345.xyz"
 	_, err = badLichess.FetchUserGames("user", 0, "", false, 0)
 	assert.Error(t, err)
 
-	// 3. ChessComClient error cases
+	// ChessComClient error cases
 	badChessCom := NewChessComClient()
 	badChessCom.BaseURL = "http://invalid-nonexistent-domain-12345.xyz"
 	_, err = badChessCom.FetchArchives("user")
@@ -402,7 +402,7 @@ func TestOnlineEdgeCasesAndErrors(t *testing.T) {
 	_, err = badChessCom.FetchMonthlyPGN("http://invalid-nonexistent-domain-12345.xyz/pgn")
 	assert.Error(t, err)
 
-	// 4. ChessComClient server with 404 monthly PGN, 500 monthly PGN, 500 archives, and invalid JSON
+	// ChessComClient server with 404 monthly PGN, 500 monthly PGN, 500 archives, and invalid JSON
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "empty-month") {
 			w.WriteHeader(http.StatusNotFound)
@@ -435,29 +435,29 @@ func TestOnlineEdgeCasesAndErrors(t *testing.T) {
 	client := NewChessComClient()
 	client.BaseURL = server.URL
 
-	// 4a. Empty month (404) returns empty string and no error
+	// Empty month (404) returns empty string and no error
 	emptyPGN, err := client.FetchMonthlyPGN(server.URL + "/empty-month")
 	require.NoError(t, err)
 	assert.Empty(t, emptyPGN)
 
-	// 4b. Error month (500) returns error
+	// Error month (500) returns error
 	_, err = client.FetchMonthlyPGN(server.URL + "/error-month")
 	assert.Error(t, err)
 
-	// 4c. Server error on archives (500)
+	// Server error on archives (500)
 	_, err = client.FetchArchives("server-err")
 	assert.Error(t, err)
 
-	// 4d. Invalid JSON on archives
+	// Invalid JSON on archives
 	_, err = client.FetchArchives("invalid-json")
 	assert.Error(t, err)
 
-	// 4e. Empty archives list
+	// Empty archives list
 	pgnZero, err := client.FetchUserGames("empty-archives", 0, 0)
 	require.NoError(t, err)
 	assert.Empty(t, pgnZero)
 
-	// 5. SyncManager with 0 games downloaded (empty usernames)
+	// SyncManager with 0 games downloaded (empty usernames)
 	tmpDir := t.TempDir()
 	pm, err := NewProfileManager(filepath.Join(tmpDir, "pm.json"))
 	require.NoError(t, err)
@@ -475,7 +475,7 @@ func TestOnlineEdgeCasesAndErrors(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, res.TotalDownloaded)
 
-	// 6. SyncManager with errors from both platforms
+	// SyncManager with errors from both platforms
 	failingProfile := &Profile{
 		Name:             "Failing Profile",
 		ChessComUsername: "server-err",
@@ -550,11 +550,11 @@ func TestImportPlayerGamesAndBlendedSync(t *testing.T) {
 	sm.Lichess.BaseURL = server.URL
 	sm.ChessCom.BaseURL = server.URL + "/pub/player"
 
-	// 1. Validation error: no usernames
+	// Validation error: no usernames
 	_, err = sm.ImportPlayerGames(ImportPlayerOptions{}, nil)
 	assert.Error(t, err)
 
-	// 2. Active Base Mode
+	// Active Base Mode
 	activeDB := scid.NewDatabase()
 	activePath := filepath.Join(tmpDir, "active_base")
 	err = activeDB.Create(activePath, "Active Base")
@@ -580,14 +580,14 @@ func TestImportPlayerGamesAndBlendedSync(t *testing.T) {
 	assert.Equal(t, uint32(2), activeDB.Header.NumGames)
 	assert.NotEmpty(t, reportedImportStages)
 
-	// 2b. Error: TargetActiveBase with nil active database
+	// Error: TargetActiveBase with nil active database
 	_, err = sm.ImportPlayerGames(ImportPlayerOptions{
 		LichessUsername: "opponentgm",
 		TargetMode:      TargetActiveBase,
 	}, nil)
 	assert.Error(t, err)
 
-	// 3. Dedicated Base Mode
+	// Dedicated Base Mode
 	dedicatedPath := filepath.Join(tmpDir, "dedicated_opponent.si4")
 	resDedicated, err := sm.ImportPlayerGames(ImportPlayerOptions{
 		PlayerName:       "Opponent GM",
@@ -614,7 +614,7 @@ func TestImportPlayerGamesAndBlendedSync(t *testing.T) {
 	assert.Equal(t, uint32(2), dedDB.Header.NumGames)
 	dedDB.Close()
 
-	// 3b. Error: Dedicated path missing
+	// Error: Dedicated path missing
 	_, err = sm.ImportPlayerGames(ImportPlayerOptions{
 		LichessUsername: "opponentgm",
 		TargetMode:      TargetDedicatedBase,
@@ -622,7 +622,7 @@ func TestImportPlayerGamesAndBlendedSync(t *testing.T) {
 	}, nil)
 	assert.Error(t, err)
 
-	// 4. Blended Base Mode (Dedicated DB + Blended Master DB)
+	// Blended Base Mode (Dedicated DB + Blended Master DB)
 	blendedDedicatedPath := filepath.Join(tmpDir, "hikaru_dedicated.si4")
 	blendedMasterPath := filepath.Join(tmpDir, "master_blended.si4")
 
@@ -653,7 +653,7 @@ func TestImportPlayerGamesAndBlendedSync(t *testing.T) {
 	assert.Equal(t, uint32(2), mDB.Header.NumGames)
 	mDB.Close()
 
-	// 5. Blended mode with active database fallback
+	// Blended mode with active database fallback
 	resBlendedActive, err := sm.ImportPlayerGames(ImportPlayerOptions{
 		PlayerName:       "Magnus",
 		LichessUsername:  "opponentgm",
@@ -664,7 +664,7 @@ func TestImportPlayerGamesAndBlendedSync(t *testing.T) {
 	require.NoError(t, err)
 	assert.Greater(t, resBlendedActive.Imported, 0)
 
-	// 6. Test SyncProfile with TargetBlendedBase
+	// Test SyncProfile with TargetBlendedBase
 	blendedSyncTarget := scid.NewDatabase()
 	err = blendedSyncTarget.Create(filepath.Join(tmpDir, "blended_sync_target"), "Blended Sync Target")
 	require.NoError(t, err)
@@ -702,14 +702,14 @@ func TestImportPlayerGamesAdditionalEdgeCases(t *testing.T) {
 	sm.Lichess.BaseURL = emptyServer.URL
 	sm.ChessCom.BaseURL = emptyServer.URL
 
-	// 1. Zero games downloaded
+	// Zero games downloaded
 	resZero, err := sm.ImportPlayerGames(ImportPlayerOptions{
 		LichessUsername: "nobody",
 	}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 0, resZero.TotalDownloaded)
 
-	// 2. TargetBlendedBase with invalid paths to trigger error branches
+	// TargetBlendedBase with invalid paths to trigger error branches
 	samplePGN := `[Event "Test"]
 [White "P1"]
 [Black "P2"]
@@ -847,12 +847,12 @@ func TestChessComIncrementalAndProgress(t *testing.T) {
 	cc := NewChessComClient()
 	cc.BaseURL = server.URL
 
-	// 1. FetchUserGamesWithProgress with sinceYear=2026, sinceMonth=2 (skips 2026/01)
+	// FetchUserGamesWithProgress with sinceYear=2026, sinceMonth=2 (skips 2026/01)
 	combined, err := cc.FetchUserGamesWithProgress("u", 2026, 2, 0, nil)
 	require.NoError(t, err)
 	assert.Contains(t, combined, "1. e4 e5")
 
-	// 2. FetchUserGamesIncremental with progressFn and maxNewGames > 0
+	// FetchUserGamesIncremental with progressFn and maxNewGames > 0
 	var stages []string
 	gamesInc, skippedInc, err := cc.FetchUserGamesIncremental("u", 1, nil, func(stage string, current, total int, message string) {
 		stages = append(stages, stage)
@@ -905,10 +905,10 @@ func TestLichessIncrementalAndSyncEdgeCases(t *testing.T) {
 	lc := NewLichessClient()
 	lc.BaseURL = srv.URL
 
-	// 1. GetUserGameCount invalid JSON
+	// GetUserGameCount invalid JSON
 	assert.Equal(t, 0, lc.GetUserGameCount("badjson", false))
 
-	// 2. FetchUserGames with 25 games and totalExpected=10 (triggers pct > 100 cap)
+	// FetchUserGames with 25 games and totalExpected=10 (triggers pct > 100 cap)
 	var batchProg int
 	_, err := lc.FetchUserGames("user25", 0, "tok", true, 0, func(stage string, current, total int, message string) {
 		batchProg++
@@ -916,7 +916,7 @@ func TestLichessIncrementalAndSyncEdgeCases(t *testing.T) {
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, batchProg, 2)
 
-	// 3. FetchUserGamesIncremental error branches & 20-game progress
+	// FetchUserGamesIncremental error branches & 20-game progress
 	_, _, err = lc.FetchUserGamesIncremental("", "", false, 0, nil)
 	assert.Error(t, err)
 	_, _, err = lc.FetchUserGamesIncremental("404", "", false, 0, nil)
@@ -934,7 +934,7 @@ func TestLichessIncrementalAndSyncEdgeCases(t *testing.T) {
 	assert.Len(t, games, 22)
 	assert.GreaterOrEqual(t, incProg, 2)
 
-	// 4. SyncManager.ImportPlayerGames edge cases:
+	// SyncManager.ImportPlayerGames edge cases:
 	// - Default mode with open activeDB
 	// - TargetDedicatedBase where DedicatedPath matches activeDB.BasePath
 	// - Error recording when Lichess and Chess.com fail

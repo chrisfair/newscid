@@ -372,7 +372,7 @@ func (r *EngineMatchRunner) playSingleGame(
 		default:
 		}
 
-		// 1. Check checkmate / stalemate
+		// Check checkmate / stalemate
 		if board.IsCheckmate() {
 			res.Termination = "checkmate"
 			if board.Turn == chess.White {
@@ -395,7 +395,7 @@ func (r *EngineMatchRunner) playSingleGame(
 			break
 		}
 
-		// 3. Whose turn?
+		// Whose turn?
 		var activePlayer EnginePlayer
 		if board.Turn == chess.White {
 			activePlayer = whitePlayer
@@ -403,7 +403,7 @@ func (r *EngineMatchRunner) playSingleGame(
 			activePlayer = blackPlayer
 		}
 
-		// 4. Request move from active engine (board.FEN() already includes all moves played so far)
+		// Request move from active engine (board.FEN() already includes all moves played so far)
 		moveUCI, evalInfo, err := activePlayer.SearchMove(ctx, board.FEN(), nil, r.Config.TimeControlMs)
 		if err != nil {
 			res.Termination = fmt.Sprintf("engine error: %v", err)
@@ -426,7 +426,7 @@ func (r *EngineMatchRunner) playSingleGame(
 			break
 		}
 
-		// 5. Parse and apply move
+		// Parse and apply move
 		parsedMove, err := board.ParseUCI(moveUCI)
 		if err != nil {
 			res.Termination = fmt.Sprintf("engine illegal move %s: %v", moveUCI, err)
@@ -454,7 +454,7 @@ func (r *EngineMatchRunner) playSingleGame(
 			break
 		}
 
-		// 7. Continuous Eval Adjudication (evalInfo.ScoreCp is already normalized to White's perspective)
+		// Continuous Eval Adjudication (evalInfo.ScoreCp is already normalized to White's perspective)
 		if r.Config.AdjudicateEvalCp > 0 && evalInfo.Depth >= 6 {
 			score := evalInfo.ScoreCp
 			if score >= r.Config.AdjudicateEvalCp {

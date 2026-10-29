@@ -33,7 +33,7 @@ vi.mock('../../wailsjs/go/main/App', () => ({
       },
     ],
     topRefutationLines: ['[B22] e4 c5 c3 d5 -> d5 (Score: 12.5%)'],
-    pgnRepertoire: '[Event "Anti-Persona Weaponized Repertoire"]\n1. e4 c5 2. c3 d5! *\n',
+    pgnRepertoire: '[Event "Anti-Persona Counter Repertoire"]\n1. e4 c5 2. c3 d5! *\n',
     polyglotEntryCount: 16,
     generatedAt: 1700000000000,
   }),
@@ -45,7 +45,7 @@ vi.mock('../../wailsjs/go/main/App', () => ({
     personaRecord: { total: 10, wins: 5, draws: 3, losses: 2, winRate: 65.0 },
     vulnerabilities: [],
     topRefutationLines: [],
-    pgnRepertoire: '[Event "Anti-Persona Weaponized Repertoire"]\n*\n',
+    pgnRepertoire: '[Event "Anti-Persona Counter Repertoire"]\n*\n',
     polyglotEntryCount: 8,
     generatedAt: 1700000000000,
   }),
@@ -56,7 +56,7 @@ vi.mock('../../wailsjs/go/main/App', () => ({
 }))
 
 describe('AntiPersonaModal.vue', () => {
-  it('renders modal and generates weaponized anti-persona opening report', async () => {
+  it('renders modal and generates anti-persona opening report', async () => {
     const wrapper = mount(AntiPersonaModal, {
       props: {
         initialPersonaId: 'p-kasparov',
@@ -72,7 +72,7 @@ describe('AntiPersonaModal.vue', () => {
     expect(wrapper.text()).toContain('12')
     expect(wrapper.text()).toContain('Critical Weaknesses')
     expect(wrapper.text()).toContain('1 Lines')
-    expect(wrapper.text()).toContain('Weaponized Book')
+    expect(wrapper.text()).toContain('Counter Book')
     expect(wrapper.text()).toContain('16 Entries')
 
     // Check vulnerability card details
@@ -101,7 +101,7 @@ describe('AntiPersonaModal.vue', () => {
 
     expect(wrapper.emitted('trainRepertoire')).toBeTruthy()
     const trainArgs = wrapper.emitted('trainRepertoire')![0]
-    expect(trainArgs[0]).toContain('Anti-Persona Weaponized Repertoire')
+    expect(trainArgs[0]).toContain('Anti-Persona Counter Repertoire')
 
     // Find and click Spar Against Persona button
     const sparBtn = wrapper.findAll('button').find((b) => b.text().includes('Spar Against Persona'))

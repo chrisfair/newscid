@@ -207,7 +207,7 @@ func TestAdvancedHeaderSearch(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	// 1. Search by Player
+	// Search by Player
 	results, total, err := db.GetGameSummaries(0, 50, scid.SearchCriteria{
 		Player: "Fischer",
 	})
@@ -218,7 +218,7 @@ func TestAdvancedHeaderSearch(t *testing.T) {
 	}
 	assert.Equal(t, total, db.CountMatches(scid.SearchCriteria{Player: "Fischer"}))
 
-	// 2. Search by Specific Color (White = Fischer)
+	// Search by Specific Color (White = Fischer)
 	resWhite, totalWhite, err := db.GetGameSummaries(0, 50, scid.SearchCriteria{
 		White: "Fischer",
 	})
@@ -228,7 +228,7 @@ func TestAdvancedHeaderSearch(t *testing.T) {
 	}
 	assert.LessOrEqual(t, totalWhite, total)
 
-	// 3. Search by Result (1-0)
+	// Search by Result (1-0)
 	resWins, totalWins, err := db.GetGameSummaries(0, 10, scid.SearchCriteria{
 		Result: "1-0",
 	})
@@ -238,7 +238,7 @@ func TestAdvancedHeaderSearch(t *testing.T) {
 		assert.Equal(t, chess.ResultWhiteWins, g.Result)
 	}
 
-	// 4. Search by ECO Range (e.g. B00 to B99)
+	// Search by ECO Range (e.g. B00 to B99)
 	resEco, totalEco, err := db.GetGameSummaries(0, 20, scid.SearchCriteria{
 		EcoFrom: "B00",
 		EcoTo:   "B99",
@@ -251,7 +251,7 @@ func TestAdvancedHeaderSearch(t *testing.T) {
 	}
 	assert.Equal(t, totalEco, db.CountMatches(scid.SearchCriteria{EcoFrom: "B00", EcoTo: "B99"}))
 
-	// 5. Search by Move count (MinMoves = 10, MaxMoves = 30)
+	// Search by Move count (MinMoves = 10, MaxMoves = 30)
 	resMoves, totalMoves, err := db.GetGameSummaries(0, 20, scid.SearchCriteria{
 		MinMoves: 10,
 		MaxMoves: 30,
@@ -263,7 +263,7 @@ func TestAdvancedHeaderSearch(t *testing.T) {
 	}
 	assert.Equal(t, totalMoves, db.CountMatches(scid.SearchCriteria{MinMoves: 10, MaxMoves: 30}))
 
-	// 6. Search by Year (YearFrom = 1970, YearTo = 1980)
+	// Search by Year (YearFrom = 1970, YearTo = 1980)
 	resYears, totalYears, err := db.GetGameSummaries(0, 20, scid.SearchCriteria{
 		YearFrom: 1970,
 		YearTo:   1980,
@@ -285,7 +285,7 @@ func TestAdvancedHeaderSearch(t *testing.T) {
 func TestMergeFromDatabases(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// 1. Create target database with 1 game
+	// Create target database with 1 game
 	targetPath := filepath.Join(tmpDir, "target_mega")
 	targetDB := scid.NewDatabase()
 	require.NoError(t, targetDB.Create(targetPath, "Target Mega DB"))
@@ -304,7 +304,7 @@ func TestMergeFromDatabases(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, targetDB.NumGames())
 
-	// 2. Create source .si4 database with 1 duplicate (g1) and 1 brand new game (g2)
+	// Create source .si4 database with 1 duplicate (g1) and 1 brand new game (g2)
 	srcSi4Path := filepath.Join(tmpDir, "local_persona")
 	srcDB := scid.NewDatabase()
 	require.NoError(t, srcDB.Create(srcSi4Path, "Local Persona DB"))
@@ -321,7 +321,7 @@ func TestMergeFromDatabases(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, srcDB.Close())
 
-	// 3. Create source .pgn file with 1 duplicate (g2) and 1 brand new game (g3)
+	// Create source .pgn file with 1 duplicate (g2) and 1 brand new game (g3)
 	srcPgnPath := filepath.Join(tmpDir, "local_club.pgn")
 	pgnContent := `[Event "Candidates"]
 [Site "https://lichess.org/gameB"]
@@ -343,7 +343,7 @@ func TestMergeFromDatabases(t *testing.T) {
 `
 	require.NoError(t, os.WriteFile(srcPgnPath, []byte(pgnContent), 0o644))
 
-	// 4. Merge both sources (plus self path which should be ignored) into targetDB
+	// Merge both sources (plus self path which should be ignored) into targetDB
 	mergeStats, err := targetDB.MergeFromDatabases([]string{targetPath, srcSi4Path, srcPgnPath}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 2, mergeStats.SourcesProcessed)

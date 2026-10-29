@@ -197,7 +197,7 @@ func TestBuildConsolidatedDatabaseAndPersonaDatabaseDiscovery(t *testing.T) {
 	app := NewApp()
 	defer app.shutdown(nil)
 
-	// 1. Save a Persona and verify it automatically gets a dedicated .si4 database in GetDiscoveredDatabases
+	// Save a Persona and verify it automatically gets a dedicated .si4 database in GetDiscoveredDatabases
 	savedPersona, err := app.SavePersona(&persona.Persona{
 		DisplayName:      "Magnus Study Persona",
 		Identifiers:      []string{"Carlsen, Magnus", "DrNykterstein"},
@@ -220,7 +220,7 @@ func TestBuildConsolidatedDatabaseAndPersonaDatabaseDiscovery(t *testing.T) {
 		t.Fatalf("expected GetDiscoveredDatabases to include Persona Databases category, got %+v", discovered)
 	}
 
-	// 2. Create two source online databases with duplicate games (by online ID and by identical moves)
+	// Create two source online databases with duplicate games (by online ID and by identical moves)
 	tmpDir := t.TempDir()
 	src1 := filepath.Join(tmpDir, "Lichess_Broadcasts")
 	src2 := filepath.Join(tmpDir, "Lichess_Elite")
@@ -272,7 +272,7 @@ func TestBuildConsolidatedDatabaseAndPersonaDatabaseDiscovery(t *testing.T) {
 	_, _ = db2.SaveGame(g2Unique)
 	_ = db2.Close()
 
-	// 3. Build Consolidated Database and set it as Default Reference Database
+	// Build Consolidated Database and set it as Default Reference Database
 	consRes, err := app.BuildConsolidatedDatabase(scid.ConsolidateDatabaseOptions{
 		TargetName:      "Consolidated_Online_Master",
 		SourceBasePaths: []string{src1, src2},
@@ -296,7 +296,7 @@ func TestBuildConsolidatedDatabaseAndPersonaDatabaseDiscovery(t *testing.T) {
 		t.Errorf("expected consolidated database policy=sync_only, got %q", pol)
 	}
 
-	// 4. Verify GetLatestMegaDatabaseCatalog and CancelActiveOperation / GetActiveOperation
+	// Verify GetLatestMegaDatabaseCatalog and CancelActiveOperation / GetActiveOperation
 	latestCat := app.GetLatestMegaDatabaseCatalog()
 	if len(latestCat) == 0 {
 		t.Fatalf("expected non-empty latest mega database catalog")
@@ -336,7 +336,7 @@ func TestStandardDatabaseImportThreeTierModel(t *testing.T) {
 	app := NewApp()
 	defer app.shutdown(nil)
 
-	// 1. EnsurePersonalUserDatabase creates My_Games (Editable) and sets it as Default User DB
+	// EnsurePersonalUserDatabase creates My_Games (Editable) and sets it as Default User DB
 	userInfo, err := app.EnsurePersonalUserDatabase(true)
 	if err != nil || userInfo == nil {
 		t.Fatalf("EnsurePersonalUserDatabase failed: %v", err)
@@ -345,7 +345,7 @@ func TestStandardDatabaseImportThreeTierModel(t *testing.T) {
 		t.Fatalf("unexpected user database info: %+v", userInfo)
 	}
 
-	// 2. Import an external PGN archive using "original_and_master" (Standard Reference Import)
+	// Import an external PGN archive using "original_and_master" (Standard Reference Import)
 	samplePGN := `[Event "Candidates 2026"]
 [Site "Toronto"]
 [Date "2026.04.10"]
@@ -401,7 +401,7 @@ func TestStandardDatabaseImportThreeTierModel(t *testing.T) {
 		t.Fatalf("expected 0 added and 2 skipped duplicates on re-import, got %+v (err=%v)", resDup, err)
 	}
 
-	// 3. Import personal games into User DB ("user_db")
+	// Import personal games into User DB ("user_db")
 	myGamePGN := `[Event "Club Championship"]
 [Site "Local Club"]
 [Date "2026.05.01"]
@@ -438,7 +438,7 @@ func TestUserProfileSetupWizardAndPersonaBooks(t *testing.T) {
 	app := NewApp()
 	defer app.shutdown(nil)
 
-	// 1. Initial status should have OnboardingCompleted = false
+	// Initial status should have OnboardingCompleted = false
 	initStatus, err := app.GetUserProfileStatus()
 	if err != nil || initStatus == nil {
 		t.Fatalf("GetUserProfileStatus failed: %v", err)
@@ -447,13 +447,13 @@ func TestUserProfileSetupWizardAndPersonaBooks(t *testing.T) {
 		t.Errorf("expected initial OnboardingCompleted=false")
 	}
 
-	// 2. Compile starter White repertoire into a Polyglot .bin book
+	// Compile starter White repertoire into a Polyglot .bin book
 	repBookPath, entryCount, err := app.CompileRepertoireToPolyglotBook("white-openings-italian", true)
 	if err != nil || entryCount == 0 || repBookPath == "" {
 		t.Fatalf("CompileRepertoireToPolyglotBook failed: path=%q count=%d err=%v", repBookPath, entryCount, err)
 	}
 
-	// 3. Save User Profile via wizard setup RPC
+	// Save User Profile via wizard setup RPC
 	setupRes, err := app.SaveUserProfileSetup(UserProfileSetupRequest{
 		DisplayName:            "Christopher Fair",
 		Title:                  "Club Player",
@@ -490,7 +490,7 @@ func TestUserProfileSetupWizardAndPersonaBooks(t *testing.T) {
 		t.Errorf("expected 'Fair, Christopher' in auto-generated aliases, got %v", setupRes.Aliases)
 	}
 
-	// 4. Add a game for this user into My_Games and compile their Persona Opening Book (.bin)
+	// Add a game for this user into My_Games and compile their Persona Opening Book (.bin)
 	myGame, err := chess.ParsePGN(`[Event "Rapid Match"]
 [Site "Lichess"]
 [Date "2026.10.20"]
@@ -511,7 +511,7 @@ func TestUserProfileSetupWizardAndPersonaBooks(t *testing.T) {
 		t.Fatalf("BuildPersonaOpeningBook failed: path=%q count=%d err=%v", personaBookPath, pBookCount, err)
 	}
 
-	// 5. Create a brand new opponent Persona with 0 games in DB, assign the compiled book & repertoire,
+	// Create a brand new opponent Persona with 0 games in DB, assign the compiled book & repertoire,
 	// and verify GetPersonaSimulatedMove plays from the assigned book/repertoire immediately!
 	oppPersona, err := app.SavePersona(&persona.Persona{
 		DisplayName:  "Club Rival Bot",

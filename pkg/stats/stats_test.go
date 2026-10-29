@@ -24,7 +24,7 @@ func createTestDatabase() *scid.Database {
 	b3 := db.Names.AddName(scid.NamePlayer, "Kasparov, Garry")
 	ev := db.Names.AddName(scid.NameEvent, "World Championship")
 
-	// 1. Kasparov vs Karpov: 1985.11.09, 1-0, B44, 40 moves, 2700 vs 2720
+	// Kasparov vs Karpov: 1985.11.09, 1-0, B44, 40 moves, 2700 vs 2720
 	db.Entries = append(db.Entries, &scid.IndexEntry{
 		WhiteID:      w1,
 		BlackID:      b1,
@@ -37,7 +37,7 @@ func createTestDatabase() *scid.Database {
 		NumHalfMoves: 80,  // 40 moves
 	})
 
-	// 2. Short vs Kasparov: 1993.09.07, 0-1, C88, 38 moves, 2655 vs 2815
+	// Short vs Kasparov: 1993.09.07, 0-1, C88, 38 moves, 2655 vs 2815
 	db.Entries = append(db.Entries, &scid.IndexEntry{
 		WhiteID:      w2,
 		BlackID:      b2,
@@ -50,7 +50,7 @@ func createTestDatabase() *scid.Database {
 		NumHalfMoves: 76,  // 38 moves
 	})
 
-	// 3. Deep Blue vs Kasparov: 1997.05.11, 1-0, B17, 19 moves, 0 vs 2820
+	// Deep Blue vs Kasparov: 1997.05.11, 1-0, B17, 19 moves, 0 vs 2820
 	db.Entries = append(db.Entries, &scid.IndexEntry{
 		WhiteID:      w3,
 		BlackID:      b3,
@@ -63,7 +63,7 @@ func createTestDatabase() *scid.Database {
 		NumHalfMoves: 38,  // 19 moves
 	})
 
-	// 4. Deleted game (should be skipped)
+	// Deleted game (should be skipped)
 	db.Entries = append(db.Entries, &scid.IndexEntry{
 		WhiteID:      w1,
 		BlackID:      b1,
@@ -76,7 +76,7 @@ func createTestDatabase() *scid.Database {
 		NumHalfMoves: 60,
 	})
 
-	// 5. Draw game: 2000.10.20, 1/2-1/2, E04, 55 moves, 2849 vs 2770
+	// Draw game: 2000.10.20, 1/2-1/2, E04, 55 moves, 2849 vs 2770
 	db.Entries = append(db.Entries, &scid.IndexEntry{
 		WhiteID:      w1,
 		BlackID:      b1,
@@ -93,7 +93,7 @@ func createTestDatabase() *scid.Database {
 }
 
 func TestCalculateRatingTracker(t *testing.T) {
-	// 1. Errors on closed db or empty aliases
+	// Errors on closed db or empty aliases
 	_, err := CalculateRatingTracker(nil, []string{"Kasparov, Garry"})
 	assert.Error(t, err)
 
@@ -105,13 +105,13 @@ func TestCalculateRatingTracker(t *testing.T) {
 	_, err = CalculateRatingTracker(db, nil)
 	assert.Error(t, err)
 
-	// 2. Player with no games
+	// Player with no games
 	resEmpty, err := CalculateRatingTracker(db, []string{"Unknown Player"})
 	require.NoError(t, err)
 	assert.Equal(t, 0, resEmpty.TotalGames)
 	assert.Equal(t, 0, resEmpty.RatedGames)
 
-	// 2b. Player with unrated games only
+	// Player with unrated games only
 	unratedDB := scid.NewDatabase()
 	unratedDB.IsOpen = true
 	unratedDB.Names = scid.NewNameBase()
@@ -129,7 +129,7 @@ func TestCalculateRatingTracker(t *testing.T) {
 	assert.Equal(t, 1, resUnrated.TotalGames)
 	assert.Equal(t, 0, resUnrated.RatedGames)
 
-	// 3. Kasparov progression
+	// Kasparov progression
 	res, err := CalculateRatingTracker(db, []string{"Kasparov, Garry", "Garry Kasparov"})
 	require.NoError(t, err)
 	assert.Equal(t, "Kasparov, Garry", res.Player)
@@ -164,7 +164,7 @@ func TestCalculateRatingTracker(t *testing.T) {
 	assert.Equal(t, 2849, res.Points[3].Rating)
 	assert.Equal(t, "1/2-1/2", res.Points[3].Result)
 
-	// 4. Test rating drop (MinRating), same-date tiebreak, and empty result
+	// Test rating drop (MinRating), same-date tiebreak, and empty result
 	dropDB := scid.NewDatabase()
 	dropDB.IsOpen = true
 	dropDB.Names = scid.NewNameBase()
@@ -183,7 +183,7 @@ func TestCalculateRatingTracker(t *testing.T) {
 }
 
 func TestCalculateDatabaseDemographics(t *testing.T) {
-	// 1. Errors on closed db
+	// Errors on closed db
 	_, err := CalculateDatabaseDemographics(nil)
 	assert.Error(t, err)
 
@@ -191,14 +191,14 @@ func TestCalculateDatabaseDemographics(t *testing.T) {
 	_, err = CalculateDatabaseDemographics(closedDB)
 	assert.Error(t, err)
 
-	// 2. Empty db
+	// Empty db
 	emptyDB := scid.NewDatabase()
 	emptyDB.IsOpen = true
 	resEmpty, err := CalculateDatabaseDemographics(emptyDB)
 	require.NoError(t, err)
 	assert.Equal(t, 0, resEmpty.TotalGames)
 
-	// 3. Populated db
+	// Populated db
 	db := createTestDatabase()
 	demo, err := CalculateDatabaseDemographics(db)
 	require.NoError(t, err)

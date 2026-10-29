@@ -145,11 +145,11 @@ func TestAnalyzeGameTimeManagement(t *testing.T) {
 
 	// 1. e4 {[%clk 0:05:00] [%eval 0.20]}
 	// 1... c5 {[%clk 0:05:00] [%eval 0.25]}
-	// 2. Nf3 {[%clk 0:04:58] [%eval 0.22]}
+	// Nf3 {[%clk 0:04:58] [%eval 0.22]}
 	// 2... d6 {[%clk 0:04:55] [%eval 0.30]}
 	// 3. d4 {[%clk 0:02:40] [%eval 0.35]}  <- White long tank of 138 seconds!
 	// 3... cxd4 {[%clk 0:04:54] [%eval 0.35]}
-	// 4. Nxd4 {[%clk 0:02:38] [%eval 0.35]}
+	// Nxd4 {[%clk 0:02:38] [%eval 0.35]}
 	// 4... Nf6 {[%clk 0:04:50] [%eval 0.35]}
 
 	n1 := &chess.MoveNode{
@@ -266,11 +266,11 @@ func TestCalculatePearson(t *testing.T) {
 }
 
 func TestAnalyzePlayerTimeManagement(t *testing.T) {
-	// 1. Closed or nil DB
+	// Closed or nil DB
 	_, err := AnalyzePlayerTimeManagement(nil, "Carlsen", 50)
 	assert.Error(t, err)
 
-	// 2. Open DB with clock games
+	// Open DB with clock games
 	tmpDir, err := os.MkdirTemp("", "scid_time_test_*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)

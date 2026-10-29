@@ -273,10 +273,10 @@ func SubmitIntuitionAnswer(challengeID string, userChoice string, elapsedMs int)
 
 	var explanation string
 	if isCorrect {
-		explanation = fmt.Sprintf("🎯 Spot on! Evaluated in %dms (%s). %s", elapsedMs, scoreFormatted, ch.KeyFeature)
+		explanation = fmt.Sprintf("Correct. Evaluated in %dms (%s). %s", elapsedMs, scoreFormatted, ch.KeyFeature)
 	} else {
 		actualName := intuitionCatDisplayNames[parseIntuitionCatID(ch.Category)]
-		explanation = fmt.Sprintf("❌ Misjudgment. The correct assessment is %s (%s). %s", actualName, scoreFormatted, ch.KeyFeature)
+		explanation = fmt.Sprintf("Incorrect. The assessment is %s (%s). %s", actualName, scoreFormatted, ch.KeyFeature)
 	}
 
 	return &IntuitionResult{

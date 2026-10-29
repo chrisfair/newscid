@@ -306,7 +306,7 @@ function handleSearch() {
 
       <!-- Body / Form Fields (scrollable) -->
       <div class="p-5 overflow-y-auto space-y-5 text-xs flex-1">
-        <!-- 1. PLAYERS & RATINGS -->
+        <!-- PLAYERS & RATINGS -->
         <div class="p-4 rounded-lg bg-zinc-950/70 border border-zinc-800 space-y-3">
           <div class="flex items-center gap-2 text-sm font-semibold text-zinc-200 border-b border-zinc-800/80 pb-2">
             <User class="w-4 h-4 text-emerald-400" />
@@ -425,7 +425,7 @@ function handleSearch() {
           </div>
         </div>
 
-        <!-- 2. EVENT, SITE & DATES -->
+        <!-- EVENT, SITE & DATES -->
         <div class="p-4 rounded-lg bg-zinc-950/70 border border-zinc-800 space-y-3">
           <div class="flex items-center gap-2 text-sm font-semibold text-zinc-200 border-b border-zinc-800/80 pb-2">
             <Trophy class="w-4 h-4 text-amber-400" />
@@ -503,7 +503,7 @@ function handleSearch() {
           </div>
         </div>
 
-        <!-- 3. GAME DETAILS, OPENING LINE & BOARD POSITION -->
+        <!-- GAME DETAILS, OPENING LINE & BOARD POSITION -->
         <div class="p-4 rounded-lg bg-zinc-950/70 border border-zinc-800 space-y-3">
           <div class="flex items-center gap-2 text-sm font-semibold text-zinc-200 border-b border-zinc-800/80 pb-2">
             <Sliders class="w-4 h-4 text-blue-400" />
@@ -577,7 +577,7 @@ function handleSearch() {
                     type="checkbox"
                     class="rounded border-zinc-700 text-emerald-500 focus:ring-0"
                   />
-                  <span>🎯 Match Exact Board Position Reached Anywhere in Game</span>
+                  <span>Match Exact Board Position Reached Anywhere in Game</span>
                 </label>
                 <span v-if="currentFen" class="text-[10px] font-mono text-zinc-500 truncate max-w-xs">
                   Board FEN: {{ currentFen }}
@@ -613,7 +613,7 @@ function handleSearch() {
           </div>
         </div>
 
-        <!-- 4. MATERIAL & PAWN STRUCTURE -->
+        <!-- MATERIAL & PAWN STRUCTURE -->
         <div class="p-4 rounded-lg bg-zinc-950/70 border border-zinc-800 space-y-3">
           <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
             <div class="flex items-center gap-2 text-sm font-semibold text-zinc-200">
@@ -709,7 +709,7 @@ function handleSearch() {
           </div>
         </div>
 
-        <!-- 5. ANNOTATION & COMMENTARY SEARCH -->
+        <!-- ANNOTATION & COMMENTARY SEARCH -->
         <div class="p-4 rounded-lg bg-zinc-950/70 border border-zinc-800 space-y-3">
           <div class="flex items-center gap-2 text-sm font-semibold text-zinc-200 border-b border-zinc-800/80 pb-2">
             <MessageSquare class="w-4 h-4 text-emerald-400" />
@@ -738,7 +738,7 @@ function handleSearch() {
           </div>
         </div>
 
-        <!-- 6. FLAGS & OPTIONS -->
+        <!-- FLAGS & OPTIONS -->
         <div class="p-4 rounded-lg bg-zinc-950/70 border border-zinc-800 flex flex-wrap items-center gap-6">
           <label class="flex items-center gap-2 cursor-pointer select-none">
             <input

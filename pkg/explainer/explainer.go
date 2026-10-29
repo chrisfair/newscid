@@ -124,7 +124,7 @@ func ExplainMove(beforeFEN, moveUCI string, scoreCp int, bestMove string) (*Expl
 	colorName := colorNames[moverColor&1]
 	enemyName := colorNames[moverColor.Other()&1]
 
-	// 1. Check & Checkmate
+	// Check & Checkmate
 	if bAfter.IsCheckmate() {
 		addMotif(motifCheckmate)
 		explanations = append(explanations, fmt.Sprintf("%s delivers checkmate, concluding the game with decisive victory.", colorName))
@@ -133,7 +133,7 @@ func ExplainMove(beforeFEN, moveUCI string, scoreCp int, bestMove string) (*Expl
 		explanations = append(explanations, fmt.Sprintf("%s gives check, forcing the %s king to respond.", colorName, enemyName))
 	}
 
-	// 2. Castling
+	// Castling
 	if movingPiece.Type() == chess.King && (m.From == 4 && (m.To == 6 || m.To == 2) || m.From == 60 && (m.To == 62 || m.To == 58)) {
 		addMotif(motifCastling)
 		strategic = append(strategic, "King Safety", "Rook Activation")
@@ -144,7 +144,7 @@ func ExplainMove(beforeFEN, moveUCI string, scoreCp int, bestMove string) (*Expl
 		explanations = append(explanations, fmt.Sprintf("%s castles %s, tucking the king into pawn shelter and activating the rook.", colorName, side))
 	}
 
-	// 3. Captures & Material Trades
+	// Captures & Material Trades
 	if capturedPiece.Type() != chess.None {
 		valFrom := pieceValue(movingPiece.Type())
 		valTo := pieceValue(capturedPiece.Type())
@@ -160,7 +160,7 @@ func ExplainMove(beforeFEN, moveUCI string, scoreCp int, bestMove string) (*Expl
 		}
 	}
 
-	// 4. Pawn Promotions & Passed Pawns
+	// Pawn Promotions & Passed Pawns
 	if m.Promo != chess.None {
 		addMotif(motifPromotion)
 		explanations = append(explanations, fmt.Sprintf("%s successfully promotes a pawn to a %s.", colorName, pieceName(m.Promo)))
@@ -173,14 +173,14 @@ func ExplainMove(beforeFEN, moveUCI string, scoreCp int, bestMove string) (*Expl
 		}
 	}
 
-	// 5. Piece Fork (Attacking 2+ enemy pieces)
+	// Piece Fork (Attacking 2+ enemy pieces)
 	attackedPieces := countAttackedPieces(bAfter, m.To, moverColor)
 	if attackedPieces >= 2 {
 		addMotif(motifFork)
 		explanations = append(explanations, fmt.Sprintf("The %s on %s creates a double attack against multiple %s targets.", pieceName(movingPiece.Type()), squareName(m.To), enemyName))
 	}
 
-	// 6. Central Outpost
+	// Central Outpost
 	if isCentralOutpost(int(m.To)) {
 		strategic = append(strategic, fmt.Sprintf("Control of %s Outpost", squareName(m.To)))
 		if movingPiece.Type() == chess.Knight || movingPiece.Type() == chess.Bishop {
@@ -188,7 +188,7 @@ func ExplainMove(beforeFEN, moveUCI string, scoreCp int, bestMove string) (*Expl
 		}
 	}
 
-	// 7. Rook on Open File
+	// Rook on Open File
 	if movingPiece.Type() == chess.Rook && isOpenFile(bAfter, int(m.To%8)) {
 		strategic = append(strategic, "Open File Control")
 		explanations = append(explanations, fmt.Sprintf("%s seizes control of the open %c-file with the rook.", colorName, 'a'+(m.To%8)))

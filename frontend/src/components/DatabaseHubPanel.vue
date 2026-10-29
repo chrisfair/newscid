@@ -169,21 +169,21 @@ function formatCount(n: number): string {
             title="Open the 5-Step Getting Started & Player Setup Wizard (Profile, Home DB, Focus Books & Persona Books)"
             @click="emit('openGettingStartedWizard')"
           >
-            <span>🚀 Getting Started Wizard</span>
+            <span>Getting Started Wizard</span>
           </button>
           <button
             class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
             title="Standard Import (.pgn or .si4) — Save untouched Original Archive (Locked), Merge into Master Reference DB, or Import into Personal User DB"
             @click="emit('openStandardImport')"
           >
-            <span>📦 Standard Import (.pgn / .si4)</span>
+            <span>Standard Import (.pgn / .si4)</span>
           </button>
           <button
             class="px-2.5 py-1.5 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
             title="Initialize or open your editable Personal User Database (My_Games)"
             @click="emit('ensureUserDB')"
           >
-            <span>👤 My User DB</span>
+            <span>My User DB</span>
           </button>
           <button
             data-testid="consolidate-all-dbs-btn"
@@ -193,7 +193,7 @@ function formatCount(n: number): string {
             @click="handleConsolidateAllToReference"
           >
             <Layers class="w-3.5 h-3.5 text-cyan-400" :class="{ 'animate-spin': isConsolidating }" />
-            <span>{{ isConsolidating ? 'Consolidating...' : '⚡ Consolidate All DBs' }}</span>
+            <span>{{ isConsolidating ? 'Consolidating...' : 'Consolidate All DBs' }}</span>
           </button>
           <button
             v-if="isConsolidating"
@@ -208,21 +208,21 @@ function formatCount(n: number): string {
             title="Create a smaller focused database from multiple source databases (by opening line or player)"
             @click="emit('openWorkstationManager', 'builder')"
           >
-            <span>⚡ Build Sub-DB</span>
+            <span>Build Sub-DB</span>
           </button>
           <button
             class="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
             title="View where NewScid stores databases, engines, opening books & endgame tablebases, or copy files into NewScid"
             @click="emit('openWorkstationManager', 'storage')"
           >
-            <span>📁 Storage &amp; Assets</span>
+            <span>Storage &amp; Assets</span>
           </button>
           <button
             class="px-2.5 py-1.5 rounded-lg bg-rose-950/50 hover:bg-rose-900/60 text-rose-300 border border-rose-500/40 font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
             title="Factory Reset all databases and settings to empty scratch state (with opt-in backup)"
             @click="emit('openWorkstationManager', 'reset')"
           >
-            <span>🧹 Factory Reset</span>
+            <span>Factory Reset</span>
           </button>
           <button
             class="px-2.5 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
@@ -281,13 +281,13 @@ function formatCount(n: number): string {
           title="Cancel database update immediately and preserve games merged so far"
           @click="emit('cancelUpdateLocal')"
         >
-          <span>🛑 Cancel Update</span>
+          <span>Cancel Update</span>
         </button>
       </div>
 
       <!-- 4 Database Role Cards -->
       <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2.5">
-        <!-- 1. DEFAULT USER DATABASE -->
+        <!-- DEFAULT USER DATABASE -->
         <div class="p-3 rounded-xl bg-zinc-900/90 border border-amber-500/40 flex flex-col justify-between gap-2">
           <div>
             <div class="flex items-center justify-between">
@@ -339,7 +339,7 @@ function formatCount(n: number): string {
               class="flex-1 px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-amber-500/30 font-semibold text-[11px] cursor-pointer transition-colors"
               @click="emit('setDefaultDB', rolesStatus.activeDb.basePath)"
             >
-              ⭐ Set Current as Default
+              Set Current as Default
             </button>
             <button
               v-if="rolesStatus?.defaultDbPath"
@@ -368,7 +368,7 @@ function formatCount(n: number): string {
           </div>
         </div>
 
-        <!-- 2. ACTIVE WORKING DATABASE -->
+        <!-- ACTIVE WORKING DATABASE -->
         <div class="p-3 rounded-xl bg-zinc-900/90 border border-emerald-500/40 flex flex-col justify-between gap-2">
           <div>
             <div class="flex items-center justify-between">
@@ -417,7 +417,7 @@ function formatCount(n: number): string {
           </div>
         </div>
 
-        <!-- 3. REFERENCE DATABASE (MEGA / CONSOLIDATED / MASTER BASE) -->
+        <!-- REFERENCE DATABASE (MEGA / CONSOLIDATED / MASTER BASE) -->
         <div class="p-3 rounded-xl bg-zinc-900/90 border border-cyan-500/40 flex flex-col justify-between gap-2">
           <div>
             <div class="flex items-center justify-between">
@@ -481,7 +481,7 @@ function formatCount(n: number): string {
               class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-cyan-300 border border-cyan-500/30 font-semibold text-[11px] cursor-pointer transition-colors"
               @click="emit('setReferenceDB', rolesStatus.activeDb.basePath, true)"
             >
-              📚 Use Active as Ref
+              Use Active as Ref
             </button>
             <button
               v-else
@@ -493,7 +493,7 @@ function formatCount(n: number): string {
           </div>
         </div>
 
-        <!-- 4. CLIPBASE (SCRATCHPAD) -->
+        <!-- CLIPBASE (SCRATCHPAD) -->
         <div class="p-3 rounded-xl bg-zinc-900/90 border border-purple-500/40 flex flex-col justify-between gap-2">
           <div>
             <div class="flex items-center justify-between">
@@ -566,19 +566,19 @@ function formatCount(n: number): string {
                   v-if="isDefaultPath(db.basePath)"
                   class="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-bold flex items-center gap-1"
                 >
-                  ⭐ Default Startup DB
+                  Default Startup DB
                 </span>
                 <span
                   v-if="isActivePath(db.basePath)"
                   class="px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold"
                 >
-                  📂 Active Working DB
+                  Active Working DB
                 </span>
                 <span
                   v-if="isReferencePath(db.basePath)"
                   class="px-1.5 py-0.5 rounded bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-[10px] font-bold"
                 >
-                  📚 Reference Theory DB
+                  Reference Theory DB
                 </span>
               </div>
               <div class="text-[10px] text-zinc-500 font-mono truncate mt-0.5">
@@ -598,7 +598,7 @@ function formatCount(n: number): string {
                 title="Click to cycle write policy: Editable (Personal) -> Sync-Only (Reference) -> Locked (Read-Only)"
                 @click="emit('cycleWritePolicy', db.basePath, db.writePolicy)"
               >
-                {{ db.writePolicy === 'locked' || db.isLocked ? '🔒 Locked' : db.writePolicy === 'sync_only' ? '🔄 Sync-Only' : '🔓 Editable' }}
+                {{ db.writePolicy === 'locked' || db.isLocked ? 'Locked' : db.writePolicy === 'sync_only' ? 'Sync-Only' : 'Editable' }}
               </button>
 
               <button
@@ -619,7 +619,7 @@ function formatCount(n: number): string {
                 title="Set as Default Database (auto-opens on startup)"
                 @click="emit('setDefaultDB', isDefaultPath(db.basePath) ? '' : db.basePath)"
               >
-                {{ isDefaultPath(db.basePath) ? '⭐ Default' : '☆ Set Default' }}
+                {{ isDefaultPath(db.basePath) ? 'Default' : '☆ Set Default' }}
               </button>
 
               <button
@@ -630,7 +630,7 @@ function formatCount(n: number): string {
                 title="Set as Reference Database for Opening Tree & Opponent Prep"
                 @click="emit('setReferenceDB', isReferencePath(db.basePath) ? '' : db.basePath, true)"
               >
-                {{ isReferencePath(db.basePath) ? '📚 Reference' : 'Set Reference' }}
+                {{ isReferencePath(db.basePath) ? 'Reference' : 'Set Reference' }}
               </button>
 
               <button

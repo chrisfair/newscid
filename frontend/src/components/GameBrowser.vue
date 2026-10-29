@@ -390,7 +390,7 @@ const activeBadges = computed(() => {
     list.push(`Moves: ${c.openingMoves.join(' ')}`)
   }
   if (c.positionFen) {
-    list.push('🎯 Board Position Match')
+    list.push('Board Position Match')
   }
   if (c.yearFrom || c.yearTo) list.push(`Year: ${c.yearFrom || ''}–${c.yearTo || ''}`)
   if (c.dateFrom || c.dateTo) list.push(`Date: ${c.dateFrom || ''}–${c.dateTo || ''}`)
@@ -476,9 +476,9 @@ const totalPages = () => Math.max(1, Math.ceil(props.totalGames / props.pageSize
 
     <!-- Intuitive Search Bar: Grouped into 3 Labeled Clusters (1. Player & Legend, 2. Opening & Moves, 3. Position & Result) -->
     <div class="px-3 py-2 bg-zinc-950/80 border-b border-zinc-800 flex flex-wrap items-center gap-2">
-      <!-- CLUSTER 1: 👤 Player & Famous Legends -->
+      <!-- Player & Famous Legends -->
       <div class="flex flex-wrap items-center gap-1.5 bg-zinc-900/90 border border-zinc-800 rounded-xl px-2 py-1">
-        <span class="text-[10px] font-bold uppercase tracking-wider text-amber-400/90 select-none">👤 Player:</span>
+        <span class="text-[10px] font-bold uppercase tracking-wider text-amber-400/90 select-none">Player:</span>
         <div class="relative">
           <Search class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
           <input
@@ -611,9 +611,9 @@ const totalPages = () => Math.max(1, Math.ceil(props.totalGames / props.pageSize
         </div>
       </div>
 
-      <!-- CLUSTER 2: 📖 Opening Family, ECO & Move Sequence -->
+      <!-- Opening Family, ECO & Move Sequence -->
       <div class="flex flex-wrap items-center gap-1.5 bg-zinc-900/90 border border-zinc-800 rounded-xl px-2 py-1">
-        <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-400/90 select-none">📖 Opening:</span>
+        <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-400/90 select-none">Opening:</span>
         <select
           v-model="selectedOpeningPreset"
           aria-label="Opening Family Preset"
@@ -644,7 +644,7 @@ const totalPages = () => Math.max(1, Math.ceil(props.totalGames / props.pageSize
         </div>
       </div>
 
-      <!-- CLUSTER 3: ♟️ Board Position, Result & Advanced Filters -->
+      <!-- ♟️ Board Position, Result & Advanced Filters -->
       <div class="flex flex-wrap items-center gap-1.5 bg-zinc-900/90 border border-zinc-800 rounded-xl px-2 py-1">
         <button
           type="button"
@@ -755,7 +755,7 @@ const totalPages = () => Math.max(1, Math.ceil(props.totalGames / props.pageSize
               @click="emit('openMegaDownloader')"
             >
               <div class="font-bold text-cyan-300 flex items-center justify-between">
-                <span>🏛️ 1. Build Master Reference DB</span>
+                <span>1. Build Master Reference DB</span>
                 <span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300">2026 Archives</span>
               </div>
               <p class="text-[11px] text-zinc-400 leading-snug">
@@ -769,7 +769,7 @@ const totalPages = () => Math.max(1, Math.ceil(props.totalGames / props.pageSize
               @click="emit('openStandardImport')"
             >
               <div class="font-bold text-emerald-300 flex items-center justify-between">
-                <span>📦 2. Standard Import (.pgn / .si4)</span>
+                <span>2. Standard Import (.pgn / .si4)</span>
                 <span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-300">Original + Master</span>
               </div>
               <p class="text-[11px] text-zinc-400 leading-snug">
@@ -783,7 +783,7 @@ const totalPages = () => Math.max(1, Math.ceil(props.totalGames / props.pageSize
               @click="emit('ensurePersonalDb')"
             >
               <div class="font-bold text-amber-300 flex items-center justify-between">
-                <span>👤 3. Personal User DB (My_Games)</span>
+                <span>3. Personal User DB (My_Games)</span>
                 <span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-950 text-amber-300">Editable</span>
               </div>
               <p class="text-[11px] text-zinc-400 leading-snug">

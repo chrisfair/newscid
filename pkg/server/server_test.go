@@ -128,7 +128,7 @@ func TestServerCORS(t *testing.T) {
 }
 
 func TestServerRPCEdgeCases(t *testing.T) {
-	// 1. Method Not Allowed (GET on /api/rpc)
+	// Method Not Allowed (GET on /api/rpc)
 	srv := New(ServerConfig{}, &mockDispatcher{})
 	req := httptest.NewRequest(http.MethodGet, "/api/rpc", nil)
 	w := httptest.NewRecorder()
@@ -137,7 +137,7 @@ func TestServerRPCEdgeCases(t *testing.T) {
 		t.Fatalf("Expected 405 Method Not Allowed, got %d", w.Code)
 	}
 
-	// 2. Invalid JSON request body
+	// Invalid JSON request body
 	reqBadJSON := httptest.NewRequest(http.MethodPost, "/api/rpc", bytes.NewReader([]byte("{invalid-json")))
 	wBadJSON := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(wBadJSON, reqBadJSON)
@@ -145,7 +145,7 @@ func TestServerRPCEdgeCases(t *testing.T) {
 		t.Fatalf("Expected 400 Bad Request, got %d", wBadJSON.Code)
 	}
 
-	// 3. Nil Dispatcher
+	// Nil Dispatcher
 	srvNil := New(ServerConfig{}, nil)
 	reqNil := httptest.NewRequest(http.MethodPost, "/api/rpc", bytes.NewReader([]byte(`{"id": 1, "method": "test"}`)))
 	wNil := httptest.NewRecorder()
@@ -160,7 +160,7 @@ func TestServerUploadAndEvents(t *testing.T) {
 	mock := &mockDispatcher{}
 	srv := New(ServerConfig{DataDir: tmpDir}, mock)
 
-	// 1. GET /api/upload should fail (Method Not Allowed)
+	// GET /api/upload should fail (Method Not Allowed)
 	reqGetUpload := httptest.NewRequest(http.MethodGet, "/api/upload", nil)
 	wGetUpload := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(wGetUpload, reqGetUpload)
@@ -168,10 +168,10 @@ func TestServerUploadAndEvents(t *testing.T) {
 		t.Fatalf("Expected 405, got %d", wGetUpload.Code)
 	}
 
-	// 2. Broadcast event
+	// Broadcast event
 	mock.listener("testEvent", "sampleData")
 
-	// 3. Fallback text response when AssetsFS is nil
+	// Fallback text response when AssetsFS is nil
 	reqRoot := httptest.NewRequest(http.MethodGet, "/", nil)
 	wRoot := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(wRoot, reqRoot)
@@ -201,7 +201,7 @@ func TestServerLifecycleFileUploadAndSPA(t *testing.T) {
 		AssetsFS: mockFS,
 	}, mock)
 
-	// 1. Test SPA serving
+	// Test SPA serving
 	reqSPA := httptest.NewRequest(http.MethodGet, "/style.css", nil)
 	wSPA := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(wSPA, reqSPA)
@@ -209,7 +209,7 @@ func TestServerLifecycleFileUploadAndSPA(t *testing.T) {
 		t.Fatalf("Expected 200 for /style.css, got %d", wSPA.Code)
 	}
 
-	// 2. Test SPA fallback to index.html
+	// Test SPA fallback to index.html
 	reqFallback := httptest.NewRequest(http.MethodGet, "/random-route", nil)
 	wFallback := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(wFallback, reqFallback)
@@ -217,7 +217,7 @@ func TestServerLifecycleFileUploadAndSPA(t *testing.T) {
 		t.Fatalf("Expected 200 or 301 fallback for /random-route, got %d", wFallback.Code)
 	}
 
-	// 3. Test File Upload
+	// Test File Upload
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	part, err := writer.CreateFormFile("file", "test_game.pgn")
@@ -235,7 +235,7 @@ func TestServerLifecycleFileUploadAndSPA(t *testing.T) {
 		t.Fatalf("Expected 200 OK for file upload, got %d: %s", wUpload.Code, wUpload.Body.String())
 	}
 
-	// 4. Test Server Start & Stop
+	// Test Server Start & Stop
 	go func() {
 		_ = srv.Start()
 	}()

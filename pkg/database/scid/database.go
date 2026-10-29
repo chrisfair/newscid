@@ -113,13 +113,13 @@ func (db *Database) Open(path string) error {
 		return fmt.Errorf("game data file not found: %s", sg4Path)
 	}
 
-	// 1. Read names into local NameBase first
+	// Read names into local NameBase first
 	nb := NewNameBase()
 	if err := nb.ReadFromFile(sn4Path); err != nil {
 		return fmt.Errorf("reading namebase: %w", err)
 	}
 
-	// 2. Read index into local slice first
+	// Read index into local slice first
 	header, entries, err := LoadAllEntries(si4Path)
 	if err != nil {
 		return fmt.Errorf("reading index: %w", err)
@@ -277,7 +277,7 @@ func parseYear(date string) int {
 
 // matchesCriteria checks if an entry matches the given search criteria.
 func (db *Database) matchesCriteria(gameID int, entry *IndexEntry, criteria *SearchCriteria) bool {
-	// 1. Deleted check
+	// Deleted check
 	isDeleted := (entry.Flags & FlagDelete) != 0
 	if criteria.OnlyDeleted && !isDeleted {
 		return false
@@ -286,12 +286,12 @@ func (db *Database) matchesCriteria(gameID int, entry *IndexEntry, criteria *Sea
 		return false
 	}
 
-	// 2. Result check
+	// Result check
 	if criteria.Result != "" && string(entry.Result) != criteria.Result {
 		return false
 	}
 
-	// 3. Ratings check
+	// Ratings check
 	wElo := int(entry.WhiteElo)
 	bElo := int(entry.BlackElo)
 
@@ -314,7 +314,7 @@ func (db *Database) matchesCriteria(gameID int, entry *IndexEntry, criteria *Sea
 		return false
 	}
 
-	// 4. Move count check
+	// Move count check
 	moves := int((entry.NumHalfMoves + 1) / 2)
 	if criteria.MinMoves > 0 && moves < criteria.MinMoves {
 		return false
@@ -323,12 +323,12 @@ func (db *Database) matchesCriteria(gameID int, entry *IndexEntry, criteria *Sea
 		return false
 	}
 
-	// 5. Variations check
+	// Variations check
 	if criteria.HasVariations && (entry.VarCounts&0x0FFF) == 0 {
 		return false
 	}
 
-	// 6. ECO check
+	// ECO check
 	if criteria.ECO != "" || criteria.EcoFrom != "" || criteria.EcoTo != "" {
 		ecoStr := formatECO(entry.EcoCode)
 		if criteria.ECO != "" {
@@ -351,7 +351,7 @@ func (db *Database) matchesCriteria(gameID int, entry *IndexEntry, criteria *Sea
 		}
 	}
 
-	// 7. Date & Year check
+	// Date & Year check
 	if criteria.YearFrom > 0 || criteria.YearTo > 0 {
 		year := parseYear(entry.Date)
 		if criteria.YearFrom > 0 && (year == 0 || year < criteria.YearFrom) {
@@ -374,7 +374,7 @@ func (db *Database) matchesCriteria(gameID int, entry *IndexEntry, criteria *Sea
 		}
 	}
 
-	// 8. Name criteria (only lookup from namebase if requested)
+	// Name criteria (only lookup from namebase if requested)
 	if len(criteria.Players) > 0 {
 		white := db.Names.GetName(NamePlayer, entry.WhiteID)
 		black := db.Names.GetName(NamePlayer, entry.BlackID)
@@ -420,7 +420,7 @@ func (db *Database) matchesCriteria(gameID int, entry *IndexEntry, criteria *Sea
 		}
 	}
 
-	// 9. Advanced Filters (Material, Pawn Structure, Annotations, OpeningMoves, PositionFEN)
+	// Advanced Filters (Material, Pawn Structure, Annotations, OpeningMoves, PositionFEN)
 	hasMat := criteria.Material != nil && criteria.Material.IsActive()
 	pawnType := parsePawnStructureType(criteria.PawnStructure)
 	hasPawn := pawnType != PawnStructNone
@@ -609,13 +609,13 @@ func (db *Database) SaveGame(game *chess.Game) (int, error) {
 		return 0, fmt.Errorf("database not open")
 	}
 
-	// 1. Encode game data
+	// Encode game data
 	rawBytes, err := EncodeGameData(game)
 	if err != nil {
 		return 0, fmt.Errorf("encoding game data: %w", err)
 	}
 
-	// 2. Append to .sg4
+	// Append to .sg4
 	sg4Path := db.BasePath + ".sg4"
 	fSg, err := os.OpenFile(sg4Path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
@@ -633,7 +633,7 @@ func (db *Database) SaveGame(game *chess.Game) (int, error) {
 	}
 	fSg.Close()
 
-	// 3. Register names in NameBase
+	// Register names in NameBase
 	wID := db.Names.AddName(NamePlayer, game.Tag("White"))
 	bID := db.Names.AddName(NamePlayer, game.Tag("Black"))
 	eID := db.Names.AddName(NameEvent, game.Tag("Event"))
@@ -660,7 +660,7 @@ func (db *Database) SaveGame(game *chess.Game) (int, error) {
 		}
 	}
 
-	// 4. Create IndexEntry
+	// Create IndexEntry
 	entry := &IndexEntry{
 		Offset:       offset,
 		Length:       uint32(len(rawBytes)),
@@ -680,7 +680,7 @@ func (db *Database) SaveGame(game *chess.Game) (int, error) {
 	db.Entries = append(db.Entries, entry)
 	db.Header.NumGames = uint32(len(db.Entries))
 
-	// 5. Append to .si4 and update header
+	// Append to .si4 and update header
 	si4Path := db.BasePath + ".si4"
 	fSi, err := os.OpenFile(si4Path, os.O_RDWR, 0644)
 	if err != nil {

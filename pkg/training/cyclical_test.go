@@ -72,13 +72,13 @@ func TestLichessThemeCatalogAndBitmask(t *testing.T) {
 }
 
 func TestClassifyPositionThemes_MotifsMatesAndPhases(t *testing.T) {
-	// 1. Invalid FEN fallback
+	// Invalid FEN fallback
 	themesInvalid, tierInvalid, ratingInvalid := ClassifyPositionThemes("invalid_fen", []string{"e2e4"}, 200)
 	assert.Contains(t, themesInvalid, "middlegame")
 	assert.Equal(t, TierEasy, tierInvalid)
 	assert.Equal(t, 1200, ratingInvalid)
 
-	// 2. Back Rank Mate in 1 & Rook Endgame
+	// Back Rank Mate in 1 & Rook Endgame
 	themesBR, tierBR, ratingBR := ClassifyPositionThemes(
 		"6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 18",
 		[]string{"e1e8"},
@@ -90,7 +90,7 @@ func TestClassifyPositionThemes_MotifsMatesAndPhases(t *testing.T) {
 	assert.Equal(t, TierEasy, tierBR)
 	assert.GreaterOrEqual(t, ratingBR, 1000)
 
-	// 3. Smothered Mate in 1
+	// Smothered Mate in 1
 	themesSmothered, _, _ := ClassifyPositionThemes(
 		"6rk/6pp/7N/8/8/8/5PPP/6K1 w - - 0 15",
 		[]string{"h6f7"},
@@ -99,7 +99,7 @@ func TestClassifyPositionThemes_MotifsMatesAndPhases(t *testing.T) {
 	assert.Contains(t, themesSmothered, "smotheredMate")
 	assert.Contains(t, themesSmothered, "mateIn1")
 
-	// 4. Arabian Mate in 1
+	// Arabian Mate in 1
 	themesArabian, _, _ := ClassifyPositionThemes(
 		"7k/2R5/5N2/8/8/8/6PP/6K1 w - - 0 21",
 		[]string{"c7h7"},
@@ -108,7 +108,7 @@ func TestClassifyPositionThemes_MotifsMatesAndPhases(t *testing.T) {
 	assert.Contains(t, themesArabian, "arabianMate")
 	assert.Contains(t, themesArabian, "mateIn1")
 
-	// 5. Hook Mate in 1 (King on f7, pawn on g7, White Knight on e5, White Rook plays h2-h7#)
+	// Hook Mate in 1 (King on f7, pawn on g7, White Knight on e5, White Rook plays h2-h7#)
 	themesHook, _, _ := ClassifyPositionThemes(
 		"8/4Rpk1/5N1p/6P1/8/8/6PP/6K1 b - - 0 25",
 		nil,
@@ -130,7 +130,7 @@ func TestClassifyPositionThemes_MotifsMatesAndPhases(t *testing.T) {
 	)
 	assert.NotEmpty(t, themesHookReal)
 
-	// 6. En Passant + Pawn Endgame + Promotion + Advanced Pawn
+	// En Passant + Pawn Endgame + Promotion + Advanced Pawn
 	themesEP, _, _ := ClassifyPositionThemes(
 		"4k3/8/8/4pP2/8/8/8/4K3 w - e6 0 20",
 		[]string{"f5e6"},
@@ -148,7 +148,7 @@ func TestClassifyPositionThemes_MotifsMatesAndPhases(t *testing.T) {
 	assert.Contains(t, themesPromo, "promotion")
 	assert.Contains(t, themesPromo, "advancedPawn")
 
-	// 7. Skewer + Minor Piece Endgame
+	// Skewer + Minor Piece Endgame
 	themesSkewer, _, _ := ClassifyPositionThemes(
 		"q7/8/2k5/8/4B3/8/6PP/6K1 w - - 0 23",
 		[]string{"e4f3", "c6c5", "f3a8"},
@@ -157,7 +157,7 @@ func TestClassifyPositionThemes_MotifsMatesAndPhases(t *testing.T) {
 	assert.Contains(t, themesSkewer, "skewer")
 	assert.Contains(t, themesSkewer, "minorPieceEndgame")
 
-	// 8. Queen Endgame
+	// Queen Endgame
 	themesQE, _, _ := ClassifyPositionThemes(
 		"6k1/5qp1/7p/8/8/6PP/5PK1/3Q4 w - - 0 30",
 		[]string{"d1d8", "f7f8", "d8d5"},
@@ -165,7 +165,7 @@ func TestClassifyPositionThemes_MotifsMatesAndPhases(t *testing.T) {
 	)
 	assert.Contains(t, themesQE, "queenEndgame")
 
-	// 9. Double Check + Mate in 2
+	// Double Check + Mate in 2
 	themesDC, _, _ := ClassifyPositionThemes(
 		"4k3/3n1ppp/4N3/8/8/8/5PPP/4R1K1 w - - 0 17",
 		[]string{"e6c7", "e8f8", "e1e8"},
@@ -175,7 +175,7 @@ func TestClassifyPositionThemes_MotifsMatesAndPhases(t *testing.T) {
 	assert.Contains(t, themesDC, "discoveredAttack")
 	assert.Contains(t, themesDC, "mateIn2")
 
-	// 10. Sacrifice + Deflection + Mate in 3
+	// Sacrifice + Deflection + Mate in 3
 	themesM3, tierM3, ratingM3 := ClassifyPositionThemes(
 		"2q1r1k1/1p3ppp/8/8/8/8/2Q2PPP/3R1RK1 w - - 0 24",
 		[]string{"c2c8", "e8c8", "d1d8", "c8d8", "f1d8"},
@@ -186,7 +186,7 @@ func TestClassifyPositionThemes_MotifsMatesAndPhases(t *testing.T) {
 	assert.Equal(t, TierHard, tierM3)
 	assert.GreaterOrEqual(t, ratingM3, 1850)
 
-	// 11. Defensive Move when starting in check
+	// Defensive Move when starting in check
 	themesDef, _, _ := ClassifyPositionThemes(
 		"4k3/8/8/8/1b6/8/8/4K2R w K - 0 15",
 		[]string{"e1f1"},
@@ -194,7 +194,7 @@ func TestClassifyPositionThemes_MotifsMatesAndPhases(t *testing.T) {
 	)
 	assert.Contains(t, themesDef, "defensiveMove")
 
-	// 12. Hook Mate on non-corner square (Black King on f8, Black pawns on e7/f7/g7, White Knight on e6, White Rook plays d1-d8#)
+	// Hook Mate on non-corner square (Black King on f8, Black pawns on e7/f7/g7, White Knight on e6, White Rook plays d1-d8#)
 	themesHookNonCorner, _, _ := ClassifyPositionThemes(
 		"5k2/4ppp1/4N3/8/8/8/5PPP/3R2K1 w - - 0 22",
 		[]string{"d1d8"},
@@ -203,7 +203,7 @@ func TestClassifyPositionThemes_MotifsMatesAndPhases(t *testing.T) {
 	assert.Contains(t, themesHookNonCorner, "hookMate")
 	assert.Contains(t, themesHookNonCorner, "mateIn1")
 
-	// 13. Intermezzo intermediate check before capture
+	// Intermezzo intermediate check before capture
 	themesIntermezzo, _, _ := ClassifyPositionThemes(
 		"6k1/5ppp/8/8/1q6/8/4QPPP/1r1R2K1 w - - 0 20",
 		[]string{"e2e8", "b4f8", "d1b1"},
@@ -211,7 +211,7 @@ func TestClassifyPositionThemes_MotifsMatesAndPhases(t *testing.T) {
 	)
 	assert.Contains(t, themesIntermezzo, "intermezzo")
 
-	// 14. Flexible move parser fallback (SAN move in solutionUCI and coordinate fallback)
+	// Flexible move parser fallback (SAN move in solutionUCI and coordinate fallback)
 	themesSANFallback, _, _ := ClassifyPositionThemes(
 		"6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 18",
 		[]string{"Re8#"},
@@ -505,11 +505,11 @@ func TestCyclicalManager_MultiCycleLifecycleAndLichessDashboard(t *testing.T) {
 }
 
 func TestCyclical_EdgeCasesAndFullTierCoverage(t *testing.T) {
-	// 1. Test formatSolutionSAN with invalid FEN and unparseable move
+	// Test formatSolutionSAN with invalid FEN and unparseable move
 	assert.Equal(t, []string{"e2e4"}, formatSolutionSAN("invalid_fen", []string{"e2e4"}))
 	assert.Equal(t, []string{"bad_move"}, formatSolutionSAN(chess.StartingFEN, []string{"bad_move"}))
 
-	// 2. Test parseMoveFlexible fallback branches (including r, b, n promotions and pseudo-legal coordinate move)
+	// Test parseMoveFlexible fallback branches (including r, b, n promotions and pseudo-legal coordinate move)
 	bPinned, err := chess.ParseFEN("4k3/1P6/8/8/1b6/2N5/8/4K3 w - - 0 1")
 	require.NoError(t, err)
 	// c3 is pinned to e1 by Bb4, so c3d5 is not in GenerateLegalMoves(), exercising coordinate fallback
@@ -529,7 +529,7 @@ func TestCyclical_EdgeCasesAndFullTierCoverage(t *testing.T) {
 	_, err = parseMoveFlexible(bPinned, "zzzz")
 	assert.Error(t, err)
 
-	// 3. Test NAGs ($1, $2, $4) and mate eval comments ([%eval #2], [%eval #-2]) in game extraction
+	// Test NAGs ($1, $2, $4) and mate eval comments ([%eval #2], [%eval #-2]) in game extraction
 	pgnNAG := `[Event "NAG Test"]
 [White "PlayerA"]
 [Black "PlayerB"]
@@ -542,14 +542,14 @@ func TestCyclical_EdgeCasesAndFullTierCoverage(t *testing.T) {
 	puzzlesNAG := ExtractPuzzlesFromPlayerGames([]*chess.Game{nil, gNAG}, nil, nil, 0)
 	assert.Len(t, puzzlesNAG, 24)
 
-	// 4. Test scoreTacticalCandidate with underpromotion and en passant
+	// Test scoreTacticalCandidate with underpromotion and en passant
 	bEP, err := chess.ParseFEN("4k3/1P6/8/4pP2/8/8/8/4K3 w - e6 0 1")
 	require.NoError(t, err)
 	assert.Greater(t, scoreTacticalCandidate(bEP, chess.Move{From: chess.F5, To: chess.E6}, chess.White, chess.Black), 0)
 	assert.Greater(t, scoreTacticalCandidate(bEP, chess.Move{From: chess.B7, To: chess.B8, Promo: chess.Knight}, chess.White, chess.Black), 0)
 	assert.Equal(t, 0, scoreTacticalCandidate(bEP, chess.Move{From: chess.A1, To: chess.A2}, chess.White, chess.Black))
 
-	// 5. Full 24-puzzle set through CyclicalManager (covers Easy, Medium, Hard first-try correct & 20+ theme history cap)
+	// Full 24-puzzle set through CyclicalManager (covers Easy, Medium, Hard first-try correct & 20+ theme history cap)
 	tmpDir := t.TempDir()
 	cm, err := NewCyclicalManager(filepath.Join(tmpDir, "full_tiers.json"))
 	require.NoError(t, err)

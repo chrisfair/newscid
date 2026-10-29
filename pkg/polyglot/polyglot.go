@@ -16,7 +16,7 @@ import (
 func HashBoard(b *chess.Board) uint64 {
 	var hash uint64
 
-	// 1. Pieces on squares
+	// Pieces on squares
 	for sq := 0; sq < 64; sq++ {
 		p := b.Squares[sq]
 		if p == chess.Empty {
@@ -30,7 +30,7 @@ func HashBoard(b *chess.Board) uint64 {
 		}
 	}
 
-	// 2. Castling flags
+	// Castling flags
 	if (b.Castling & chess.CastlingWhiteKing) != 0 {
 		hash ^= PolyglotRandomArray[768]
 	}
@@ -44,7 +44,7 @@ func HashBoard(b *chess.Board) uint64 {
 		hash ^= PolyglotRandomArray[771]
 	}
 
-	// 3. En passant square (only if an opposing pawn can capture it)
+	// En passant square (only if an opposing pawn can capture it)
 	if b.EPSquare != chess.NoSquare {
 		file := int(b.EPSquare % 8)
 		canCapture := false
@@ -70,7 +70,7 @@ func HashBoard(b *chess.Board) uint64 {
 		}
 	}
 
-	// 4. Turn (White to move)
+	// Turn (White to move)
 	if b.Turn == chess.White {
 		hash ^= PolyglotRandomArray[780]
 	}

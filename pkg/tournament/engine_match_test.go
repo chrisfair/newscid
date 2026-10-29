@@ -100,7 +100,7 @@ func TestEngineMatch_ColorAlternationAndRounds(t *testing.T) {
 
 func TestEngineMatch_RepetitionDraw(t *testing.T) {
 	// Knights moving back and forth -> 3-fold repetition
-	// 1. Nf3 Nf6 2. Ng1 Ng8 3. Nf3 Nf6 4. Ng1 Ng8
+	// Nf3 Nf6 2. Ng1 Ng8 3. Nf3 Nf6 4. Ng1 Ng8
 	p1 := NewMockEnginePlayer("KnightBotW", "g1f3", "f3g1", "g1f3", "f3g1")
 	p2 := NewMockEnginePlayer("KnightBotB", "g8f6", "f6g8", "g8f6", "f6g8")
 
@@ -248,7 +248,7 @@ func (p *customMovePlayer) SearchMove(ctx context.Context, fen string, moves []s
 }
 
 func TestUCIEnginePlayer_LifecycleAndErrors(t *testing.T) {
-	// 1. Invalid path error
+	// Invalid path error
 	_, err := NewUCIEnginePlayer("BadEngine", "/nonexistent/path/to/engine", nil)
 	assert.Error(t, err)
 
@@ -256,7 +256,7 @@ func TestUCIEnginePlayer_LifecycleAndErrors(t *testing.T) {
 	var emptyPlayer UCIEnginePlayer
 	assert.NoError(t, emptyPlayer.Close())
 
-	// 2. Fake UCI engine script in TempDir
+	// Fake UCI engine script in TempDir
 	tmpDir := t.TempDir()
 	scriptPath := filepath.Join(tmpDir, "fake_uci.sh")
 	script := `#!/bin/sh
@@ -297,13 +297,13 @@ func writeExecutableScript(path, content string) error {
 }
 
 func TestEngineMatch_AdditionalTerminationsAndBranches(t *testing.T) {
-	// 1. Default config values in NewEngineMatchRunner
+	// Default config values in NewEngineMatchRunner
 	rDefault := NewEngineMatchRunner(NewMockEnginePlayer("P1"), NewMockEnginePlayer("P2"), EngineMatchConfig{}, nil)
 	assert.Equal(t, 2, rDefault.Config.Rounds)
 	assert.Equal(t, 500, rDefault.Config.TimeControlMs)
 	assert.Equal(t, 150, rDefault.Config.MaxPlies)
 
-	// 2. Invalid OpeningFEN returns error
+	// Invalid OpeningFEN returns error
 	rBadFEN := NewEngineMatchRunner(NewMockEnginePlayer("P1"), NewMockEnginePlayer("P2"), EngineMatchConfig{
 		Rounds:      1,
 		OpeningFENs: []string{"invalid_fen"},
@@ -311,7 +311,7 @@ func TestEngineMatch_AdditionalTerminationsAndBranches(t *testing.T) {
 	_, err := rBadFEN.Run(context.Background(), nil, nil)
 	assert.Error(t, err)
 
-	// 3. Stalemate starting from a stalemate FEN (Black to move, stalemated)
+	// Stalemate starting from a stalemate FEN (Black to move, stalemated)
 	stalemateFEN := "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1"
 	rStalemate := NewEngineMatchRunner(NewMockEnginePlayer("P1"), NewMockEnginePlayer("P2"), EngineMatchConfig{
 		Rounds:      1,
@@ -333,7 +333,7 @@ func TestEngineMatch_AdditionalTerminationsAndBranches(t *testing.T) {
 	assert.Equal(t, "50-move rule", sumFifty.Games[0].Termination)
 	assert.Equal(t, "1/2-1/2", sumFifty.Games[0].Result)
 
-	// 5. White wins by checkmate (protected Queen on g7) in 2 rounds with AlternateColors
+	// White wins by checkmate (protected Queen on g7) in 2 rounds with AlternateColors
 	whiteMateFEN := "6k1/6Qp/6K1/8/8/8/8/8 b - - 0 1"
 	rWhiteMate := NewEngineMatchRunner(NewMockEnginePlayer("P1"), NewMockEnginePlayer("P2"), EngineMatchConfig{
 		Rounds:          2,
@@ -346,7 +346,7 @@ func TestEngineMatch_AdditionalTerminationsAndBranches(t *testing.T) {
 	assert.Equal(t, 1, sumWM.Engine1Wins)
 	assert.Equal(t, 1, sumWM.Engine2Wins)
 
-	// 6. Black wins in Round 2 when AlternateColors is true (so P1 is Black and wins)
+	// Black wins in Round 2 when AlternateColors is true (so P1 is Black and wins)
 	blackMateFEN := "8/8/8/8/8/6k1/5qpp/6K1 w - - 0 1"
 	rBlackMate := NewEngineMatchRunner(NewMockEnginePlayer("P1"), NewMockEnginePlayer("P2"), EngineMatchConfig{
 		Rounds:          2,
@@ -359,7 +359,7 @@ func TestEngineMatch_AdditionalTerminationsAndBranches(t *testing.T) {
 	assert.Equal(t, 1, sumBM.Engine1Wins)
 	assert.Equal(t, 1, sumBM.Engine2Wins)
 
-	// 7. Engine error, empty move forfeit, and illegal move by Black
+	// Engine error, empty move forfeit, and illegal move by Black
 	errWhite := &customMovePlayer{name: "ErrW", fn: func(ctx context.Context, fen string, ply int) (string, engine.EvalInfo, error) {
 		return "", engine.EvalInfo{}, assert.AnError
 	}}
@@ -389,7 +389,7 @@ func TestEngineMatch_AdditionalTerminationsAndBranches(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "1-0", sumIllB.Games[0].Result)
 
-	// 8. Eval adjudication for Black (and score reset before 4 consecutive plies)
+	// Eval adjudication for Black (and score reset before 4 consecutive plies)
 	blackAdjW := &customMovePlayer{name: "W", fn: func(ctx context.Context, fen string, call int) (string, engine.EvalInfo, error) {
 		moves := []string{"e2e4", "g1f3", "f1c4", "d2d3"}
 		cp := -1200
@@ -410,7 +410,7 @@ func TestEngineMatch_AdditionalTerminationsAndBranches(t *testing.T) {
 	assert.Equal(t, "0-1", sumAdjB.Games[0].Result)
 	assert.Contains(t, sumAdjB.Games[0].Termination, "for Black")
 
-	// 9. Context cancelled mid-game inside playSingleGame
+	// Context cancelled mid-game inside playSingleGame
 	ctxMid, cancelMid := context.WithCancel(context.Background())
 	cancelOnMove := &customMovePlayer{name: "CancelBot", fn: func(ctx context.Context, fen string, call int) (string, engine.EvalInfo, error) {
 		cancelMid()
@@ -419,7 +419,7 @@ func TestEngineMatch_AdditionalTerminationsAndBranches(t *testing.T) {
 	_, err = NewEngineMatchRunner(cancelOnMove, NewMockEnginePlayer("P2"), EngineMatchConfig{Rounds: 1}, nil).Run(ctxMid, nil, nil)
 	assert.NoError(t, err) // playSingleGame returns non-nil res on mid-game cancel
 
-	// 10. MockEnginePlayer edge cases (cancelled ctx, invalid FEN, no legal moves)
+	// MockEnginePlayer edge cases (cancelled ctx, invalid FEN, no legal moves)
 	mockP := NewMockEnginePlayer("Mock")
 	_, _, err = mockP.SearchMove(ctxMid, chess.StartingFEN, nil, 10)
 	assert.Error(t, err)

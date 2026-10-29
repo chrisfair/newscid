@@ -64,7 +64,7 @@ const isSaving = ref(false)
 const statusBanner = ref<string | null>(null)
 const errorBanner = ref<string | null>(null)
 
-// Step 1: Player Profile State
+// Player Profile State
 const displayName = ref('')
 const playerTitle = ref('Club Player')
 const estimatedElo = ref(1500)
@@ -76,7 +76,7 @@ const newAliasInput = ref('')
 const homeDbName = ref('My_Games')
 const userPersonaId = ref('')
 
-// Step 2: Home DB & Migration State
+// Home DB & Migration State
 const homeDbPath = ref('')
 const homeDbGames = ref(0)
 const referenceDbPath = ref('')
@@ -89,7 +89,7 @@ const pgnSourcePath = ref('')
 const pgnPasteText = ref('')
 const isImportingPgn = ref(false)
 
-// Step 3: Focus Books & Repertoires State
+// Focus Books & Repertoires State
 const repertoires = ref<any[]>([])
 const polyglotBooks = ref<string[]>([])
 const focusWhiteRepId = ref('white-openings-italian')
@@ -100,7 +100,7 @@ const newRepColor = ref<'w' | 'b'>('w')
 const newRepDesc = ref('')
 const isCompilingBook = ref(false)
 
-// Step 4: Opponent Personas & Persona Books State
+// Opponent Personas & Persona Books State
 const personas = ref<any[]>([])
 const selectedPersonaId = ref('')
 const newOpponentName = ref('')
@@ -273,7 +273,7 @@ async function handleFinishWizard() {
   emit('close')
 }
 
-// Step 2 Handlers: Online Sync, PGN Import, Reference DB
+// Handlers: Online Sync, PGN Import, Reference DB
 async function handleSyncOnlineIntoHome() {
   errorBanner.value = null
   statusBanner.value = null
@@ -346,7 +346,7 @@ async function handleSelectReferenceDb(basePath: string) {
   }
 }
 
-// Step 3 Handlers: Repertoires & Polyglot Books
+// Handlers: Repertoires & Polyglot Books
 async function handleCreateQuickRepertoire() {
   const name = newRepName.value.trim()
   if (!name) {
@@ -438,7 +438,7 @@ async function handleImportExternalBook() {
   }
 }
 
-// Step 4 Handlers: Opponent Personas & Persona Books
+// Handlers: Opponent Personas & Persona Books
 async function handleCreateOpponentPersona() {
   const name = newOpponentName.value.trim()
   if (!name) {
@@ -944,7 +944,7 @@ onMounted(() => {
                 class="px-3 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/40 text-cyan-300 font-bold cursor-pointer"
                 @click="emit('openMegaCatalog')"
               >
-                🌐 Open Master Database Catalog...
+                Open Master Database Catalog...
               </button>
             </div>
           </div>
@@ -991,7 +991,7 @@ onMounted(() => {
                     title="Compile this White Repertoire into a Polyglot .bin book"
                     @click="handleCompileRepToBook(focusWhiteRepId)"
                   >
-                    ⚡ To .bin
+                    To .bin
                   </button>
                 </div>
               </div>
@@ -1014,7 +1014,7 @@ onMounted(() => {
                     title="Compile this Black Repertoire into a Polyglot .bin book"
                     @click="handleCompileRepToBook(focusBlackRepId)"
                   >
-                    ⚡ To .bin
+                    To .bin
                   </button>
                 </div>
               </div>
@@ -1124,7 +1124,7 @@ onMounted(() => {
               >
                 <option value="">— Select Persona —</option>
                 <option v-for="p in personas" :key="p.id" :value="p.id">
-                  {{ p.isUserProfile ? '👤 [ME] ' : '🎯 ' }}{{ p.displayName }} ({{ p.estimatedElo || 1500 }} Elo)
+                  {{ p.isUserProfile ? '[ME] ' : '' }}{{ p.displayName }} ({{ p.estimatedElo || 1500 }} Elo)
                 </option>
               </select>
 
@@ -1192,7 +1192,7 @@ onMounted(() => {
                     class="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-emerald-300 font-semibold cursor-pointer"
                     @click="handleFetchPersonaOnline(selectedPersona.id)"
                   >
-                    ☁️ Fetch Their Lichess / Chess.com Games
+                    Fetch Their Lichess / Chess.com Games
                   </button>
                   <button
                     type="button"
@@ -1200,7 +1200,7 @@ onMounted(() => {
                     class="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-amber-300 font-semibold cursor-pointer"
                     @click="handleExtractPersonaFromOpenDB(selectedPersona.id)"
                   >
-                    📥 Extract Their Games from Open DB
+                    Extract Their Games from Open DB
                   </button>
                 </div>
               </div>

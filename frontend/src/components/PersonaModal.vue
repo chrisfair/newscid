@@ -565,7 +565,7 @@ function formatShortBookName(path?: string): string {
                 <div class="flex items-center gap-2 text-[10px] text-zinc-400 mt-0.5">
                   <span>{{ p.identifiers?.length || 0 }} aliases</span>
                   <span v-if="p.estimatedElo" class="text-emerald-400 font-mono">~{{ p.estimatedElo }}</span>
-                  <span v-if="(p as any).bookPath" class="text-purple-400 font-mono truncate">📘 Book</span>
+                  <span v-if="(p as any).bookPath" class="text-purple-400 font-mono truncate">Book</span>
                 </div>
               </div>
             </div>
@@ -887,7 +887,7 @@ function formatShortBookName(path?: string): string {
                   >
                     <option value="">-- None --</option>
                     <option v-for="b in availableBooks" :key="b" :value="b">
-                      📘 {{ formatShortBookName(b) }}
+                      {{ formatShortBookName(b) }}
                     </option>
                   </select>
                   <button
@@ -1012,7 +1012,7 @@ function formatShortBookName(path?: string): string {
               <button
                 v-if="selectedPersona.id"
                 class="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-                title="Evaluate opening vulnerabilities and generate weaponized anti-book"
+                title="Evaluate opening vulnerabilities and generate counter-book"
                 @click="handleExploitPersona"
               >
                 <Crosshair class="w-3.5 h-3.5" />

@@ -94,9 +94,9 @@ func (a *App) resolvePortalCredentials() (lichessUser, lichessToken, chessComUse
 
 // resolveAutoCaptureTargetPath determines which database should receive auto-captured live games.
 // Preference order:
-// 1. Default Personal User Database (if configured and not Locked)
-// 2. Active Database (if open, editable, and not a Reference/Mega archive)
-// 3. Managed Personal User Database (~/.local/share/newscid/databases/My_Games)
+// Default Personal User Database (if configured and not Locked)
+// Active Database (if open, editable, and not a Reference/Mega archive)
+// Managed Personal User Database (~/.local/share/newscid/databases/My_Games)
 func (a *App) resolveAutoCaptureTargetPath() string {
 	prefs, _ := a.GetAppPreferences()
 	if prefs != nil && strings.TrimSpace(prefs.DefaultDatabasePath) != "" {

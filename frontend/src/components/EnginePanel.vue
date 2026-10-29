@@ -389,7 +389,7 @@ function handleApplyHash(h: number) {
           }"
           :title="`Syzygy Tablebase (${tablebaseResult.pieceCount} pieces): ${tablebaseResult.summaryText}`"
         >
-          <span class="font-bold">⚡ TB:</span>
+          <span class="font-bold">TB:</span>
           <span>{{ tablebaseResult.summaryText }}</span>
         </div>
 

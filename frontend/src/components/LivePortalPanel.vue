@@ -193,7 +193,7 @@ async function handleCheckAndCaptureNow(silentIfZero = false) {
       applyCaptureStatus(res.status)
     }
     if (res && res.newGamesImported > 0) {
-      showToast(`✅ Auto-captured ${res.newGamesImported} new game(s) into '${res.targetDatabaseName}': ${res.latestGameSummary}`)
+      showToast(`Auto-captured ${res.newGamesImported} new game(s) into '${res.targetDatabaseName}': ${res.latestGameSummary}`)
       emit('gameCaptured', res)
     } else if (!silentIfZero) {
       showToast(`Checked Lichess & Chess.com — all finished games are already in '${targetDbName.value}' (${res?.duplicatesSkipped || 0} recent verified).`)
@@ -217,7 +217,7 @@ async function handleCaptureUrlOrPgn() {
       applyCaptureStatus(res.status)
     }
     if (res && res.newGamesImported > 0) {
-      showToast(`✅ Captured & saved to '${res.targetDatabaseName}' (Game #${res.latestGameId}): ${res.latestGameSummary}`)
+      showToast(`Captured & saved to '${res.targetDatabaseName}' (Game #${res.latestGameId}): ${res.latestGameSummary}`)
       emit('gameCaptured', res)
     } else if (res && res.latestGamePgn) {
       showToast(`Game already in '${res.targetDatabaseName}' — loaded '${res.latestGameSummary}' onto the board!`)
@@ -273,7 +273,7 @@ onMounted(async () => {
           applyCaptureStatus(res.status)
         }
         if (res?.newGamesImported > 0) {
-          showToast(`🎉 Auto-added new finished game to '${res.targetDatabaseName}': ${res.latestGameSummary}`)
+          showToast(`Auto-added new finished game to '${res.targetDatabaseName}': ${res.latestGameSummary}`)
         }
       })
     }
@@ -385,7 +385,7 @@ onUnmounted(() => {
             @click="handleCheckAndCaptureNow(false)"
           >
             <RefreshCw class="w-3 h-3" :class="isCheckingNow ? 'animate-spin' : ''" />
-            <span>{{ isCheckingNow ? 'Checking...' : '⚡ Capture Latest Now' }}</span>
+            <span>{{ isCheckingNow ? 'Checking...' : 'Capture Latest Now' }}</span>
           </button>
 
           <button
@@ -577,7 +577,7 @@ onUnmounted(() => {
           title="Download this specific Lichess or Chess.com game URL and add it directly to your Personal Database"
           @click="handleCaptureUrlOrPgn"
         >
-          {{ isCapturingUrl ? 'Capturing...' : '📥 Capture Game to DB' }}
+          {{ isCapturingUrl ? 'Capturing...' : 'Capture Game to DB' }}
         </button>
         <button
           type="button"

@@ -89,10 +89,10 @@ func TestBuildCrosstableFromGames_RoundRobin(t *testing.T) {
 	assert.True(t, ct.AverageElo > 2500)
 
 	// Standings verification
-	// 1. Carlsen: 2.5 pts (W vs Nakamura, W vs Smith, D vs Pragg)
-	// 2. Nakamura: 2.0 pts (W vs Pragg, W vs Smith, L vs Carlsen)
-	// 3. Pragg: 1.5 pts (W vs Smith, D vs Carlsen, L vs Nakamura)
-	// 4. Smith: 0.0 pts
+	// Carlsen: 2.5 pts (W vs Nakamura, W vs Smith, D vs Pragg)
+	// Nakamura: 2.0 pts (W vs Pragg, W vs Smith, L vs Carlsen)
+	// Pragg: 1.5 pts (W vs Smith, D vs Carlsen, L vs Nakamura)
+	// Smith: 0.0 pts
 	require.Len(t, ct.Standings, 4)
 	assert.Equal(t, "GM Carlsen, Magnus", ct.Standings[0].PlayerName)
 	assert.Equal(t, 2.5, ct.Standings[0].Points)
@@ -335,10 +335,10 @@ func TestParseRoundNumberAndTitles(t *testing.T) {
 
 func TestTiebreaksAndFormattingEdgeCases(t *testing.T) {
 	// Test tiebreaks:
-	// 1. Sonneborn-Berger tiebreak
-	// 2. Buchholz tiebreak
-	// 3. Wins tiebreak
-	// 4. Name tiebreak
+	// Sonneborn-Berger tiebreak
+	// Buchholz tiebreak
+	// Wins tiebreak
+	// Name tiebreak
 	// Also test:
 	// - Event/Site/Date auto-population when empty
 	// - Skipping non-matching event names and empty player names

@@ -846,11 +846,7 @@ func (a *App) UpdateDatabaseFromLocal(targetBasePath string, sourceBasePaths []s
 
 	return targetDB.MergeFromDatabasesWithCancel(sourceBasePaths, progressCb, cancelCheck)
 }
-
-// ==========================================
 // Database Locking & Write Policies
-// ==========================================
-
 // GetDatabaseWritePolicy returns the current write policy ("editable", "sync_only", or "locked") for basePath.
 func (a *App) GetDatabaseWritePolicy(basePath string) string {
 	clean := normalizeScidBasePath(basePath)
@@ -899,11 +895,7 @@ func (a *App) SetDatabaseWritePolicy(basePath string, policy string) (*DatabaseI
 
 	return a.GetDatabaseInfo()
 }
-
-// ==========================================
 // Active Long-Running Operation Cancellation
-// ==========================================
-
 func (a *App) startCancellableOperation(name string) (context.Context, func()) {
 	a.opMu.Lock()
 	if a.activeOpCancel != nil {
@@ -976,11 +968,7 @@ func (a *App) GetActiveOperation() string {
 	}
 	return ""
 }
-
-// ==========================================
 // Multi-Database Focused Sub-Database Builder
-// ==========================================
-
 // BuildFocusedDatabase extracts games matching opening lines, ECO codes, or players from multiple databases
 // into a new focused Scid database in NewScid's managed databases folder.
 func (a *App) BuildFocusedDatabase(filter scid.SubDatabaseFilter) (*scid.SubDatabaseResult, error) {
@@ -1025,11 +1013,7 @@ func (a *App) BuildFocusedDatabase(filter scid.SubDatabaseFilter) (*scid.SubData
 	}
 	return res, nil
 }
-
-// ==========================================
 // Consolidated Online & Master Database Builder
-// ==========================================
-
 // BuildConsolidatedDatabase combines all specified (or all discovered online/local) databases
 // into a single unified Scid (.si4) database, removing all duplicate games whether they match
 // by Online Game ID/URL or by identical move sequence / game content.
@@ -1224,11 +1208,7 @@ func (a *App) ConsolidateOnlineCatalogDatabases(
 		},
 	})
 }
-
-// ==========================================
 // Famous & Custom Tracked Players Discovery
-// ==========================================
-
 // GetNotablePlayersDropdown returns famous grandmasters and user-configured players discovered in the active database.
 func (a *App) GetNotablePlayersDropdown() ([]scid.DiscoveredNotablePlayer, error) {
 	prefs, _ := a.GetAppPreferences()
@@ -1351,11 +1331,7 @@ func (a *App) ResetNotablePlayersToDefault() ([]scid.DiscoveredNotablePlayer, er
 	}
 	return a.GetNotablePlayersDropdown()
 }
-
-// ==========================================
 // Workstation Storage, Asset Copying & Factory Reset
-// ==========================================
-
 // GetWorkstationStorageReport returns the exact locations and contents of NewScid's managed directories
 // (databases, personas, engines, opening books, endgame tablebases, repertoires, config, and backups).
 func (a *App) GetWorkstationStorageReport() (*workstation.StorageReport, error) {
@@ -1430,12 +1406,8 @@ func (a *App) FactoryResetNewScid(opts workstation.FactoryResetOptions) (*workst
 
 	return res, nil
 }
-
-// ==========================================
 // Standardized 3-Tier Database Import Pipeline
 // (Original Archive vs. Master Reference vs. Personal User DB)
-// ==========================================
-
 // StandardImportRequest defines how an external database (.pgn or .si4) or PGN text
 // should be imported into NewScid's 3-tier database architecture:
 //   - "original_and_master": Save untouched Original Archive (Locked) + Merge & Deduplicate into Master Reference DB (Sync-Only)
@@ -1659,7 +1631,7 @@ func (a *App) ImportStandardDatabase(req StandardImportRequest) (*StandardImport
 		return mStats, mergeErr
 	}
 
-	// Step 1: If raw PGN text was provided without a file path, write it to a temporary PGN file for uniform processing
+	// If raw PGN text was provided without a file path, write it to a temporary PGN file for uniform processing
 	effectiveSrc := srcPath
 	if effectiveSrc == "" && pgnText != "" {
 		tmpPGN := filepath.Join(os.TempDir(), fmt.Sprintf("newscid_import_%d.pgn", time.Now().UnixNano()))
@@ -1678,7 +1650,7 @@ func (a *App) ImportStandardDatabase(req StandardImportRequest) (*StandardImport
 		}
 	}
 
-	// Step 2: Execute according to ImportMode
+	// Execute according to ImportMode
 	switch mode {
 	case "original_only", "original_and_master":
 		origBase := filepath.Join(targetDir, archiveName)
@@ -1841,11 +1813,7 @@ func (a *App) ImportStandardDatabase(req StandardImportRequest) (*StandardImport
 
 	return res, nil
 }
-
-// ==========================================
 // Unified User Profile, Home DB & Focus Book Setup Wizard
-// ==========================================
-
 // UserProfileSetupRequest defines the user's identity, home database, and focus books/repertoires.
 type UserProfileSetupRequest struct {
 	DisplayName            string   `json:"displayName"`
@@ -2075,7 +2043,7 @@ func (a *App) SaveUserProfileSetup(req UserProfileSetupRequest) (*UserProfileSet
 
 	aliases := buildAutomaticPlayerAliases(displayName, lichess, chesscom, req.Aliases)
 
-	// 1. Ensure Home Database (defaulting to My_Games) if requested or if none configured
+	// Ensure Home Database (defaulting to My_Games) if requested or if none configured
 	dataRoot, _ := workstation.DefaultWorkstationDirs()
 	dbDir := filepath.Join(dataRoot, "databases")
 	_ = os.MkdirAll(dbDir, 0o755)
@@ -2107,7 +2075,7 @@ func (a *App) SaveUserProfileSetup(req UserProfileSetupRequest) (*UserProfileSet
 		prefs.DatabasePolicies[homeBase] = scid.WritePolicyEditable.String()
 	}
 
-	// 2. Save User Profile fields onto AppPreferences
+	// Save User Profile fields onto AppPreferences
 	prefs.PlayerDisplayName = displayName
 	prefs.PlayerTitle = title
 	prefs.PlayerEstimatedElo = elo
@@ -2132,7 +2100,7 @@ func (a *App) SaveUserProfileSetup(req UserProfileSetupRequest) (*UserProfileSet
 		prefs.OnboardingCompleted = true
 	}
 
-	// 3. Create or update Personal Persona in PersonaManager
+	// Create or update Personal Persona in PersonaManager
 	if displayName != "" && a.personaMgr != nil {
 		personaID := strings.TrimSpace(prefs.PlayerPersonaID)
 		if personaID == "" {
@@ -2164,7 +2132,7 @@ func (a *App) SaveUserProfileSetup(req UserProfileSetupRequest) (*UserProfileSet
 		}
 	}
 
-	// 4. Create or update Online Sync Profile linked to Home DB
+	// Create or update Online Sync Profile linked to Home DB
 	if (lichess != "" || chesscom != "") && a.ensureProfileMgr() != nil {
 		profName := displayName
 		if profName == "" {
@@ -2186,7 +2154,7 @@ func (a *App) SaveUserProfileSetup(req UserProfileSetupRequest) (*UserProfileSet
 		})
 	}
 
-	// 5. Save preferences and add user to Notable Players dropdown
+	// Save preferences and add user to Notable Players dropdown
 	_, err := a.SaveAppPreferences(*prefs)
 	if err != nil {
 		return nil, err
@@ -2195,7 +2163,7 @@ func (a *App) SaveUserProfileSetup(req UserProfileSetupRequest) (*UserProfileSet
 		_, _ = a.AddCustomNotablePlayer(displayName, aliases, title, "My Profile")
 	}
 
-	// 6. If no database is currently open and homeBase exists, open it as Active DB
+	// If no database is currently open and homeBase exists, open it as Active DB
 	a.mu.RLock()
 	hasOpenDB := a.db != nil && a.db.IsOpen
 	a.mu.RUnlock()

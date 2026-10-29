@@ -185,7 +185,7 @@ func (b *Board) MoveToDescriptive(m Move) string {
 	fromPiece := b.Squares[m.From]
 	pt := fromPiece.Type()
 
-	// 1. Castling
+	// Castling
 	if pt == King {
 		if (m.From == E1 && m.To == G1) || (m.From == E8 && m.To == G8) {
 			return b.appendCheckSuffix(m, "O-O")

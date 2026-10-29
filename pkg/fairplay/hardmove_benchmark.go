@@ -285,7 +285,7 @@ func BuildHardMoveBenchmarkReport(
 		return report
 	}
 
-	// 1. Calibrate Empirical Benchmark Bands from Your Own Games
+	// Calibrate Empirical Benchmark Bands from Your Own Games
 	selfScores := make([]float64, len(selfPerfs))
 	for i, p := range selfPerfs {
 		selfScores[i] = p.UnusualnessScore
@@ -327,7 +327,7 @@ func BuildHardMoveBenchmarkReport(
 		oppPerfs[i].BandName = name
 	}
 
-	// 2. Optional Online Ban / Closed-Account Verification for Unique Opponents
+	// Optional Online Ban / Closed-Account Verification for Unique Opponents
 	bannedHandles := make(map[string]string)
 	checkedAccounts := 0
 	if checkOnlineBans && len(oppPerfs) > 0 {
@@ -342,7 +342,7 @@ func BuildHardMoveBenchmarkReport(
 		}
 	}
 
-	// 3. Aggregate 5-Band Distribution & Top-Two-Band Excess
+	// Aggregate 5-Band Distribution & Top-Two-Band Excess
 	bandDefs := []struct {
 		idx   int
 		name  string
@@ -479,7 +479,7 @@ func BuildHardMoveBenchmarkReport(
 		report.OddsOneIn = 1
 	}
 
-	// 4. Banned Opponent Validation Summary
+	// Banned Opponent Validation Summary
 	bannedTop2 := bannedBandCounts[4] + bannedBandCounts[5]
 	bannedRate := 0.0
 	if gamesVsBanned > 0 {
@@ -511,10 +511,10 @@ func BuildHardMoveBenchmarkReport(
 		ConfirmedBannedHandle: confirmedList,
 	}
 
-	// 5. Selective Cheating Simulation (Swapping Engine Top Choices into Your Own Games)
+	// Selective Cheating Simulation (Swapping Engine Top Choices into Your Own Games)
 	report.SelectiveSimulation = simulateSelectiveCheatingOnSelfGames(selfPerfs, p95, p99)
 
-	// 6. Top 100 Most Unusual Games Leaderboard (Both Self and Opponents)
+	// Top 100 Most Unusual Games Leaderboard (Both Self and Opponents)
 	allCombined := make([]GameHardMovePerformance, 0, len(selfPerfs)+len(oppPerfs))
 	allCombined = append(allCombined, selfPerfs...)
 	allCombined = append(allCombined, oppPerfs...)
@@ -542,7 +542,7 @@ func BuildHardMoveBenchmarkReport(
 	report.OpponentInTop100Count = oppInTop100
 	report.Top100Games = top100
 
-	// 7. Build "Man vs Chess" Verdict Headline & Key Findings
+	// Build "Man vs Chess" Verdict Headline & Key Findings
 	buildHardMoveVerdict(report)
 
 	return report
@@ -774,9 +774,9 @@ func evaluateHardMoveCandidate(
 
 	// Estimate human probability p_i of finding the #1 move at playerElo
 	// Factors that make a move HARD (lower p_i):
-	// 1. Many legal moves (nLegal >= 22) and several plausible competing candidates (plausibleCnt >= 3)
-	// 2. Quiet best move (not a check or obvious capture) or non-trivial tactical gap
-	// 3. Moderate player Elo
+	// Many legal moves (nLegal >= 22) and several plausible competing candidates (plausibleCnt >= 3)
+	// Quiet best move (not a check or obvious capture) or non-trivial tactical gap
+	// Moderate player Elo
 	eloFactor := (float64(playerElo) - 1500.0) / 2000.0 // e.g. 0.0 at 1500, +0.25 at 2000, -0.15 at 1200
 	baseProb := 1.0 / math.Max(1.6, float64(plausibleCnt)*0.95+float64(nLegal)*0.055)
 
@@ -1085,7 +1085,7 @@ func checkOpponentAccountsBanStatus(
 			defer func() { <-sem }()
 
 			low := strings.ToLower(username)
-			// 1. Check Chess.com public player status
+			// Check Chess.com public player status
 			ccEndpoint := fmt.Sprintf("%s/pub/player/%s", strings.TrimRight(chessComBaseURL, "/"), url.PathEscape(low))
 			if req, err := http.NewRequest(http.MethodGet, ccEndpoint, nil); err == nil {
 				req.Header.Set("User-Agent", "NewScid/1.0")
@@ -1105,7 +1105,7 @@ func checkOpponentAccountsBanStatus(
 				}
 			}
 
-			// 2. Check Lichess public user status
+			// Check Lichess public user status
 			liEndpoint := fmt.Sprintf("%s/api/user/%s", strings.TrimRight(lichessBaseURL, "/"), url.PathEscape(username))
 			if req, err := http.NewRequest(http.MethodGet, liEndpoint, nil); err == nil {
 				req.Header.Set("User-Agent", "NewScid/1.0")
