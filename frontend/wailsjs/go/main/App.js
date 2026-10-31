@@ -18,6 +18,10 @@ export function AddPersonaIdentifier(arg1, arg2) {
   return window['go']['main']['App']['AddPersonaIdentifier'](arg1, arg2);
 }
 
+export function AddRepertoireLineSAN(arg1, arg2, arg3) {
+  return window['go']['main']['App']['AddRepertoireLineSAN'](arg1, arg2, arg3);
+}
+
 export function AddRepertoireMove(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['main']['App']['AddRepertoireMove'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
@@ -58,12 +62,20 @@ export function AnnotatePGN(arg1, arg2) {
   return window['go']['main']['App']['AnnotatePGN'](arg1, arg2);
 }
 
+export function AssignPersonaBooks(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['AssignPersonaBooks'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function BuildConsolidatedDatabase(arg1) {
   return window['go']['main']['App']['BuildConsolidatedDatabase'](arg1);
 }
 
 export function BuildFocusedDatabase(arg1) {
   return window['go']['main']['App']['BuildFocusedDatabase'](arg1);
+}
+
+export function BuildPersonaOpeningBook(arg1, arg2, arg3) {
+  return window['go']['main']['App']['BuildPersonaOpeningBook'](arg1, arg2, arg3);
 }
 
 export function CancelActiveOperation() {
@@ -106,6 +118,14 @@ export function CompactDatabase() {
   return window['go']['main']['App']['CompactDatabase']();
 }
 
+export function CompileRepertoireToPolyglot(arg1) {
+  return window['go']['main']['App']['CompileRepertoireToPolyglot'](arg1);
+}
+
+export function CompileRepertoireToPolyglotBook(arg1, arg2) {
+  return window['go']['main']['App']['CompileRepertoireToPolyglotBook'](arg1, arg2);
+}
+
 export function ConfigureLivePortalAutoCapture(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['ConfigureLivePortalAutoCapture'](arg1, arg2, arg3, arg4);
 }
@@ -144,6 +164,10 @@ export function DeletePersona(arg1) {
 
 export function DeleteRepertoire(arg1) {
   return window['go']['main']['App']['DeleteRepertoire'](arg1);
+}
+
+export function DeleteRepertoireMove(arg1, arg2, arg3) {
+  return window['go']['main']['App']['DeleteRepertoireMove'](arg1, arg2, arg3);
 }
 
 export function DeleteSyncProfile(arg1) {
@@ -262,6 +286,10 @@ export function FormatMoveSequence(arg1, arg2, arg3) {
   return window['go']['main']['App']['FormatMoveSequence'](arg1, arg2, arg3);
 }
 
+export function GenerateAdaptiveCoachingSession(arg1) {
+  return window['go']['main']['App']['GenerateAdaptiveCoachingSession'](arg1);
+}
+
 export function GenerateIntuitionDrillsFromDatabase(arg1) {
   return window['go']['main']['App']['GenerateIntuitionDrillsFromDatabase'](arg1);
 }
@@ -284,6 +312,10 @@ export function GenerateSafetyDrillsFromDatabase(arg1) {
 
 export function GetActiveOperation() {
   return window['go']['main']['App']['GetActiveOperation']();
+}
+
+export function GetAdaptiveCoachDashboard() {
+  return window['go']['main']['App']['GetAdaptiveCoachDashboard']();
 }
 
 export function GetAllBlunderPuzzles() {
@@ -402,6 +434,10 @@ export function GetLivePortalCaptureStatus() {
   return window['go']['main']['App']['GetLivePortalCaptureStatus']();
 }
 
+export function GetMainUserOnlineDefaults() {
+  return window['go']['main']['App']['GetMainUserOnlineDefaults']();
+}
+
 export function GetMegaDatabaseCatalog() {
   return window['go']['main']['App']['GetMegaDatabaseCatalog']();
 }
@@ -474,6 +510,10 @@ export function GetRepertoire(arg1) {
   return window['go']['main']['App']['GetRepertoire'](arg1);
 }
 
+export function GetRepertoireMastery(arg1) {
+  return window['go']['main']['App']['GetRepertoireMastery'](arg1);
+}
+
 export function GetRepertoires() {
   return window['go']['main']['App']['GetRepertoires']();
 }
@@ -512,6 +552,10 @@ export function GetTournamentCrosstable(arg1, arg2, arg3) {
 
 export function GetTournamentEvents() {
   return window['go']['main']['App']['GetTournamentEvents']();
+}
+
+export function GetUserProfileStatus() {
+  return window['go']['main']['App']['GetUserProfileStatus']();
 }
 
 export function GetVersionInfo() {
@@ -642,6 +686,10 @@ export function QueryPolyglotBook(arg1, arg2) {
   return window['go']['main']['App']['QueryPolyglotBook'](arg1, arg2);
 }
 
+export function RecordAdaptiveCoachAttempt(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RecordAdaptiveCoachAttempt'](arg1, arg2, arg3);
+}
+
 export function RecordBlunderReview(arg1, arg2) {
   return window['go']['main']['App']['RecordBlunderReview'](arg1, arg2);
 }
@@ -668,6 +716,10 @@ export function RemovePersonaIdentifier(arg1, arg2) {
 
 export function ResetNotablePlayersToDefault() {
   return window['go']['main']['App']['ResetNotablePlayersToDefault']();
+}
+
+export function ResetRepertoireMastery(arg1) {
+  return window['go']['main']['App']['ResetRepertoireMastery'](arg1);
 }
 
 export function SaveAppPreferences(arg1) {
@@ -704,6 +756,14 @@ export function SaveRepertoire(arg1) {
 
 export function SaveSyncProfile(arg1) {
   return window['go']['main']['App']['SaveSyncProfile'](arg1);
+}
+
+export function SaveUserProfileSetup(arg1) {
+  return window['go']['main']['App']['SaveUserProfileSetup'](arg1);
+}
+
+export function ScanRepertoireDeviations(arg1) {
+  return window['go']['main']['App']['ScanRepertoireDeviations'](arg1);
 }
 
 export function SearchECO(arg1, arg2, arg3) {
@@ -830,12 +890,20 @@ export function SyncOnlineProfile(arg1) {
   return window['go']['main']['App']['SyncOnlineProfile'](arg1);
 }
 
+export function SyncUserHomeGames(arg1) {
+  return window['go']['main']['App']['SyncUserHomeGames'](arg1);
+}
+
 export function UpdateDatabaseFromLocal(arg1, arg2) {
   return window['go']['main']['App']['UpdateDatabaseFromLocal'](arg1, arg2);
 }
 
 export function UpdateGameHeaders(arg1, arg2) {
   return window['go']['main']['App']['UpdateGameHeaders'](arg1, arg2);
+}
+
+export function UpdateRepertoireMoveComment(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['UpdateRepertoireMoveComment'](arg1, arg2, arg3, arg4);
 }
 
 export function VerifyDatabase() {
@@ -845,74 +913,3 @@ export function VerifyDatabase() {
 export function VerifyRepertoireMove(arg1, arg2, arg3) {
   return window['go']['main']['App']['VerifyRepertoireMove'](arg1, arg2, arg3);
 }
-
-export function GetUserProfileStatus() {
-  return window['go']['main']['App']['GetUserProfileStatus']();
-}
-
-export function SaveUserProfileSetup(arg1) {
-  return window['go']['main']['App']['SaveUserProfileSetup'](arg1);
-}
-
-export function SyncUserHomeGames(arg1) {
-  return window['go']['main']['App']['SyncUserHomeGames'](arg1);
-}
-
-export function BuildPersonaOpeningBook(arg1, arg2, arg3) {
-  return window['go']['main']['App']['BuildPersonaOpeningBook'](arg1, arg2, arg3);
-}
-
-export function AssignPersonaBooks(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['AssignPersonaBooks'](arg1, arg2, arg3, arg4, arg5);
-}
-
-export function CompileRepertoireToPolyglotBook(arg1, arg2) {
-  return window['go']['main']['App']['CompileRepertoireToPolyglotBook'](arg1, arg2);
-}
-
-export function AddRepertoireLineSAN(arg1, arg2, arg3) {
-  return window['go']['main']['App']['AddRepertoireLineSAN'](arg1, arg2, arg3);
-}
-
-export function DeleteRepertoireMove(arg1, arg2, arg3) {
-  return window['go']['main']['App']['DeleteRepertoireMove'](arg1, arg2, arg3);
-}
-
-export function UpdateRepertoireMoveComment(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['UpdateRepertoireMoveComment'](arg1, arg2, arg3, arg4);
-}
-
-export function GetRepertoireMastery(arg1) {
-  return window['go']['main']['App']['GetRepertoireMastery'](arg1);
-}
-
-export function ResetRepertoireMastery(arg1) {
-  return window['go']['main']['App']['ResetRepertoireMastery'](arg1);
-}
-
-export function CompileRepertoireToPolyglot(arg1) {
-  return window['go']['main']['App']['CompileRepertoireToPolyglot'](arg1);
-}
-
-export function GetMainUserOnlineDefaults() {
-  return window['go']['main']['App']['GetMainUserOnlineDefaults']();
-}
-
-export function ScanRepertoireDeviations(arg1) {
-  return window['go']['main']['App']['ScanRepertoireDeviations'](arg1);
-}
-
-export function GetAdaptiveCoachDashboard() {
-  return window['go']['main']['App']['GetAdaptiveCoachDashboard']();
-}
-
-export function GenerateAdaptiveCoachingSession(arg1) {
-  return window['go']['main']['App']['GenerateAdaptiveCoachingSession'](arg1);
-}
-
-export function RecordAdaptiveCoachAttempt(arg1, arg2, arg3) {
-  return window['go']['main']['App']['RecordAdaptiveCoachAttempt'](arg1, arg2, arg3);
-}
-
-
-

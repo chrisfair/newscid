@@ -21,7 +21,7 @@ vi.mock('../../wailsjs/go/main/App', () => ({
   ScanRepertoireDeviations: vi.fn(),
   AddBlunderToVault: vi.fn(),
   ParseFEN: vi.fn(),
-  MakeMoveOnBoard: vi.fn(),
+  MakeMove: vi.fn(),
 }));
 
 describe('OpeningTrainerModal', () => {
@@ -101,7 +101,7 @@ describe('OpeningTrainerModal', () => {
           isMastered: false,
         },
       ],
-    });
+    } as any);
 
     vi.mocked(AppAPI.ParseFEN).mockResolvedValue({ squares: [] } as any);
   });
@@ -210,7 +210,7 @@ describe('OpeningTrainerModal', () => {
           remediationAdvice: 'Opponents played 1...d5 (d7d5) leaving your prepared book. Add exd5 to your book to cover this sideline.',
         },
       ],
-    });
+    } as any);
 
     const wrapper = mount(OpeningTrainerModal, {
       global: {

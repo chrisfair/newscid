@@ -7,8 +7,27 @@ import {
   RecordAdaptiveCoachAttempt,
   GetMainUserOnlineDefaults,
   ParseFEN,
-  MakeMoveOnBoard,
+  MakeMove,
 } from '../../wailsjs/go/main/App';
+
+const props = withDefaults(
+  defineProps<{
+    currentPieceSet?: string;
+    boardTheme?: {
+      light: string;
+      dark: string;
+      highlight: string;
+    };
+  }>(),
+  {
+    currentPieceSet: 'cburnett',
+    boardTheme: () => ({
+      light: '#f0d9b5',
+      dark: '#b58863',
+      highlight: 'rgba(255, 255, 0, 0.4)',
+    }),
+  }
+);
 
 const emit = defineEmits<{
   (e: 'close'): void;
@@ -40,7 +59,9 @@ const reinforcementNotice = ref<string>('');
 
 // Board state
 const currentFen = ref<string>(STARTING_FEN);
-const currentBoard = ref<any | null>(null);
+const legalMoves = ref<string[]>([]);
+const inCheck = ref<boolean>(false);
+const lastMove = ref<{ from: string; to: string } | null>(null);
 const flipped = ref<boolean>(false);
 const statusType = ref<'neutral' | 'correct' | 'wrong' | 'complete'>('neutral');
 const statusMessage = ref<string>('Scan your online or database games to generate a customized coaching session.');
@@ -52,6 +73,26 @@ const activeDrill = computed(() => {
   const idx = Math.max(0, Math.min(currentDrillIndex.value, activeQueue.value.length - 1));
   return activeQueue.value[idx] || null;
 });
+
+function parseUciMove(uci: string): { from: string; to: string } | null {
+  if (!uci || uci.length < 4) return null;
+  return { from: uci.slice(0, 2), to: uci.slice(2, 4) };
+}
+
+async function setBoardFen(fen: string, moveUci: string = '') {
+  currentFen.value = fen;
+  lastMove.value = parseUciMove(moveUci);
+  try {
+    const state = await ParseFEN(fen);
+    if (state) {
+      legalMoves.value = state.legalMoves || [];
+      inCheck.value = Boolean(state.inCheck);
+    }
+  } catch (e) {
+    legalMoves.value = [];
+    inCheck.value = false;
+  }
+}
 
 async function loadDefaultsAndDashboard() {
   try {
@@ -71,7 +112,7 @@ async function loadDefaultsAndDashboard() {
       const firstUnattempted = activeQueue.value.findIndex((d: any) => !d.attempted);
       await loadDrillAtIndex(firstUnattempted >= 0 ? firstUnattempted : 0);
     } else {
-      currentBoard.value = await ParseFEN(STARTING_FEN);
+      await setBoardFen(STARTING_FEN);
     }
   } catch (e) {
     console.error('Failed to load adaptive coach dashboard:', e);
@@ -117,8 +158,7 @@ async function loadDrillAtIndex(idx: number) {
   drillStartTimeMs.value = Date.now();
 
   const d = activeQueue.value[clamped];
-  currentFen.value = d.fen;
-  currentBoard.value = await ParseFEN(d.fen);
+  await setBoardFen(d.fen);
   flipped.value = d.turn === 'b';
   statusType.value = 'neutral';
   statusMessage.value = `${d.diagnosisHeadline} — Find the best move for ${d.turn === 'b' ? 'Black' : 'White'}.`;
@@ -132,11 +172,14 @@ async function onBoardMove(uci: string) {
   if (!expectedUCI) return;
 
   try {
-    const moveRes = await MakeMoveOnBoard(currentFen.value, uci);
+    const moveRes = await MakeMove(currentFen.value, uci);
+    const playedSan = moveRes.moveSan || uci;
 
     if (uci.toLowerCase() === expectedUCI.toLowerCase()) {
       currentFen.value = moveRes.fen;
-      currentBoard.value = moveRes.board;
+      legalMoves.value = moveRes.legalMoves || [];
+      inCheck.value = Boolean(moveRes.inCheck);
+      lastMove.value = parseUciMove(moveRes.moveUci || uci);
       currentStepIdx.value++;
 
       if (currentStepIdx.value >= d.solutionUci.length) {
@@ -145,7 +188,7 @@ async function onBoardMove(uci: string) {
         const solvedCleanly = !hadMistakeOnCurrent.value;
         showTakeaway.value = true;
         statusType.value = 'complete';
-        statusMessage.value = `Solved (${moveRes.san}). ${d.postSolveTakeaway}`;
+        statusMessage.value = `Solved (${playedSan}). ${d.postSolveTakeaway}`;
 
         if (!d.attempted || solvedCleanly) {
           const res = await RecordAdaptiveCoachAttempt(d.id, solvedCleanly, elapsedSec);
@@ -156,15 +199,17 @@ async function onBoardMove(uci: string) {
       } else {
         // Play opponent response in multi-move tactical sequence
         statusType.value = 'correct';
-        statusMessage.value = `Good move (${moveRes.san}). Calculating opponent reply...`;
+        statusMessage.value = `Good move (${playedSan}). Calculating opponent reply...`;
         const oppUCI = d.solutionUci[currentStepIdx.value];
         setTimeout(async () => {
           try {
-            const oppRes = await MakeMoveOnBoard(currentFen.value, oppUCI);
+            const oppRes = await MakeMove(currentFen.value, oppUCI);
             currentFen.value = oppRes.fen;
-            currentBoard.value = oppRes.board;
+            legalMoves.value = oppRes.legalMoves || [];
+            inCheck.value = Boolean(oppRes.inCheck);
+            lastMove.value = parseUciMove(oppRes.moveUci || oppUCI);
             currentStepIdx.value++;
-            statusMessage.value = `Opponent played ${oppRes.san}. Find the follow-up move.`;
+            statusMessage.value = `Opponent played ${oppRes.moveSan || oppUCI}. Find the follow-up move.`;
           } catch (err) {
             console.error('Opponent reply failed:', err);
           }
@@ -178,7 +223,7 @@ async function onBoardMove(uci: string) {
       showTakeaway.value = true;
       statusType.value = 'wrong';
       const expectedSAN = d.solutionSan?.[currentStepIdx.value] || expectedUCI;
-      statusMessage.value = `${moveRes.san} misses the tactic. Study the Coaching Protocol on the right and play ${expectedSAN}.`;
+      statusMessage.value = `${playedSan} misses the tactic. Study the Coaching Protocol on the right and play ${expectedSAN}.`;
 
       if (isFirstMissOnDrill) {
         const elapsedSec = Math.max(1, Math.round((Date.now() - drillStartTimeMs.value) / 1000));
@@ -324,8 +369,12 @@ onMounted(async () => {
           <div class="board-wrapper">
             <Chessboard
               :fen="currentFen"
-              :board="currentBoard"
+              :legal-moves="legalMoves"
               :flipped="flipped"
+              :piece-set="props.currentPieceSet"
+              :board-theme="props.boardTheme"
+              :last-move="lastMove"
+              :in-check="inCheck"
               @move="onBoardMove"
             />
           </div>

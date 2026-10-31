@@ -9,7 +9,7 @@ vi.mock('../../wailsjs/go/main/App', () => ({
   RecordAdaptiveCoachAttempt: vi.fn(),
   GetMainUserOnlineDefaults: vi.fn(),
   ParseFEN: vi.fn(),
-  MakeMoveOnBoard: vi.fn(),
+  MakeMove: vi.fn(),
 }));
 
 describe('AdaptiveCoachModal', () => {

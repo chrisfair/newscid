@@ -19,11 +19,31 @@ import {
   ScanRepertoireDeviations,
   AddBlunderToVault,
   ParseFEN,
-  MakeMoveOnBoard,
+  MakeMove,
 } from '../../wailsjs/go/main/App';
+
+const props = withDefaults(
+  defineProps<{
+    currentPieceSet?: string;
+    boardTheme?: {
+      light: string;
+      dark: string;
+      highlight: string;
+    };
+  }>(),
+  {
+    currentPieceSet: 'cburnett',
+    boardTheme: () => ({
+      light: '#f0d9b5',
+      dark: '#b58863',
+      highlight: 'rgba(255, 255, 0, 0.4)',
+    }),
+  }
+);
 
 const emit = defineEmits<{
   (e: 'close'): void;
+  (e: 'loadIntoApp', fen: string): void;
 }>();
 
 const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
@@ -45,6 +65,9 @@ const currentLineMistakes = ref<number>(0);
 // Board state
 const currentFen = ref<string>(STARTING_FEN);
 const currentBoard = ref<any | null>(null);
+const legalMoves = ref<string[]>([]);
+const inCheck = ref<boolean>(false);
+const lastMove = ref<{ from: string; to: string } | null>(null);
 const flipped = ref<boolean>(false);
 const moveHistory = ref<string[]>([]);
 const fenHistory = ref<string[]>([STARTING_FEN]);
@@ -180,14 +203,26 @@ watch(currentFen, () => {
   syncEditingComments();
 });
 
+async function applyBoardStateFromFEN(fen: string, moveUci?: string) {
+  currentFen.value = fen;
+  const state = await ParseFEN(fen);
+  currentBoard.value = state;
+  legalMoves.value = state?.legalMoves || [];
+  inCheck.value = Boolean(state?.inCheck);
+  if (moveUci && moveUci.length >= 4) {
+    lastMove.value = { from: moveUci.slice(0, 2), to: moveUci.slice(2, 4) };
+  } else {
+    lastMove.value = null;
+  }
+}
+
 async function startLineOrResetBoard(targetLineIdx?: number) {
   if (typeof targetLineIdx === 'number') {
     currentLineIndex.value = targetLineIdx;
   }
   currentStepIndex.value = 0;
   currentLineMistakes.value = 0;
-  currentFen.value = STARTING_FEN;
-  currentBoard.value = await ParseFEN(STARTING_FEN);
+  await applyBoardStateFromFEN(STARTING_FEN);
   moveHistory.value = [];
   fenHistory.value = [STARTING_FEN];
   hintMoves.value = [];
@@ -232,10 +267,14 @@ async function playNextSystematicOpponentStep() {
   }
 
   try {
-    const res = await MakeMoveOnBoard(currentFen.value, step.uci);
+    const res = await MakeMove(currentFen.value, step.uci);
+    const san = res.moveSan || step.san || step.uci;
     currentFen.value = res.fen;
-    currentBoard.value = res.board;
-    moveHistory.value.push(res.san || step.san);
+    currentBoard.value = res;
+    legalMoves.value = res.legalMoves || [];
+    inCheck.value = Boolean(res.inCheck);
+    lastMove.value = { from: step.uci.slice(0, 2), to: step.uci.slice(2, 4) };
+    moveHistory.value.push(san);
     fenHistory.value.push(res.fen);
     currentStepIndex.value++;
 
@@ -247,7 +286,7 @@ async function playNextSystematicOpponentStep() {
         setTimeout(() => playNextSystematicOpponentStep(), 300);
       } else {
         statusType.value = 'neutral';
-        statusMessage.value = `Opponent played ${res.san || step.san}. Your turn — find your book response.`;
+        statusMessage.value = `Opponent played ${san}. Your turn — find your book response.`;
       }
     }
   } catch (e) {
@@ -298,13 +337,17 @@ async function handleRandomOpponentMove() {
 
   const chosen = options[Math.floor(Math.random() * options.length)];
   try {
-    const res = await MakeMoveOnBoard(currentFen.value, chosen.uci);
+    const res = await MakeMove(currentFen.value, chosen.uci);
+    const san = res.moveSan || chosen.san || chosen.uci;
     currentFen.value = res.fen;
-    currentBoard.value = res.board;
-    moveHistory.value.push(res.san);
+    currentBoard.value = res;
+    legalMoves.value = res.legalMoves || [];
+    inCheck.value = Boolean(res.inCheck);
+    lastMove.value = { from: chosen.uci.slice(0, 2), to: chosen.uci.slice(2, 4) };
+    moveHistory.value.push(san);
     fenHistory.value.push(res.fen);
     statusType.value = 'neutral';
-    statusMessage.value = `Opponent played ${res.san}. Your turn.`;
+    statusMessage.value = `Opponent played ${san}. Your turn.`;
   } catch (e) {
     console.error('Opponent move failed:', e);
   }
@@ -315,25 +358,29 @@ async function onBoardMove(uci: string) {
   const preMoveFen = currentFen.value;
 
   try {
-    const moveRes = await MakeMoveOnBoard(preMoveFen, uci);
+    const moveRes = await MakeMove(preMoveFen, uci);
+    const moveSan = moveRes.moveSan || (moveRes as any).san || uci;
 
     if (mode.value === 'builder') {
       await AddRepertoireMove(
         activeRep.value.id,
         preMoveFen,
         uci,
-        moveRes.san,
+        moveSan,
         moveRes.fen,
         moveComment.value
       );
       activeRep.value = await GetRepertoire(activeRep.value.id);
       await refreshMastery(activeRep.value.id);
       currentFen.value = moveRes.fen;
-      currentBoard.value = moveRes.board;
-      moveHistory.value.push(moveRes.san);
+      currentBoard.value = moveRes;
+      legalMoves.value = moveRes.legalMoves || [];
+      inCheck.value = Boolean(moveRes.inCheck);
+      lastMove.value = { from: uci.slice(0, 2), to: uci.slice(2, 4) };
+      moveHistory.value.push(moveSan);
       fenHistory.value.push(moveRes.fen);
       statusType.value = 'correct';
-      statusMessage.value = `Recorded ${moveRes.san} (${uci}) into ${activeRep.value.name}.`;
+      statusMessage.value = `Recorded ${moveSan} (${uci}) into ${activeRep.value.name}.`;
       moveComment.value = '';
       return;
     }
@@ -349,14 +396,17 @@ async function onBoardMove(uci: string) {
       await refreshMastery(activeRep.value.id);
 
       currentFen.value = moveRes.fen;
-      currentBoard.value = moveRes.board;
-      moveHistory.value.push(moveRes.san);
+      currentBoard.value = moveRes;
+      legalMoves.value = moveRes.legalMoves || [];
+      inCheck.value = Boolean(moveRes.inCheck);
+      lastMove.value = { from: uci.slice(0, 2), to: uci.slice(2, 4) };
+      moveHistory.value.push(moveSan);
       fenHistory.value.push(moveRes.fen);
       hintMoves.value = [];
 
       const note = res.playedMove?.comment ? ` — ${res.playedMove.comment}` : '';
       statusType.value = 'correct';
-      statusMessage.value = `Correct: ${moveRes.san}${note}`;
+      statusMessage.value = `Correct: ${moveSan}${note}`;
 
       if (drillStrategy.value === 'systematic' && activeSystematicLine.value) {
         const line = activeSystematicLine.value;
@@ -379,7 +429,7 @@ async function onBoardMove(uci: string) {
           setTimeout(() => handleRandomOpponentMove(), 450);
         } else {
           statusType.value = 'complete';
-          statusMessage.value = `Line completed (${moveRes.san}). Book Mastery: ${masteryPct.value}%.`;
+          statusMessage.value = `Line completed (${moveSan}). Book Mastery: ${masteryPct.value}%.`;
         }
       }
     } else {
@@ -394,9 +444,9 @@ async function onBoardMove(uci: string) {
         const expectedList = hintMoves.value
           .map((m: any) => (m.comment ? `${m.san} (${m.comment})` : m.san))
           .join(' or ');
-        statusMessage.value = `${moveRes.san} breaks book. Expected: ${expectedList}. Try again.`;
+        statusMessage.value = `${moveSan} breaks book. Expected: ${expectedList}. Try again.`;
       } else {
-        statusMessage.value = `${moveRes.san} is not in your repertoire for this position.`;
+        statusMessage.value = `${moveSan} is not in your repertoire for this position.`;
       }
     }
   } catch (e) {
@@ -412,8 +462,7 @@ async function stepBack() {
     currentStepIndex.value--;
   }
   const prevFen = fenHistory.value[fenHistory.value.length - 1];
-  currentFen.value = prevFen;
-  currentBoard.value = await ParseFEN(prevFen);
+  await applyBoardStateFromFEN(prevFen);
 }
 
 function showHint() {
@@ -521,7 +570,7 @@ async function createNewRepertoire() {
     description: newRepDesc.value.trim() || 'Custom user repertoire',
     positions: {},
   };
-  await SaveRepertoire(rep);
+  await SaveRepertoire(rep as any);
   repertoires.value = (await GetRepertoires()) || [];
   showCreateForm.value = false;
   newRepName.value = '';
@@ -564,8 +613,7 @@ async function runDeviationScan() {
 async function drillDeviationPosition(dev: any) {
   mode.value = 'drill';
   drillStrategy.value = 'random';
-  currentFen.value = dev.fen;
-  currentBoard.value = await ParseFEN(dev.fen);
+  await applyBoardStateFromFEN(dev.fen);
   moveHistory.value = dev.lineBeforeSan ? dev.lineBeforeSan.split(' ') : [];
   fenHistory.value = [STARTING_FEN, dev.fen];
   hintMoves.value = dev.expectedMoves || [];
@@ -617,8 +665,7 @@ async function addSidelineReplyToBook(side: any) {
 
 async function inspectSidelineOnBoard(side: any) {
   mode.value = 'builder';
-  currentFen.value = side.afterOpponentFen;
-  currentBoard.value = await ParseFEN(side.afterOpponentFen);
+  await applyBoardStateFromFEN(side.afterOpponentFen, side.opponentMoveUci);
   fenHistory.value = [STARTING_FEN, side.afterOpponentFen];
   statusType.value = 'neutral';
   statusMessage.value = `Opponent played ${side.opponentMoveSan}. Play your chosen reply on the board to add it to your book.`;
@@ -754,8 +801,12 @@ onMounted(async () => {
           <div class="board-wrapper">
             <Chessboard
               :fen="currentFen"
-              :board="currentBoard"
+              :legal-moves="legalMoves"
+              :piece-set="props.currentPieceSet"
+              :board-theme="props.boardTheme"
               :flipped="flipped"
+              :last-move="lastMove"
+              :in-check="inCheck"
               @move="onBoardMove"
             />
           </div>

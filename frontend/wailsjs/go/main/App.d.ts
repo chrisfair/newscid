@@ -3,6 +3,7 @@
 import {blundervault} from '../models';
 import {scid} from '../models';
 import {persona} from '../models';
+import {repertoire} from '../models';
 import {training} from '../models';
 import {stats} from '../models';
 import {fairplay} from '../models';
@@ -23,7 +24,6 @@ import {tree} from '../models';
 import {playerbot} from '../models';
 import {polyglot} from '../models';
 import {imbalance} from '../models';
-import {repertoire} from '../models';
 import {tournament} from '../models';
 import {version} from '../models';
 import {puzzleminer} from '../models';
@@ -37,6 +37,8 @@ export function AddCustomNotablePlayer(arg1:string,arg2:Array<string>,arg3:strin
 export function AddGameComment(arg1:number,arg2:string):Promise<void>;
 
 export function AddPersonaIdentifier(arg1:string,arg2:string):Promise<persona.Persona>;
+
+export function AddRepertoireLineSAN(arg1:string,arg2:string,arg3:string):Promise<repertoire.Repertoire>;
 
 export function AddRepertoireMove(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string):Promise<void>;
 
@@ -58,9 +60,13 @@ export function AnnotateCurrentGame(arg1:number):Promise<engine.GameAnalysis>;
 
 export function AnnotatePGN(arg1:string,arg2:number):Promise<engine.GameAnalysis>;
 
+export function AssignPersonaBooks(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<persona.Persona>;
+
 export function BuildConsolidatedDatabase(arg1:scid.ConsolidateDatabaseOptions):Promise<scid.ConsolidateDatabaseResult>;
 
 export function BuildFocusedDatabase(arg1:scid.SubDatabaseFilter):Promise<scid.SubDatabaseResult>;
+
+export function BuildPersonaOpeningBook(arg1:string,arg2:string,arg3:number):Promise<string>;
 
 export function CancelActiveOperation():Promise<boolean>;
 
@@ -82,6 +88,10 @@ export function CloseDatabase():Promise<void>;
 
 export function CompactDatabase():Promise<scid.CompactStats>;
 
+export function CompileRepertoireToPolyglot(arg1:string):Promise<string>;
+
+export function CompileRepertoireToPolyglotBook(arg1:string,arg2:boolean):Promise<string>;
+
 export function ConfigureLivePortalAutoCapture(arg1:string,arg2:string,arg3:boolean,arg4:boolean):Promise<main.LivePortalCaptureStatus>;
 
 export function ConsolidateOnlineCatalogDatabases(arg1:Array<string>,arg2:boolean,arg3:string,arg4:number,arg5:number,arg6:boolean):Promise<scid.ConsolidateDatabaseResult>;
@@ -101,6 +111,8 @@ export function DeleteGame(arg1:number,arg2:boolean):Promise<void>;
 export function DeletePersona(arg1:string):Promise<void>;
 
 export function DeleteRepertoire(arg1:string):Promise<void>;
+
+export function DeleteRepertoireMove(arg1:string,arg2:string,arg3:string):Promise<repertoire.Repertoire>;
 
 export function DeleteSyncProfile(arg1:string):Promise<void>;
 
@@ -160,6 +172,8 @@ export function FormatMove(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function FormatMoveSequence(arg1:string,arg2:Array<string>,arg3:string):Promise<string>;
 
+export function GenerateAdaptiveCoachingSession(arg1:main.AdaptiveCoachRequest):Promise<training.AdaptiveCoachDashboard>;
+
 export function GenerateIntuitionDrillsFromDatabase(arg1:number):Promise<Array<training.IntuitionChallenge>>;
 
 export function GenerateOpponentScoutingReport(arg1:string):Promise<scout.Report>;
@@ -171,6 +185,8 @@ export function GenerateRandomChess960():Promise<chess960.Position>;
 export function GenerateSafetyDrillsFromDatabase(arg1:number):Promise<Array<training.SafetyDrill>>;
 
 export function GetActiveOperation():Promise<string>;
+
+export function GetAdaptiveCoachDashboard():Promise<training.AdaptiveCoachDashboard>;
 
 export function GetAllBlunderPuzzles():Promise<Array<blundervault.Puzzle>>;
 
@@ -230,6 +246,8 @@ export function GetLichessThemesCatalog():Promise<Array<training.LichessThemeInf
 
 export function GetLivePortalCaptureStatus():Promise<main.LivePortalCaptureStatus>;
 
+export function GetMainUserOnlineDefaults():Promise<Record<string, string>>;
+
 export function GetMegaDatabaseCatalog():Promise<Array<online.MegaDatabaseSource>>;
 
 export function GetNotablePlayersDropdown():Promise<Array<scid.DiscoveredNotablePlayer>>;
@@ -266,6 +284,8 @@ export function GetRatingEvolution(arg1:string):Promise<stats.RatingTrackerResul
 
 export function GetRepertoire(arg1:string):Promise<repertoire.Repertoire>;
 
+export function GetRepertoireMastery(arg1:string):Promise<repertoire.RepertoireMasteryReport>;
+
 export function GetRepertoires():Promise<Array<repertoire.RepertoireSummary>>;
 
 export function GetSafetyDrillBatch(arg1:number,arg2:string):Promise<Array<training.SafetyDrill>>;
@@ -285,6 +305,8 @@ export function GetSyncProfiles():Promise<Array<online.Profile>>;
 export function GetTournamentCrosstable(arg1:string,arg2:string,arg3:string):Promise<tournament.TournamentCrosstable>;
 
 export function GetTournamentEvents():Promise<Array<tournament.EventSummary>>;
+
+export function GetUserProfileStatus():Promise<main.UserProfileSetupResult>;
 
 export function GetVersionInfo():Promise<version.Info>;
 
@@ -350,6 +372,8 @@ export function PublishWorkspaceState(arg1:main.SharedWorkspaceState):Promise<vo
 
 export function QueryPolyglotBook(arg1:string,arg2:string):Promise<Array<polyglot.BookMove>>;
 
+export function RecordAdaptiveCoachAttempt(arg1:string,arg2:boolean,arg3:number):Promise<training.AdaptiveDrillResult>;
+
 export function RecordBlunderReview(arg1:string,arg2:number):Promise<blundervault.Puzzle>;
 
 export function RecordCyclicalPuzzleAttempt(arg1:string,arg2:string,arg3:boolean,arg4:number):Promise<training.CycleSet>;
@@ -363,6 +387,8 @@ export function RemoveNotablePlayer(arg1:string):Promise<Array<scid.DiscoveredNo
 export function RemovePersonaIdentifier(arg1:string,arg2:string):Promise<persona.Persona>;
 
 export function ResetNotablePlayersToDefault():Promise<Array<scid.DiscoveredNotablePlayer>>;
+
+export function ResetRepertoireMastery(arg1:string):Promise<repertoire.RepertoireMasteryReport>;
 
 export function SaveAppPreferences(arg1:main.AppPreferences):Promise<main.AppPreferences>;
 
@@ -381,6 +407,10 @@ export function SavePersona(arg1:persona.Persona):Promise<persona.Persona>;
 export function SaveRepertoire(arg1:repertoire.Repertoire):Promise<void>;
 
 export function SaveSyncProfile(arg1:online.Profile):Promise<void>;
+
+export function SaveUserProfileSetup(arg1:main.UserProfileSetupRequest):Promise<main.UserProfileSetupResult>;
+
+export function ScanRepertoireDeviations(arg1:main.RepertoireScanRequest):Promise<repertoire.BookDeviationReport>;
 
 export function SearchECO(arg1:string,arg2:string,arg3:number):Promise<Array<eco.Entry>>;
 
@@ -444,47 +474,14 @@ export function SuggestPersonaIdentifiers(arg1:string,arg2:Array<string>):Promis
 
 export function SyncOnlineProfile(arg1:string):Promise<online.SyncResult>;
 
+export function SyncUserHomeGames(arg1:number):Promise<online.SyncResult>;
+
 export function UpdateDatabaseFromLocal(arg1:string,arg2:Array<string>):Promise<scid.MergeStats>;
 
 export function UpdateGameHeaders(arg1:number,arg2:Record<string, string>):Promise<scid.GameSummary>;
 
+export function UpdateRepertoireMoveComment(arg1:string,arg2:string,arg3:string,arg4:string):Promise<repertoire.Repertoire>;
+
 export function VerifyDatabase():Promise<scid.VerificationReport>;
 
 export function VerifyRepertoireMove(arg1:string,arg2:string,arg3:string):Promise<main.RepertoireCheckResult>;
-
-export function GetUserProfileStatus():Promise<any>;
-
-export function SaveUserProfileSetup(arg1:any):Promise<any>;
-
-export function SyncUserHomeGames(arg1:number):Promise<online.SyncResult>;
-
-export function BuildPersonaOpeningBook(arg1:string,arg2:string,arg3:number):Promise<string>;
-
-export function AssignPersonaBooks(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<persona.Persona>;
-
-export function CompileRepertoireToPolyglotBook(arg1:string,arg2:boolean):Promise<string>;
-
-export function AddRepertoireLineSAN(arg1:string,arg2:string,arg3:string):Promise<repertoire.Repertoire>;
-
-export function DeleteRepertoireMove(arg1:string,arg2:string,arg3:string):Promise<repertoire.Repertoire>;
-
-export function UpdateRepertoireMoveComment(arg1:string,arg2:string,arg3:string,arg4:string):Promise<repertoire.Repertoire>;
-
-export function GetRepertoireMastery(arg1:string):Promise<any>;
-
-export function ResetRepertoireMastery(arg1:string):Promise<any>;
-
-export function CompileRepertoireToPolyglot(arg1:string):Promise<string>;
-
-export function GetMainUserOnlineDefaults():Promise<Record<string, string>>;
-
-export function ScanRepertoireDeviations(arg1:any):Promise<any>;
-
-export function GetAdaptiveCoachDashboard():Promise<any>;
-
-export function GenerateAdaptiveCoachingSession(arg1:any):Promise<any>;
-
-export function RecordAdaptiveCoachAttempt(arg1:string,arg2:boolean,arg3:number):Promise<any>;
-
-
-
