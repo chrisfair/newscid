@@ -48,6 +48,7 @@ import SupportModal from './components/SupportModal.vue'
 import MegaDatabaseModal from './components/MegaDatabaseModal.vue'
 import FairPlayModal from './components/FairPlayModal.vue'
 import CyclicalDrillModal from './components/CyclicalDrillModal.vue'
+import AdaptiveCoachModal from './components/AdaptiveCoachModal.vue'
 import WorkstationManagerModal from './components/WorkstationManagerModal.vue'
 import StandardImportModal from './components/StandardImportModal.vue'
 import GettingStartedWizardModal from './components/GettingStartedWizardModal.vue'
@@ -373,6 +374,7 @@ const showSupportModal = ref(false)
 const showMegaDatabaseModal = ref(false)
 const showFairPlayModal = ref(false)
 const showCyclicalDrillModal = ref(false)
+const showAdaptiveCoachModal = ref(false)
 const showWorkstationManagerModal = ref(false)
 const workstationInitialTab = ref<'builder' | 'storage' | 'reset'>('builder')
 const workstationInitialFilter = ref<any>(undefined)
@@ -3749,6 +3751,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         @show-support="showSupportModal = true"
         @fair-play-inspector="showFairPlayModal = true"
         @cyclical-drill="showCyclicalDrillModal = true"
+        @adaptive-coach="showAdaptiveCoachModal = true"
         @open-workstation-manager="openWorkstationManagerModal"
       />
 
@@ -5186,6 +5189,12 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       :active-db-name="dbInfo?.name"
       :initial-player="gameTags.White && gameTags.White !== '?' ? gameTags.White : ''"
       @close="showCyclicalDrillModal = false"
+    />
+
+    <!-- Adaptive Weakness Coach & Online Game Trainer Modal -->
+    <AdaptiveCoachModal
+      v-if="showAdaptiveCoachModal"
+      @close="showAdaptiveCoachModal = false"
     />
 
     <!-- Workstation Manager, Multi-Database Sub-Database Builder, Managed Storage & Factory Reset Modal -->

@@ -85,6 +85,16 @@ type RepertoireCheckResult struct {
 	Alternatives []repertoire.RepertoireMove `json:"alternatives"`
 }
 
+// RepertoireScanRequest configures an online and/or database scan for opening book deviations.
+type RepertoireScanRequest struct {
+	RepertoireID     string `json:"repertoireId"`
+	Source           string `json:"source"` // "online", "database", "both"
+	LichessUsername  string `json:"lichessUsername"`
+	ChessComUsername string `json:"chessComUsername"`
+	PlayerName       string `json:"playerName"`
+	MaxGames         int    `json:"maxGames"`
+}
+
 // EventListener receives events emitted by App when running in server or mobile mode.
 type EventListener = func(eventName string, optionalData ...interface{})
 
@@ -121,6 +131,7 @@ type App struct {
 	blunderVault     *blundervault.Vault
 	supportMgr       *support.Manager
 	cyclicalMgr      *training.CyclicalManager
+	coachMgr         *training.AdaptiveCoachManager
 }
 
 // NewApp creates a new App application struct
@@ -141,6 +152,8 @@ func NewApp() *App {
 	supMgr, _ := support.NewManager(supportPath)
 	cyclicalPath := filepath.Join(configDir, "newscid", "cyclical_drill.json")
 	cycMgr, _ := training.NewCyclicalManager(cyclicalPath)
+	coachPath := filepath.Join(configDir, "newscid", "adaptive_coach.json")
+	coachMgr, _ := training.NewAdaptiveCoachManager(coachPath)
 
 	return &App{
 		db:              scid.NewDatabase(),
@@ -158,6 +171,7 @@ func NewApp() *App {
 		blunderVault:    bVault,
 		supportMgr:      supMgr,
 		cyclicalMgr:     cycMgr,
+		coachMgr:        coachMgr,
 	}
 }
 
@@ -1315,6 +1329,231 @@ func (a *App) ShortenRepertoire(opts repertoire.ShortenerOptions) (*repertoire.S
 	a.mu.RUnlock()
 
 	return a.repMgr.ShortenRepertoire(opts, db)
+}
+
+// AddRepertoireLineSAN parses a PGN/SAN move sequence and adds all moves into the specified repertoire.
+func (a *App) AddRepertoireLineSAN(repID string, moveText string, comment string) (*repertoire.Repertoire, error) {
+	return a.repMgr.AddLineSAN(repID, moveText, comment)
+}
+
+// DeleteRepertoireMove removes a move from a position in the specified repertoire.
+func (a *App) DeleteRepertoireMove(repID string, fen string, uci string) (*repertoire.Repertoire, error) {
+	return a.repMgr.DeleteMove(repID, fen, uci)
+}
+
+// UpdateRepertoireMoveComment updates the strategic note for a move in the specified repertoire.
+func (a *App) UpdateRepertoireMoveComment(repID string, fen string, uci string, comment string) (*repertoire.Repertoire, error) {
+	return a.repMgr.UpdateMoveComment(repID, fen, uci, comment)
+}
+
+// GetRepertoireMastery returns the 0-100% systematic training progress and variation line checklist for a repertoire.
+func (a *App) GetRepertoireMastery(repID string) (*repertoire.RepertoireMasteryReport, error) {
+	return a.repMgr.GetMasteryReport(repID)
+}
+
+// ResetRepertoireMastery clears all practice counters and mastery flags for a repertoire and returns the fresh report.
+func (a *App) ResetRepertoireMastery(repID string) (*repertoire.RepertoireMasteryReport, error) {
+	if _, err := a.repMgr.ResetMastery(repID); err != nil {
+		return nil, err
+	}
+	return a.repMgr.GetMasteryReport(repID)
+}
+
+// CompileRepertoireToPolyglot compiles a repertoire into a Polyglot (.bin) opening book and links it to the user profile if applicable.
+func (a *App) CompileRepertoireToPolyglot(repID string) (string, error) {
+	home, _ := os.UserHomeDir()
+	bookDir := filepath.Join(home, ".local", "share", "newscid", "books", "opening")
+	if err := os.MkdirAll(bookDir, 0755); err != nil {
+		return "", err
+	}
+	targetPath := filepath.Join(bookDir, repID+".bin")
+	count, err := a.repMgr.CompileToPolyglotBook(repID, targetPath)
+	if err != nil {
+		return "", err
+	}
+	if a.personaMgr != nil {
+		for _, p := range a.personaMgr.GetPersonas() {
+			if p.IsUserProfile || p.WhiteRepertoireID == repID || p.BlackRepertoireID == repID {
+				p.BookPath = targetPath
+				_, _ = a.personaMgr.SavePersona(p)
+			}
+		}
+	}
+	a.mu.Lock()
+	if a.polyglotBooks != nil {
+		if b, bErr := polyglot.OpenBook(targetPath); bErr == nil {
+			a.polyglotBooks[targetPath] = b
+		}
+	}
+	a.mu.Unlock()
+	return fmt.Sprintf("%s (%d positions)", targetPath, count), nil
+}
+
+// GetMainUserOnlineDefaults returns the primary user's configured Lichess/Chess.com handles and display name.
+func (a *App) GetMainUserOnlineDefaults() map[string]string {
+	res := map[string]string{
+		"displayName":       "",
+		"lichessUsername":   "",
+		"chessComUsername":  "",
+		"whiteRepertoireId": "",
+		"blackRepertoireId": "",
+	}
+	if a.personaMgr != nil {
+		personas := a.personaMgr.GetPersonas()
+		for _, p := range personas {
+			if p.IsUserProfile {
+				res["displayName"] = p.DisplayName
+				res["lichessUsername"] = p.LichessUsername
+				res["chessComUsername"] = p.ChessComUsername
+				res["whiteRepertoireId"] = p.WhiteRepertoireID
+				res["blackRepertoireId"] = p.BlackRepertoireID
+				break
+			}
+		}
+		if res["lichessUsername"] == "" && res["chessComUsername"] == "" && len(personas) > 0 {
+			p := personas[0]
+			res["displayName"] = p.DisplayName
+			res["lichessUsername"] = p.LichessUsername
+			res["chessComUsername"] = p.ChessComUsername
+			res["whiteRepertoireId"] = p.WhiteRepertoireID
+			res["blackRepertoireId"] = p.BlackRepertoireID
+		}
+	}
+	if a.profileMgr != nil {
+		for _, prof := range a.profileMgr.GetProfiles() {
+			if res["lichessUsername"] == "" && prof.LichessUsername != "" {
+				res["lichessUsername"] = prof.LichessUsername
+			}
+			if res["chessComUsername"] == "" && prof.ChessComUsername != "" {
+				res["chessComUsername"] = prof.ChessComUsername
+			}
+			if res["displayName"] == "" && prof.Name != "" {
+				res["displayName"] = prof.Name
+			}
+		}
+	}
+	return res
+}
+
+// ScanRepertoireDeviations scans online accounts (Lichess / Chess.com) and/or local databases for times the opening book was broken.
+func (a *App) ScanRepertoireDeviations(req RepertoireScanRequest) (*repertoire.BookDeviationReport, error) {
+	if strings.TrimSpace(req.RepertoireID) == "" {
+		return nil, fmt.Errorf("repertoire ID is required")
+	}
+	maxGames := req.MaxGames
+	if maxGames <= 0 {
+		maxGames = 100
+	}
+	if maxGames > 1000 {
+		maxGames = 1000
+	}
+
+	source := strings.ToLower(strings.TrimSpace(req.Source))
+	if source == "" {
+		source = "both"
+	}
+
+	lichessUser := strings.TrimSpace(req.LichessUsername)
+	chessComUser := strings.TrimSpace(req.ChessComUsername)
+	playerName := strings.TrimSpace(req.PlayerName)
+
+	var identifiers []string
+	var personaDBPath string
+
+	if a.personaMgr != nil {
+		for _, p := range a.personaMgr.GetPersonas() {
+			if p.IsUserProfile ||
+				(playerName != "" && strings.EqualFold(p.DisplayName, playerName)) ||
+				(lichessUser != "" && strings.EqualFold(p.LichessUsername, lichessUser)) ||
+				(chessComUser != "" && strings.EqualFold(p.ChessComUsername, chessComUser)) {
+				if lichessUser == "" {
+					lichessUser = strings.TrimSpace(p.LichessUsername)
+				}
+				if chessComUser == "" {
+					chessComUser = strings.TrimSpace(p.ChessComUsername)
+				}
+				if playerName == "" {
+					playerName = strings.TrimSpace(p.DisplayName)
+				}
+				if personaDBPath == "" && p.DatabasePath != "" {
+					personaDBPath = p.DatabasePath
+				}
+				identifiers = append(identifiers, p.DisplayName, p.LichessUsername, p.ChessComUsername)
+				identifiers = append(identifiers, p.Identifiers...)
+				break
+			}
+		}
+	}
+
+	if lichessUser != "" {
+		identifiers = append(identifiers, lichessUser)
+	}
+	if chessComUser != "" {
+		identifiers = append(identifiers, chessComUser)
+	}
+	if playerName != "" {
+		identifiers = append(identifiers, playerName)
+	}
+
+	var games []*chess.Game
+
+	// 1. Fetch from Online Accounts if requested
+	if source == "online" || source == "both" {
+		if a.syncMgr == nil {
+			a.syncMgr = online.NewSyncManager(a.ensureProfileMgr())
+		}
+		if lichessUser != "" && a.syncMgr.Lichess != nil {
+			if pgnText, err := a.syncMgr.Lichess.FetchUserGames(lichessUser, 0, "", false, maxGames); err == nil && strings.TrimSpace(pgnText) != "" {
+				if parsed, pErr := chess.ParsePGNDatabase(strings.NewReader(pgnText)); pErr == nil {
+					games = append(games, parsed...)
+				}
+			}
+		}
+		if chessComUser != "" && a.syncMgr.ChessCom != nil {
+			if pgnText, err := a.syncMgr.ChessCom.FetchUserGames(chessComUser, 0, 0, maxGames); err == nil && strings.TrimSpace(pgnText) != "" {
+				if parsed, pErr := chess.ParsePGNDatabase(strings.NewReader(pgnText)); pErr == nil {
+					games = append(games, parsed...)
+				}
+			}
+		}
+	}
+
+	// 2. Load from Local Databases if requested or if no online games were found
+	if source == "database" || source == "both" || len(games) == 0 {
+		// Check persona dedicated database first
+		if personaDBPath != "" {
+			pDB := scid.NewDatabase()
+			if err := pDB.Open(personaDBPath); err == nil {
+				total := pDB.NumGames()
+				for id := total; id >= 1 && len(games) < maxGames*2; id-- {
+					if g, gErr := pDB.GetGame(id); gErr == nil && g != nil {
+						games = append(games, g)
+					}
+				}
+				_ = pDB.Close()
+			}
+		}
+
+		// Also check active database
+		a.mu.RLock()
+		db := a.db
+		activeGame := a.activeGame
+		a.mu.RUnlock()
+
+		if db != nil && db.IsOpen {
+			total := db.NumGames()
+			for id := total; id >= 1 && len(games) < maxGames*2; id-- {
+				if g, gErr := db.GetGame(id); gErr == nil && g != nil {
+					games = append(games, g)
+				}
+			}
+		}
+		if len(games) == 0 && activeGame != nil {
+			games = append(games, activeGame)
+		}
+	}
+
+	return a.repMgr.ScanGamesForBookDeviations(req.RepertoireID, games, identifiers)
 }
 // Database Puzzle Miner Operations
 func (a *App) MinePuzzlesFromDatabase(playerName string, maxGames int) ([]puzzleminer.MinedPuzzle, error) {
@@ -3529,4 +3768,167 @@ func (a *App) CheckCyclicalEntitlement() support.FeatureEntitlement {
 		}
 	}
 	return a.supportMgr.CheckFeatureEntitlement("cyclical-tactical-drill", false, chessComIDs, lichessIDs)
+}
+
+// AdaptiveCoachRequest configures an online/database scan and custom instructional coaching session.
+type AdaptiveCoachRequest struct {
+	Source           string `json:"source"` // "both", "online", "database"
+	LichessUsername  string `json:"lichessUsername"`
+	ChessComUsername string `json:"chessComUsername"`
+	PlayerName       string `json:"playerName"`
+	FocusTheme       string `json:"focusTheme"` // "auto" or specific theme key like "hangingPiece"
+	MaxGames         int    `json:"maxGames"`
+	BatchSize        int    `json:"batchSize"`
+}
+
+func (a *App) ensureCoachMgr() *training.AdaptiveCoachManager {
+	if a.coachMgr == nil {
+		configDir, _ := os.UserConfigDir()
+		a.coachMgr, _ = training.NewAdaptiveCoachManager(filepath.Join(configDir, "newscid", "adaptive_coach.json"))
+	}
+	return a.coachMgr
+}
+
+// GetAdaptiveCoachDashboard returns the current adaptive coaching weakness profile, drill queue, and session history.
+func (a *App) GetAdaptiveCoachDashboard() (*training.AdaptiveCoachDashboard, error) {
+	mgr := a.ensureCoachMgr()
+	if mgr == nil {
+		return nil, fmt.Errorf("adaptive coach manager not initialized")
+	}
+	dash := mgr.GetDashboard()
+	return &dash, nil
+}
+
+// GenerateAdaptiveCoachingSession scans the user's online (Lichess / Chess.com) and/or local database games,
+// diagnoses recurring tactical blind spots (such as missed hanging pieces), and builds a customized high-instructional drill queue.
+func (a *App) GenerateAdaptiveCoachingSession(req AdaptiveCoachRequest) (*training.AdaptiveCoachDashboard, error) {
+	mgr := a.ensureCoachMgr()
+	if mgr == nil {
+		return nil, fmt.Errorf("adaptive coach manager not initialized")
+	}
+
+	maxGames := req.MaxGames
+	if maxGames <= 0 {
+		maxGames = 100
+	}
+	if maxGames > 500 {
+		maxGames = 500
+	}
+
+	batchSize := req.BatchSize
+	if batchSize <= 0 {
+		batchSize = 12
+	}
+
+	source := strings.ToLower(strings.TrimSpace(req.Source))
+	if source == "" {
+		source = "both"
+	}
+
+	lichessUser := strings.TrimSpace(req.LichessUsername)
+	chessComUser := strings.TrimSpace(req.ChessComUsername)
+	playerName := strings.TrimSpace(req.PlayerName)
+
+	var identifiers []string
+	var personaDBPath string
+
+	if a.personaMgr != nil {
+		for _, p := range a.personaMgr.GetPersonas() {
+			if p.IsUserProfile ||
+				(playerName != "" && strings.EqualFold(p.DisplayName, playerName)) ||
+				(lichessUser != "" && strings.EqualFold(p.LichessUsername, lichessUser)) ||
+				(chessComUser != "" && strings.EqualFold(p.ChessComUsername, chessComUser)) {
+				if lichessUser == "" {
+					lichessUser = strings.TrimSpace(p.LichessUsername)
+				}
+				if chessComUser == "" {
+					chessComUser = strings.TrimSpace(p.ChessComUsername)
+				}
+				if playerName == "" {
+					playerName = strings.TrimSpace(p.DisplayName)
+				}
+				if personaDBPath == "" && p.DatabasePath != "" {
+					personaDBPath = p.DatabasePath
+				}
+				identifiers = append(identifiers, p.DisplayName, p.LichessUsername, p.ChessComUsername)
+				identifiers = append(identifiers, p.Identifiers...)
+				break
+			}
+		}
+	}
+
+	if lichessUser != "" {
+		identifiers = append(identifiers, lichessUser)
+	}
+	if chessComUser != "" {
+		identifiers = append(identifiers, chessComUser)
+	}
+	if playerName != "" {
+		identifiers = append(identifiers, playerName)
+	}
+
+	var games []*chess.Game
+
+	if source == "online" || source == "both" {
+		if a.syncMgr == nil {
+			a.syncMgr = online.NewSyncManager(a.ensureProfileMgr())
+		}
+		if lichessUser != "" && a.syncMgr.Lichess != nil {
+			if pgnText, err := a.syncMgr.Lichess.FetchUserGames(lichessUser, 0, "", false, maxGames); err == nil && strings.TrimSpace(pgnText) != "" {
+				if parsed, pErr := chess.ParsePGNDatabase(strings.NewReader(pgnText)); pErr == nil {
+					games = append(games, parsed...)
+				}
+			}
+		}
+		if chessComUser != "" && a.syncMgr.ChessCom != nil {
+			if pgnText, err := a.syncMgr.ChessCom.FetchUserGames(chessComUser, 0, 0, maxGames); err == nil && strings.TrimSpace(pgnText) != "" {
+				if parsed, pErr := chess.ParsePGNDatabase(strings.NewReader(pgnText)); pErr == nil {
+					games = append(games, parsed...)
+				}
+			}
+		}
+	}
+
+	if source == "database" || source == "both" || len(games) == 0 {
+		if personaDBPath != "" {
+			pDB := scid.NewDatabase()
+			if err := pDB.Open(personaDBPath); err == nil {
+				total := pDB.NumGames()
+				for id := total; id >= 1 && len(games) < maxGames*2; id-- {
+					if g, gErr := pDB.GetGame(id); gErr == nil && g != nil {
+						games = append(games, g)
+					}
+				}
+				_ = pDB.Close()
+			}
+		}
+
+		a.mu.RLock()
+		db := a.db
+		activeGame := a.activeGame
+		a.mu.RUnlock()
+
+		if db != nil && db.IsOpen {
+			total := db.NumGames()
+			for id := total; id >= 1 && len(games) < maxGames*2; id-- {
+				if g, gErr := db.GetGame(id); gErr == nil && g != nil {
+					games = append(games, g)
+				}
+			}
+		}
+		if len(games) == 0 && activeGame != nil {
+			games = append(games, activeGame)
+		}
+	}
+
+	return mgr.ScanAndBuildCurriculum(games, identifiers, req.FocusTheme, batchSize)
+}
+
+// RecordAdaptiveCoachAttempt records a drill attempt in the adaptive coach and triggers extra reinforcement drills if missed.
+func (a *App) RecordAdaptiveCoachAttempt(drillID string, solvedFirstTry bool, timeTakenSec int) (*training.AdaptiveDrillResult, error) {
+	mgr := a.ensureCoachMgr()
+	if mgr == nil {
+		return nil, fmt.Errorf("adaptive coach manager not initialized")
+	}
+	return mgr.RecordDrillAttempt(drillID, solvedFirstTry, timeTakenSec)
 }

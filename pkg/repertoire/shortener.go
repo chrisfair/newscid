@@ -175,6 +175,8 @@ func (m *Manager) ShortenRepertoire(opts ShortenerOptions, db *scid.Database) (*
 			// Apply player move to get opponent board
 			oppBoard := curr.board.Clone()
 			oppBoard.MakeMove(playerMove)
+			oppCore := CoreFEN(oppBoard.FEN())
+			reachableCores[oppCore] = true
 			playerHistory := append(curr.history, rm.SAN)
 
 			// Opponent is now to move. Inspect legal opponent responses that exist in repertoire
@@ -290,6 +292,19 @@ func (m *Manager) ShortenRepertoire(opts ShortenerOptions, db *scid.Database) (*
 					})
 					// Prune from repertoire
 					delete(prunedPositions, oc.nextCore)
+					if oppMoves, ok := prunedPositions[oppCore]; ok {
+						var keptOpp []RepertoireMove
+						for _, om := range oppMoves {
+							if !strings.EqualFold(om.UCI, oc.move.String()) {
+								keptOpp = append(keptOpp, om)
+							}
+						}
+						if len(keptOpp) == 0 {
+							delete(prunedPositions, oppCore)
+						} else {
+							prunedPositions[oppCore] = keptOpp
+						}
+					}
 				} else {
 					cumulativePct += oc.pct
 					reachableCores[oc.nextCore] = true

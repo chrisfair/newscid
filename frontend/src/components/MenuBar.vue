@@ -183,6 +183,7 @@ const emit = defineEmits<{
   (e: 'megaDownloader'): void
   (e: 'fairPlayInspector'): void
   (e: 'cyclicalDrill'): void
+  (e: 'adaptiveCoach'): void
   (e: 'openWorkstationManager', tab?: 'builder' | 'storage' | 'reset'): void
   (e: 'openGettingStartedWizard'): void
 }>()
@@ -868,6 +869,12 @@ onUnmounted(() => {
           @click="selectItem(() => emit('cyclicalDrill'))"
         >
           <span class="flex items-center gap-2.5 whitespace-nowrap"><RefreshCw class="w-4 h-4 shrink-0 text-emerald-400" /> Cyclical Tactical Drill &amp; Theme Radar...</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('adaptiveCoach'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Award class="w-4 h-4 shrink-0 text-purple-400" /> Adaptive Weakness Coach &amp; Online Trainer...</span>
         </button>
         <button
           class="w-full text-left px-3.5 py-1.5 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"

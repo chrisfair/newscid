@@ -870,3 +870,49 @@ export function CompileRepertoireToPolyglotBook(arg1, arg2) {
   return window['go']['main']['App']['CompileRepertoireToPolyglotBook'](arg1, arg2);
 }
 
+export function AddRepertoireLineSAN(arg1, arg2, arg3) {
+  return window['go']['main']['App']['AddRepertoireLineSAN'](arg1, arg2, arg3);
+}
+
+export function DeleteRepertoireMove(arg1, arg2, arg3) {
+  return window['go']['main']['App']['DeleteRepertoireMove'](arg1, arg2, arg3);
+}
+
+export function UpdateRepertoireMoveComment(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['UpdateRepertoireMoveComment'](arg1, arg2, arg3, arg4);
+}
+
+export function GetRepertoireMastery(arg1) {
+  return window['go']['main']['App']['GetRepertoireMastery'](arg1);
+}
+
+export function ResetRepertoireMastery(arg1) {
+  return window['go']['main']['App']['ResetRepertoireMastery'](arg1);
+}
+
+export function CompileRepertoireToPolyglot(arg1) {
+  return window['go']['main']['App']['CompileRepertoireToPolyglot'](arg1);
+}
+
+export function GetMainUserOnlineDefaults() {
+  return window['go']['main']['App']['GetMainUserOnlineDefaults']();
+}
+
+export function ScanRepertoireDeviations(arg1) {
+  return window['go']['main']['App']['ScanRepertoireDeviations'](arg1);
+}
+
+export function GetAdaptiveCoachDashboard() {
+  return window['go']['main']['App']['GetAdaptiveCoachDashboard']();
+}
+
+export function GenerateAdaptiveCoachingSession(arg1) {
+  return window['go']['main']['App']['GenerateAdaptiveCoachingSession'](arg1);
+}
+
+export function RecordAdaptiveCoachAttempt(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RecordAdaptiveCoachAttempt'](arg1, arg2, arg3);
+}
+
+
+

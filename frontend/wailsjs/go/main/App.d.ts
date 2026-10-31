@@ -464,3 +464,27 @@ export function AssignPersonaBooks(arg1:string,arg2:string,arg3:string,arg4:stri
 
 export function CompileRepertoireToPolyglotBook(arg1:string,arg2:boolean):Promise<string>;
 
+export function AddRepertoireLineSAN(arg1:string,arg2:string,arg3:string):Promise<repertoire.Repertoire>;
+
+export function DeleteRepertoireMove(arg1:string,arg2:string,arg3:string):Promise<repertoire.Repertoire>;
+
+export function UpdateRepertoireMoveComment(arg1:string,arg2:string,arg3:string,arg4:string):Promise<repertoire.Repertoire>;
+
+export function GetRepertoireMastery(arg1:string):Promise<any>;
+
+export function ResetRepertoireMastery(arg1:string):Promise<any>;
+
+export function CompileRepertoireToPolyglot(arg1:string):Promise<string>;
+
+export function GetMainUserOnlineDefaults():Promise<Record<string, string>>;
+
+export function ScanRepertoireDeviations(arg1:any):Promise<any>;
+
+export function GetAdaptiveCoachDashboard():Promise<any>;
+
+export function GenerateAdaptiveCoachingSession(arg1:any):Promise<any>;
+
+export function RecordAdaptiveCoachAttempt(arg1:string,arg2:boolean,arg3:number):Promise<any>;
+
+
+
