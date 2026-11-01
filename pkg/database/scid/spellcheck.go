@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"unicode"
+
+	"newscid/pkg/fileformat"
 )
 
 // SpellCorrection records a single player name replacement.
@@ -367,12 +369,12 @@ func (sc *SpellChecker) StandardizeDatabase(db *Database) (*SpellCheckSummary, e
 
 	// Write back updated index and namebase
 	if db.BasePath != "" {
-		sn4Path := db.BasePath + ".sn4"
+		sn4Path := fileformat.ScidNamesPath(db.BasePath)
 		if err := db.Names.WriteToFile(sn4Path); err != nil {
 			return summary, fmt.Errorf("saving namebase: %w", err)
 		}
 
-		si4Path := db.BasePath + ".si4"
+		si4Path := fileformat.ScidIndexPath(db.BasePath)
 		fSi, err := os.OpenFile(si4Path, os.O_RDWR, 0644)
 		if err != nil {
 			return summary, fmt.Errorf("opening index: %w", err)

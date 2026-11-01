@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"newscid/pkg/chess"
+	"newscid/pkg/fileformat"
 )
 
 // GameSummary represents lightweight metadata for fast table display.
@@ -95,13 +96,8 @@ func (db *Database) Open(path string) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	base := strings.TrimSuffix(path, ".si4")
-	base = strings.TrimSuffix(base, ".sn4")
-	base = strings.TrimSuffix(base, ".sg4")
-
-	si4Path := base + ".si4"
-	sn4Path := base + ".sn4"
-	sg4Path := base + ".sg4"
+	base := fileformat.TrimScidExtensions(path)
+	si4Path, sn4Path, sg4Path := fileformat.ScidPaths(base)
 
 	if _, err := os.Stat(si4Path); err != nil {
 		return fmt.Errorf("index file not found: %s", si4Path)
@@ -139,9 +135,8 @@ func (db *Database) Create(path string, description string) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	base := strings.TrimSuffix(path, ".si4")
-	base = strings.TrimSuffix(base, ".sn4")
-	base = strings.TrimSuffix(base, ".sg4")
+	base := fileformat.TrimScidExtensions(path)
+	si4Path, sn4Path, sg4Path := fileformat.ScidPaths(base)
 
 	nb := NewNameBase()
 	header := &IndexHeader{
@@ -153,11 +148,11 @@ func (db *Database) Create(path string, description string) error {
 	}
 
 	// Write empty files first before mutating db state
-	if err := nb.WriteToFile(base + ".sn4"); err != nil {
+	if err := nb.WriteToFile(sn4Path); err != nil {
 		return err
 	}
 
-	fSi, err := os.Create(base + ".si4")
+	fSi, err := os.Create(si4Path)
 	if err != nil {
 		return err
 	}
@@ -167,7 +162,7 @@ func (db *Database) Create(path string, description string) error {
 	}
 	fSi.Close()
 
-	fSg, err := os.Create(base + ".sg4")
+	fSg, err := os.Create(sg4Path)
 	if err != nil {
 		return err
 	}
@@ -585,7 +580,7 @@ func (db *Database) getGameLocked(gameNum int) (*chess.Game, error) {
 	}
 
 	entry := db.Entries[gameNum-1]
-	sg4Path := db.BasePath + ".sg4"
+	sg4Path := fileformat.ScidGameDataPath(db.BasePath)
 	rawBytes, err := ReadGameBytes(sg4Path, entry.Offset, entry.Length)
 	if err != nil {
 		return nil, fmt.Errorf("reading raw game bytes: %w", err)
@@ -616,7 +611,7 @@ func (db *Database) SaveGame(game *chess.Game) (int, error) {
 	}
 
 	// Append to .sg4
-	sg4Path := db.BasePath + ".sg4"
+	sg4Path := fileformat.ScidGameDataPath(db.BasePath)
 	fSg, err := os.OpenFile(sg4Path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
 		return 0, err
@@ -641,7 +636,7 @@ func (db *Database) SaveGame(game *chess.Game) (int, error) {
 	rID := db.Names.AddName(NameRound, game.Tag("Round"))
 
 	// Save updated NameBase
-	if err := db.Names.WriteToFile(db.BasePath + ".sn4"); err != nil {
+	if err := db.Names.WriteToFile(fileformat.ScidNamesPath(db.BasePath)); err != nil {
 		return 0, fmt.Errorf("updating namebase: %w", err)
 	}
 
@@ -681,7 +676,7 @@ func (db *Database) SaveGame(game *chess.Game) (int, error) {
 	db.Header.NumGames = uint32(len(db.Entries))
 
 	// Append to .si4 and update header
-	si4Path := db.BasePath + ".si4"
+	si4Path := fileformat.ScidIndexPath(db.BasePath)
 	fSi, err := os.OpenFile(si4Path, os.O_RDWR, 0644)
 	if err != nil {
 		return 0, err
@@ -721,7 +716,7 @@ func (db *Database) DeleteGame(gameNum int, deleted bool) error {
 	}
 
 	// Write entry back to .si4
-	si4Path := db.BasePath + ".si4"
+	si4Path := fileformat.ScidIndexPath(db.BasePath)
 	fSi, err := os.OpenFile(si4Path, os.O_RDWR, 0644)
 	if err != nil {
 		return err
@@ -793,7 +788,7 @@ func (db *Database) UpdateGameTags(gameNum int, tags map[string]string) error {
 
 	// Persist updated NameBase if new names were added
 	if namebaseChanged && db.BasePath != "" {
-		sn4Path := db.BasePath + ".sn4"
+		sn4Path := fileformat.ScidNamesPath(db.BasePath)
 		if err := db.Names.WriteToFile(sn4Path); err != nil {
 			return fmt.Errorf("saving namebase: %w", err)
 		}
@@ -801,7 +796,7 @@ func (db *Database) UpdateGameTags(gameNum int, tags map[string]string) error {
 
 	// Persist updated IndexEntry to .si4
 	if db.BasePath != "" {
-		si4Path := db.BasePath + ".si4"
+		si4Path := fileformat.ScidIndexPath(db.BasePath)
 		fSi, err := os.OpenFile(si4Path, os.O_RDWR, 0644)
 		if err != nil {
 			return err

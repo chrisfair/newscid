@@ -12,6 +12,7 @@ import (
 
 	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
+	"newscid/pkg/fileformat"
 )
 
 // TWICIssueResult details the result of downloading and importing a single TWIC issue.
@@ -101,7 +102,7 @@ func (c *TWICClient) extractGamesFromZip(data []byte, issue int) ([]*chess.Game,
 	foundPGN := false
 
 	for _, file := range zipReader.File {
-		if strings.HasSuffix(strings.ToLower(file.Name), ".pgn") {
+		if fileformat.IsPGNPath(file.Name) {
 			rc, err := file.Open()
 			if err != nil {
 				return nil, fmt.Errorf("reading %s in TWIC %d zip: %w", file.Name, issue, err)

@@ -19,6 +19,7 @@ import (
 
 	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
+	"newscid/pkg/fileformat"
 )
 
 // MegaDatabaseSource describes a curated online chess database available for one-click download/import.
@@ -581,7 +582,7 @@ func (c *MegaDatabaseClient) DownloadAndImport(
 		if fmtKind == format7zSI4 {
 			if strings.TrimSpace(destDir) == "" {
 				home, _ := os.UserHomeDir()
-				destDir = filepath.Join(home, ".local", "share", "newscid", "databases")
+				destDir = filepath.Join(home, ".local", "share", fileformat.AppDirName, fileformat.DirDatabases)
 			}
 			emit(phaseExtracting, fmt.Sprintf("Extracting native Scid .si4 database from %s...", src.Name), totalBytes, totalBytes, 0, 0, 75)
 			si4Path, err := extract7zNativeSI4(tmpFile, destDir)
@@ -618,13 +619,13 @@ func (c *MegaDatabaseClient) DownloadAndImport(
 func detectArchiveFormatFromURL(u string) archiveFormat {
 	lower := strings.ToLower(u)
 	switch {
-	case strings.HasSuffix(lower, ".pgn.zst") || strings.HasSuffix(lower, ".zst"):
+	case strings.HasSuffix(lower, fileformat.ExtPGNZst) || strings.HasSuffix(lower, fileformat.ExtZst):
 		return formatPGNZst
-	case strings.HasSuffix(lower, ".zip"):
+	case strings.HasSuffix(lower, fileformat.ExtZip):
 		return formatZipPGN
-	case strings.HasSuffix(lower, "_si4.7z"):
+	case strings.HasSuffix(lower, fileformat.ExtSI47z):
 		return format7zSI4
-	case strings.HasSuffix(lower, ".7z"):
+	case strings.HasSuffix(lower, fileformat.Ext7z):
 		return format7zPGN
 	default:
 		return formatPGN
@@ -889,7 +890,7 @@ func extractAndImportZip(
 	totalImported := 0
 
 	for _, f := range zr.File {
-		if f.FileInfo().IsDir() || !strings.HasSuffix(strings.ToLower(f.Name), ".pgn") {
+		if f.FileInfo().IsDir() || !fileformat.IsPGNPath(f.Name) {
 			continue
 		}
 		remaining := 0
@@ -936,7 +937,7 @@ func extractAndImport7zPGN(
 	totalImported := 0
 
 	for _, f := range sz.File {
-		if f.FileInfo().IsDir() || !strings.HasSuffix(strings.ToLower(f.Name), ".pgn") {
+		if f.FileInfo().IsDir() || !fileformat.IsPGNPath(f.Name) {
 			continue
 		}
 		remaining := 0
@@ -974,9 +975,9 @@ func extract7zNativeSI4(sevenZipPath string, destDir string) (string, error) {
 	if bsdtarPath, err := exec.LookPath("bsdtar"); err == nil {
 		cmd := exec.Command(bsdtarPath, "-xf", sevenZipPath, "-C", destDir)
 		if err := cmd.Run(); err == nil {
-			matches, _ := filepath.Glob(filepath.Join(destDir, "*.si4"))
+			matches, _ := filepath.Glob(filepath.Join(destDir, fileformat.GlobScidIndex))
 			if len(matches) > 0 {
-				return strings.TrimSuffix(matches[0], ".si4"), nil
+				return fileformat.TrimScidExtensions(matches[0]), nil
 			}
 		}
 	}
@@ -994,7 +995,7 @@ func extract7zNativeSI4(sevenZipPath string, destDir string) (string, error) {
 		}
 		baseName := filepath.Base(f.Name)
 		ext := strings.ToLower(filepath.Ext(baseName))
-		if ext != ".si4" && ext != ".sn4" && ext != ".sg4" {
+		if !fileformat.IsScidComponentExt(ext) {
 			continue
 		}
 		outPath := filepath.Join(destDir, baseName)
@@ -1013,8 +1014,8 @@ func extract7zNativeSI4(sevenZipPath string, destDir string) (string, error) {
 		if copyErr != nil {
 			return "", copyErr
 		}
-		if ext == ".si4" {
-			si4BasePath = strings.TrimSuffix(outPath, ".si4")
+		if ext == fileformat.ExtScidIndex {
+			si4BasePath = fileformat.TrimScidExtensions(outPath)
 		}
 	}
 

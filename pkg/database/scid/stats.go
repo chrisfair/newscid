@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"newscid/pkg/chess"
+	"newscid/pkg/fileformat"
 )
 
 // NameCountPair represents an item and its frequency in a ranking.
@@ -50,9 +51,9 @@ func (db *Database) GetStatistics() (*DatabaseStatistics, error) {
 		TopPlayers:  make([]NameCountPair, 0),
 	}
 
-	siStat, _ := os.Stat(db.BasePath + ".si4")
-	snStat, _ := os.Stat(db.BasePath + ".sn4")
-	sgStat, _ := os.Stat(db.BasePath + ".sg4")
+	siStat, _ := os.Stat(fileformat.ScidIndexPath(db.BasePath))
+	snStat, _ := os.Stat(fileformat.ScidNamesPath(db.BasePath))
+	sgStat, _ := os.Stat(fileformat.ScidGameDataPath(db.BasePath))
 
 	if siStat != nil {
 		stats.FileSizes["si4"] = siStat.Size()

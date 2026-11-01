@@ -18,6 +18,7 @@ import (
 	"newscid/pkg/blundervault"
 	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
+	"newscid/pkg/fileformat"
 	"newscid/pkg/online"
 	"newscid/pkg/persona"
 	"newscid/pkg/playerbot"
@@ -146,11 +147,11 @@ var (
 func preferencesFilePath() string {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
-		return filepath.Join(os.TempDir(), "newscid_preferences.json")
+		return filepath.Join(os.TempDir(), "newscid_"+fileformat.FilePreferencesJSON)
 	}
-	dir := filepath.Join(home, ".newscid")
+	dir := filepath.Join(home, fileformat.LegacyDotDirName)
 	_ = os.MkdirAll(dir, 0o755)
-	return filepath.Join(dir, "preferences.json")
+	return filepath.Join(dir, fileformat.FilePreferencesJSON)
 }
 
 func xdgPreferencesFilePath() string {
@@ -162,19 +163,19 @@ func xdgPreferencesFilePath() string {
 		}
 		cfgDir = filepath.Join(home, ".config")
 	}
-	dir := filepath.Join(cfgDir, "newscid")
+	dir := filepath.Join(cfgDir, fileformat.AppDirName)
 	_ = os.MkdirAll(dir, 0o755)
-	return filepath.Join(dir, "preferences.json")
+	return filepath.Join(dir, fileformat.FilePreferencesJSON)
 }
 
 func workspaceSyncFilePath() string {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
-		return filepath.Join(os.TempDir(), "newscid_workspace_sync.json")
+		return filepath.Join(os.TempDir(), "newscid_"+fileformat.FileWorkspaceSyncJSON)
 	}
-	dir := filepath.Join(home, ".newscid")
+	dir := filepath.Join(home, fileformat.LegacyDotDirName)
 	_ = os.MkdirAll(dir, 0o755)
-	return filepath.Join(dir, "workspace_sync.json")
+	return filepath.Join(dir, fileformat.FileWorkspaceSyncJSON)
 }
 
 func clipbaseDefaultPath() string {
@@ -182,19 +183,13 @@ func clipbaseDefaultPath() string {
 	if err != nil || home == "" {
 		return filepath.Join(os.TempDir(), "Clipbase")
 	}
-	dir := filepath.Join(home, ".local", "share", "newscid", "databases")
+	dir := filepath.Join(home, ".local", "share", fileformat.AppDirName, fileformat.DirDatabases)
 	_ = os.MkdirAll(dir, 0o755)
 	return filepath.Join(dir, "Clipbase")
 }
 
 func normalizeScidBasePath(p string) string {
-	p = strings.TrimSpace(p)
-	for _, ext := range []string{".si4", ".sg4", ".sn4", ".pgn"} {
-		if strings.HasSuffix(strings.ToLower(p), ext) {
-			return p[:len(p)-len(ext)]
-		}
-	}
-	return p
+	return fileformat.TrimDatabaseExtensions(strings.TrimSpace(p))
 }
 
 func defaultAppPreferences() *AppPreferences {
@@ -404,7 +399,7 @@ func (a *App) OpenDefaultDatabase() (*DatabaseInfo, error) {
 // OpenClipbase opens (creating if necessary) the temporary Clipbase scratchpad database.
 func (a *App) OpenClipbase() (*DatabaseInfo, error) {
 	clipPath := clipbaseDefaultPath()
-	if _, err := os.Stat(clipPath + ".si4"); err == nil {
+	if _, err := os.Stat(fileformat.ScidIndexPath(clipPath)); err == nil {
 		return a.OpenDatabase(clipPath)
 	}
 	return a.CreateDatabase(clipPath, "Clipbase (Session Scratchpad & Temporary Filter Base)")
@@ -973,7 +968,7 @@ func (a *App) GetActiveOperation() string {
 // into a new focused Scid database in NewScid's managed databases folder.
 func (a *App) BuildFocusedDatabase(filter scid.SubDatabaseFilter) (*scid.SubDatabaseResult, error) {
 	dataRoot, _ := workstation.DefaultWorkstationDirs()
-	outputDir := filepath.Join(dataRoot, "databases")
+	outputDir := filepath.Join(dataRoot, fileformat.DirDatabases)
 	_ = os.MkdirAll(outputDir, 0o755)
 
 	if filter.ShouldCancel == nil {
@@ -1020,7 +1015,7 @@ func (a *App) BuildFocusedDatabase(filter scid.SubDatabaseFilter) (*scid.SubData
 // Optionally sets the resulting database as the Default Reference Database or Default User Database.
 func (a *App) BuildConsolidatedDatabase(opts scid.ConsolidateDatabaseOptions) (*scid.ConsolidateDatabaseResult, error) {
 	dataRoot, _ := workstation.DefaultWorkstationDirs()
-	outputDir := filepath.Join(dataRoot, "databases")
+	outputDir := filepath.Join(dataRoot, fileformat.DirDatabases)
 	_ = os.MkdirAll(outputDir, 0o755)
 
 	if opts.ShouldCancel == nil {
@@ -1118,7 +1113,7 @@ func (a *App) ConsolidateOnlineCatalogDatabases(
 	setAsReference bool,
 ) (*scid.ConsolidateDatabaseResult, error) {
 	dataRoot, _ := workstation.DefaultWorkstationDirs()
-	outputDir := filepath.Join(dataRoot, "databases")
+	outputDir := filepath.Join(dataRoot, fileformat.DirDatabases)
 	_ = os.MkdirAll(outputDir, 0o755)
 
 	if strings.TrimSpace(targetName) == "" {
@@ -1158,7 +1153,7 @@ func (a *App) ConsolidateOnlineCatalogDatabases(
 		stageName := "online_stage_" + strings.ReplaceAll(strings.ToLower(id), "-", "_")
 		stageBase := filepath.Join(outputDir, stageName)
 		stageDB := scid.NewDatabase()
-		if _, err := os.Stat(stageBase + ".si4"); err == nil {
+		if _, err := os.Stat(fileformat.ScidIndexPath(stageBase)); err == nil {
 			_ = stageDB.Open(stageBase)
 		} else {
 			_ = stageDB.Create(stageBase, "Online Stage: "+id)
@@ -1174,7 +1169,7 @@ func (a *App) ConsolidateOnlineCatalogDatabases(
 		_ = stageDB.Close()
 		if err == nil && res != nil && res.DatabasePath != "" {
 			addSource(res.DatabasePath)
-		} else if _, statErr := os.Stat(stageBase + ".si4"); statErr == nil {
+		} else if _, statErr := os.Stat(fileformat.ScidIndexPath(stageBase)); statErr == nil {
 			addSource(stageBase)
 		}
 	}
@@ -1400,8 +1395,8 @@ func (a *App) FactoryResetNewScid(opts workstation.FactoryResetOptions) (*workst
 	a.syncMgr = online.NewSyncManager(a.profileMgr)
 	a.personaMgr, _ = persona.NewPersonaManager("")
 	a.repMgr = repertoire.NewManager("")
-	a.blunderVault, _ = blundervault.NewVault(filepath.Join(configRoot, "blunder_vault.json"))
-	a.cyclicalMgr, _ = training.NewCyclicalManager(filepath.Join(configRoot, "cyclical_drill.json"))
+	a.blunderVault, _ = blundervault.NewVault(filepath.Join(configRoot, fileformat.FileBlunderVaultJSON))
+	a.cyclicalMgr, _ = training.NewCyclicalManager(filepath.Join(configRoot, fileformat.FileCyclicalDrillJSON))
 	a.mu.Unlock()
 
 	return res, nil
@@ -1448,12 +1443,7 @@ type StandardImportResult struct {
 }
 
 func sanitizeDBFilename(raw string, fallback string) string {
-	s := strings.TrimSpace(raw)
-	for _, ext := range []string{".si4", ".sg4", ".sn4", ".pgn"} {
-		if strings.HasSuffix(strings.ToLower(s), ext) {
-			s = s[:len(s)-len(ext)]
-		}
-	}
+	s := fileformat.TrimDatabaseExtensions(strings.TrimSpace(raw))
 	s = filepath.Base(s)
 	var b strings.Builder
 	for _, r := range s {
@@ -1476,7 +1466,7 @@ func copyScidBundleFiles(srcBase, dstBase string) error {
 	if cleanSrc == cleanDst {
 		return nil
 	}
-	for _, ext := range []string{".si4", ".sg4", ".sn4"} {
+	for _, ext := range fileformat.ScidV4Extensions() {
 		in, err := os.Open(cleanSrc + ext)
 		if err != nil {
 			return fmt.Errorf("opening %s%s: %w", srcBase, ext, err)
@@ -1502,21 +1492,21 @@ func copyScidBundleFiles(srcBase, dstBase string) error {
 func (a *App) EnsurePersonalUserDatabase(openActive bool) (*DatabaseInfo, error) {
 	prefs, _ := a.GetAppPreferences()
 	dataRoot, _ := workstation.DefaultWorkstationDirs()
-	dbDir := filepath.Join(dataRoot, "databases")
+	dbDir := filepath.Join(dataRoot, fileformat.DirDatabases)
 	_ = os.MkdirAll(dbDir, 0o755)
 
 	targetBase := ""
 	if prefs != nil && strings.TrimSpace(prefs.DefaultDatabasePath) != "" {
 		cand := normalizeScidBasePath(prefs.DefaultDatabasePath)
-		if _, err := os.Stat(cand + ".si4"); err == nil {
+		if _, err := os.Stat(fileformat.ScidIndexPath(cand)); err == nil {
 			targetBase = cand
 		}
 	}
 	if targetBase == "" {
-		targetBase = filepath.Join(dbDir, "My_Games")
+		targetBase = filepath.Join(dbDir, fileformat.DefaultMyGamesDBName)
 	}
 
-	if _, err := os.Stat(targetBase + ".si4"); err != nil {
+	if _, err := os.Stat(fileformat.ScidIndexPath(targetBase)); err != nil {
 		db := scid.NewDatabase()
 		if err := db.Create(targetBase, "Personal User Database (My Games, Annotations & Repertoire)"); err != nil {
 			return nil, fmt.Errorf("creating personal user database: %w", err)
@@ -1552,7 +1542,7 @@ func (a *App) ImportStandardDatabase(req StandardImportRequest) (*StandardImport
 	targetDir := strings.TrimSpace(req.TargetDir)
 	if targetDir == "" {
 		dataRoot, _ := workstation.DefaultWorkstationDirs()
-		targetDir = filepath.Join(dataRoot, "databases")
+		targetDir = filepath.Join(dataRoot, fileformat.DirDatabases)
 	}
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		return nil, fmt.Errorf("creating databases directory: %w", err)
@@ -1596,7 +1586,7 @@ func (a *App) ImportStandardDatabase(req StandardImportRequest) (*StandardImport
 		a.mu.Unlock()
 
 		tDB := scid.NewDatabase()
-		if _, err := os.Stat(cleanTarget + ".si4"); err == nil {
+		if _, err := os.Stat(fileformat.ScidIndexPath(cleanTarget)); err == nil {
 			if err := tDB.Open(cleanTarget); err != nil {
 				return nil, fmt.Errorf("opening %s: %w", filepath.Base(cleanTarget), err)
 			}
@@ -1634,7 +1624,7 @@ func (a *App) ImportStandardDatabase(req StandardImportRequest) (*StandardImport
 	// If raw PGN text was provided without a file path, write it to a temporary PGN file for uniform processing
 	effectiveSrc := srcPath
 	if effectiveSrc == "" && pgnText != "" {
-		tmpPGN := filepath.Join(os.TempDir(), fmt.Sprintf("newscid_import_%d.pgn", time.Now().UnixNano()))
+		tmpPGN := filepath.Join(os.TempDir(), fmt.Sprintf("newscid_import_%d%s", time.Now().UnixNano(), fileformat.ExtPGN))
 		if err := os.WriteFile(tmpPGN, []byte(pgnText), 0o644); err != nil {
 			return nil, fmt.Errorf("staging PGN text: %w", err)
 		}
@@ -1642,10 +1632,10 @@ func (a *App) ImportStandardDatabase(req StandardImportRequest) (*StandardImport
 		effectiveSrc = tmpPGN
 	}
 
-	isPGNSource := strings.HasSuffix(strings.ToLower(effectiveSrc), ".pgn")
+	isPGNSource := fileformat.IsPGNPath(effectiveSrc)
 	srcScidBase := normalizeScidBasePath(effectiveSrc)
 	if !isPGNSource {
-		if _, err := os.Stat(srcScidBase + ".si4"); err != nil {
+		if _, err := os.Stat(fileformat.ScidIndexPath(srcScidBase)); err != nil {
 			return nil, fmt.Errorf("source database not found: %s", effectiveSrc)
 		}
 	}
@@ -1658,8 +1648,8 @@ func (a *App) ImportStandardDatabase(req StandardImportRequest) (*StandardImport
 
 		if isPGNSource {
 			// Create or update Original Archive from PGN
-			if _, err := os.Stat(origBase + ".si4"); err == nil {
-				for _, ext := range []string{".si4", ".sg4", ".sn4"} {
+			if _, err := os.Stat(fileformat.ScidIndexPath(origBase)); err == nil {
+				for _, ext := range fileformat.ScidV4Extensions() {
 					_ = os.Remove(origBase + ext)
 				}
 			}
@@ -1772,11 +1762,11 @@ func (a *App) ImportStandardDatabase(req StandardImportRequest) (*StandardImport
 		prefs, _ := a.GetAppPreferences()
 		userBase := ""
 		if strings.TrimSpace(req.UserDBName) != "" {
-			userBase = filepath.Join(targetDir, sanitizeDBFilename(req.UserDBName, "My_Games"))
+			userBase = filepath.Join(targetDir, sanitizeDBFilename(req.UserDBName, fileformat.DefaultMyGamesDBName))
 		} else if prefs != nil && strings.TrimSpace(prefs.DefaultDatabasePath) != "" && req.TargetDir == "" {
 			userBase = normalizeScidBasePath(prefs.DefaultDatabasePath)
 		} else {
-			userBase = filepath.Join(targetDir, "My_Games")
+			userBase = filepath.Join(targetDir, fileformat.DefaultMyGamesDBName)
 		}
 		userDesc := "Personal User Database (My Games, Annotations & Repertoire)"
 
@@ -1963,7 +1953,7 @@ func (a *App) GetUserProfileStatus() (*UserProfileSetupResult, error) {
 	homeGames := 0
 	if homePath != "" {
 		homeName = filepath.Base(homePath)
-		if _, err := os.Stat(homePath + ".si4"); err == nil {
+		if _, err := os.Stat(fileformat.ScidIndexPath(homePath)); err == nil {
 			meta := scid.InspectDatabase(homePath, "")
 			homeGames = meta.NumGames
 		}
@@ -1974,7 +1964,7 @@ func (a *App) GetUserProfileStatus() (*UserProfileSetupResult, error) {
 	refGames := 0
 	if refPath != "" {
 		refName = filepath.Base(refPath)
-		if _, err := os.Stat(refPath + ".si4"); err == nil {
+		if _, err := os.Stat(fileformat.ScidIndexPath(refPath)); err == nil {
 			meta := scid.InspectDatabase(refPath, "")
 			refGames = meta.NumGames
 		}
@@ -2045,18 +2035,18 @@ func (a *App) SaveUserProfileSetup(req UserProfileSetupRequest) (*UserProfileSet
 
 	// Ensure Home Database (defaulting to My_Games) if requested or if none configured
 	dataRoot, _ := workstation.DefaultWorkstationDirs()
-	dbDir := filepath.Join(dataRoot, "databases")
+	dbDir := filepath.Join(dataRoot, fileformat.DirDatabases)
 	_ = os.MkdirAll(dbDir, 0o755)
 
 	homeBase := normalizeScidBasePath(prefs.DefaultDatabasePath)
 	if strings.TrimSpace(req.HomeDatabaseName) != "" {
-		homeBase = filepath.Join(dbDir, sanitizeDBFilename(req.HomeDatabaseName, "My_Games"))
+		homeBase = filepath.Join(dbDir, sanitizeDBFilename(req.HomeDatabaseName, fileformat.DefaultMyGamesDBName))
 	} else if homeBase == "" && (req.EnsureHomeDB || displayName != "") {
-		homeBase = filepath.Join(dbDir, "My_Games")
+		homeBase = filepath.Join(dbDir, fileformat.DefaultMyGamesDBName)
 	}
 
 	if homeBase != "" {
-		if _, err := os.Stat(homeBase + ".si4"); err != nil {
+		if _, err := os.Stat(fileformat.ScidIndexPath(homeBase)); err != nil {
 			db := scid.NewDatabase()
 			desc := "Personal User Database (My Games, Annotations & Repertoire)"
 			if displayName != "" {
@@ -2317,11 +2307,11 @@ func (a *App) BuildPersonaOpeningBook(personaID string, targetColor string, maxD
 	}
 
 	dataRoot, _ := workstation.DefaultWorkstationDirs()
-	booksDir := filepath.Join(dataRoot, "books", "opening")
+	booksDir := filepath.Join(dataRoot, fileformat.DirBooks, fileformat.DirOpeningBooks)
 	_ = os.MkdirAll(booksDir, 0o755)
 
 	slug := sanitizeDBFilename(p.DisplayName, "Persona")
-	targetPath := filepath.Join(booksDir, fmt.Sprintf("%s_Book.bin", slug))
+	targetPath := filepath.Join(booksDir, fmt.Sprintf("%s_Book%s", slug, fileformat.ExtPolyglotBook))
 
 	ids := append([]string{p.DisplayName}, p.Identifiers...)
 	count, err := persona.CompilePersonaPolyglotBook(allGames, ids, targetColor, maxDepth, targetPath)
@@ -2368,11 +2358,11 @@ func (a *App) CompileRepertoireToPolyglotBook(repID string, setAsFocusBook bool)
 	}
 
 	dataRoot, _ := workstation.DefaultWorkstationDirs()
-	booksDir := filepath.Join(dataRoot, "books", "opening")
+	booksDir := filepath.Join(dataRoot, fileformat.DirBooks, fileformat.DirOpeningBooks)
 	_ = os.MkdirAll(booksDir, 0o755)
 
 	slug := sanitizeDBFilename(rep.Name, rep.ID)
-	targetPath := filepath.Join(booksDir, fmt.Sprintf("Repertoire_%s.bin", slug))
+	targetPath := filepath.Join(booksDir, fmt.Sprintf("Repertoire_%s%s", slug, fileformat.ExtPolyglotBook))
 
 	count, err := a.repMgr.CompileToPolyglotBook(repID, targetPath)
 	if err != nil {

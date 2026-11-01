@@ -8,6 +8,7 @@ import (
 
 	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
+	"newscid/pkg/fileformat"
 )
 
 // SyncResult details the outcome of an online database sync operation.
@@ -217,10 +218,10 @@ func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *sci
 	case TargetDedicatedBase, TargetBlendedBase:
 		if strings.TrimSpace(opts.DedicatedPath) != "" {
 			cleanPath := strings.TrimSpace(opts.DedicatedPath)
-			base := strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(cleanPath, ".si4"), ".sn4"), ".sg4")
-			if activeDB != nil && activeDB.IsOpen && strings.TrimSuffix(activeDB.BasePath, ".si4") == base {
+			base := fileformat.TrimScidExtensions(cleanPath)
+			if activeDB != nil && activeDB.IsOpen && fileformat.TrimScidExtensions(activeDB.BasePath) == base {
 				existingSigs = activeDB.BuildGameSignatureSet()
-			} else if _, err := os.Stat(base + ".si4"); err == nil {
+			} else if _, err := os.Stat(fileformat.ScidIndexPath(base)); err == nil {
 				tmpDB := scid.NewDatabase()
 				if err := tmpDB.Open(base); err == nil {
 					existingSigs = tmpDB.BuildGameSignatureSet()
@@ -327,11 +328,9 @@ func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *sci
 			return nil, fmt.Errorf("dedicated database path must be specified")
 		}
 		cleanPath := strings.TrimSpace(opts.DedicatedPath)
-		base := strings.TrimSuffix(cleanPath, ".si4")
-		base = strings.TrimSuffix(base, ".sn4")
-		base = strings.TrimSuffix(base, ".sg4")
+		base := fileformat.TrimScidExtensions(cleanPath)
 
-		if activeDB != nil && activeDB.IsOpen && strings.TrimSuffix(activeDB.BasePath, ".si4") == base {
+		if activeDB != nil && activeDB.IsOpen && fileformat.TrimScidExtensions(activeDB.BasePath) == base {
 			if err := importIntoDB(activeDB, true); err != nil {
 				return nil, fmt.Errorf("importing to dedicated database: %w", err)
 			}
@@ -403,12 +402,10 @@ func openOrCreateDatabase(path string, desc string) (*scid.Database, error) {
 	if cleanPath == "" {
 		return nil, fmt.Errorf("database path is empty")
 	}
-	base := strings.TrimSuffix(cleanPath, ".si4")
-	base = strings.TrimSuffix(base, ".sn4")
-	base = strings.TrimSuffix(base, ".sg4")
+	base := fileformat.TrimScidExtensions(cleanPath)
 
 	db := scid.NewDatabase()
-	if _, err := os.Stat(base + ".si4"); os.IsNotExist(err) {
+	if _, err := os.Stat(fileformat.ScidIndexPath(base)); os.IsNotExist(err) {
 		if err := db.Create(base, desc); err != nil {
 			return nil, fmt.Errorf("creating database %s: %w", base, err)
 		}

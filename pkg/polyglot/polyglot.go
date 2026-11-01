@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"newscid/pkg/chess"
+	"newscid/pkg/fileformat"
 )
 
 // HashBoard calculates the standard 64-bit Polyglot Zobrist hash of a chess board.
@@ -419,13 +420,13 @@ func WriteBook(path string, entries []BookEntry) error {
 // DiscoverBooks looks for opening books (.bin) across standard Scid vs PC and user directories.
 func DiscoverBooks(extraDirs ...string) []string {
 	dirs := []string{
-		filepath.Join(os.Getenv("HOME"), ".local", "share", "newscid", "books", "opening"),
-		filepath.Join(os.Getenv("HOME"), ".local", "share", "newscid", "books"),
+		filepath.Join(os.Getenv("HOME"), ".local", "share", fileformat.AppDirName, fileformat.DirBooks, fileformat.DirOpeningBooks),
+		filepath.Join(os.Getenv("HOME"), ".local", "share", fileformat.AppDirName, fileformat.DirBooks),
 		"/usr/share/scid/books",
 		"/usr/share/games/scid/books",
 		"/usr/local/share/scid/books",
-		filepath.Join(os.Getenv("HOME"), ".scidvspc", "books"),
-		"books",
+		filepath.Join(os.Getenv("HOME"), fileformat.LegacyScidVsPCDir, fileformat.DirBooks),
+		fileformat.DirBooks,
 	}
 	dirs = append(dirs, extraDirs...)
 
@@ -441,7 +442,7 @@ func DiscoverBooks(extraDirs ...string) []string {
 			continue
 		}
 		for _, e := range entries {
-			if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".bin") {
+			if !e.IsDir() && fileformat.IsPolyglotBookPath(e.Name()) {
 				full := filepath.Join(d, e.Name())
 				if !seen[full] {
 					seen[full] = true

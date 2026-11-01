@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"newscid/pkg/chess"
+	"newscid/pkg/fileformat"
 	"newscid/pkg/polyglot"
 )
 
@@ -101,7 +102,7 @@ type Manager struct {
 func NewManager(storageDir string) *Manager {
 	if storageDir == "" {
 		home, _ := os.UserHomeDir()
-		storageDir = filepath.Join(home, ".newscid", "repertoires")
+		storageDir = filepath.Join(home, fileformat.LegacyDotDirName, fileformat.DirRepertoires)
 	}
 	_ = os.MkdirAll(storageDir, 0755)
 
@@ -120,7 +121,7 @@ func (m *Manager) loadAll() {
 		return
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
+		if !entry.IsDir() && fileformat.IsJSONPath(entry.Name()) {
 			path := filepath.Join(m.dir, entry.Name())
 			data, err := os.ReadFile(path)
 			if err != nil {
@@ -340,7 +341,7 @@ func (m *Manager) saveRepertoireLocked(rep *Repertoire) error {
 	m.inMem[rep.ID] = rep
 
 	data, _ := json.MarshalIndent(rep, "", "  ")
-	filePath := filepath.Join(m.dir, rep.ID+".json")
+	filePath := filepath.Join(m.dir, rep.ID+fileformat.ExtJSON)
 	return os.WriteFile(filePath, data, 0644)
 }
 
@@ -350,7 +351,7 @@ func (m *Manager) DeleteRepertoire(id string) error {
 	defer m.mu.Unlock()
 
 	delete(m.inMem, id)
-	filePath := filepath.Join(m.dir, id+".json")
+	filePath := filepath.Join(m.dir, id+fileformat.ExtJSON)
 	_ = os.Remove(filePath)
 	return nil
 }

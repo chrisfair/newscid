@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"newscid/pkg/fileformat"
 )
 
 // DuplicateCriteria specifies rules for identifying duplicate games.
@@ -35,7 +37,7 @@ func (db *Database) FindDuplicates(criteria DuplicateCriteria) ([]DuplicateGroup
 	}
 
 	groupsMap := make(map[string][]int)
-	sg4Path := db.BasePath + ".sg4"
+	sg4Path := fileformat.ScidGameDataPath(db.BasePath)
 
 	var sgFile *os.File
 	var err error
@@ -129,7 +131,7 @@ func (db *Database) DeleteDuplicates(criteria DuplicateCriteria) (int, error) {
 	defer db.mu.Unlock()
 
 	deletedCount := 0
-	si4Path := db.BasePath + ".si4"
+	si4Path := fileformat.ScidIndexPath(db.BasePath)
 
 	fSi, err := os.OpenFile(si4Path, os.O_RDWR, 0644)
 	if err != nil {

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"newscid/pkg/fileformat"
 )
 
 // CompactStats holds metrics about a database compaction operation.
@@ -26,8 +28,8 @@ func (db *Database) Compact() (*CompactStats, error) {
 		return nil, fmt.Errorf("database not open")
 	}
 
-	si4Path := db.BasePath + ".si4"
-	sg4Path := db.BasePath + ".sg4"
+	si4Path := fileformat.ScidIndexPath(db.BasePath)
+	sg4Path := fileformat.ScidGameDataPath(db.BasePath)
 
 	// Stat original files
 	sgStat, err := os.Stat(sg4Path)
@@ -56,8 +58,8 @@ func (db *Database) Compact() (*CompactStats, error) {
 		}, nil
 	}
 
-	tmpSgPath := db.BasePath + ".sg4.tmp"
-	tmpSiPath := db.BasePath + ".si4.tmp"
+	tmpSgPath := db.BasePath + fileformat.ExtScidGameDataTemp
+	tmpSiPath := db.BasePath + fileformat.ExtScidIndexTemp
 
 	// Open original sg4 for reading
 	origSg, err := os.Open(sg4Path)

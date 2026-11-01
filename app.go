@@ -28,6 +28,7 @@ import (
 	"newscid/pkg/epd"
 	"newscid/pkg/explainer"
 	"newscid/pkg/fairplay"
+	"newscid/pkg/fileformat"
 	"newscid/pkg/gameexport"
 	"newscid/pkg/imbalance"
 	"newscid/pkg/online"
@@ -138,21 +139,21 @@ type App struct {
 func NewApp() *App {
 	classifier := eco.NewClassifier()
 	// Attempt to load system scid.eco if available
-	if _, err := os.Stat("/usr/share/scid/data/scid.eco"); err == nil {
-		_ = classifier.LoadFromFile("/usr/share/scid/data/scid.eco")
+	if _, err := os.Stat(fileformat.SystemScidECOPath); err == nil {
+		_ = classifier.LoadFromFile(fileformat.SystemScidECOPath)
 	}
 
 	profileMgr, _ := online.NewProfileManager("")
 	personaMgr, _ := persona.NewPersonaManager("")
 
 	configDir, _ := os.UserConfigDir()
-	vaultPath := filepath.Join(configDir, "newscid", "blunder_vault.json")
+	vaultPath := filepath.Join(configDir, fileformat.AppDirName, fileformat.FileBlunderVaultJSON)
 	bVault, _ := blundervault.NewVault(vaultPath)
-	supportPath := filepath.Join(configDir, "newscid", "support.json")
+	supportPath := filepath.Join(configDir, fileformat.AppDirName, fileformat.FileSupportJSON)
 	supMgr, _ := support.NewManager(supportPath)
-	cyclicalPath := filepath.Join(configDir, "newscid", "cyclical_drill.json")
+	cyclicalPath := filepath.Join(configDir, fileformat.AppDirName, fileformat.FileCyclicalDrillJSON)
 	cycMgr, _ := training.NewCyclicalManager(cyclicalPath)
-	coachPath := filepath.Join(configDir, "newscid", "adaptive_coach.json")
+	coachPath := filepath.Join(configDir, fileformat.AppDirName, fileformat.FileAdaptiveCoachJSON)
 	coachMgr, _ := training.NewAdaptiveCoachManager(coachPath)
 
 	return &App{
@@ -310,7 +311,7 @@ func (a *App) OpenDatabase(path string) (*DatabaseInfo, error) {
 	defer a.mu.Unlock()
 
 	// If path is a PGN file, convert/cache into Scid DB
-	if strings.HasSuffix(strings.ToLower(path), ".pgn") {
+	if fileformat.IsPGNPath(path) {
 		content, err := os.ReadFile(path)
 		if err != nil {
 			return nil, err
@@ -319,10 +320,10 @@ func (a *App) OpenDatabase(path string) (*DatabaseInfo, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse PGN: %w", err)
 		}
-		tmpBase := filepath.Join(os.TempDir(), "newscid_pgn_"+strings.TrimSuffix(filepath.Base(path), ".pgn"))
-		_ = os.Remove(tmpBase + ".si4")
-		_ = os.Remove(tmpBase + ".sg4")
-		_ = os.Remove(tmpBase + ".sn4")
+		tmpBase := filepath.Join(os.TempDir(), "newscid_pgn_"+fileformat.TrimDatabaseExtensions(filepath.Base(path)))
+		for _, ext := range fileformat.ScidV4Extensions() {
+			_ = os.Remove(tmpBase + ext)
+		}
 		if err := a.db.Create(tmpBase, "Imported from "+filepath.Base(path)); err != nil {
 			return nil, err
 		}
@@ -613,7 +614,7 @@ func (a *App) OpenPGNFileDialog() (string, error) {
 	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "Select PGN File to Import",
 		Filters: []runtime.FileFilter{
-			{DisplayName: "PGN Files (*.pgn)", Pattern: "*.pgn"},
+			{DisplayName: "PGN Files (" + fileformat.GlobPGN + ")", Pattern: fileformat.GlobPGN},
 			{DisplayName: "All Files (*.*)", Pattern: "*.*"},
 		},
 	})
@@ -623,8 +624,8 @@ func (a *App) OpenFileDialog() (string, error) {
 	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "Open Chess Database",
 		Filters: []runtime.FileFilter{
-			{DisplayName: "SCID Databases (*.si4)", Pattern: "*.si4"},
-			{DisplayName: "PGN Databases (*.pgn)", Pattern: "*.pgn"},
+			{DisplayName: "SCID Databases (" + fileformat.GlobScidIndex + ")", Pattern: fileformat.GlobScidIndex},
+			{DisplayName: "PGN Databases (" + fileformat.GlobPGN + ")", Pattern: fileformat.GlobPGN},
 			{DisplayName: "All Files (*.*)", Pattern: "*.*"},
 		},
 	})
@@ -635,7 +636,7 @@ func (a *App) SaveFileDialog(defaultName string) (string, error) {
 		Title:           "Create Chess Database",
 		DefaultFilename: defaultName,
 		Filters: []runtime.FileFilter{
-			{DisplayName: "SCID Database (*.si4)", Pattern: "*.si4"},
+			{DisplayName: "SCID Database (" + fileformat.GlobScidIndex + ")", Pattern: fileformat.GlobScidIndex},
 		},
 	})
 }
@@ -740,11 +741,11 @@ func (a *App) GetOpeningTree(fen string) (*tree.TreeResult, error) {
 	if len(books) > 0 {
 		preferredBook := books[0]
 		for _, b := range books {
-			if strings.Contains(b, "Performance.bin") {
+			if strings.Contains(b, fileformat.BookPerformanceBin) {
 				preferredBook = b
 				break
 			}
-			if strings.Contains(b, "Elo2400.bin") {
+			if strings.Contains(b, fileformat.BookElo2400Bin) {
 				preferredBook = b
 			}
 		}
@@ -1143,7 +1144,7 @@ func (a *App) GetScidSystemBases() []string {
 		"/usr/share/scid/bases/endings",
 	}
 	for _, c := range candidates {
-		if _, err := os.Stat(c + ".si4"); err == nil {
+		if _, err := os.Stat(c + fileformat.ExtScidIndex); err == nil {
 			found = append(found, c)
 		}
 	}
@@ -1169,9 +1170,7 @@ func (a *App) LoadTacticsPuzzle(basePath string, puzzleNum int) (*TacticsPuzzle,
 	if basePath == "" {
 		basePath = "/usr/share/scid/bases/tactics"
 	}
-	basePath = strings.TrimSuffix(basePath, ".si4")
-	basePath = strings.TrimSuffix(basePath, ".sg4")
-	basePath = strings.TrimSuffix(basePath, ".sn4")
+	basePath = fileformat.TrimScidExtensions(basePath)
 
 	db := scid.NewDatabase()
 	if err := db.Open(basePath); err != nil {
@@ -1257,7 +1256,7 @@ func (a *App) GetProgressivePuzzle(level int) (*TacticsPuzzle, error) {
 		base = "/usr/share/scid/bases/endings"
 	}
 
-	if _, err := os.Stat(base + ".si4"); err != nil {
+	if _, err := os.Stat(base + fileformat.ExtScidIndex); err != nil {
 		base = "/usr/share/scid/bases/tactics"
 	}
 
@@ -1362,11 +1361,11 @@ func (a *App) ResetRepertoireMastery(repID string) (*repertoire.RepertoireMaster
 // CompileRepertoireToPolyglot compiles a repertoire into a Polyglot (.bin) opening book and links it to the user profile if applicable.
 func (a *App) CompileRepertoireToPolyglot(repID string) (string, error) {
 	home, _ := os.UserHomeDir()
-	bookDir := filepath.Join(home, ".local", "share", "newscid", "books", "opening")
+	bookDir := filepath.Join(home, ".local", "share", fileformat.AppDirName, fileformat.DirBooks, fileformat.DirOpeningBooks)
 	if err := os.MkdirAll(bookDir, 0755); err != nil {
 		return "", err
 	}
-	targetPath := filepath.Join(bookDir, repID+".bin")
+	targetPath := filepath.Join(bookDir, repID+fileformat.ExtPolyglotBook)
 	count, err := a.repMgr.CompileToPolyglotBook(repID, targetPath)
 	if err != nil {
 		return "", err
@@ -1647,7 +1646,7 @@ func (a *App) SyncOnlineProfile(profileID string) (*online.SyncResult, error) {
 		}
 		targetDB = a.db
 	} else {
-		basePath := strings.TrimSuffix(targetPath, ".si4")
+		basePath := fileformat.TrimScidExtensions(targetPath)
 		targetPolicy := a.resolveDatabaseWritePolicy(basePath, 0, "")
 		if !targetPolicy.AllowsOnlineSync() {
 			return nil, fmt.Errorf("database %q is locked (%s); unlock or switch to Sync-Only", filepath.Base(basePath), targetPolicy.String())
@@ -1658,7 +1657,7 @@ func (a *App) SyncOnlineProfile(profileID string) (*online.SyncResult, error) {
 			targetDB = scid.NewDatabase()
 			shouldCloseTarget = true
 
-			if _, err := os.Stat(basePath + ".si4"); err == nil {
+			if _, err := os.Stat(basePath + fileformat.ExtScidIndex); err == nil {
 				if err := targetDB.Open(basePath); err != nil {
 					return nil, fmt.Errorf("failed to open target database: %w", err)
 				}
@@ -3133,7 +3132,7 @@ func (a *App) ExportAntiPersonaPolyglotBook(report *persona.AntiPersonaReport, f
 
 		slug := strings.ReplaceAll(report.DisplayName, " ", "_")
 		slug = strings.ReplaceAll(slug, ",", "")
-		target = filepath.Join(booksDir, fmt.Sprintf("Anti_%s.bin", slug))
+		target = filepath.Join(booksDir, fmt.Sprintf("Anti_%s%s", slug, fileformat.ExtPolyglotBook))
 	}
 
 	if err := persona.SaveAntiPersonaBook(report, target); err != nil {
@@ -3168,12 +3167,12 @@ func (a *App) ExportAntiPersonaPGN(report *persona.AntiPersonaReport, filePath s
 		if err != nil {
 			homeDir = os.TempDir()
 		}
-		repDir := filepath.Join(homeDir, ".local", "share", "newscid", "repertoires")
+		repDir := filepath.Join(homeDir, ".local", "share", fileformat.AppDirName, fileformat.DirRepertoires)
 		_ = os.MkdirAll(repDir, 0755)
 
 		slug := strings.ReplaceAll(report.DisplayName, " ", "_")
 		slug = strings.ReplaceAll(slug, ",", "")
-		target = filepath.Join(repDir, fmt.Sprintf("Anti_%s.pgn", slug))
+		target = filepath.Join(repDir, fmt.Sprintf("Anti_%s%s", slug, fileformat.ExtPGN))
 	}
 
 	dir := filepath.Dir(target)
@@ -3194,7 +3193,7 @@ func (a *App) SaveBookFileDialog(defaultFilename string) (string, error) {
 		Title:           "Save Polyglot Opening Book",
 		DefaultFilename: defaultFilename,
 		Filters: []runtime.FileFilter{
-			{DisplayName: "Polyglot Opening Book (*.bin)", Pattern: "*.bin"},
+			{DisplayName: "Polyglot Opening Book (" + fileformat.GlobPolyglotBook + ")", Pattern: fileformat.GlobPolyglotBook},
 		},
 	})
 }
@@ -3205,7 +3204,7 @@ func (a *App) SavePGNFileDialog(defaultFilename string) (string, error) {
 		Title:           "Save Repertoire PGN",
 		DefaultFilename: defaultFilename,
 		Filters: []runtime.FileFilter{
-			{DisplayName: "PGN Chess Repertoire (*.pgn)", Pattern: "*.pgn"},
+			{DisplayName: "PGN Chess Repertoire (" + fileformat.GlobPGN + ")", Pattern: fileformat.GlobPGN},
 		},
 	})
 }
@@ -3455,7 +3454,7 @@ func (a *App) FetchLichessDatabaseFeed(feedType string, limit int) ([]string, er
 func (a *App) ImportMegaDatabase(opts online.MegaImportOptions) (*online.MegaImportResult, error) {
 	client := online.NewMegaDatabaseClient()
 	home, _ := os.UserHomeDir()
-	userDBDir := filepath.Join(home, ".local", "share", "newscid", "databases")
+	userDBDir := filepath.Join(home, ".local", "share", fileformat.AppDirName, fileformat.DirDatabases)
 	_ = os.MkdirAll(userDBDir, 0o755)
 
 	// Determine whether we need to create/open a new database first
@@ -3478,9 +3477,9 @@ func (a *App) ImportMegaDatabase(opts online.MegaImportOptions) (*online.MegaImp
 		}
 		if newDBName != "" {
 			cleanBase := filepath.Base(newDBName)
-			cleanBase = strings.TrimSuffix(cleanBase, ".si4")
+			cleanBase = fileformat.TrimScidExtensions(cleanBase)
 			newDBPath := filepath.Join(userDBDir, cleanBase)
-			if _, err := os.Stat(newDBPath + ".si4"); err == nil {
+			if _, err := os.Stat(newDBPath + fileformat.ExtScidIndex); err == nil {
 				if _, err := a.OpenDatabase(newDBPath); err != nil {
 					return nil, fmt.Errorf("opening database %s: %w", newDBPath, err)
 				}
@@ -3554,11 +3553,11 @@ func (a *App) DownloadAndAnalyzePlayerFairPlay(platform string, username string,
 
 	if !isOpen {
 		home, _ := os.UserHomeDir()
-		userDBDir := filepath.Join(home, ".local", "share", "newscid", "databases")
+		userDBDir := filepath.Join(home, ".local", "share", fileformat.AppDirName, fileformat.DirDatabases)
 		_ = os.MkdirAll(userDBDir, 0o755)
 		safeName := "fairplay_" + strings.ToLower(regexp.MustCompile(`[^a-zA-Z0-9_-]`).ReplaceAllString(user, "_"))
 		dbPath := filepath.Join(userDBDir, safeName)
-		if _, err := os.Stat(dbPath + ".si4"); err == nil {
+		if _, err := os.Stat(dbPath + fileformat.ExtScidIndex); err == nil {
 			if _, err := a.OpenDatabase(dbPath); err != nil {
 				return nil, fmt.Errorf("opening fair-play database: %w", err)
 			}
@@ -3658,7 +3657,7 @@ func (a *App) DownloadAndAnalyzeHardMoveBenchmark(
 func (a *App) GetCyclicalDashboard() training.CyclicalDashboard {
 	if a.cyclicalMgr == nil {
 		configDir, _ := os.UserConfigDir()
-		a.cyclicalMgr, _ = training.NewCyclicalManager(filepath.Join(configDir, "newscid", "cyclical_drill.json"))
+		a.cyclicalMgr, _ = training.NewCyclicalManager(filepath.Join(configDir, fileformat.AppDirName, fileformat.FileCyclicalDrillJSON))
 	}
 	return a.cyclicalMgr.GetDashboard()
 }
@@ -3672,7 +3671,7 @@ func (a *App) GetLichessThemesCatalog() []training.LichessThemeInfo {
 func (a *App) CreateCyclicalDrillSet(name string, playerOrPersonaID string, themeFilter []string, setSize int) (*training.CycleSet, error) {
 	if a.cyclicalMgr == nil {
 		configDir, _ := os.UserConfigDir()
-		a.cyclicalMgr, _ = training.NewCyclicalManager(filepath.Join(configDir, "newscid", "cyclical_drill.json"))
+		a.cyclicalMgr, _ = training.NewCyclicalManager(filepath.Join(configDir, fileformat.AppDirName, fileformat.FileCyclicalDrillJSON))
 	}
 
 	resolvedPlayer := strings.TrimSpace(playerOrPersonaID)
@@ -3784,7 +3783,7 @@ type AdaptiveCoachRequest struct {
 func (a *App) ensureCoachMgr() *training.AdaptiveCoachManager {
 	if a.coachMgr == nil {
 		configDir, _ := os.UserConfigDir()
-		a.coachMgr, _ = training.NewAdaptiveCoachManager(filepath.Join(configDir, "newscid", "adaptive_coach.json"))
+		a.coachMgr, _ = training.NewAdaptiveCoachManager(filepath.Join(configDir, fileformat.AppDirName, fileformat.FileAdaptiveCoachJSON))
 	}
 	return a.coachMgr
 }

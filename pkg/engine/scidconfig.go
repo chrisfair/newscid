@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"newscid/pkg/fileformat"
 )
 
 // EngineConfig represents a configured chess engine discovered from Scid or system.
@@ -133,7 +135,7 @@ func DiscoverScidEngines() []EngineConfig {
 	home, _ := os.UserHomeDir()
 	var configFiles []string
 	if home != "" {
-		managedEngDir := filepath.Join(home, ".local", "share", "newscid", "engines")
+		managedEngDir := filepath.Join(home, ".local", "share", fileformat.AppDirName, fileformat.DirEngines)
 		if entries, err := os.ReadDir(managedEngDir); err == nil {
 			for _, e := range entries {
 				if e.IsDir() {
@@ -153,8 +155,8 @@ func DiscoverScidEngines() []EngineConfig {
 			}
 		}
 		configFiles = append(configFiles,
-			filepath.Join(home, ".scidvspc", "config", "engines.dat"),
-			filepath.Join(home, ".scid5.0", "config", "engines.dat"),
+			filepath.Join(home, fileformat.LegacyScidVsPCDir, "config", fileformat.FileScidEnginesDat),
+			filepath.Join(home, fileformat.LegacyScid5Dir, "config", fileformat.FileScidEnginesDat),
 		)
 	}
 

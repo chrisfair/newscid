@@ -5,6 +5,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	"newscid/pkg/fileformat"
 )
 
 // SortField defines the attribute used to order games in a database.
@@ -194,8 +196,8 @@ func (db *Database) Sort(criteria SortCriteria) error {
 	})
 
 	// Rewrite .si4 index file
-	si4Path := db.BasePath + ".si4"
-	tmpSiPath := db.BasePath + ".si4.tmp"
+	si4Path := fileformat.ScidIndexPath(db.BasePath)
+	tmpSiPath := db.BasePath + fileformat.ExtScidIndexTemp
 
 	fSi, err := os.Create(tmpSiPath)
 	if err != nil {

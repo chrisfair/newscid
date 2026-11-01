@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"newscid/pkg/fileformat"
 )
 
 // DatabaseTargetMode specifies where downloaded player games should be merged.
@@ -51,7 +53,7 @@ func DefaultConfigPath() string {
 	if err != nil {
 		configDir = os.TempDir()
 	}
-	return filepath.Join(configDir, "newscid", "sync_profiles.json")
+	return filepath.Join(configDir, fileformat.AppDirName, fileformat.FileSyncProfilesJSON)
 }
 
 // NewProfileManager creates a profile manager persisting data at configPath.

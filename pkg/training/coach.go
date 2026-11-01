@@ -13,6 +13,7 @@ import (
 
 	"newscid/pkg/chess"
 	"newscid/pkg/explainer"
+	"newscid/pkg/fileformat"
 )
 
 // ThemeWeaknessStat tracks the user's historical mistakes in online/database games
@@ -134,7 +135,7 @@ func NewAdaptiveCoachManager(filePath string) (*AdaptiveCoachManager, error) {
 		if err != nil {
 			cfgDir = os.TempDir()
 		}
-		filePath = filepath.Join(cfgDir, "newscid", "adaptive_coach.json")
+		filePath = filepath.Join(cfgDir, fileformat.AppDirName, fileformat.FileAdaptiveCoachJSON)
 	}
 
 	mgr := &AdaptiveCoachManager{

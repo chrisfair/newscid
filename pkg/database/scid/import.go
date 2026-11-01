@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"newscid/pkg/chess"
+	"newscid/pkg/fileformat"
 )
 
 // ImportStats contains the summary of a batch PGN import.
@@ -66,8 +67,8 @@ func (db *Database) ImportGames(games []*chess.Game) (*ImportStats, error) {
 		return stats, nil
 	}
 
-	sg4Path := db.BasePath + ".sg4"
-	si4Path := db.BasePath + ".si4"
+	sg4Path := fileformat.ScidGameDataPath(db.BasePath)
+	si4Path := fileformat.ScidIndexPath(db.BasePath)
 
 	// Open .sg4 for appending
 	fSg, err := os.OpenFile(sg4Path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
@@ -162,7 +163,7 @@ func (db *Database) ImportGames(games []*chess.Game) (*ImportStats, error) {
 	}
 
 	// Save updated NameBase to .sn4
-	sn4Path := db.BasePath + ".sn4"
+	sn4Path := fileformat.ScidNamesPath(db.BasePath)
 	if err := db.Names.WriteToFile(sn4Path); err != nil {
 		return nil, fmt.Errorf("updating namebase: %w", err)
 	}
@@ -381,7 +382,7 @@ func (db *Database) MergeFromDatabasesWithCancel(
 
 	start := time.Now()
 	existingSigs := db.BuildGameSignatureSet()
-	targetClean := strings.TrimSuffix(strings.TrimSuffix(db.BasePath, ".si4"), ".pgn")
+	targetClean := fileformat.TrimDatabaseExtensions(db.BasePath)
 
 	res := &MergeStats{
 		SourceNames: make([]string, 0, len(sourcePaths)),
@@ -390,8 +391,8 @@ func (db *Database) MergeFromDatabasesWithCancel(
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	sg4Path := db.BasePath + ".sg4"
-	si4Path := db.BasePath + ".si4"
+	sg4Path := fileformat.ScidGameDataPath(db.BasePath)
+	si4Path := fileformat.ScidIndexPath(db.BasePath)
 
 	fSg, err := os.OpenFile(sg4Path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
 	if err != nil {
@@ -424,13 +425,13 @@ func (db *Database) MergeFromDatabasesWithCancel(
 		if srcClean == "" {
 			continue
 		}
-		srcBase := strings.TrimSuffix(strings.TrimSuffix(srcClean, ".si4"), ".si3")
+		srcBase := fileformat.TrimScidExtensions(srcClean)
 		if srcBase == targetClean {
 			continue // Never merge a database into itself
 		}
 
 		// Case 1: PGN file source
-		if strings.HasSuffix(strings.ToLower(srcClean), ".pgn") {
+		if fileformat.IsPGNPath(srcClean) {
 			fPgn, err := os.Open(srcClean)
 			if err != nil {
 				res.Errors++
@@ -521,7 +522,7 @@ func (db *Database) MergeFromDatabasesWithCancel(
 		}
 
 		// Case 2: Scid .si4 database source (zero move-tree re-encoding!)
-		if _, err := os.Stat(srcBase + ".si4"); err != nil {
+		if _, err := os.Stat(fileformat.ScidIndexPath(srcBase)); err != nil {
 			continue
 		}
 		srcDB := NewDatabase()
@@ -530,7 +531,7 @@ func (db *Database) MergeFromDatabasesWithCancel(
 			continue
 		}
 
-		srcSg, err := os.Open(srcBase + ".sg4")
+		srcSg, err := os.Open(fileformat.ScidGameDataPath(srcBase))
 		if err != nil {
 			_ = srcDB.Close()
 			res.Errors++
@@ -629,7 +630,7 @@ func (db *Database) MergeFromDatabasesWithCancel(
 			db.Header.NumGames = uint32(len(db.Entries))
 			_ = WriteIndexHeader(fSi, db.Header)
 		}
-		_ = db.Names.WriteToFile(db.BasePath + ".sn4")
+		_ = db.Names.WriteToFile(fileformat.ScidNamesPath(db.BasePath))
 	}
 
 	res.TargetTotalGames = len(db.Entries)

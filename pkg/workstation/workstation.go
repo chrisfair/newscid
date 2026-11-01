@@ -11,6 +11,7 @@ import (
 	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
 	"newscid/pkg/fairplay"
+	"newscid/pkg/fileformat"
 	"newscid/pkg/online"
 	"newscid/pkg/persona"
 	"newscid/pkg/scout"
@@ -47,19 +48,19 @@ const (
 
 // openOrCreateScidDB opens an existing .si4 database or creates a new one if createIfMissing is true.
 func openOrCreateScidDB(dbPath string, createIfMissing bool, description string) (*scid.Database, error) {
-	clean := strings.TrimSuffix(strings.TrimSpace(dbPath), ".si4")
+	clean := fileformat.TrimScidExtensions(strings.TrimSpace(dbPath))
 	if clean == "" {
 		return nil, fmt.Errorf("database path (--db) is required")
 	}
 	db := scid.NewDatabase()
-	if _, err := os.Stat(clean + ".si4"); err == nil {
+	if _, err := os.Stat(fileformat.ScidIndexPath(clean)); err == nil {
 		if err := db.Open(clean); err != nil {
 			return nil, fmt.Errorf("opening database %s: %w", clean, err)
 		}
 		return db, nil
 	}
 	if !createIfMissing {
-		return nil, fmt.Errorf("database not found: %s.si4", clean)
+		return nil, fmt.Errorf("database not found: %s%s", clean, fileformat.ExtScidIndex)
 	}
 	if description == "" {
 		description = "NewScid Workstation Database"

@@ -10,6 +10,7 @@ import (
 	"unicode"
 
 	"newscid/pkg/chess"
+	"newscid/pkg/fileformat"
 )
 
 // WritePolicyID defines the write and lock policy for a database.
@@ -356,7 +357,7 @@ func BuildFocusedSubDatabase(
 	targetName := strings.TrimSpace(filter.TargetName)
 	targetBasePath := strings.TrimSpace(filter.TargetBasePath)
 	if targetBasePath != "" {
-		targetBasePath = strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(targetBasePath, ".si4"), ".sn4"), ".sg4")
+		targetBasePath = fileformat.TrimScidExtensions(targetBasePath)
 		if targetName == "" {
 			targetName = filepath.Base(targetBasePath)
 		}
@@ -408,7 +409,7 @@ func BuildFocusedSubDatabase(
 
 		srcLabel := filepath.Base(src)
 
-		if strings.HasSuffix(strings.ToLower(src), ".pgn") {
+		if fileformat.IsPGNPath(src) {
 			f, err := os.Open(src)
 			if err != nil {
 				continue
@@ -463,7 +464,7 @@ func BuildFocusedSubDatabase(
 			continue
 		}
 
-		cleanSrc := strings.TrimSuffix(strings.TrimSuffix(src, ".si4"), ".si3")
+		cleanSrc := fileformat.TrimScidExtensions(src)
 		if cleanSrc == targetBasePath {
 			continue
 		}
@@ -993,7 +994,7 @@ func ExtractOnlineGameID(g *chess.Game) string {
 			}
 			parts := strings.Split(rest, "/")
 			for i := len(parts) - 1; i >= 0; i-- {
-				cand := strings.TrimSuffix(parts[i], ".pgn")
+				cand := strings.TrimSuffix(parts[i], fileformat.ExtPGN)
 				if cand == "" || cand == "white" || cand == "black" || cand == "export" || cand == "game" || cand == "embed" || cand == "broadcast" || cand == "tournament" || cand == "swiss" || cand == "study" {
 					continue
 				}
@@ -1199,7 +1200,7 @@ func ConsolidateDatabases(
 		_ = os.MkdirAll(outputDir, 0o755)
 		targetBasePath = filepath.Join(outputDir, sanitizeFileName(targetName))
 	} else {
-		targetBasePath = strings.TrimSuffix(targetBasePath, ".si4")
+		targetBasePath = fileformat.TrimScidExtensions(targetBasePath)
 		_ = os.MkdirAll(filepath.Dir(targetBasePath), 0o755)
 	}
 
@@ -1209,7 +1210,7 @@ func ConsolidateDatabases(
 	}
 
 	targetDB := NewDatabase()
-	if _, err := os.Stat(targetBasePath + ".si4"); err == nil {
+	if _, err := os.Stat(fileformat.ScidIndexPath(targetBasePath)); err == nil {
 		if err := targetDB.Open(targetBasePath); err != nil {
 			return nil, fmt.Errorf("opening target consolidated database: %w", err)
 		}
@@ -1275,7 +1276,7 @@ func ConsolidateDatabases(
 		sourcePaths = FilterMostRecentDatabasePaths(sourcePaths)
 	}
 
-	cleanTarget := strings.TrimSuffix(targetBasePath, ".si4")
+	cleanTarget := fileformat.TrimScidExtensions(targetBasePath)
 	for _, rawSrc := range sourcePaths {
 		if opts.ShouldCancel != nil && opts.ShouldCancel() {
 			res.Cancelled = true
@@ -1285,14 +1286,13 @@ func ConsolidateDatabases(
 		if src == "" {
 			continue
 		}
-		cleanSrc := strings.TrimSuffix(src, ".si4")
+		cleanSrc := fileformat.TrimScidExtensions(src)
 		if cleanSrc == cleanTarget {
 			continue
 		}
 
 		res.SourcesScanned++
-		lowerSrc := strings.ToLower(src)
-		if strings.HasSuffix(lowerSrc, ".pgn") {
+		if fileformat.IsPGNPath(src) {
 			f, err := os.Open(src)
 			if err != nil {
 				return nil, fmt.Errorf("opening source PGN %q: %w", src, err)

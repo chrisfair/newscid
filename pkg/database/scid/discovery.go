@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"newscid/pkg/fileformat"
 )
 
 // DiscoveredDatabase represents a database found on the user's system.
@@ -63,8 +65,7 @@ func FormatFileSize(bytes int64) string {
 
 // InspectDatabase extracts metadata from a Scid base path without loading all records.
 func InspectDatabase(basePath string, category string) DiscoveredDatabase {
-	cleanPath := strings.TrimSuffix(basePath, ".si4")
-	cleanPath = strings.TrimSuffix(cleanPath, ".si3")
+	cleanPath := fileformat.TrimScidExtensions(basePath)
 	name := filepath.Base(cleanPath)
 
 	db := DiscoveredDatabase{
@@ -75,11 +76,11 @@ func InspectDatabase(basePath string, category string) DiscoveredDatabase {
 		Exists:   false,
 	}
 
-	si4Path := cleanPath + ".si4"
+	si4Path := fileformat.ScidIndexPath(cleanPath)
 	si4Info, err := os.Stat(si4Path)
 	if err != nil {
 		// Maybe it's a PGN file
-		if strings.HasSuffix(basePath, ".pgn") {
+		if fileformat.IsPGNPath(basePath) {
 			if pgnInfo, err := os.Stat(basePath); err == nil {
 				db.Type = "pgn"
 				db.BasePath = basePath
@@ -95,10 +96,10 @@ func InspectDatabase(basePath string, category string) DiscoveredDatabase {
 
 	db.Exists = true
 	totalSize := si4Info.Size()
-	if sg4Info, err := os.Stat(cleanPath + ".sg4"); err == nil {
+	if sg4Info, err := os.Stat(fileformat.ScidGameDataPath(cleanPath)); err == nil {
 		totalSize += sg4Info.Size()
 	}
-	if sn4Info, err := os.Stat(cleanPath + ".sn4"); err == nil {
+	if sn4Info, err := os.Stat(fileformat.ScidNamesPath(cleanPath)); err == nil {
 		totalSize += sn4Info.Size()
 	}
 	db.SizeStr = FormatFileSize(totalSize)
@@ -136,8 +137,8 @@ func DiscoverScidDatabases() []DiscoveredDatabase {
 	// Check recent files from Scid config
 	if home != "" {
 		recentFilesList := []string{
-			filepath.Join(home, ".scidvspc", "config", "recent.dat"),
-			filepath.Join(home, ".scid5.0", "config", "recent.dat"),
+			filepath.Join(home, fileformat.LegacyScidVsPCDir, "config", fileformat.FileScidRecentDat),
+			filepath.Join(home, fileformat.LegacyScid5Dir, "config", fileformat.FileScidRecentDat),
 		}
 		for _, rf := range recentFilesList {
 			f, err := os.Open(rf)
@@ -145,8 +146,7 @@ func DiscoverScidDatabases() []DiscoveredDatabase {
 				paths := ParseRecentDat(f)
 				_ = f.Close()
 				for _, p := range paths {
-					clean := strings.TrimSuffix(p, ".si4")
-					clean = strings.TrimSuffix(clean, ".si3")
+					clean := fileformat.TrimScidExtensions(p)
 					if !seen[clean] {
 						seen[clean] = true
 						meta := InspectDatabase(p, "Recent Databases")
@@ -167,8 +167,8 @@ func DiscoverScidDatabases() []DiscoveredDatabase {
 				if err != nil || info == nil {
 					return nil
 				}
-				if !info.IsDir() && strings.HasSuffix(path, ".si4") {
-					clean := strings.TrimSuffix(path, ".si4")
+				if !info.IsDir() && fileformat.IsScidIndexPath(path) {
+					clean := fileformat.TrimScidExtensions(path)
 					if !seen[clean] {
 						seen[clean] = true
 						meta := InspectDatabase(clean, "User Databases")
@@ -188,19 +188,19 @@ func DiscoverScidDatabases() []DiscoveredDatabase {
 			dir      string
 			category string
 		}{
-			{filepath.Join(home, ".scidvspc", "data"), "User Databases"},
-			{filepath.Join(home, ".local", "share", "newscid", "databases"), "User Databases"},
-			{filepath.Join(home, ".local", "share", "newscid", "personas"), "Persona Databases"},
-			{filepath.Join(home, ".config", "newscid", "personas"), "Persona Databases"},
-			{filepath.Join(home, ".newscid", "personas"), "Persona Databases"},
+			{filepath.Join(home, fileformat.LegacyScidVsPCDir, "data"), "User Databases"},
+			{filepath.Join(home, ".local", "share", fileformat.AppDirName, fileformat.DirDatabases), "User Databases"},
+			{filepath.Join(home, ".local", "share", fileformat.AppDirName, fileformat.DirPersonas), "Persona Databases"},
+			{filepath.Join(home, ".config", fileformat.AppDirName, fileformat.DirPersonas), "Persona Databases"},
+			{filepath.Join(home, fileformat.LegacyDotDirName, fileformat.DirPersonas), "Persona Databases"},
 		}
 		for _, ed := range extraDirs {
 			if fi, err := os.Stat(ed.dir); err == nil && fi.IsDir() {
 				entries, _ := os.ReadDir(ed.dir)
 				for _, e := range entries {
-					if !e.IsDir() && strings.HasSuffix(e.Name(), ".si4") {
+					if !e.IsDir() && fileformat.IsScidIndexPath(e.Name()) {
 						full := filepath.Join(ed.dir, e.Name())
-						clean := strings.TrimSuffix(full, ".si4")
+						clean := fileformat.TrimScidExtensions(full)
 						if !seen[clean] {
 							seen[clean] = true
 							meta := InspectDatabase(clean, ed.category)
@@ -229,7 +229,7 @@ func DiscoverScidDatabases() []DiscoveredDatabase {
 
 	for _, sb := range systemBases {
 		if !seen[sb.path] {
-			if _, err := os.Stat(sb.path + ".si4"); err == nil {
+			if _, err := os.Stat(fileformat.ScidIndexPath(sb.path)); err == nil {
 				seen[sb.path] = true
 				meta := InspectDatabase(sb.path, "Tutorial & Tactics")
 				meta.Name = sb.name

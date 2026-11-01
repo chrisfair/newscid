@@ -15,6 +15,7 @@ import (
 
 	"newscid/pkg/blundervault"
 	"newscid/pkg/chess"
+	"newscid/pkg/fileformat"
 	"newscid/pkg/puzzleminer"
 )
 
@@ -2274,7 +2275,7 @@ func NewCyclicalManager(filePath string) (*CyclicalManager, error) {
 		if err != nil {
 			cfgDir = os.TempDir()
 		}
-		filePath = filepath.Join(cfgDir, "newscid", "cyclical_drill.json")
+		filePath = filepath.Join(cfgDir, fileformat.AppDirName, fileformat.FileCyclicalDrillJSON)
 	}
 
 	cm := &CyclicalManager{

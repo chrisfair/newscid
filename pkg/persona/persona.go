@@ -14,6 +14,7 @@ import (
 
 	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
+	"newscid/pkg/fileformat"
 )
 
 // Persona represents a unified user or player identity mapping together multiple
@@ -93,7 +94,7 @@ func DefaultConfigPath() string {
 	if err != nil {
 		configDir = os.TempDir()
 	}
-	return filepath.Join(configDir, "newscid", "personas.json")
+	return filepath.Join(configDir, fileformat.AppDirName, fileformat.FilePersonasJSON)
 }
 
 // NewPersonaManager creates a PersonaManager persisting personas at configPath.
@@ -363,7 +364,7 @@ func DefaultPersonaDirectory() string {
 	if err != nil {
 		dataDir = os.TempDir()
 	}
-	return filepath.Join(dataDir, "newscid", "personas")
+	return filepath.Join(dataDir, fileformat.AppDirName, fileformat.DirPersonas)
 }
 
 // DefaultPersonaDatabasePath returns the default .si4 base path for a persona by display name.
@@ -403,7 +404,7 @@ func (pm *PersonaManager) EnsurePersonaDatabase(p *Persona) (string, error) {
 		return "", fmt.Errorf("creating persona database directory: %w", err)
 	}
 
-	si4Path := targetPath + ".si4"
+	si4Path := fileformat.ScidIndexPath(targetPath)
 	if _, err := os.Stat(si4Path); os.IsNotExist(err) {
 		db := &scid.Database{}
 		desc := fmt.Sprintf("%s Unified Games Database", p.DisplayName)

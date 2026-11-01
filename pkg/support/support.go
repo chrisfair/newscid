@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"newscid/pkg/fileformat"
 )
 
 // Live Stripe Payment Link URLs (shared with bughouse-online) for the 5 classic chess piece tiers.
@@ -152,7 +154,7 @@ func NewManager(configPath string) (*Manager, error) {
 		if err != nil {
 			cfgDir = os.TempDir()
 		}
-		configPath = filepath.Join(cfgDir, "newscid", "support.json")
+		configPath = filepath.Join(cfgDir, fileformat.AppDirName, fileformat.FileSupportJSON)
 	}
 
 	m := &Manager{

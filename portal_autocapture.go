@@ -12,6 +12,7 @@ import (
 
 	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
+	"newscid/pkg/fileformat"
 	"newscid/pkg/online"
 	"newscid/pkg/workstation"
 )
@@ -125,12 +126,12 @@ func (a *App) resolveAutoCaptureTargetPath() string {
 	}
 
 	if dataRoot, _ := workstation.DefaultWorkstationDirs(); dataRoot != "" {
-		dbDir := filepath.Join(dataRoot, "databases")
+		dbDir := filepath.Join(dataRoot, fileformat.DirDatabases)
 		_ = os.MkdirAll(dbDir, 0o755)
-		return filepath.Join(dbDir, "My_Games")
+		return filepath.Join(dbDir, fileformat.DefaultMyGamesDBName)
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".local", "share", "newscid", "databases", "My_Games")
+	return filepath.Join(home, ".local", "share", fileformat.AppDirName, fileformat.DirDatabases, fileformat.DefaultMyGamesDBName)
 }
 
 // GetLivePortalCaptureStatus returns the current configuration and live status of portal game auto-capture.
@@ -540,7 +541,7 @@ func formatCapturedGameSummary(g *chess.Game) string {
 
 func openOrCreatePortalTargetDB(basePath string, desc string) (*scid.Database, error) {
 	db := scid.NewDatabase()
-	if _, err := os.Stat(basePath + ".si4"); err == nil {
+	if _, err := os.Stat(fileformat.ScidIndexPath(basePath)); err == nil {
 		if err := db.Open(basePath); err != nil {
 			return nil, err
 		}
@@ -563,7 +564,7 @@ func (a *App) buildTargetSignatureSet(targetBasePath string) (*scid.GameSignatur
 	}
 	a.mu.RUnlock()
 
-	if _, err := os.Stat(cleanTarget + ".si4"); err != nil {
+	if _, err := os.Stat(fileformat.ScidIndexPath(cleanTarget)); err != nil {
 		return scid.NewGameSignatureSet(), nil
 	}
 

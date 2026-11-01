@@ -3,6 +3,8 @@ package scid
 import (
 	"fmt"
 	"os"
+
+	"newscid/pkg/fileformat"
 )
 
 // VerificationReport contains detailed diagnostics on database health and file integrity.
@@ -36,9 +38,7 @@ func (db *Database) Verify() (*VerificationReport, error) {
 		NameCounts: make(map[string]int),
 	}
 
-	si4Path := db.BasePath + ".si4"
-	sn4Path := db.BasePath + ".sn4"
-	sg4Path := db.BasePath + ".sg4"
+	si4Path, sn4Path, sg4Path := fileformat.ScidPaths(db.BasePath)
 
 	// Stat files
 	siStat, err := os.Stat(si4Path)

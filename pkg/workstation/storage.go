@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"newscid/pkg/fileformat"
 )
 
 // AssetCategoryID is a compact hot-path integer constant identifying a workstation storage category.
@@ -186,15 +188,15 @@ func FormatByteSize(bytes int64) string {
 func DefaultWorkstationDirs() (dataRoot string, configRoot string) {
 	home, _ := os.UserHomeDir()
 	if xdgData := os.Getenv("XDG_DATA_HOME"); strings.TrimSpace(xdgData) != "" {
-		dataRoot = filepath.Join(xdgData, "newscid")
+		dataRoot = filepath.Join(xdgData, fileformat.AppDirName)
 	} else {
-		dataRoot = filepath.Join(home, ".local", "share", "newscid")
+		dataRoot = filepath.Join(home, ".local", "share", fileformat.AppDirName)
 	}
 
 	if cfgDir, err := os.UserConfigDir(); err == nil && cfgDir != "" {
-		configRoot = filepath.Join(cfgDir, "newscid")
+		configRoot = filepath.Join(cfgDir, fileformat.AppDirName)
 	} else {
-		configRoot = filepath.Join(home, ".config", "newscid")
+		configRoot = filepath.Join(home, ".config", fileformat.AppDirName)
 	}
 	return dataRoot, configRoot
 }
@@ -202,7 +204,7 @@ func DefaultWorkstationDirs() (dataRoot string, configRoot string) {
 // DefaultLegacyConfigDir returns the legacy ~/.newscid directory path.
 func DefaultLegacyConfigDir() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".newscid")
+	return filepath.Join(home, fileformat.LegacyDotDirName)
 }
 
 // resolveRoots fills in default dataRoot and configRoot if either is empty.
@@ -222,14 +224,14 @@ func EnsureWorkstationDirs(dataRoot, configRoot string) (map[AssetCategoryID]str
 	dataRoot, configRoot = resolveRoots(dataRoot, configRoot)
 
 	dirs := map[AssetCategoryID]string{
-		CategoryDatabases:    filepath.Join(dataRoot, "databases"),
-		CategoryPersonas:     filepath.Join(dataRoot, "personas"),
-		CategoryEngines:      filepath.Join(dataRoot, "engines"),
-		CategoryOpeningBooks: filepath.Join(dataRoot, "books", "opening"),
-		CategoryEndgameBooks: filepath.Join(dataRoot, "books", "endgame"),
-		CategoryRepertoires:  filepath.Join(dataRoot, "repertoires"),
+		CategoryDatabases:    filepath.Join(dataRoot, fileformat.DirDatabases),
+		CategoryPersonas:     filepath.Join(dataRoot, fileformat.DirPersonas),
+		CategoryEngines:      filepath.Join(dataRoot, fileformat.DirEngines),
+		CategoryOpeningBooks: filepath.Join(dataRoot, fileformat.DirBooks, fileformat.DirOpeningBooks),
+		CategoryEndgameBooks: filepath.Join(dataRoot, fileformat.DirBooks, fileformat.DirEndgameBooks),
+		CategoryRepertoires:  filepath.Join(dataRoot, fileformat.DirRepertoires),
 		CategoryConfig:       configRoot,
-		CategoryBackups:      filepath.Join(dataRoot, "backups"),
+		CategoryBackups:      filepath.Join(dataRoot, fileformat.DirBackups),
 	}
 
 	for _, cat := range allCategories {
@@ -355,12 +357,12 @@ func ImportAssetToWorkstation(categoryKey string, sourcePath string, dataRoot st
 	// Special handling for Scid databases (.si4, .sg4, .sn4 or base path without extension)
 	if cat == CategoryDatabases {
 		ext := strings.ToLower(filepath.Ext(trimmedSrc))
-		if ext == ".si4" || ext == ".sg4" || ext == ".sn4" || ext == "" {
+		if fileformat.IsScidComponentExt(ext) || ext == "" {
 			baseSrc := strings.TrimSuffix(trimmedSrc, filepath.Ext(trimmedSrc))
-			if _, statErr := os.Stat(baseSrc + ".si4"); statErr == nil {
+			if _, statErr := os.Stat(fileformat.ScidIndexPath(baseSrc)); statErr == nil {
 				baseName := filepath.Base(baseSrc)
 				var totalSize int64
-				for _, scidExt := range []string{".si4", ".sg4", ".sn4"} {
+				for _, scidExt := range fileformat.ScidV4Extensions() {
 					companionSrc := baseSrc + scidExt
 					if st, err := os.Stat(companionSrc); err == nil && !st.IsDir() {
 						dstPath := filepath.Join(targetDir, baseName+scidExt)
@@ -371,10 +373,10 @@ func ImportAssetToWorkstation(categoryKey string, sourcePath string, dataRoot st
 						totalSize += n
 					}
 				}
-				primaryDst := filepath.Join(targetDir, baseName+".si4")
+				primaryDst := filepath.Join(targetDir, baseName+fileformat.ExtScidIndex)
 				st, _ := os.Stat(primaryDst)
 				return &StoredAssetInfo{
-					Name:          baseName + ".si4",
+					Name:          baseName + fileformat.ExtScidIndex,
 					Path:          primaryDst,
 					Category:      cat.Key(),
 					SizeBytes:     totalSize,
@@ -552,7 +554,7 @@ func FactoryResetWorkstation(opts FactoryResetOptions, dataRoot, configRoot, leg
 		if backupDir == "" {
 			backupDir = dirs[CategoryBackups]
 		}
-		archiveName := fmt.Sprintf("newscid-factory-backup-%s.tar.gz", now.Format("20060102-150405"))
+		archiveName := fmt.Sprintf("newscid-factory-backup-%s%s", now.Format("20060102-150405"), fileformat.ExtTarGz)
 		archivePath := filepath.Join(backupDir, archiveName)
 		roots := map[string]string{
 			"data":   dataRoot,
