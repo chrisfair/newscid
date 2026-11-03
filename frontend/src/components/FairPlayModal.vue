@@ -60,10 +60,13 @@ interface GameFairPlayRecord {
   moveTimeCV: number
   roboticCadencePct: number
   delayedRecaptureCount: number
+  forcedMoveHesitationCount?: number
   acpl: number
   top1AgreementPct: number
   criticalAccuracyPct: number
   blunderCount: number
+  maxEngineStreak?: number
+  clutchToggle?: boolean
   intrinsicPerformanceElo: number
   gameIssueScore: number
   flags: string[]
@@ -86,6 +89,9 @@ interface TimeControlIssueProfile {
   avgMoveTimeSec: number
   avgMoveTimeCV: number
   roboticCadenceGamePct: number
+  clutchToggleGameCount?: number
+  engineStreakGameCount?: number
+  coOccurringEngineGames?: number
   consistentIssueScore: number
   zScore: number
   consistencyClassification: string

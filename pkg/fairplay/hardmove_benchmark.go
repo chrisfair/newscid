@@ -727,6 +727,10 @@ func evaluateHardMoveCandidate(
 	if nLegal <= 3 {
 		return false, 0.90, true, 0, 0, nLegal, node.SAN
 	}
+	// Mop-up moves in already completely decided positions (> +/- 450cp) are not contested Hard Moves
+	if hasExactEvalPair && math.Abs(prevEvalWhiteCp) >= 450.0 && math.Abs(currEvalWhiteCp) >= 450.0 && (prevEvalWhiteCp*currEvalWhiteCp > 0) {
+		return false, 0.85, true, 0, 0, nLegal, node.SAN
+	}
 
 	mover := board.Turn
 	type scoredMove struct {

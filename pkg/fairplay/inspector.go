@@ -38,16 +38,19 @@ type GameFairPlayRecord struct {
 	HasEvalData             bool     `json:"hasEvalData"`
 	AvgMoveTimeSec          float64  `json:"avgMoveTimeSec"`
 	MoveTimeStdDevSec       float64  `json:"moveTimeStdDevSec"`
-	MoveTimeCV              float64  `json:"moveTimeCV"`              // StdDev / Mean; < 0.38 indicates flat robotic pacing
-	RoboticCadencePct       float64  `json:"roboticCadencePct"`       // % of moves in narrow [2.5s, 8.5s] band
-	DelayedRecaptureCount   int      `json:"delayedRecaptureCount"`   // Recaptures taking > 3.0s
-	ACPL                    float64  `json:"acpl"`                    // Average Centipawn Loss on non-book moves
-	Top1AgreementPct        float64  `json:"top1AgreementPct"`        // % of moves with <= 10cp loss
-	CriticalAccuracyPct     float64  `json:"criticalAccuracyPct"`     // % accuracy in sharp/high-tension positions
-	BlunderCount            int      `json:"blunderCount"`            // Moves with >= 180cp loss
-	IntrinsicPerformanceElo int      `json:"intrinsicPerformanceElo"` // Ken Regan-style IPR estimate
-	GameIssueScore          float64  `json:"gameIssueScore"`          // 0-100 anomaly index for this game
-	Flags                   []string `json:"flags"`
+	MoveTimeCV                float64  `json:"moveTimeCV"`                // StdDev / Mean; < 0.38 indicates flat robotic pacing
+	RoboticCadencePct         float64  `json:"roboticCadencePct"`         // % of moves in narrow [2.5s, 8.5s] band
+	DelayedRecaptureCount     int      `json:"delayedRecaptureCount"`     // Recaptures taking > 3.0s
+	ForcedMoveHesitationCount int      `json:"forcedMoveHesitationCount"` // Recaptures or check evasions taking 3.2s-14s (relay lag)
+	MaxEngineStreak           int      `json:"maxEngineStreak"`           // Longest consecutive <= 10cp loss streak in contested positions
+	ClutchToggle              bool     `json:"clutchToggle"`              // Mid-game engine toggle after >= 150cp opening deficit
+	ACPL                      float64  `json:"acpl"`                      // Average Centipawn Loss on non-book moves
+	Top1AgreementPct          float64  `json:"top1AgreementPct"`          // % of moves with <= 10cp loss
+	CriticalAccuracyPct       float64  `json:"criticalAccuracyPct"`       // % accuracy in sharp/high-tension positions
+	BlunderCount              int      `json:"blunderCount"`              // Moves with >= 180cp loss
+	IntrinsicPerformanceElo   int      `json:"intrinsicPerformanceElo"`   // Ken Regan-style IPR estimate
+	GameIssueScore            float64  `json:"gameIssueScore"`            // 0-100 anomaly index for this game
+	Flags                     []string `json:"flags"`
 }
 
 // TimeControlIssueProfile aggregates multi-game and multi-day fair-play & consistency metrics for one time control category.
@@ -68,6 +71,9 @@ type TimeControlIssueProfile struct {
 	AvgMoveTimeSec            float64 `json:"avgMoveTimeSec"`
 	AvgMoveTimeCV             float64 `json:"avgMoveTimeCV"`
 	RoboticCadenceGamePct     float64 `json:"roboticCadenceGamePct"`
+	ClutchToggleGameCount     int     `json:"clutchToggleGameCount"`
+	EngineStreakGameCount     int     `json:"engineStreakGameCount"`
+	CoOccurringEngineGames    int     `json:"coOccurringEngineGames"`
 	ConsistentIssueScore      float64 `json:"consistentIssueScore"`      // 0-100 longitudinal issue score for this time control
 	ZScore                    float64 `json:"zScore"`                    // Statistical sigma score
 	ConsistencyClassification string  `json:"consistencyClassification"` // "Normal Human Variance" | "Mild Anomaly" | "Elevated Consistent Issue" | "High Consistent Time-Control Anomaly"
@@ -472,11 +478,17 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 
 	var moveTimes []float64
 	var cpLosses []float64
+	var allRawLosses []float64
 	var criticalLosses []float64
 	delayedRecaptures := 0
+	forcedMoveHesitations := 0
 	top1Count := 0
 	criticalTop1Count := 0
 	blunders := 0
+	currentEngineStreak := 0
+	maxEngineStreak := 0
+	wasDown150Cp := false
+	postDeficitZeroLossMoves := 0
 	hasClock := false
 	hasEval := false
 
@@ -485,6 +497,7 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 	prevEvalWhiteCp := 20.0
 	prevHasEval := false
 	prevWasCapture := false
+	prevWasCheck := false
 
 	node := g.RootMove
 	ply := 0
@@ -495,6 +508,7 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 		turnColor := board.Turn
 
 		isCapture := strings.Contains(node.SAN, "x")
+		isCheck := strings.Contains(node.SAN, "+")
 		complexity := estimateBoardComplexity(board)
 
 		// Extract clock time spent
@@ -558,14 +572,24 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 				if prevWasCapture && isCapture && spentSec >= 3.2 {
 					delayedRecaptures++
 				}
+				if ((prevWasCapture && isCapture) || prevWasCheck) && spentSec >= 3.2 && spentSec <= 14.0 {
+					forcedMoveHesitations++
+				}
 			}
 
 			var lossCp float64
 			var isTop1 bool
+			isClampedMopUp := false
+			isContestedPos := true
 			if currHasEval && prevHasEval {
+				var playerEvalBefore, playerEvalAfter float64
 				if turnColor == chess.White {
+					playerEvalBefore = prevEvalWhiteCp
+					playerEvalAfter = currEvalWhiteCp
 					lossCp = prevEvalWhiteCp - currEvalWhiteCp
 				} else {
+					playerEvalBefore = -prevEvalWhiteCp
+					playerEvalAfter = -currEvalWhiteCp
 					lossCp = currEvalWhiteCp - prevEvalWhiteCp
 				}
 				if lossCp < 0 {
@@ -575,19 +599,41 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 					lossCp = 500
 				}
 				isTop1 = lossCp <= 12.0
+
+				// Positions beyond +/- 300cp are already decided; clamped +/- 900cp endgames must not fake 0cp streaks
+				isContestedPos = math.Abs(playerEvalBefore) <= 300.0 && math.Abs(playerEvalAfter) <= 300.0
+				isClampedMopUp = math.Abs(playerEvalBefore) >= 450.0 && math.Abs(playerEvalAfter) >= 450.0 && (playerEvalBefore*playerEvalAfter > 0) && lossCp == 0
+
+				if playerEvalBefore <= -150.0 {
+					wasDown150Cp = true
+				}
+				if isContestedPos && lossCp <= 10.0 {
+					currentEngineStreak++
+					if currentEngineStreak > maxEngineStreak {
+						maxEngineStreak = currentEngineStreak
+					}
+					if wasDown150Cp {
+						postDeficitZeroLossMoves++
+					}
+				} else if isContestedPos && lossCp > 15.0 {
+					currentEngineStreak = 0
+				}
 			} else {
 				lossCp = heurLossCp
 				isTop1 = heurIsTop1
 			}
 
-			cpLosses = append(cpLosses, lossCp)
-			if isTop1 {
-				top1Count++
+			allRawLosses = append(allRawLosses, lossCp)
+			if !isClampedMopUp {
+				cpLosses = append(cpLosses, lossCp)
+				if isTop1 {
+					top1Count++
+				}
 			}
 			if lossCp >= 160.0 {
 				blunders++
 			}
-			if complexity >= 10 {
+			if complexity >= 10 && !isClampedMopUp {
 				criticalLosses = append(criticalLosses, lossCp)
 				if isTop1 || lossCp <= 15.0 {
 					criticalTop1Count++
@@ -602,8 +648,20 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 			prevHasEval = false
 		}
 		prevWasCapture = isCapture
+		prevWasCheck = isCheck
 		node = node.Next
 	}
+
+	if len(cpLosses) == 0 && len(allRawLosses) > 0 {
+		cpLosses = allRawLosses
+		for _, l := range cpLosses {
+			if l <= 12.0 {
+				top1Count++
+			}
+		}
+	}
+
+	clutchToggle := wasDown150Cp && postDeficitZeroLossMoves >= 6 && playerScore >= 0.5
 
 	avgTime, stdTime, cvTime, roboticPct := computeCadenceStats(moveTimes)
 	acpl := meanFloat64(cpLosses)
@@ -646,35 +704,54 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 		delayedRecaptures,
 	)
 
+	// Apply contested-position mid-game toggle, engine streak, and forced-move hesitation signals
+	if clutchToggle {
+		issueScore += 18.0
+		flags = append(flags, fmt.Sprintf("Mid-game engine toggle comeback (>=6 zero-loss contested moves after -1.5 deficit)"))
+	} else if maxEngineStreak >= 9 {
+		issueScore += 10.0
+		flags = append(flags, fmt.Sprintf("%d consecutive 0-cp contested engine moves", maxEngineStreak))
+	}
+	if forcedMoveHesitations >= 2 && delayedRecaptures < 2 {
+		issueScore += 8.0
+		flags = append(flags, fmt.Sprintf("%d forced recaptures/check evasions delayed >3.2s (relay lag)", forcedMoveHesitations))
+	}
+	if issueScore > 99.0 {
+		issueScore = 99.0
+	}
+
 	return GameFairPlayRecord{
-		GameID:                  gameID,
-		Date:                    normalizeDateStr(g.Tag("Date")),
-		Event:                   eventStr,
-		Site:                    g.Tag("Site"),
-		TimeControlRaw:          tcRaw,
-		TimeControlCategory:     tcCat,
-		PlayerColor:             playerColorStr,
-		PlayerElo:               playerElo,
-		OpponentName:            opponentName,
-		OpponentElo:             opponentElo,
-		Result:                  resStr,
-		PlayerScore:             playerScore,
-		TotalPlies:              ply,
-		NonBookMoves:            nonBookMoves,
-		HasClockData:            hasValidClock,
-		HasEvalData:             hasEval,
-		AvgMoveTimeSec:          round2(avgTime),
-		MoveTimeStdDevSec:       round2(stdTime),
-		MoveTimeCV:              round2(cvTime),
-		RoboticCadencePct:       round1(roboticPct),
-		DelayedRecaptureCount:   delayedRecaptures,
-		ACPL:                    round1(acpl),
-		Top1AgreementPct:        top1Pct,
-		CriticalAccuracyPct:     critAccPct,
-		BlunderCount:            blunders,
-		IntrinsicPerformanceElo: ipr,
-		GameIssueScore:          round1(issueScore),
-		Flags:                   flags,
+		GameID:                    gameID,
+		Date:                      normalizeDateStr(g.Tag("Date")),
+		Event:                     eventStr,
+		Site:                      g.Tag("Site"),
+		TimeControlRaw:            tcRaw,
+		TimeControlCategory:       tcCat,
+		PlayerColor:               playerColorStr,
+		PlayerElo:                 playerElo,
+		OpponentName:              opponentName,
+		OpponentElo:               opponentElo,
+		Result:                    resStr,
+		PlayerScore:               playerScore,
+		TotalPlies:                ply,
+		NonBookMoves:              nonBookMoves,
+		HasClockData:              hasValidClock,
+		HasEvalData:               hasEval,
+		AvgMoveTimeSec:            round2(avgTime),
+		MoveTimeStdDevSec:         round2(stdTime),
+		MoveTimeCV:                round2(cvTime),
+		RoboticCadencePct:         round1(roboticPct),
+		DelayedRecaptureCount:     delayedRecaptures,
+		ForcedMoveHesitationCount: forcedMoveHesitations,
+		MaxEngineStreak:           maxEngineStreak,
+		ClutchToggle:              clutchToggle,
+		ACPL:                      round1(acpl),
+		Top1AgreementPct:          top1Pct,
+		CriticalAccuracyPct:       critAccPct,
+		BlunderCount:              blunders,
+		IntrinsicPerformanceElo:   ipr,
+		GameIssueScore:            round1(issueScore),
+		Flags:                     flags,
 	}, true
 }
 
@@ -697,6 +774,9 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 		clockGames      int
 		evalGames       int
 		roboticGamesCnt int
+		clutchGamesCnt  int
+		streakGamesCnt  int
+		coOccurringCnt  int
 		issueSum        float64
 	)
 
@@ -714,6 +794,15 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 		if g.HasEvalData {
 			evalGames++
 		}
+		if g.ClutchToggle {
+			clutchGamesCnt++
+		}
+		if g.MaxEngineStreak >= 9 {
+			streakGamesCnt++
+		}
+		_, elevatedACPL := expectedSuspectACPLThreshold(g.PlayerElo, category)
+		isHighAccGame := (g.HasEvalData && g.ACPL <= elevatedACPL) || g.ClutchToggle || g.MaxEngineStreak >= 9
+		isRoboticClock := false
 		if g.HasClockData {
 			clockGames++
 			timeSum += g.AvgMoveTimeSec
@@ -721,6 +810,10 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 			if g.MoveTimeCV > 0 && g.MoveTimeCV <= 0.38 && g.RoboticCadencePct >= 60.0 {
 				roboticGamesCnt++
 			}
+			isRoboticClock = (g.MoveTimeCV > 0 && g.MoveTimeCV <= 0.42 && g.RoboticCadencePct >= 58.0) || g.ForcedMoveHesitationCount >= 2 || g.DelayedRecaptureCount >= 2
+		}
+		if isHighAccGame && isRoboticClock {
+			coOccurringCnt++
 		}
 		issueSum += g.GameIssueScore
 		dayIssues[g.Date] = append(dayIssues[g.Date], g.GameIssueScore)
@@ -755,6 +848,12 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 		roboticGamePct = round1(100.0 * float64(roboticGamesCnt) / float64(clockGames))
 	}
 
+	severeACPL, elevatedACPL := expectedSuspectACPLThreshold(avgElo, category)
+	minClutchForSample := int(math.Ceil(float64(n) * 0.15))
+	if minClutchForSample < 1 {
+		minClutchForSample = 1
+	}
+
 	baseAvgIssue := issueSum / float64(n)
 	// Multi-game & multi-day consistency bonus: if elevated across multiple days/games in this time control
 	consistencyBonus := 0.0
@@ -767,8 +866,16 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 	if eloDelta > 280 && (evalGames > 0 || clockGames > 0 || (winsSum/float64(n)) >= 0.65) {
 		consistencyBonus += math.Min(16.0, float64(eloDelta-280)*0.035)
 	}
+	if coOccurringCnt >= 1 || (clutchGamesCnt >= minClutchForSample && avgACPL <= elevatedACPL) {
+		consistencyBonus += math.Min(14.0, float64(coOccurringCnt*6+clutchGamesCnt*4))
+	}
 
-	consistentScore := round1(math.Min(99.0, math.Max(0.0, baseAvgIssue+consistencyBonus)))
+	consistentScore := baseAvgIssue + consistencyBonus
+	// Veteran / High-Rated Master dampener: prevent false positives when a 2100+ player has normal move-time variance and normal master ACPL
+	if avgElo >= 2100 && coOccurringCnt == 0 && roboticGamePct < 25.0 && avgACPL > severeACPL {
+		consistentScore *= 0.62
+	}
+	consistentScore = round1(math.Min(99.0, math.Max(0.0, consistentScore)))
 	zScore := round2((consistentScore - 24.0) / 15.0)
 	if zScore < -2.0 {
 		zScore = -2.0
@@ -801,6 +908,9 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 		AvgMoveTimeSec:            avgMoveTime,
 		AvgMoveTimeCV:             avgCV,
 		RoboticCadenceGamePct:     roboticGamePct,
+		ClutchToggleGameCount:     clutchGamesCnt,
+		EngineStreakGameCount:     streakGamesCnt,
+		CoOccurringEngineGames:    coOccurringCnt,
 		ConsistentIssueScore:      consistentScore,
 		ZScore:                    zScore,
 		ConsistencyClassification: classification,
@@ -953,6 +1063,26 @@ func computeCrossControlDivergence(profiles []TimeControlIssueProfile) CrossCont
 	}
 }
 
+// expectedSuspectACPLThreshold returns Elo-band and time-control calibrated ACPL cutoffs
+// so master-level players (2100+) are not falsely flagged for normal 14-20 ACPL games.
+func expectedSuspectACPLThreshold(playerElo int, tcCat string) (severeACPL, elevatedACPL float64) {
+	switch {
+	case playerElo >= 2300:
+		severeACPL, elevatedACPL = 8.0, 12.0
+	case playerElo >= 2100:
+		severeACPL, elevatedACPL = 9.5, 14.0
+	case playerElo >= 1850:
+		severeACPL, elevatedACPL = 11.5, 17.5
+	default:
+		severeACPL, elevatedACPL = 14.0, 21.0
+	}
+	if tcCat == "Bullet" {
+		severeACPL -= 1.0
+		elevatedACPL -= 1.5
+	}
+	return severeACPL, elevatedACPL
+}
+
 func scoreSingleGameAnomaly(
 	tcCat string,
 	playerElo, ipr int,
@@ -967,26 +1097,27 @@ func scoreSingleGameAnomaly(
 	var flags []string
 
 	eloDiff := ipr - playerElo
+	severeACPL, elevatedACPL := expectedSuspectACPLThreshold(playerElo, tcCat)
 
-	// Move Accuracy & ACPL vs Official Rating
+	// Move Accuracy & ACPL vs Official Rating Band
 	if hasEval {
 		// Engine-annotated moves ([%eval] tags present)
-		if acpl <= 14.0 && nonBookMoves >= 12 {
+		if acpl <= severeACPL && nonBookMoves >= 12 {
 			score += 34.0
 			flags = append(flags, fmt.Sprintf("Ultra-low engine ACPL (%.1f cp) over %d non-book moves", acpl, nonBookMoves))
-		} else if acpl <= 21.0 && nonBookMoves >= 12 {
+		} else if acpl <= elevatedACPL && nonBookMoves >= 12 {
 			score += 18.0
 		}
-		if critAccPct >= 88.0 && nonBookMoves >= 10 && acpl <= 22.0 {
+		if critAccPct >= 88.0 && nonBookMoves >= 10 && acpl <= elevatedACPL+1.0 {
 			score += 14.0
 			flags = append(flags, fmt.Sprintf("%.0f%% critical-position accuracy in high-tension middlegame", critAccPct))
 		}
 	} else {
 		// Heuristic tactical/positional screening when [%eval] tags are absent
-		if acpl <= 15.0 && blunders == 0 && playerScore >= 0.75 && nonBookMoves >= 16 {
+		if acpl <= severeACPL+1.0 && blunders == 0 && playerScore >= 0.75 && nonBookMoves >= 16 {
 			score += 22.0
 			flags = append(flags, fmt.Sprintf("Near-zero tactical/positional loss (%.1f cp) over %d moves", acpl, nonBookMoves))
-		} else if acpl <= 21.0 && blunders == 0 && playerScore == 1.0 && nonBookMoves >= 16 {
+		} else if acpl <= elevatedACPL && blunders == 0 && playerScore == 1.0 && nonBookMoves >= 16 {
 			score += 12.0
 		}
 	}
@@ -996,7 +1127,7 @@ func scoreSingleGameAnomaly(
 		flags = append(flags, fmt.Sprintf("Intrinsic Performance %d (+%d above %d rating)", ipr, eloDiff, playerElo))
 	}
 
-	if blunders == 0 && nonBookMoves >= 22 && acpl <= 20.0 && playerScore >= 0.5 {
+	if blunders == 0 && nonBookMoves >= 22 && acpl <= elevatedACPL-1.0 && playerScore >= 0.5 {
 		score += 8.0
 	}
 

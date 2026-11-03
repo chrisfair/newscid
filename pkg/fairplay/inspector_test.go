@@ -448,6 +448,100 @@ func TestFairPlayHelpersAndEdgeCases(t *testing.T) {
 	}
 }
 
+func TestMasterEndgameMopUpNotFalselyFlagged_AndClutchToggleCaught(t *testing.T) {
+	// 1. Veteran Master (2420 Elo) playing a strong game with a long clamped +9.0 endgame mop-up
+	// and natural human move-time variance should NOT be falsely flagged.
+	masterPGN := `
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/m1"]
+[Date "2026.10.20"]
+[White "InsaneManiac"]
+[Black "MasterOpp"]
+[Result "1-0"]
+[WhiteElo "2420"]
+[BlackElo "2390"]
+[TimeControl "180+0"]
+
+1. e4 { [%eval 0.2] [%clk 0:03:00] } e5 { [%eval 0.2] [%clk 0:03:00] }
+2. Nf3 { [%eval 0.2] [%clk 0:02:59] } Nc6 { [%eval 0.2] [%clk 0:02:59] }
+3. Bb5 { [%eval 0.3] [%clk 0:02:58] } a6 { [%eval 0.3] [%clk 0:02:58] }
+4. Ba4 { [%eval 0.3] [%clk 0:02:57] } Nf6 { [%eval 0.3] [%clk 0:02:57] }
+5. O-O { [%eval 0.3] [%clk 0:02:56] } Be7 { [%eval 0.3] [%clk 0:02:56] }
+6. Re1 { [%eval 0.2] [%clk 0:02:51] } b5 { [%eval 0.3] [%clk 0:02:54] }
+7. Bb3 { [%eval 0.2] [%clk 0:02:50] } d6 { [%eval 0.3] [%clk 0:02:52] }
+8. c3 { [%eval 0.1] [%clk 0:02:44] } O-O { [%eval 0.3] [%clk 0:02:50] }
+9. h3 { [%eval 0.0] [%clk 0:02:42] } Na5 { [%eval 0.2] [%clk 0:02:48] }
+10. Bc2 { [%eval -0.1] [%clk 0:02:35] } c5 { [%eval 0.2] [%clk 0:02:45] }
+11. d4 { [%eval -0.3] [%clk 0:02:22] } Qc7 { [%eval 0.1] [%clk 0:02:40] }
+12. Nbd2 { [%eval -0.1] [%clk 0:02:19] } cxd4 { [%eval 0.2] [%clk 0:02:38] }
+13. cxd4 { [%eval 0.2] [%clk 0:02:18.5] } Nc6 { [%eval 0.5] [%clk 0:02:33] }
+14. Nb3 { [%eval 0.2] [%clk 0:02:09] } a5 { [%eval 0.8] [%clk 0:02:28] }
+15. Be3 { [%eval 0.5] [%clk 0:02:04] } a4 { [%eval 1.9] [%clk 0:02:20] }
+16. Nbd2 { [%eval 1.6] [%clk 0:02:01] } Bd7 { [%eval 4.8] [%clk 0:02:10] }
+17. Rc1 { [%eval 9.0] [%clk 0:01:58] } Qb7 { [%eval 9.0] [%clk 0:02:00] }
+18. Bb1 { [%eval 9.0] [%clk 0:01:57] } Rfc8 { [%eval 9.0] [%clk 0:01:55] }
+19. Nf1 { [%eval 9.0] [%clk 0:01:56] } Bd8 { [%eval 9.0] [%clk 0:01:50] }
+20. Ng3 { [%eval 9.0] [%clk 0:01:55] } Bb6 { [%eval 9.0] [%clk 0:01:45] }
+21. Qd2 { [%eval 9.0] [%clk 0:01:54] } Qa7 { [%eval 9.0] [%clk 0:01:40] }
+22. Red1 { [%eval 9.0] [%clk 0:01:53] } Qb8 { [%eval 9.0] [%clk 0:01:35] } 1-0
+`
+	masterGames, err := chess.ParsePGNDatabase(strings.NewReader(masterPGN))
+	if err != nil {
+		t.Fatalf("ParsePGNDatabase failed: %v", err)
+	}
+	masterDossier := BuildPlayerFairPlayDossier("InsaneManiac", masterGames, []int{1})
+	if masterDossier.OverallIssueScore >= 25.0 {
+		t.Errorf("expected Master with clamped +9.0 endgame mop-up to score < 25.0, got %.1f (%s)",
+			masterDossier.OverallIssueScore, masterDossier.OverallClassification)
+	}
+	if masterDossier.AllGames[0].ClutchToggle {
+		t.Errorf("expected ClutchToggle = false on clamped endgame mop-up")
+	}
+
+	// 2. Mid-Game Engine Toggler (1500 Elo): falls to -2.0 in opening, then reels off 7 consecutive 0-cp contested moves with 5s flat pacing
+	togglePGN := `
+[Event "Rated Rapid game"]
+[Site "https://lichess.org/t1"]
+[Date "2026.10.21"]
+[White "MidGameToggler"]
+[Black "HumanVictim"]
+[Result "1-0"]
+[WhiteElo "1500"]
+[BlackElo "1520"]
+[TimeControl "600+0"]
+
+1. e4 { [%eval 0.2] [%clk 0:10:00] } e5 { [%eval 0.2] [%clk 0:10:00] }
+2. Nf3 { [%eval 0.2] [%clk 0:09:55] } Nc6 { [%eval 0.2] [%clk 0:09:55] }
+3. Bc4 { [%eval 0.2] [%clk 0:09:50] } Bc5 { [%eval 0.2] [%clk 0:09:50] }
+4. c3 { [%eval 0.1] [%clk 0:09:45] } Nf6 { [%eval 0.1] [%clk 0:09:45] }
+5. d4 { [%eval 0.1] [%clk 0:09:40] } exd4 { [%eval 0.1] [%clk 0:09:40] }
+6. cxd4 { [%eval -2.0] [%clk 0:09:35] } Bb4+ { [%eval -2.0] [%clk 0:09:35] }
+7. Nc3 { [%eval -2.0] [%clk 0:09:30] } Nxe4 { [%eval -1.8] [%clk 0:09:30] }
+8. O-O { [%eval -1.8] [%clk 0:09:25] } Bxc3 { [%eval -1.6] [%clk 0:09:25] }
+9. bxc3 { [%eval -1.6] [%clk 0:09:20] } d5 { [%eval -1.4] [%clk 0:09:20] }
+10. Bd3 { [%eval -1.4] [%clk 0:09:15] } O-O { [%eval -1.2] [%clk 0:09:15] }
+11. Qc2 { [%eval -1.2] [%clk 0:09:10] } Bf5 { [%eval -0.9] [%clk 0:09:10] }
+12. Ba3 { [%eval -0.9] [%clk 0:09:05] } Re8 { [%eval -0.5] [%clk 0:09:05] }
+13. Rfe1 { [%eval -0.5] [%clk 0:09:00] } Bg6 { [%eval -0.1] [%clk 0:09:00] }
+14. Rab1 { [%eval -0.1] [%clk 0:08:55] } Rb8 { [%eval 0.4] [%clk 0:08:55] }
+15. c4 { [%eval 0.4] [%clk 0:08:50] } dxc4 { [%eval 0.9] [%clk 0:08:50] }
+16. Bxc4 { [%eval 0.9] [%clk 0:08:45] } Nxd4 { [%eval 1.4] [%clk 0:08:45] }
+17. Nxd4 { [%eval 1.4] [%clk 0:08:40] } Qxd4 { [%eval 2.1] [%clk 0:08:40] }
+18. Rbd1 { [%eval 2.1] [%clk 0:08:35] } Qf6 { [%eval 2.8] [%clk 0:08:35] } 1-0
+`
+	toggleGames, err := chess.ParsePGNDatabase(strings.NewReader(togglePGN))
+	if err != nil {
+		t.Fatalf("ParsePGNDatabase failed: %v", err)
+	}
+	toggleDossier := BuildPlayerFairPlayDossier("MidGameToggler", toggleGames, []int{1})
+	if !toggleDossier.AllGames[0].ClutchToggle {
+		t.Errorf("expected ClutchToggle = true for MidGameToggler")
+	}
+	if toggleDossier.OverallIssueScore < 65.0 {
+		t.Errorf("expected MidGameToggler OverallIssueScore >= 65.0, got %.1f", toggleDossier.OverallIssueScore)
+	}
+}
+
 
 
 
