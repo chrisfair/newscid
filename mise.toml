@@ -2,7 +2,7 @@
 # Manages Go, Node.js, and Wails CLI tool versions.
 
 [tools]
-go = "1.26"
+go = "latest"
 node = "26"
 "go:github.com/wailsapp/wails/v2/cmd/wails" = "v2.11.0"
 

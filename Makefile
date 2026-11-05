@@ -80,15 +80,12 @@ dev: ## Run live development server with hot-reload (Wails Dev)
 build: ## Build the standalone production binary and companion CLI workstation tools (build/bin/newscid*)
 	@printf "$(BOLD)$(BLUE)==> Building NewScid production desktop application (v$(APP_VERSION), commit $(GIT_COMMIT))...$(RESET)\n"
 	@mkdir -p $(BIN_DIR)
-	@if command -v wails >/dev/null 2>&1; then \
-		wails build -tags "webkit2_41" -ldflags "$(LDFLAGS)"; \
-	else \
-		$(MAKE) build-frontend && go build -tags "desktop,production,webkit2_41" -ldflags "$(LDFLAGS)" -o $(BINARY) .; \
-	fi
+	@$(MAKE) build-frontend
+	@unset GOROOT; go build -tags "desktop,production,webkit2_41" -ldflags "$(LDFLAGS)" -o $(BINARY) .
 	@printf "$(BOLD)$(BLUE)==> Building companion workstation CLI binaries (newscid-import, newscid-fairplay, newscid-scout)...$(RESET)\n"
-	@go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/newscid-import ./cmd/newscid-import
-	@go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/newscid-fairplay ./cmd/newscid-fairplay
-	@go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/newscid-scout ./cmd/newscid-scout
+	@unset GOROOT; go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/newscid-import ./cmd/newscid-import
+	@unset GOROOT; go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/newscid-fairplay ./cmd/newscid-fairplay
+	@unset GOROOT; go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/newscid-scout ./cmd/newscid-scout
 	@printf "$(BOLD)$(GREEN)✔ Binaries built at $(BIN_DIR)/newscid{,-import,-fairplay,-scout}$(RESET)\n"
 
 

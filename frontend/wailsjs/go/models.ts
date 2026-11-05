@@ -655,6 +655,9 @@ export namespace fairplay {
 	    moveTimeCV: number;
 	    roboticCadencePct: number;
 	    delayedRecaptureCount: number;
+	    forcedMoveHesitationCount: number;
+	    maxEngineStreak: number;
+	    clutchToggle: boolean;
 	    acpl: number;
 	    top1AgreementPct: number;
 	    criticalAccuracyPct: number;
@@ -690,6 +693,9 @@ export namespace fairplay {
 	        this.moveTimeCV = source["moveTimeCV"];
 	        this.roboticCadencePct = source["roboticCadencePct"];
 	        this.delayedRecaptureCount = source["delayedRecaptureCount"];
+	        this.forcedMoveHesitationCount = source["forcedMoveHesitationCount"];
+	        this.maxEngineStreak = source["maxEngineStreak"];
+	        this.clutchToggle = source["clutchToggle"];
 	        this.acpl = source["acpl"];
 	        this.top1AgreementPct = source["top1AgreementPct"];
 	        this.criticalAccuracyPct = source["criticalAccuracyPct"];
@@ -933,6 +939,9 @@ export namespace fairplay {
 	    avgMoveTimeSec: number;
 	    avgMoveTimeCV: number;
 	    roboticCadenceGamePct: number;
+	    clutchToggleGameCount: number;
+	    engineStreakGameCount: number;
+	    coOccurringEngineGames: number;
 	    consistentIssueScore: number;
 	    zScore: number;
 	    consistencyClassification: string;
@@ -960,6 +969,9 @@ export namespace fairplay {
 	        this.avgMoveTimeSec = source["avgMoveTimeSec"];
 	        this.avgMoveTimeCV = source["avgMoveTimeCV"];
 	        this.roboticCadenceGamePct = source["roboticCadenceGamePct"];
+	        this.clutchToggleGameCount = source["clutchToggleGameCount"];
+	        this.engineStreakGameCount = source["engineStreakGameCount"];
+	        this.coOccurringEngineGames = source["coOccurringEngineGames"];
 	        this.consistentIssueScore = source["consistentIssueScore"];
 	        this.zScore = source["zScore"];
 	        this.consistencyClassification = source["consistencyClassification"];
