@@ -777,12 +777,24 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 		clutchGamesCnt  int
 		streakGamesCnt  int
 		coOccurringCnt  int
+		severeGamesCnt  int
+		curWinStreak    int
+		maxWinStreak    int
 		issueSum        float64
+		gameScores      []float64
 	)
 
 	dayIssues := make(map[string][]float64)
 	for _, g := range games {
 		winsSum += g.PlayerScore
+		if g.PlayerScore == 1.0 {
+			curWinStreak++
+			if curWinStreak > maxWinStreak {
+				maxWinStreak = curWinStreak
+			}
+		} else {
+			curWinStreak = 0
+		}
 		eloSum += g.PlayerElo
 		iprSum += g.IntrinsicPerformanceElo
 		acplSum += g.ACPL
@@ -801,21 +813,28 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 			streakGamesCnt++
 		}
 		_, elevatedACPL := expectedSuspectACPLThreshold(g.PlayerElo, category)
-		isHighAccGame := (g.HasEvalData && g.ACPL <= elevatedACPL) || g.ClutchToggle || g.MaxEngineStreak >= 9
+		isHighAccGame := (g.HasEvalData && g.ACPL <= elevatedACPL) ||
+			(!g.HasEvalData && g.ACPL <= elevatedACPL+4.0 && g.BlunderCount == 0 && g.PlayerScore == 1.0 && g.NonBookMoves >= 16) ||
+			g.ClutchToggle ||
+			g.MaxEngineStreak >= 9
 		isRoboticClock := false
 		if g.HasClockData {
 			clockGames++
 			timeSum += g.AvgMoveTimeSec
 			cvSum += g.MoveTimeCV
-			if g.MoveTimeCV > 0 && g.MoveTimeCV <= 0.38 && g.RoboticCadencePct >= 60.0 {
+			if g.MoveTimeCV > 0 && g.MoveTimeCV <= 0.42 && g.RoboticCadencePct >= 56.0 {
 				roboticGamesCnt++
 			}
-			isRoboticClock = (g.MoveTimeCV > 0 && g.MoveTimeCV <= 0.42 && g.RoboticCadencePct >= 58.0) || g.ForcedMoveHesitationCount >= 2 || g.DelayedRecaptureCount >= 2
+			isRoboticClock = (g.MoveTimeCV > 0 && g.MoveTimeCV <= 0.44 && g.RoboticCadencePct >= 55.0) || g.ForcedMoveHesitationCount >= 2 || g.DelayedRecaptureCount >= 2
 		}
 		if isHighAccGame && isRoboticClock {
 			coOccurringCnt++
 		}
+		if g.GameIssueScore >= 58.0 || (isHighAccGame && isRoboticClock) || g.ClutchToggle {
+			severeGamesCnt++
+		}
 		issueSum += g.GameIssueScore
+		gameScores = append(gameScores, g.GameIssueScore)
 		dayIssues[g.Date] = append(dayIssues[g.Date], g.GameIssueScore)
 	}
 
@@ -855,24 +874,47 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 	}
 
 	baseAvgIssue := issueSum / float64(n)
+	// When a selective cheater toggles an engine in a subset of games (e.g. >=2 severe games or >=20% of sample),
+	// blend the top suspect games so non-cheated games do not completely wash out blatant engine games.
+	if severeGamesCnt >= 2 || (severeGamesCnt >= 1 && n <= 3) {
+		sortedSc := make([]float64, len(gameScores))
+		copy(sortedSc, gameScores)
+		sort.Slice(sortedSc, func(i, j int) bool { return sortedSc[i] > sortedSc[j] })
+		topK := severeGamesCnt
+		if topK > len(sortedSc) {
+			topK = len(sortedSc)
+		}
+		topAvg := meanFloat64(sortedSc[:topK])
+		severeShare := float64(severeGamesCnt) / float64(n)
+		if severeGamesCnt >= 3 || severeShare >= 0.25 || coOccurringCnt >= 1 || clutchGamesCnt >= 1 {
+			blendedPeak := 0.55*topAvg + 0.45*baseAvgIssue
+			if blendedPeak > baseAvgIssue {
+				baseAvgIssue = blendedPeak
+			}
+		}
+	}
+
 	// Multi-game & multi-day consistency bonus: if elevated across multiple days/games in this time control
 	consistencyBonus := 0.0
 	if n >= 3 && dailyConsistencyPct >= 50.0 {
 		consistencyBonus += (dailyConsistencyPct - 40.0) * 0.22
 	}
-	if clockGames >= 2 && roboticGamePct >= 50.0 {
-		consistencyBonus += (roboticGamePct - 40.0) * 0.18
+	if clockGames >= 2 && roboticGamePct >= 40.0 {
+		consistencyBonus += (roboticGamePct - 30.0) * 0.20
 	}
-	if eloDelta > 280 && (evalGames > 0 || clockGames > 0 || (winsSum/float64(n)) >= 0.65) {
-		consistencyBonus += math.Min(16.0, float64(eloDelta-280)*0.035)
+	if eloDelta > 260 && (evalGames > 0 || clockGames > 0 || (winsSum/float64(n)) >= 0.65) {
+		consistencyBonus += math.Min(16.0, float64(eloDelta-260)*0.038)
 	}
-	if coOccurringCnt >= 1 || (clutchGamesCnt >= minClutchForSample && avgACPL <= elevatedACPL) {
-		consistencyBonus += math.Min(14.0, float64(coOccurringCnt*6+clutchGamesCnt*4))
+	if coOccurringCnt >= 1 || (clutchGamesCnt >= minClutchForSample && avgACPL <= elevatedACPL+4.0) {
+		consistencyBonus += math.Min(16.0, float64(coOccurringCnt*7+clutchGamesCnt*5))
+	}
+	if maxWinStreak >= 7 && (evalGames > 0 || clockGames > 0 || avgACPL <= elevatedACPL+10.0) {
+		consistencyBonus += math.Min(12.0, float64(maxWinStreak-5)*2.0)
 	}
 
 	consistentScore := baseAvgIssue + consistencyBonus
 	// Veteran / High-Rated Master dampener: prevent false positives when a 2100+ player has normal move-time variance and normal master ACPL
-	if avgElo >= 2100 && coOccurringCnt == 0 && roboticGamePct < 25.0 && avgACPL > severeACPL {
+	if avgElo >= 2100 && coOccurringCnt == 0 && clutchGamesCnt == 0 && roboticGamePct < 25.0 && avgACPL > severeACPL {
 		consistentScore *= 0.62
 	}
 	consistentScore = round1(math.Min(99.0, math.Max(0.0, consistentScore)))
@@ -1114,11 +1156,13 @@ func scoreSingleGameAnomaly(
 		}
 	} else {
 		// Heuristic tactical/positional screening when [%eval] tags are absent
-		if acpl <= severeACPL+1.0 && blunders == 0 && playerScore >= 0.75 && nonBookMoves >= 16 {
-			score += 22.0
+		heurSevere := severeACPL + 3.0
+		heurElevated := elevatedACPL + 4.0
+		if acpl <= heurSevere && blunders == 0 && playerScore >= 0.75 && nonBookMoves >= 16 {
+			score += 24.0
 			flags = append(flags, fmt.Sprintf("Near-zero tactical/positional loss (%.1f cp) over %d moves", acpl, nonBookMoves))
-		} else if acpl <= elevatedACPL && blunders == 0 && playerScore == 1.0 && nonBookMoves >= 16 {
-			score += 12.0
+		} else if acpl <= heurElevated && blunders == 0 && playerScore == 1.0 && nonBookMoves >= 16 {
+			score += 13.0
 		}
 	}
 
@@ -1133,16 +1177,18 @@ func scoreSingleGameAnomaly(
 
 	// Move-Time Cadence ("Robotic Pacing" / External Consultation Signature)
 	if hasClock {
-		if cvTime > 0 && cvTime <= 0.35 && avgTime >= 2.2 {
-			score += 28.0
+		if cvTime > 0 && cvTime <= 0.36 && avgTime >= 2.0 {
+			score += 30.0
 			flags = append(flags, fmt.Sprintf("Robotic flat move-time cadence (%.1fs ± %.2f CV, %.0f%% in narrow band)", avgTime, cvTime, roboticPct))
-		} else if cvTime > 0 && cvTime <= 0.45 && roboticPct >= 65.0 {
-			score += 16.0
-			flags = append(flags, fmt.Sprintf("Low move-time variance (CV %.2f, %.0f%% moves in 2.5s–8.5s band)", cvTime, roboticPct))
+		} else if cvTime > 0 && cvTime <= 0.46 && roboticPct >= 58.0 {
+			score += 18.0
+			flags = append(flags, fmt.Sprintf("Low move-time variance (CV %.2f, %.0f%% moves in 2.0s–9.5s band)", cvTime, roboticPct))
 		}
 		if delayedRecaptures >= 2 {
-			score += 8.0
+			score += 10.0
 			flags = append(flags, fmt.Sprintf("%d obvious recaptures delayed >3.2s (tab-switch signature)", delayedRecaptures))
+		} else if delayedRecaptures == 1 && cvTime > 0 && cvTime <= 0.44 {
+			score += 6.0
 		}
 	}
 
@@ -1422,7 +1468,7 @@ func computeCadenceStats(times []float64) (mean, stdDev, cv, roboticPct float64)
 	for _, t := range times {
 		d := t - mean
 		sqDiffSum += d * d
-		if t >= 2.3 && t <= 8.8 {
+		if t >= 2.0 && t <= 9.5 {
 			narrowBandCnt++
 		}
 	}

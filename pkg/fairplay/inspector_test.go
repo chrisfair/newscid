@@ -540,6 +540,43 @@ func TestMasterEndgameMopUpNotFalselyFlagged_AndClutchToggleCaught(t *testing.T)
 	if toggleDossier.OverallIssueScore < 65.0 {
 		t.Errorf("expected MidGameToggler OverallIssueScore >= 65.0, got %.1f", toggleDossier.OverallIssueScore)
 	}
+
+	// 3. Selective Cheater in a 5-game sample (3 normal human losses + 2 blatant engine games):
+	// Verify that non-cheated games do not wash out repeated engine-toggle games in the same time control.
+	selectivePGN := togglePGN + "\n" + togglePGN + `
+[Event "Rated Rapid game"]
+[Site "https://lichess.org/norm1"]
+[Date "2026.10.22"]
+[White "MidGameToggler"]
+[Black "HumanPeer1"]
+[Result "0-1"]
+[WhiteElo "1500"]
+[BlackElo "1510"]
+[TimeControl "600+0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. Ng5 d5 5. exd5 Nxd5 6. Nxf7 Kxf7 7. Qf3+ Ke6 8. Nc3 Nce7 9. d4 c6 10. Bg5 h6 11. Bxe7 Bxe7 12. O-O-O Rf8 13. Qe4 Rf4 14. Qxe5+ Kf7 15. Nxd5 cxd5 16. Bxd5+ Kf8 0-1
+
+[Event "Rated Rapid game"]
+[Site "https://lichess.org/norm2"]
+[Date "2026.10.22"]
+[White "MidGameToggler"]
+[Black "HumanPeer2"]
+[Result "0-1"]
+[WhiteElo "1500"]
+[BlackElo "1510"]
+[TimeControl "600+0"]
+
+1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Bg5 Be7 5. e3 O-O 6. Nf3 b6 7. cxd5 exd5 8. Bd3 Bb7 9. O-O Nbd7 10. Rc1 c5 11. Qe2 Ne4 12. Bf4 Ndf6 13. Rfd1 Bd6 14. Bxd6 Qxd6 15. dxc5 Nxc5 16. Bb1 Rfd8 0-1
+`
+	selectiveGames, err := chess.ParsePGNDatabase(strings.NewReader(selectivePGN))
+	if err != nil {
+		t.Fatalf("ParsePGNDatabase failed: %v", err)
+	}
+	selectiveDossier := BuildPlayerFairPlayDossier("MidGameToggler", selectiveGames, []int{1, 2, 3, 4})
+	if selectiveDossier.OverallIssueScore < 55.0 {
+		t.Errorf("expected selective cheater (2/4 blatant engine games) to score >= 55.0, got %.1f (%s)",
+			selectiveDossier.OverallIssueScore, selectiveDossier.OverallClassification)
+	}
 }
 
 

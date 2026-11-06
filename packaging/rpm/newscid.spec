@@ -1,5 +1,5 @@
 Name:           newscid
-Version:        1.3.35
+Version:        1.3.36
 Release:        1%{?dist}
 Summary:        Chess Information Database (Scid v4 compatible)
 
