@@ -44,6 +44,8 @@ type GameFairPlayRecord struct {
 	ForcedMoveHesitationCount int      `json:"forcedMoveHesitationCount"` // Recaptures or check evasions taking 3.2s-14s (relay lag)
 	MaxEngineStreak           int      `json:"maxEngineStreak"`           // Longest consecutive <= 10cp loss streak in contested positions
 	ClutchToggle              bool     `json:"clutchToggle"`              // Mid-game engine toggle after >= 150cp opening deficit
+	MicroBurstWindowCV        float64  `json:"microBurstWindowCV"`        // Lowest 6-move sliding window CV inside [2.0s, 9.0s]
+	MaiaPattern               bool     `json:"maiaPattern"`               // Blunder-free sub-ceiling neural-imitation (Maia) loss distribution
 	ACPL                      float64  `json:"acpl"`                      // Average Centipawn Loss on non-book moves
 	Top1AgreementPct          float64  `json:"top1AgreementPct"`          // % of moves with <= 10cp loss
 	CriticalAccuracyPct       float64  `json:"criticalAccuracyPct"`       // % accuracy in sharp/high-tension positions
@@ -716,6 +718,40 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 		issueScore += 8.0
 		flags = append(flags, fmt.Sprintf("%d forced recaptures/check evasions delayed >3.2s (relay lag)", forcedMoveHesitations))
 	}
+
+	var microBurstCV, microBurstMean, microBurstPause float64
+	var microBurstStartMove int
+	if hasValidClock && tcCat != "Bullet" {
+		microBurstStartMove, microBurstCV, microBurstMean, microBurstPause = detectMicroBurstWindow(moveTimes)
+	}
+	maiaPattern, lossStdDev := detectMaiaLossDistribution(cpLosses, acpl, top1Pct, blunders, playerElo, tcCat, hasEval)
+
+	_, elevatedACPLForGame := expectedSuspectACPLThreshold(playerElo, tcCat)
+	if microBurstCV > 0 && microBurstCV <= 0.25 && cvTime > 0.36 {
+		hasBurstCorroboration := (hasEval && acpl <= elevatedACPLForGame+6.0) ||
+			maiaPattern ||
+			clutchToggle ||
+			(microBurstPause >= 10.0 && playerScore == 1.0 && (delayedRecaptures >= 1 || acpl <= elevatedACPLForGame+4.0))
+		if hasBurstCorroboration {
+			issueScore += 18.0
+			if microBurstPause >= 10.0 {
+				flags = append(flags, fmt.Sprintf("Selective 6-move micro-burst cadence (moves %d–%d, window CV %.2f, %.1fs avg after %.1fs setup pause)", microBurstStartMove, microBurstStartMove+5, microBurstCV, microBurstMean, microBurstPause))
+			} else {
+				flags = append(flags, fmt.Sprintf("Selective 6-move micro-burst cadence (moves %d–%d, window CV %.2f, %.1fs avg)", microBurstStartMove, microBurstStartMove+5, microBurstCV, microBurstMean))
+			}
+		}
+	}
+
+	hasRoboticOrBurstClock := hasValidClock && ((cvTime > 0 && cvTime <= 0.44 && roboticPct >= 55.0) || (microBurstCV > 0 && microBurstCV <= 0.25))
+	if maiaPattern && (hasRoboticOrBurstClock || (hasEval && playerScore == 1.0 && nonBookMoves >= 20)) {
+		if hasRoboticOrBurstClock {
+			issueScore += 22.0
+		} else {
+			issueScore += 12.0
+		}
+		flags = append(flags, fmt.Sprintf("Maia / human-like neural bot signature (blunder-free %.1f ACPL below Stockfish ceiling, compressed ±%.1f cp loss spread)", acpl, lossStdDev))
+	}
+
 	if issueScore > 99.0 {
 		issueScore = 99.0
 	}
@@ -745,6 +781,8 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 		ForcedMoveHesitationCount: forcedMoveHesitations,
 		MaxEngineStreak:           maxEngineStreak,
 		ClutchToggle:              clutchToggle,
+		MicroBurstWindowCV:        round2(microBurstCV),
+		MaiaPattern:               maiaPattern,
 		ACPL:                      round1(acpl),
 		Top1AgreementPct:          top1Pct,
 		CriticalAccuracyPct:       critAccPct,
@@ -816,16 +854,20 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 		isHighAccGame := (g.HasEvalData && g.ACPL <= elevatedACPL) ||
 			(!g.HasEvalData && g.ACPL <= elevatedACPL+4.0 && g.BlunderCount == 0 && g.PlayerScore == 1.0 && g.NonBookMoves >= 16) ||
 			g.ClutchToggle ||
-			g.MaxEngineStreak >= 9
+			g.MaxEngineStreak >= 9 ||
+			g.MaiaPattern
 		isRoboticClock := false
 		if g.HasClockData {
 			clockGames++
 			timeSum += g.AvgMoveTimeSec
 			cvSum += g.MoveTimeCV
-			if g.MoveTimeCV > 0 && g.MoveTimeCV <= 0.42 && g.RoboticCadencePct >= 56.0 {
+			if (g.MoveTimeCV > 0 && g.MoveTimeCV <= 0.42 && g.RoboticCadencePct >= 56.0) || (g.MicroBurstWindowCV > 0 && g.MicroBurstWindowCV <= 0.25 && isHighAccGame) {
 				roboticGamesCnt++
 			}
-			isRoboticClock = (g.MoveTimeCV > 0 && g.MoveTimeCV <= 0.44 && g.RoboticCadencePct >= 55.0) || g.ForcedMoveHesitationCount >= 2 || g.DelayedRecaptureCount >= 2
+			isRoboticClock = (g.MoveTimeCV > 0 && g.MoveTimeCV <= 0.44 && g.RoboticCadencePct >= 55.0) ||
+				(g.MicroBurstWindowCV > 0 && g.MicroBurstWindowCV <= 0.25) ||
+				g.ForcedMoveHesitationCount >= 2 ||
+				g.DelayedRecaptureCount >= 2
 		}
 		if isHighAccGame && isRoboticClock {
 			coOccurringCnt++
@@ -1476,6 +1518,81 @@ func computeCadenceStats(times []float64) (mean, stdDev, cv, roboticPct float64)
 	cv = stdDev / mean
 	roboticPct = 100.0 * float64(narrowBandCnt) / float64(len(times))
 	return mean, stdDev, cv, roboticPct
+}
+
+// detectMicroBurstWindow scans post-book move times for a 6-move sliding window inside [2.0s, 9.0s]
+// with ultra-flat cadence (windowCV <= 0.25), catching partial-game toggles.
+func detectMicroBurstWindow(times []float64) (startMove int, bestCV, bestMean, setupPauseSec float64) {
+	if len(times) < 8 {
+		return 0, 0, 0, 0
+	}
+	for i := 0; i <= len(times)-6; i++ {
+		win := times[i : i+6]
+		allInBand := true
+		for _, t := range win {
+			if t < 2.0 || t > 9.0 {
+				allInBand = false
+				break
+			}
+		}
+		if !allInBand {
+			continue
+		}
+		m := meanFloat64(win)
+		if m < 2.4 {
+			continue
+		}
+		var sqDiff float64
+		for _, t := range win {
+			d := t - m
+			sqDiff += d * d
+		}
+		cv := math.Sqrt(sqDiff/6.0) / m
+		if cv <= 0.25 {
+			pause := 0.0
+			if i > 0 && times[i-1] >= 10.0 {
+				pause = times[i-1]
+			}
+			if bestCV == 0 || cv < bestCV-0.02 || (pause >= 10.0 && setupPauseSec == 0) {
+				startMove = i + 6
+				bestCV = cv
+				bestMean = m
+				setupPauseSec = pause
+			}
+		}
+	}
+	return startMove, bestCV, bestMean, setupPauseSec
+}
+
+// detectMaiaLossDistribution identifies the statistical centipawn-loss distribution of Maia / human-like
+// neural engines: staying intentionally above the Stockfish severeACPL threshold (13..42cp) with 0 blunders,
+// >=25% of moves leaking 11..65cp human-consensus inaccuracies, and compressed loss spread (StdDev <= 26cp).
+func detectMaiaLossDistribution(cpLosses []float64, acpl, top1Pct float64, blunders, playerElo int, tcCat string, hasEval bool) (bool, float64) {
+	if !hasEval || len(cpLosses) < 14 || blunders > 0 || top1Pct >= 68.0 {
+		return false, 0
+	}
+	severeACPL, elevatedACPL := expectedSuspectACPLThreshold(playerElo, tcCat)
+	if acpl <= severeACPL || acpl > elevatedACPL+18.0 {
+		return false, 0
+	}
+	maxLoss := 0.0
+	modSuboptimal := 0
+	var sqDiff float64
+	for _, l := range cpLosses {
+		if l > maxLoss {
+			maxLoss = l
+		}
+		if l >= 11.0 && l <= 65.0 {
+			modSuboptimal++
+		}
+		d := l - acpl
+		sqDiff += d * d
+	}
+	stdDev := math.Sqrt(sqDiff / float64(len(cpLosses)))
+	if maxLoss < 115.0 && float64(modSuboptimal)/float64(len(cpLosses)) >= 0.25 && stdDev <= 26.0 {
+		return true, round1(stdDev)
+	}
+	return false, round1(stdDev)
 }
 
 func meanFloat64(vals []float64) float64 {

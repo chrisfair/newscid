@@ -577,6 +577,19 @@ func TestMasterEndgameMopUpNotFalselyFlagged_AndClutchToggleCaught(t *testing.T)
 		t.Errorf("expected selective cheater (2/4 blatant engine games) to score >= 55.0, got %.1f (%s)",
 			selectiveDossier.OverallIssueScore, selectiveDossier.OverallClassification)
 	}
+
+	// 4. Explicit Maia / Human-Like Neural Engine & 6-Move Micro-Burst Detection:
+	startMove, burstCV, burstMean, pauseSec := detectMicroBurstWindow([]float64{1.2, 14.5, 4.2, 4.5, 3.9, 4.8, 4.4, 4.1, 18.0})
+	if startMove != 8 || burstCV <= 0 || burstCV > 0.25 || burstMean < 3.5 || pauseSec < 14.0 {
+		t.Errorf("expected 6-move micro-burst after 14.5s pause, got start=%d cv=%.2f mean=%.1f pause=%.1f",
+			startMove, burstCV, burstMean, pauseSec)
+	}
+
+	maiaLosses := []float64{0, 18, 22, 0, 28, 15, 0, 24, 19, 0, 32, 14, 21, 0, 25, 16}
+	isMaia, lossStd := detectMaiaLossDistribution(maiaLosses, 14.6, 37.5, 0, 1400, "Rapid", true)
+	if !isMaia || lossStd <= 0 || lossStd > 26.0 {
+		t.Errorf("expected detectMaiaLossDistribution=true for Maia loss profile, got %v (std=%.1f)", isMaia, lossStd)
+	}
 }
 
 
