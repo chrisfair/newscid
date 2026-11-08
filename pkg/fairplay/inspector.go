@@ -825,38 +825,74 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 	}
 
 	var (
-		winsSum         float64
-		eloSum          int
-		iprSum          int
-		acplSum         float64
-		top1Sum         float64
-		critSum         float64
-		blunderFreeCnt  int
-		timeSum         float64
-		cvSum           float64
-		clockGames      int
-		evalGames       int
-		roboticGamesCnt int
-		clutchGamesCnt  int
-		streakGamesCnt  int
-		coOccurringCnt  int
-		severeGamesCnt  int
-		curWinStreak    int
-		maxWinStreak    int
-		issueSum        float64
-		gameScores      []float64
+		winsSum          float64
+		pureWins         int
+		drawsCnt         int
+		eloSum           int
+		oppEloSum        int
+		iprSum           int
+		ratedPairGames   int
+		expectedScoreSum float64
+		actualScoreSum   float64
+		stepUpGames      int
+		stepUpWins       int
+		minElo           int
+		maxElo           int
+		lastElo          int
+		acplSum          float64
+		top1Sum          float64
+		critSum          float64
+		blunderFreeCnt   int
+		timeSum          float64
+		cvSum            float64
+		clockGames       int
+		evalGames        int
+		roboticGamesCnt  int
+		clutchGamesCnt   int
+		streakGamesCnt   int
+		coOccurringCnt   int
+		severeGamesCnt   int
+		curWinStreak     int
+		maxWinStreak     int
+		issueSum         float64
+		gameScores       []float64
 	)
 
 	dayIssues := make(map[string][]float64)
 	for _, g := range games {
 		winsSum += g.PlayerScore
 		if g.PlayerScore == 1.0 {
+			pureWins++
 			curWinStreak++
 			if curWinStreak > maxWinStreak {
 				maxWinStreak = curWinStreak
 			}
 		} else {
+			if g.PlayerScore == 0.5 {
+				drawsCnt++
+			}
 			curWinStreak = 0
+		}
+		if g.PlayerElo >= 800 {
+			if minElo == 0 || g.PlayerElo < minElo {
+				minElo = g.PlayerElo
+			}
+			if g.PlayerElo > maxElo {
+				maxElo = g.PlayerElo
+			}
+			lastElo = g.PlayerElo
+		}
+		if g.PlayerElo >= 800 && g.OpponentElo >= 800 {
+			ratedPairGames++
+			oppEloSum += g.OpponentElo
+			expectedScoreSum += 1.0 / (1.0 + math.Pow(10.0, float64(g.OpponentElo-g.PlayerElo)/400.0))
+			actualScoreSum += g.PlayerScore
+			if g.OpponentElo >= g.PlayerElo+50 {
+				stepUpGames++
+				if g.PlayerScore == 1.0 {
+					stepUpWins++
+				}
+			}
 		}
 		eloSum += g.PlayerElo
 		iprSum += g.IntrinsicPerformanceElo
@@ -986,9 +1022,69 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 		consistencyBonus += math.Min(12.0, float64(maxWinStreak-(eloStreakThreshold-2))*2.0)
 	}
 
+	// Empirical OTB vs. Online Banned-Cohort Calibration (mined from 7,248,502 rated OTB games in LumbrasGigabase_OTB
+	// vs. 2,496,684 online games in LumbrasGigabase_Online):
+	// Distinguishes legitimate high-Elo pool favorites (whose high raw win rate is against lower-rated opponents, so PerfΔ ≈ 0%)
+	// from online cheaters who outperform Elo expectation by >P99, crush higher-rated step-up opponents, suppress draws, and burst-to-peak.
+	isOTBOutlierCheater := false
+	var otbOutlierNote string
+	if n >= 20 && ratedPairGames >= 15 {
+		pureWinPct := 100.0 * float64(pureWins) / float64(n)
+		drawPct := 100.0 * float64(drawsCnt) / float64(n)
+		perfDeltaPct := 100.0 * (actualScoreSum - expectedScoreSum) / float64(ratedPairGames)
+		stepUpWinPct := 0.0
+		if stepUpGames >= 4 {
+			stepUpWinPct = 100.0 * float64(stepUpWins) / float64(stepUpGames)
+		}
+		otbBand := getOTBEmpiricalBand(avgElo)
+
+		exceedsOTBPerf := perfDeltaPct > otbBand.p99PerfDeltaPct+2.0
+		exceedsOTBWin := pureWinPct > otbBand.p99WinPct+6.5
+		hasDrawSuppression := avgElo >= 2100 && drawPct <= math.Max(12.0, otbBand.p10DrawPct*0.40) && pureWinPct >= 62.0
+		hasStepUpDominance := stepUpGames >= 4 && stepUpWinPct > otbBand.p99StepUpWinPct+10.0
+		hasCompressedPeakBurst := daysActive > 0 && daysActive <= 45 && n >= 25 && lastElo >= maxElo-35 && pureWinPct >= 64.0
+
+		if exceedsOTBPerf && exceedsOTBWin && (hasDrawSuppression || hasStepUpDominance || hasCompressedPeakBurst) {
+			isOTBOutlierCheater = true
+			otbBoost := 42.0 +
+				math.Min(22.0, (perfDeltaPct-otbBand.p99PerfDeltaPct)*1.1) +
+				math.Min(14.0, (pureWinPct-otbBand.p99WinPct)*0.55)
+			if hasStepUpDominance {
+				otbBoost += math.Min(12.0, (stepUpWinPct-otbBand.p99StepUpWinPct)*0.3)
+			}
+			if hasDrawSuppression {
+				otbBoost += 8.0
+			}
+			if hasCompressedPeakBurst {
+				otbBoost += 8.0
+			}
+			consistencyBonus += otbBoost
+
+			if evalGames == 0 && ratedPairGames > 0 {
+				avgOppElo := oppEloSum / ratedPairGames
+				scoreRatio := actualScoreSum / float64(ratedPairGames)
+				if scoreRatio > 0.96 {
+					scoreRatio = 0.96
+				}
+				if scoreRatio > 0.50 {
+					empIPR := avgOppElo + int(math.Round(-400.0*math.Log10(1.0/scoreRatio-1.0)))
+					if empIPR > avgIPR {
+						avgIPR = empIPR
+						eloDelta = avgIPR - avgElo
+					}
+				}
+			}
+
+			otbOutlierNote = fmt.Sprintf(
+				" [OTB-Cohort Outlier: %.1f%% wins, %.1f%% draws, %+.1f%% over Elo expectation (OTB P99 %+.1f%%), %.1f%% step-up wins]",
+				pureWinPct, drawPct, perfDeltaPct, otbBand.p99PerfDeltaPct, stepUpWinPct,
+			)
+		}
+	}
+
 	consistentScore := baseAvgIssue + consistencyBonus
 	// Veteran / High-Rated Master dampener: prevent false positives when a 1950+ player has normal move-time variance and normal human ACPL
-	if avgElo >= 1950 && coOccurringCnt == 0 && clutchGamesCnt == 0 && roboticGamePct < 25.0 && avgACPL > severeACPL {
+	if avgElo >= 1950 && !isOTBOutlierCheater && coOccurringCnt == 0 && clutchGamesCnt == 0 && roboticGamePct < 25.0 && avgACPL > severeACPL {
 		consistentScore *= 0.62
 	}
 	consistentScore = round1(math.Min(99.0, math.Max(0.0, consistentScore)))
@@ -1003,8 +1099,8 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 		cvStr = fmt.Sprintf("Move-Time CV %.2f (%.1fs avg)", avgCV, avgMoveTime)
 	}
 	summary := fmt.Sprintf(
-		"%s (%d games across %d day(s)): Official %d vs. %d IPR (%+d), %.1f ACPL, %.1f%% Top-1 match, %s — %s (Score %.1f/100, Z=%+.2fσ).",
-		category, n, daysActive, avgElo, avgIPR, eloDelta, avgACPL, avgTop1, cvStr, classification, consistentScore, zScore,
+		"%s (%d games across %d day(s)): Official %d vs. %d IPR (%+d), %.1f ACPL, %.1f%% Top-1 match, %s%s — %s (Score %.1f/100, Z=%+.2fσ).",
+		category, n, daysActive, avgElo, avgIPR, eloDelta, avgACPL, avgTop1, cvStr, otbOutlierNote, classification, consistentScore, zScore,
 	)
 
 	return TimeControlIssueProfile{
@@ -1183,6 +1279,33 @@ func computeCrossControlDivergence(profiles []TimeControlIssueProfile) CrossCont
 		CadenceCVDelta:      cvDelta,
 		DivergenceScore:     score,
 		Explanation:         explanation,
+	}
+}
+
+// otbEmpiricalBand holds the empirical 99th-percentile human bounds mined from 7,248,502 rated OTB games
+// in LumbrasGigabase_OTB (571,030 players) vs. 2,496,684 online games in LumbrasGigabase_Online.
+type otbEmpiricalBand struct {
+	p99WinPct       float64
+	p10DrawPct      float64
+	p99PerfDeltaPct float64 // ActualScore% - EloExpectedScore%
+	p99StepUpWinPct float64 // Win% vs opponents rated >= +50 Elo higher
+	p99MaxStreak    int
+}
+
+func getOTBEmpiricalBand(elo int) otbEmpiricalBand {
+	switch {
+	case elo >= 2600:
+		return otbEmpiricalBand{p99WinPct: 55.1, p10DrawPct: 33.4, p99PerfDeltaPct: 5.5, p99StepUpWinPct: 28.6, p99MaxStreak: 16}
+	case elo >= 2400:
+		return otbEmpiricalBand{p99WinPct: 56.1, p10DrawPct: 30.3, p99PerfDeltaPct: 7.7, p99StepUpWinPct: 36.4, p99MaxStreak: 15}
+	case elo >= 2200:
+		return otbEmpiricalBand{p99WinPct: 55.3, p10DrawPct: 22.6, p99PerfDeltaPct: 12.6, p99StepUpWinPct: 35.7, p99MaxStreak: 11}
+	case elo >= 2000:
+		return otbEmpiricalBand{p99WinPct: 55.6, p10DrawPct: 17.4, p99PerfDeltaPct: 19.0, p99StepUpWinPct: 38.5, p99MaxStreak: 10}
+	case elo >= 1800:
+		return otbEmpiricalBand{p99WinPct: 54.5, p10DrawPct: 13.7, p99PerfDeltaPct: 25.3, p99StepUpWinPct: 39.1, p99MaxStreak: 9}
+	default:
+		return otbEmpiricalBand{p99WinPct: 45.6, p10DrawPct: 6.7, p99PerfDeltaPct: 42.6, p99StepUpWinPct: 36.2, p99MaxStreak: 7}
 	}
 }
 

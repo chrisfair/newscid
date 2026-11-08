@@ -1,6 +1,7 @@
 package fairplay
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -594,6 +595,71 @@ func TestMasterEndgameMopUpNotFalselyFlagged_AndClutchToggleCaught(t *testing.T)
 	isMaiaMaster, _ := detectMaiaLossDistribution(maiaLosses, 14.6, 37.5, 0, 2420, "Rapid", false)
 	if isMaiaMaster {
 		t.Errorf("expected detectMaiaLossDistribution=false for 2420 Elo master without robotic cadence")
+	}
+
+	// 5. Verify OTB-vs-Online Banned Cohort Calibration:
+	// An unannotated online cheater who outperforms Elo expectation by >P99 (+24%), suppresses draws (<4%),
+	// and crushes higher-rated step-up opponents is flagged as High Consistent Time-Control Anomaly,
+	// whereas a high-Elo pool favorite beating lower-rated opponents (PerfΔ ≈ 0%) remains Normal Human Variance.
+	var bannedPGNs, poolFavPGNs strings.Builder
+	var gameIDs []int
+	for i := 0; i < 30; i++ {
+		gameIDs = append(gameIDs, i+1)
+		res := "1-0"
+		if i%5 == 4 {
+			res = "0-1"
+		}
+		oppElo := 2660
+		if i < 10 {
+			oppElo = 2740 // step-up opponent (+80 Elo)
+		}
+		bannedPGNs.WriteString(fmt.Sprintf(`
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/b%d"]
+[Date "2026.10.%02d"]
+[White "BannedOnlineSuspect"]
+[Black "GMOpponent%d"]
+[Result "%s"]
+[WhiteElo "2660"]
+[BlackElo "%d"]
+[TimeControl "180+0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 9. h3 Na5 10. Bc2 c5 11. d4 Qc7 12. Nbd2 cxd4 13. cxd4 Nc6 14. Nb3 a5 15. Be3 a4 16. Nbd2 Bd7 17. Rc1 Qb7 18. Bb1 Rfc8 %s
+`, i, (i%10)+1, i, res, oppElo, res))
+
+		// Pool favorite (2444 Elo paired downward against 2160 Elo on average -> expected score 84%, actual 80% -> PerfΔ = -4%)
+		poolFavPGNs.WriteString(fmt.Sprintf(`
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/p%d"]
+[Date "2026.0%d.%02d"]
+[White "PoolFavoriteMaster"]
+[Black "LowerPoolOpp%d"]
+[Result "%s"]
+[WhiteElo "2444"]
+[BlackElo "2160"]
+[TimeControl "180+0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 9. h3 Na5 10. Bc2 c5 11. d4 Qc7 12. Nbd2 cxd4 13. cxd4 Nc6 14. Nb3 a5 15. Be3 a4 16. Nbd2 Bd7 17. Rc1 Qb7 18. Bb1 Rfc8 %s
+`, i, (i%8)+1, (i%25)+1, i, res, res))
+	}
+	bannedGames, err := chess.ParsePGNDatabase(strings.NewReader(bannedPGNs.String()))
+	if err != nil {
+		t.Fatalf("ParsePGNDatabase(bannedGames) failed: %v", err)
+	}
+	bannedDossier := BuildPlayerFairPlayDossier("BannedOnlineSuspect", bannedGames, gameIDs)
+	if bannedDossier.OverallIssueScore < 65.0 {
+		t.Errorf("expected BannedOnlineSuspect to score >= 65.0 via OTB-vs-Online cohort calibration, got %.1f (%s)",
+			bannedDossier.OverallIssueScore, bannedDossier.OverallClassification)
+	}
+
+	poolFavGames, err := chess.ParsePGNDatabase(strings.NewReader(poolFavPGNs.String()))
+	if err != nil {
+		t.Fatalf("ParsePGNDatabase(poolFavGames) failed: %v", err)
+	}
+	poolFavDossier := BuildPlayerFairPlayDossier("PoolFavoriteMaster", poolFavGames, gameIDs)
+	if poolFavDossier.OverallIssueScore >= 25.0 {
+		t.Errorf("expected PoolFavoriteMaster (paired downward, PerfΔ <= 0) to score < 25.0, got %.1f (%s)",
+			poolFavDossier.OverallIssueScore, poolFavDossier.OverallClassification)
 	}
 }
 
