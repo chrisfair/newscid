@@ -26,6 +26,9 @@ import {
   DownloadAndAnalyzeHardMoveBenchmark,
   GetDatabasePlayers,
 } from '../../wailsjs/go/main/App'
+import pkg from '../../package.json'
+
+const appVersion = pkg.version || '1.3.41'
 
 const props = defineProps<{
   dbOpen?: boolean
@@ -298,6 +301,9 @@ async function handleCopyReport() {
           <div>
             <h2 class="text-base font-bold text-white flex items-center gap-2">
               <span>Longitudinal Fair-Play &amp; Hard-Move Excess Inspector</span>
+              <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-700">
+                v{{ appVersion }}
+              </span>
               <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
                 Multi-Control &amp; Self-Benchmarked Detector
               </span>

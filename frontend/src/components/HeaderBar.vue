@@ -19,6 +19,9 @@ import {
   Globe
 } from '@lucide/vue'
 import { UI_THEMES, type UITheme } from '../utils/theme'
+import pkg from '../../package.json'
+
+const appVersion = pkg.version || '1.3.41'
 
 export interface PieceSetOption {
   id: string
@@ -149,6 +152,9 @@ defineExpose({
         </div>
         <span class="font-extrabold text-base tracking-tight text-zinc-100">
           New<span class="text-emerald-400">Scid</span>
+        </span>
+        <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-zinc-900 text-zinc-400 border border-zinc-800">
+          v{{ appVersion }}
         </span>
       </div>
 

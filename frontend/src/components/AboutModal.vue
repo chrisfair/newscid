@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { Info, X, ExternalLink, GitCommit, Calendar, Cpu, CheckCircle, Heart } from '@lucide/vue'
 import { GetVersionInfo } from '../../wailsjs/go/main/App'
+import pkg from '../../package.json'
 
 defineEmits<{
   (e: 'close'): void
@@ -9,7 +10,7 @@ defineEmits<{
 }>()
 
 const versionData = ref({
-  version: '1.3.3',
+  version: pkg.version || '1.3.41',
   gitCommit: 'unknown',
   buildDate: 'unknown',
   channel: 'stable',
