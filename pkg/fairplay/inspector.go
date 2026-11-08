@@ -491,6 +491,10 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 	maxEngineStreak := 0
 	wasDown150Cp := false
 	postDeficitZeroLossMoves := 0
+	maxPostDeficitStreak := 0
+	postDeficitBlunders := 0
+	var postDeficitLosses []float64
+	flatZeroDrawRun := 0
 	hasClock := false
 	hasEval := false
 
@@ -602,12 +606,24 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 				}
 				isTop1 = lossCp <= 12.0
 
-				// Positions beyond +/- 300cp are already decided; clamped +/- 900cp endgames must not fake 0cp streaks
-				isContestedPos = math.Abs(playerEvalBefore) <= 300.0 && math.Abs(playerEvalAfter) <= 300.0
-				isClampedMopUp = math.Abs(playerEvalBefore) >= 450.0 && math.Abs(playerEvalAfter) >= 450.0 && (playerEvalBefore*playerEvalAfter > 0) && lossCp == 0
+				// Positions beyond +/- 300cp are already decided; clamped +/- 900cp endgames and dead-drawn 0.00 endgames must not fake 0cp streaks
+				if ply >= 60 && math.Abs(playerEvalBefore) <= 25.0 && math.Abs(playerEvalAfter) <= 25.0 && lossCp <= 6.0 {
+					flatZeroDrawRun++
+				} else {
+					flatZeroDrawRun = 0
+				}
+				isDeadDrawnShuffle := flatZeroDrawRun >= 6
+				isContestedPos = !isDeadDrawnShuffle && math.Abs(playerEvalBefore) <= 300.0 && math.Abs(playerEvalAfter) <= 300.0
+				isClampedMopUp = isDeadDrawnShuffle || (math.Abs(playerEvalBefore) >= 450.0 && math.Abs(playerEvalAfter) >= 450.0 && (playerEvalBefore*playerEvalAfter > 0) && lossCp <= 10.0)
 
 				if playerEvalBefore <= -150.0 {
 					wasDown150Cp = true
+				}
+				if wasDown150Cp && !isDeadDrawnShuffle && math.Abs(playerEvalBefore) <= 300.0 {
+					postDeficitLosses = append(postDeficitLosses, lossCp)
+					if lossCp >= 90.0 {
+						postDeficitBlunders++
+					}
 				}
 				if isContestedPos && lossCp <= 10.0 {
 					currentEngineStreak++
@@ -616,9 +632,15 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 					}
 					if wasDown150Cp {
 						postDeficitZeroLossMoves++
+						if postDeficitZeroLossMoves > maxPostDeficitStreak {
+							maxPostDeficitStreak = postDeficitZeroLossMoves
+						}
 					}
 				} else if isContestedPos && lossCp > 15.0 {
 					currentEngineStreak = 0
+					if wasDown150Cp {
+						postDeficitZeroLossMoves = 0
+					}
 				}
 			} else {
 				lossCp = heurLossCp
@@ -663,10 +685,11 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 		}
 	}
 
-	clutchToggle := wasDown150Cp && postDeficitZeroLossMoves >= 6 && playerScore >= 0.5
-
 	avgTime, stdTime, cvTime, roboticPct := computeCadenceStats(moveTimes)
 	acpl := meanFloat64(cpLosses)
+	clutchToggle := wasDown150Cp && playerScore >= 0.5 && acpl <= 34.0 &&
+		maxPostDeficitStreak >= 6 && len(postDeficitLosses) >= 6 &&
+		meanFloat64(postDeficitLosses) <= 12.0 && postDeficitBlunders == 0
 	top1Pct := 0.0
 	if len(cpLosses) > 0 {
 		top1Pct = round1(100.0 * float64(top1Count) / float64(len(cpLosses)))
@@ -714,7 +737,8 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 		issueScore += 10.0
 		flags = append(flags, fmt.Sprintf("%d consecutive 0-cp contested engine moves", maxEngineStreak))
 	}
-	if forcedMoveHesitations >= 2 && delayedRecaptures < 2 {
+	_, elevatedACPLForGame := expectedSuspectACPLThreshold(playerElo, tcCat)
+	if forcedMoveHesitations >= 2 && delayedRecaptures < 2 && ((cvTime > 0 && cvTime <= 0.65) || acpl <= elevatedACPLForGame) {
 		issueScore += 8.0
 		flags = append(flags, fmt.Sprintf("%d forced recaptures/check evasions delayed >3.2s (relay lag)", forcedMoveHesitations))
 	}
@@ -726,7 +750,6 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 	}
 	maiaPattern, lossStdDev := detectMaiaLossDistribution(cpLosses, acpl, top1Pct, blunders, playerElo, tcCat, hasEval)
 
-	_, elevatedACPLForGame := expectedSuspectACPLThreshold(playerElo, tcCat)
 	if microBurstCV > 0 && microBurstCV <= 0.25 && cvTime > 0.36 {
 		hasBurstCorroboration := (hasEval && acpl <= elevatedACPLForGame+6.0) ||
 			maiaPattern ||
@@ -743,13 +766,15 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 	}
 
 	hasRoboticOrBurstClock := hasValidClock && ((cvTime > 0 && cvTime <= 0.44 && roboticPct >= 55.0) || (microBurstCV > 0 && microBurstCV <= 0.25))
-	if maiaPattern && (hasRoboticOrBurstClock || (hasEval && playerScore == 1.0 && nonBookMoves >= 20)) {
+	if maiaPattern && (hasRoboticOrBurstClock || (playerElo < 2050 && hasEval && playerScore == 1.0 && nonBookMoves >= 20 && (!hasValidClock || cvTime <= 0.52))) {
 		if hasRoboticOrBurstClock {
 			issueScore += 22.0
 		} else {
 			issueScore += 12.0
 		}
 		flags = append(flags, fmt.Sprintf("Maia / human-like neural bot signature (blunder-free %.1f ACPL below Stockfish ceiling, compressed ±%.1f cp loss spread)", acpl, lossStdDev))
+	} else {
+		maiaPattern = false
 	}
 
 	if issueScore > 99.0 {
@@ -866,8 +891,7 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 			}
 			isRoboticClock = (g.MoveTimeCV > 0 && g.MoveTimeCV <= 0.44 && g.RoboticCadencePct >= 55.0) ||
 				(g.MicroBurstWindowCV > 0 && g.MicroBurstWindowCV <= 0.25) ||
-				g.ForcedMoveHesitationCount >= 2 ||
-				g.DelayedRecaptureCount >= 2
+				(g.MoveTimeCV > 0 && g.MoveTimeCV <= 0.65 && (g.ForcedMoveHesitationCount >= 2 || g.DelayedRecaptureCount >= 2))
 		}
 		if isHighAccGame && isRoboticClock {
 			coOccurringCnt++
@@ -928,7 +952,9 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 		}
 		topAvg := meanFloat64(sortedSc[:topK])
 		severeShare := float64(severeGamesCnt) / float64(n)
-		if severeGamesCnt >= 3 || severeShare >= 0.25 || coOccurringCnt >= 1 || clutchGamesCnt >= 1 {
+		hasSubstantialSelectiveShare := (n < 20 && (severeGamesCnt >= 3 || severeShare >= 0.25 || coOccurringCnt >= 1 || clutchGamesCnt >= 1)) ||
+			(n >= 20 && (severeShare >= 0.15 || coOccurringCnt >= 2 || clutchGamesCnt >= minClutchForSample))
+		if hasSubstantialSelectiveShare {
 			blendedPeak := 0.55*topAvg + 0.45*baseAvgIssue
 			if blendedPeak > baseAvgIssue {
 				baseAvgIssue = blendedPeak
@@ -950,13 +976,19 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 	if coOccurringCnt >= 1 || (clutchGamesCnt >= minClutchForSample && avgACPL <= elevatedACPL+4.0) {
 		consistencyBonus += math.Min(16.0, float64(coOccurringCnt*7+clutchGamesCnt*5))
 	}
-	if maxWinStreak >= 7 && (evalGames > 0 || clockGames > 0 || avgACPL <= elevatedACPL+10.0) {
-		consistencyBonus += math.Min(12.0, float64(maxWinStreak-5)*2.0)
+	eloStreakThreshold := 7
+	if avgElo >= 2200 {
+		eloStreakThreshold = 10
+	} else if avgElo >= 1900 {
+		eloStreakThreshold = 8
+	}
+	if maxWinStreak >= eloStreakThreshold && (eloDelta > 0 || roboticGamePct >= 20.0 || avgACPL <= elevatedACPL+6.0) {
+		consistencyBonus += math.Min(12.0, float64(maxWinStreak-(eloStreakThreshold-2))*2.0)
 	}
 
 	consistentScore := baseAvgIssue + consistencyBonus
-	// Veteran / High-Rated Master dampener: prevent false positives when a 2100+ player has normal move-time variance and normal master ACPL
-	if avgElo >= 2100 && coOccurringCnt == 0 && clutchGamesCnt == 0 && roboticGamePct < 25.0 && avgACPL > severeACPL {
+	// Veteran / High-Rated Master dampener: prevent false positives when a 1950+ player has normal move-time variance and normal human ACPL
+	if avgElo >= 1950 && coOccurringCnt == 0 && clutchGamesCnt == 0 && roboticGamePct < 25.0 && avgACPL > severeACPL {
 		consistentScore *= 0.62
 	}
 	consistentScore = round1(math.Min(99.0, math.Max(0.0, consistentScore)))
@@ -1103,6 +1135,7 @@ func computeCrossControlDivergence(profiles []TimeControlIssueProfile) CrossCont
 	susp := profiles[suspectIdx]
 
 	iprDelta := susp.IntrinsicPerformanceElo - base.IntrinsicPerformanceElo
+	overperfJump := susp.EloOverperformanceDelta - base.EloOverperformanceDelta
 	acplDelta := round1(base.AvgACPL - susp.AvgACPL) // Positive means suspect control has lower centipawn loss
 	cvDelta := 0.0
 	if base.AvgMoveTimeSec > 0 && susp.AvgMoveTimeSec > 0 {
@@ -1110,13 +1143,19 @@ func computeCrossControlDivergence(profiles []TimeControlIssueProfile) CrossCont
 	}
 
 	score := 0.0
-	if iprDelta > 150 {
-		score += math.Min(45.0, float64(iprDelta-150)*0.09)
+	// Only score IPR jump when the suspect control actually overperforms relative to its own official Elo (or drops ACPL),
+	// so having a higher official rating in Blitz than Classical does not create a fake divergence penalty.
+	effectiveIPRJump := iprDelta
+	if overperfJump < effectiveIPRJump {
+		effectiveIPRJump = overperfJump
+	}
+	if effectiveIPRJump > 150 && (susp.EloOverperformanceDelta > 0 || acplDelta > 5.0) {
+		score += math.Min(45.0, float64(effectiveIPRJump-150)*0.09)
 	}
 	if acplDelta > 10.0 {
 		score += math.Min(30.0, (acplDelta-10.0)*1.1)
 	}
-	if cvDelta > 0.20 {
+	if cvDelta > 0.20 && (susp.AvgMoveTimeCV <= 0.55 || acplDelta > 5.0) {
 		score += math.Min(25.0, (cvDelta-0.15)*50.0)
 	}
 	score = round1(math.Min(100.0, math.Max(0.0, score)))
@@ -1226,7 +1265,7 @@ func scoreSingleGameAnomaly(
 			score += 18.0
 			flags = append(flags, fmt.Sprintf("Low move-time variance (CV %.2f, %.0f%% moves in 2.0s–9.5s band)", cvTime, roboticPct))
 		}
-		if delayedRecaptures >= 2 {
+		if delayedRecaptures >= 2 && (cvTime <= 0.65 || acpl <= elevatedACPL) {
 			score += 10.0
 			flags = append(flags, fmt.Sprintf("%d obvious recaptures delayed >3.2s (tab-switch signature)", delayedRecaptures))
 		} else if delayedRecaptures == 1 && cvTime > 0 && cvTime <= 0.44 {

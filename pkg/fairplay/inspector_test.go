@@ -590,7 +590,13 @@ func TestMasterEndgameMopUpNotFalselyFlagged_AndClutchToggleCaught(t *testing.T)
 	if !isMaia || lossStd <= 0 || lossStd > 26.0 {
 		t.Errorf("expected detectMaiaLossDistribution=true for Maia loss profile, got %v (std=%.1f)", isMaia, lossStd)
 	}
+	// Verify per-Elo calibration: a 2420 Elo master with the same 14.6 ACPL and normal clock CV is NOT flagged as a Maia bot
+	isMaiaMaster, _ := detectMaiaLossDistribution(maiaLosses, 14.6, 37.5, 0, 2420, "Rapid", false)
+	if isMaiaMaster {
+		t.Errorf("expected detectMaiaLossDistribution=false for 2420 Elo master without robotic cadence")
+	}
 }
+
 
 
 
