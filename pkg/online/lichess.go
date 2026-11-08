@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"newscid/pkg/chess"
@@ -16,9 +17,17 @@ import (
 )
 
 const (
-	DefaultLichessBaseURL   = "https://lichess.org"
-	DefaultOnlineUserAgent  = "NewScid/1.0 (Modern Chess Information Database)"
-	DefaultHTTPTimeout      = 45 * time.Second
+	DefaultLichessBaseURL  = "https://lichess.org"
+	DefaultOnlineUserAgent = "NewScid/1.0 (Modern Chess Information Database)"
+	DefaultHTTPTimeout     = 45 * time.Second
+	lichessMinRequestGap   = 300 * time.Millisecond
+	lichess429Cooldown     = 60 * time.Second
+)
+
+var (
+	lichessReqMu         sync.Mutex
+	lichessLastReqAt     time.Time
+	lichessCooldownUntil time.Time
 )
 
 // ProgressFn is a callback reporting real-time download and processing progress.
@@ -26,9 +35,11 @@ type ProgressFn func(stage string, current int, total int, message string)
 
 // LichessClient provides an HTTP client for retrieving games from lichess.org.
 type LichessClient struct {
-	BaseURL    string
-	HTTPClient *http.Client
-	UserAgent  string
+	BaseURL           string
+	HTTPClient        *http.Client
+	UserAgent         string
+	mu                sync.Mutex
+	lastSeenUserGames map[string]int
 }
 
 // NewLichessClient creates a client configured with default timeout and user agent.
@@ -42,8 +53,37 @@ func NewLichessClient() *LichessClient {
 				IdleConnTimeout:       90 * time.Second,
 			},
 		},
-		UserAgent: DefaultOnlineUserAgent,
+		UserAgent:         DefaultOnlineUserAgent,
+		lastSeenUserGames: make(map[string]int),
 	}
+}
+
+// doRequest executes a Lichess HTTP request sequentially and honors Lichess's 60-second HTTP 429 cooldown policy.
+func (c *LichessClient) doRequest(req *http.Request) (*http.Response, error) {
+	lichessReqMu.Lock()
+	defer lichessReqMu.Unlock()
+
+	isLiveLichess := strings.Contains(strings.ToLower(req.URL.Host), "lichess.org")
+	if isLiveLichess {
+		now := time.Now()
+		if now.Before(lichessCooldownUntil) {
+			waitSec := int(time.Until(lichessCooldownUntil).Seconds()) + 1
+			return nil, fmt.Errorf("lichess API cooldown active (%ds remaining after HTTP 429)", waitSec)
+		}
+		if elapsed := now.Sub(lichessLastReqAt); elapsed < lichessMinRequestGap {
+			time.Sleep(lichessMinRequestGap - elapsed)
+		}
+		lichessLastReqAt = time.Now()
+	}
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode == http.StatusTooManyRequests && isLiveLichess {
+		lichessCooldownUntil = time.Now().Add(lichess429Cooldown)
+	}
+	return resp, nil
 }
 
 // GetUserGameCount queries Lichess user endpoint to determine the total number of games for a user.
@@ -58,7 +98,7 @@ func (c *LichessClient) GetUserGameCount(username string, ratedOnly bool) int {
 		return 0
 	}
 	req.Header.Set("User-Agent", c.UserAgent)
-	resp, err := c.HTTPClient.Do(req)
+	resp, err := c.doRequest(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		if resp != nil && resp.Body != nil {
 			resp.Body.Close()
@@ -131,7 +171,7 @@ func (c *LichessClient) FetchUserGames(username string, sinceTimeMs int64, token
 		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
 	}
 
-	resp, err := c.HTTPClient.Do(req)
+	resp, err := c.doRequest(req)
 	if err != nil {
 		return "", fmt.Errorf("lichess request failed: %w", err)
 	}
@@ -243,7 +283,7 @@ func (c *LichessClient) FetchUserGamesIncremental(
 		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
 	}
 
-	resp, err := c.HTTPClient.Do(req)
+	resp, err := c.doRequest(req)
 	if err != nil {
 		return nil, 0, fmt.Errorf("lichess request failed: %w", err)
 	}
@@ -348,7 +388,21 @@ func (c *LichessClient) FetchRecentNewGames(
 		return nil, 0, fmt.Errorf("lichess username cannot be empty")
 	}
 	if limit <= 0 {
-		limit = 8
+		limit = 5
+	}
+
+	// Lightweight pre-check: if the user's total game count on /api/user/{username}
+	// has not changed since the last poll and existingSigs is already populated,
+	// skip the heavier /api/games/user/ PGN export call entirely.
+	userKey := strings.ToLower(username)
+	currentTotal := c.GetUserGameCount(username, false)
+	if currentTotal > 0 && existingSigs != nil && existingSigs.Count() > 0 {
+		c.mu.Lock()
+		lastTotal, seen := c.lastSeenUserGames[userKey]
+		c.mu.Unlock()
+		if seen && currentTotal == lastTotal {
+			return nil, 0, nil
+		}
 	}
 
 	endpoint := fmt.Sprintf("%s/api/games/user/%s", strings.TrimRight(c.BaseURL, "/"), url.PathEscape(username))
@@ -368,12 +422,15 @@ func (c *LichessClient) FetchRecentNewGames(
 		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
 	}
 
-	resp, err := c.HTTPClient.Do(req)
+	resp, err := c.doRequest(req)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return nil, 0, fmt.Errorf("lichess rate limit exceeded (HTTP 429), backing off 60s")
+	}
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		return nil, 0, fmt.Errorf("lichess HTTP %d: %s", resp.StatusCode, string(bodyBytes))
@@ -386,6 +443,15 @@ func (c *LichessClient) FetchRecentNewGames(
 	parsed, err := chess.ParsePGNDatabase(strings.NewReader(string(rawBytes)))
 	if err != nil {
 		return nil, 0, err
+	}
+
+	if currentTotal > 0 {
+		c.mu.Lock()
+		if c.lastSeenUserGames == nil {
+			c.lastSeenUserGames = make(map[string]int)
+		}
+		c.lastSeenUserGames[userKey] = currentTotal
+		c.mu.Unlock()
 	}
 
 	var newGames []*chess.Game
@@ -436,7 +502,7 @@ func (c *LichessClient) FetchGameByID(gameID string, token string) (*chess.Game,
 		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
 	}
 
-	resp, err := c.HTTPClient.Do(req)
+	resp, err := c.doRequest(req)
 	if err != nil {
 		return nil, err
 	}

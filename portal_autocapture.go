@@ -62,7 +62,7 @@ var (
 	portalSessionCaptured  int
 	portalLastError        string
 	portalCheckInFlight    bool
-	portalPollInterval     = 25 * time.Second
+	portalPollInterval     = 45 * time.Second
 )
 
 // resolvePortalCredentials discovers the user's Lichess and Chess.com usernames (and optional Lichess token)
@@ -329,7 +329,7 @@ func (a *App) CheckAndCaptureLivePortalGames() (*LivePortalCaptureResult, error)
 	var errs []string
 
 	if lichessUser != "" && a.syncMgr != nil && a.syncMgr.Lichess != nil {
-		lgames, skipped, lerr := a.syncMgr.Lichess.FetchRecentNewGames(lichessUser, lichessToken, 8, existingSigs)
+		lgames, skipped, lerr := a.syncMgr.Lichess.FetchRecentNewGames(lichessUser, lichessToken, 5, existingSigs)
 		if lerr != nil {
 			errs = append(errs, fmt.Sprintf("Lichess: %v", lerr))
 		} else {
