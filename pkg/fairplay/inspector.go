@@ -27,6 +27,7 @@ type GameFairPlayRecord struct {
 	TimeControlRaw          string   `json:"timeControlRaw"`
 	TimeControlCategory     string   `json:"timeControlCategory"` // "Bullet" | "Blitz" | "Rapid" | "Classical"
 	PlayerColor             string   `json:"playerColor"`         // "white" | "black"
+	PlayerTitle             string   `json:"playerTitle,omitempty"`
 	PlayerElo               int      `json:"playerElo"`
 	OpponentName            string   `json:"opponentName"`
 	OpponentElo             int      `json:"opponentElo"`
@@ -428,14 +429,19 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 	playerColor := chess.White
 	playerColorStr := "white"
 	opponentName := blackName
+	playerTitle := strings.ToUpper(strings.TrimSpace(g.Tag("WhiteTitle")))
 	playerElo, _ := strconv.Atoi(g.Tag("WhiteElo"))
 	opponentElo, _ := strconv.Atoi(g.Tag("BlackElo"))
 	if !isWhite && isBlack {
 		playerColor = chess.Black
 		playerColorStr = "black"
 		opponentName = whiteName
+		playerTitle = strings.ToUpper(strings.TrimSpace(g.Tag("BlackTitle")))
 		playerElo, _ = strconv.Atoi(g.Tag("BlackElo"))
 		opponentElo, _ = strconv.Atoi(g.Tag("WhiteElo"))
+	}
+	if titleFloor := verifiedMasterRatingFloor(playerTitle); titleFloor > playerElo {
+		playerElo = titleFloor
 	}
 	if playerElo <= 0 {
 		playerElo = 1500
@@ -777,6 +783,10 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 		maiaPattern = false
 	}
 
+	if damp := verifiedMasterTitleDampener(playerTitle); damp < 1.0 && !hasRoboticOrBurstClock && acpl > 6.5 {
+		issueScore *= damp
+	}
+
 	if issueScore > 99.0 {
 		issueScore = 99.0
 	}
@@ -789,6 +799,7 @@ func analyzeSingleGameForPlayer(g *chess.Game, gameID int, targetLower string) (
 		TimeControlRaw:            tcRaw,
 		TimeControlCategory:       tcCat,
 		PlayerColor:               playerColorStr,
+		PlayerTitle:               playerTitle,
 		PlayerElo:                 playerElo,
 		OpponentName:              opponentName,
 		OpponentElo:               opponentElo,
@@ -1022,13 +1033,24 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 		consistencyBonus += math.Min(12.0, float64(maxWinStreak-(eloStreakThreshold-2))*2.0)
 	}
 
+	hasVerifiedMasterTitle := false
+	titleDampener := 1.0
+	for _, g := range games {
+		if d := verifiedMasterTitleDampener(g.PlayerTitle); d < 1.0 {
+			hasVerifiedMasterTitle = true
+			if d < titleDampener {
+				titleDampener = d
+			}
+		}
+	}
+
 	// Empirical OTB vs. Online Banned-Cohort Calibration (mined from 7,248,502 rated OTB games in LumbrasGigabase_OTB
 	// vs. 2,496,684 online games in LumbrasGigabase_Online):
 	// Distinguishes legitimate high-Elo pool favorites (whose high raw win rate is against lower-rated opponents, so PerfΔ ≈ 0%)
 	// from online cheaters who outperform Elo expectation by >P99, crush higher-rated step-up opponents, suppress draws, and burst-to-peak.
 	isOTBOutlierCheater := false
 	var otbOutlierNote string
-	if n >= 20 && ratedPairGames >= 15 {
+	if !hasVerifiedMasterTitle && n >= 20 && ratedPairGames >= 15 {
 		pureWinPct := 100.0 * float64(pureWins) / float64(n)
 		drawPct := 100.0 * float64(drawsCnt) / float64(n)
 		perfDeltaPct := 100.0 * (actualScoreSum - expectedScoreSum) / float64(ratedPairGames)
@@ -1083,8 +1105,14 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 	}
 
 	consistentScore := baseAvgIssue + consistencyBonus
-	// Veteran / High-Rated Master dampener: prevent false positives when a 1950+ player has normal move-time variance and normal human ACPL
-	if avgElo >= 1950 && !isOTBOutlierCheater && coOccurringCnt == 0 && clutchGamesCnt == 0 && roboticGamePct < 25.0 && avgACPL > severeACPL {
+	// Verified Federation Master (GM/IM/FM/NM/CM) dampener when move-time variance is human and no robotic+engine co-occurrence exists
+	if hasVerifiedMasterTitle && coOccurringCnt == 0 && roboticGamePct < 20.0 && (clockGames == 0 || avgCV >= 0.50) && avgACPL > severeACPL-1.5 {
+		consistentScore *= titleDampener
+		if consistentScore > 22.0 {
+			consistentScore = 22.0
+		}
+	} else if avgElo >= 1950 && !isOTBOutlierCheater && coOccurringCnt == 0 && clutchGamesCnt == 0 && roboticGamePct < 25.0 && avgACPL > severeACPL {
+		// Veteran / High-Rated Master dampener: prevent false positives when a 1950+ player has normal move-time variance and normal human ACPL
 		consistentScore *= 0.62
 	}
 	consistentScore = round1(math.Min(99.0, math.Max(0.0, consistentScore)))
@@ -1306,6 +1334,42 @@ func getOTBEmpiricalBand(elo int) otbEmpiricalBand {
 		return otbEmpiricalBand{p99WinPct: 54.5, p10DrawPct: 13.7, p99PerfDeltaPct: 25.3, p99StepUpWinPct: 39.1, p99MaxStreak: 9}
 	default:
 		return otbEmpiricalBand{p99WinPct: 45.6, p10DrawPct: 6.7, p99PerfDeltaPct: 42.6, p99StepUpWinPct: 36.2, p99MaxStreak: 7}
+	}
+}
+
+func verifiedMasterRatingFloor(title string) int {
+	switch strings.ToUpper(strings.TrimSpace(title)) {
+	case "GM":
+		return 2550
+	case "IM", "LM":
+		return 2420
+	case "WGM":
+		return 2380
+	case "FM":
+		return 2320
+	case "WIM":
+		return 2260
+	case "NM", "CM":
+		return 2220
+	case "WFM", "WNM", "WCM":
+		return 2120
+	default:
+		return 0
+	}
+}
+
+func verifiedMasterTitleDampener(title string) float64 {
+	switch strings.ToUpper(strings.TrimSpace(title)) {
+	case "GM", "WGM":
+		return 0.45
+	case "IM", "WIM", "LM":
+		return 0.55
+	case "FM", "WFM":
+		return 0.62
+	case "NM", "WNM", "CM", "WCM":
+		return 0.68
+	default:
+		return 1.0
 	}
 }
 
