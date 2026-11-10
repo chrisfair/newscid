@@ -1105,8 +1105,13 @@ func buildTimeControlProfile(category string, games []GameFairPlayRecord) TimeCo
 	}
 
 	consistentScore := baseAvgIssue + consistencyBonus
-	// Verified Federation Master (GM/IM/FM/NM/CM) dampener when move-time variance is human and no robotic+engine co-occurrence exists
-	if hasVerifiedMasterTitle && coOccurringCnt == 0 && roboticGamePct < 20.0 && (clockGames == 0 || avgCV >= 0.50) && avgACPL > severeACPL-1.5 {
+	// Verified Federation Master (GM/IM/FM/NM/CM) dampener when move-time variance is human and no sustained/clutch/relay engine signature exists
+	hasTitledEngineSignature := coOccurringCnt >= 1 ||
+		roboticGamePct >= 20.0 ||
+		(clockGames > 0 && avgCV < 0.50) ||
+		(evalGames > 0 && avgACPL <= severeACPL) ||
+		(clutchGamesCnt >= minClutchForSample && clutchGamesCnt >= 2)
+	if hasVerifiedMasterTitle && !hasTitledEngineSignature {
 		consistentScore *= titleDampener
 		if consistentScore > 22.0 {
 			consistentScore = 22.0
