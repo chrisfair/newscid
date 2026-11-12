@@ -27,9 +27,16 @@ mkdir -p "${STAGE_DIR}/usr/share/doc/newscid"
 mkdir -p "${STAGE_DIR}/usr/share/man/man1"
 mkdir -p "${DIST_DIR}"
 
-# 1. Install binary
+# 1. Install binaries
 cp "${BINARY_PATH}" "${STAGE_DIR}/usr/bin/newscid"
 chmod 755 "${STAGE_DIR}/usr/bin/newscid"
+BIN_DIR_SRC="$(dirname "${BINARY_PATH}")"
+for companion in newscid-tui newscid-import newscid-fairplay newscid-scout; do
+    if [ -f "${BIN_DIR_SRC}/${companion}" ]; then
+        cp "${BIN_DIR_SRC}/${companion}" "${STAGE_DIR}/usr/bin/${companion}"
+        chmod 755 "${STAGE_DIR}/usr/bin/${companion}"
+    fi
+done
 
 # 2. Desktop entry and metadata
 cp packaging/desktop/newscid.desktop "${STAGE_DIR}/usr/share/applications/newscid.desktop"

@@ -31,11 +31,18 @@ All seven panels (Board, Scorebook, Engine, Opening Tree, Game Browser, Eval Gra
 
 ---
 
-## Companion CLI Tools
+## Terminal Workstation (Kitty Graphics TUI) & Companion CLI Tools
 
-Three command-line utilities are built alongside the desktop binary for terminal scripting and headless batch jobs:
+NewScid includes a full terminal interface (`newscid-tui`, or `newscid tui` / `newscid --kitty`) with zero GTK/WebKit dependencies. On terminals supporting the Kitty Graphics Protocol (Kitty, Ghostty, WezTerm, Konsole), it renders embedded vector-rasterized piece sets (`cburnett`, `merida`, `staunty`, `alpha`, `leipzig`, `cardinal`), Scid board themes, legal-move overlays, and engine/book arrows directly inside the terminal grid with SGR mouse click/drag-to-move and DEC Mode 2026 synchronized output. Press `g` at any time (or pass `--unicode`) to switch to a 24-bit TrueColor Unicode board over standard terminals or SSH.
 
 ```bash
+# Launch the interactive Kitty Protocol TUI workstation on a Scid v4 database or PGN file
+newscid-tui ~/.local/share/newscid/databases/master.si4
+newscid tui --kitty --theme walnut --piece-set merida games.pgn
+
+# Render a position inline in terminal scrollback and exit
+newscid-tui --render-once --kitty --fen "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3"
+
 # Import a PGN archive into a Scid database, deduplicate, and compact deleted records
 newscid-import -db ~/.local/share/newscid/databases/master.si4 -pgn twic.pgn -dedup -compact
 
@@ -69,6 +76,7 @@ Requires Go 1.24+, Node.js 20+, GTK3, and WebKit2GTK (`webkit2gtk-4.1` on Arch/F
 ```bash
 cd frontend && npm install && npm run build && cd ..
 go build -tags webkit2_41 -o build/bin/newscid .
+go build -o build/bin/newscid-tui ./cmd/newscid-tui
 go build -o build/bin/newscid-import ./cmd/newscid-import
 go build -o build/bin/newscid-fairplay ./cmd/newscid-fairplay
 go build -o build/bin/newscid-scout ./cmd/newscid-scout

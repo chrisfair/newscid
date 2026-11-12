@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"newscid/pkg/server"
+	"newscid/pkg/tui"
 	"newscid/pkg/version"
 
 	"github.com/wailsapp/wails/v2"
@@ -37,7 +38,6 @@ func runServer(app *App, host string, port int, dataDir string) {
 }
 
 func main() {
-	app := NewApp()
 	isAndroid := runtime.GOOS == "android"
 
 	if len(os.Args) > 1 {
@@ -49,18 +49,48 @@ func main() {
 		if arg == "-h" || arg == "--help" || arg == "help" {
 			fmt.Printf("NewScid - Modern Chess Information Database (%s)\n", version.Short())
 			fmt.Println("Usage: newscid [options] [database.si4 | file.pgn]")
+			fmt.Println("       newscid tui [--kitty|--unicode] [--theme <id>] [--piece-set <id>] [database.si4 | file.pgn]")
 			fmt.Println("       newscid --window-panel <board|tree|engine|notation|games|imbalance|info|portal|db-roles> [--workspace <1..10>] [--title <title>]")
 			fmt.Println("       newscid --portal-url <https://lichess.org | https://www.chess.com> [--title <title>]")
 			fmt.Println("       newscid serve [--host 127.0.0.1] [--port 8080] [--data-dir /path]")
 			fmt.Println("\nOptions:")
 			fmt.Println("  -v, --version         Print application version details")
 			fmt.Println("  -h, --help            Display this help message")
+			fmt.Println("  tui, --tui            Launch the Kitty Graphics / TrueColor terminal workstation (TUI)")
+			fmt.Println("  --kitty               Launch the terminal workstation with Kitty Graphics Protocol HD board")
 			fmt.Println("  --window-panel <id>   Launch a detached multi-screen panel window (for Hyprland / multi-monitor)")
 			fmt.Println("  --workspace <1..10>   Place the window onto a specific Hyprland workspace")
 			fmt.Println("  --portal-url <url>    Launch a dedicated live portal window into Lichess.org or Chess.com")
 			fmt.Println("  serve, --server       Run in standalone web / mobile server mode (for Android / browser)")
 			os.Exit(0)
 		}
+		if arg == "tui" || arg == "--tui" || arg == "-tui" {
+			os.Exit(tui.RunCLI(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
+		}
+		if arg == "--kitty" || arg == "-kitty" {
+			os.Exit(tui.RunCLI(append([]string{"--kitty"}, os.Args[2:]...), os.Stdin, os.Stdout, os.Stderr))
+		}
+	}
+
+	// Support --tui or --kitty anywhere in flags (e.g. `newscid games.si4 --tui`)
+	for i := 1; i < len(os.Args); i++ {
+		if os.Args[i] == "--tui" || os.Args[i] == "-tui" {
+			rest := append([]string{}, os.Args[1:i]...)
+			rest = append(rest, os.Args[i+1:]...)
+			os.Exit(tui.RunCLI(rest, os.Stdin, os.Stdout, os.Stderr))
+		}
+		if os.Args[i] == "--kitty" || os.Args[i] == "-kitty" {
+			rest := []string{"--kitty"}
+			rest = append(rest, os.Args[1:i]...)
+			rest = append(rest, os.Args[i+1:]...)
+			os.Exit(tui.RunCLI(rest, os.Stdin, os.Stdout, os.Stderr))
+		}
+	}
+
+	app := NewApp()
+
+	if len(os.Args) > 1 {
+		arg := os.Args[1]
 		if arg == "serve" || arg == "--server" || arg == "-server" {
 			fs := flag.NewFlagSet("serve", flag.ExitOnError)
 			host := fs.String("host", "127.0.0.1", "Host address to bind to (e.g. 127.0.0.1 or 0.0.0.0)")
@@ -71,6 +101,11 @@ func main() {
 			runServer(app, *host, *port, *dataDir)
 			return
 		}
+	}
+
+	// Headless Linux SSH / console fallback: when neither X11 nor Wayland is active, launch TUI directly
+	if runtime.GOOS == "linux" && !isAndroid && os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
+		os.Exit(tui.RunCLI(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 	}
 
 	windowTitle := "NewScid - Modern Chess Information Database"

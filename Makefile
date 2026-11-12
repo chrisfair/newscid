@@ -2,7 +2,7 @@
 # Automated dependency management, testing, and building
 
 .DEFAULT_GOAL := help
-.PHONY: help deps setup dev build build-frontend generate test functional-test test-coverage lint clean clean-dist run serve \
+.PHONY: help deps setup dev build build-tui build-frontend generate test functional-test test-coverage lint clean clean-dist run serve \
         install install-user uninstall \
         appimage package-appimage snap package-snap deb package-deb pacman package-pacman aur rpm package-rpm \
         chocolatey choco package-chocolatey package-choco brew homebrew package-brew \
@@ -82,11 +82,17 @@ build: ## Build the standalone production binary and companion CLI workstation t
 	@mkdir -p $(BIN_DIR)
 	@$(MAKE) build-frontend
 	@unset GOROOT; go build -tags "desktop,production,webkit2_41" -ldflags "$(LDFLAGS)" -o $(BINARY) .
-	@printf "$(BOLD)$(BLUE)==> Building companion workstation CLI binaries (newscid-import, newscid-fairplay, newscid-scout)...$(RESET)\n"
+	@printf "$(BOLD)$(BLUE)==> Building companion workstation CLI binaries (newscid-tui, newscid-import, newscid-fairplay, newscid-scout)...$(RESET)\n"
+	@unset GOROOT; go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/newscid-tui ./cmd/newscid-tui
 	@unset GOROOT; go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/newscid-import ./cmd/newscid-import
 	@unset GOROOT; go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/newscid-fairplay ./cmd/newscid-fairplay
 	@unset GOROOT; go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/newscid-scout ./cmd/newscid-scout
-	@printf "$(BOLD)$(GREEN)✔ Binaries built at $(BIN_DIR)/newscid{,-import,-fairplay,-scout}$(RESET)\n"
+	@printf "$(BOLD)$(GREEN)✔ Binaries built at $(BIN_DIR)/newscid{,-tui,-import,-fairplay,-scout}$(RESET)\n"
+
+build-tui: ## Build standalone Kitty Protocol / TrueColor terminal workstation binary (no GTK/WebKit required)
+	@mkdir -p $(BIN_DIR)
+	@unset GOROOT; go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/newscid-tui ./cmd/newscid-tui
+	@printf "$(BOLD)$(GREEN)✔ Built $(BIN_DIR)/newscid-tui$(RESET)\n"
 
 
 build-frontend: ## Compile the Vue 3 + Vite frontend assets
@@ -263,6 +269,7 @@ install: build ## Install NewScid and companion CLI tools to system (supports DE
 	@printf "$(BOLD)$(BLUE)==> Installing NewScid to $(DESTDIR)$(PREFIX)...$(RESET)\n"
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin $(DESTDIR)$(PREFIX)/share/applications $(DESTDIR)$(PREFIX)/share/metainfo $(DESTDIR)$(PREFIX)/share/mime/packages $(DESTDIR)$(PREFIX)/share/man/man1 $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps
 	@install -Dm755 $(BINARY) $(DESTDIR)$(PREFIX)/bin/$(APP_NAME)
+	@install -Dm755 $(BIN_DIR)/newscid-tui $(DESTDIR)$(PREFIX)/bin/newscid-tui
 	@install -Dm755 $(BIN_DIR)/newscid-import $(DESTDIR)$(PREFIX)/bin/newscid-import
 	@install -Dm755 $(BIN_DIR)/newscid-fairplay $(DESTDIR)$(PREFIX)/bin/newscid-fairplay
 	@install -Dm755 $(BIN_DIR)/newscid-scout $(DESTDIR)$(PREFIX)/bin/newscid-scout
@@ -295,6 +302,7 @@ install-user: ## Install NewScid to user local environment (~/.local)
 uninstall: ## Remove NewScid from user local environment (~/.local)
 	@printf "$(BOLD)$(YELLOW)==> Uninstalling NewScid from $(HOME)/.local...$(RESET)\n"
 	@rm -f $(HOME)/.local/bin/$(APP_NAME)
+	@rm -f $(HOME)/.local/bin/newscid-tui
 	@rm -f $(HOME)/.local/bin/newscid-import
 	@rm -f $(HOME)/.local/bin/newscid-fairplay
 	@rm -f $(HOME)/.local/bin/newscid-scout

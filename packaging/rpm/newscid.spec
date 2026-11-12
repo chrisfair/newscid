@@ -1,5 +1,5 @@
 Name:           newscid
-Version:        1.3.43
+Version:        1.3.44
 Release:        1%{?dist}
 Summary:        Chess Information Database (Scid v4 compatible)
 
@@ -60,6 +60,10 @@ fi
 %license LICENSE
 %doc README.md
 %{_bindir}/newscid
+%{_bindir}/newscid-tui
+%{_bindir}/newscid-import
+%{_bindir}/newscid-fairplay
+%{_bindir}/newscid-scout
 %{_datadir}/applications/newscid.desktop
 %{_datadir}/metainfo/org.newscid.NewScid.metainfo.xml
 %{_datadir}/mime/packages/newscid.xml
