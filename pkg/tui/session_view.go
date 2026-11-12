@@ -89,11 +89,16 @@ func (s *Session) Render(scr *Screen, geom TermGeometry, out io.Writer, forceFul
 		s.renderHelpModal(scr)
 	}
 
-	// 7. Manage Kitty Graphics Protocol Placement & Cutout
-	var kittySeq string
+	// 7. Manage Kitty / Sixel Pixel Graphics Placement & Cutout
+	var graphicsSeq string
 	skipCutout := false
 
-	if s.UseKitty && !modalActive && boardPlacementRect.W >= 8 && boardPlacementRect.H >= 4 {
+	if s.eraseSixelRect.W > 0 && s.eraseSixelRect.H > 0 {
+		scr.InvalidateRect(s.eraseSixelRect)
+		s.eraseSixelRect = Rect{}
+	}
+
+	if s.Graphics.IsPixelMode() && !modalActive && boardPlacementRect.W >= 8 && boardPlacementRect.H >= 4 {
 		scr.Cutout = boardPlacementRect
 		lastFrom, lastTo := s.LastMoveSquares()
 		targets, capMask := s.LegalTargetsFrom(s.SelectedSq)
@@ -119,43 +124,80 @@ func (s *Session) Render(scr *Screen, geom TermGeometry, out io.Writer, forceFul
 		hash := opt.Hash(s.Board)
 		rectChanged := boardPlacementRect != s.lastBoardRect
 
-		if forceFull || !s.kittyPlaced || rectChanged || hash != s.lastBoardHash || len(s.lastBoardPNG) == 0 {
-			if hash != s.lastBoardHash || len(s.lastBoardPNG) == 0 {
-				pngBytes, err := RenderBoardPNG(s.Board, opt)
-				if err == nil {
-					s.lastBoardPNG = pngBytes
-					s.lastBoardHash = hash
+		if s.Graphics == GraphicsKitty {
+			if s.sixelPlaced {
+				scr.InvalidateRect(s.lastBoardRect)
+				s.sixelPlaced = false
+			}
+			if forceFull || !s.kittyPlaced || rectChanged || hash != s.lastBoardHash || len(s.lastBoardPNG) == 0 {
+				if hash != s.lastBoardHash || len(s.lastBoardPNG) == 0 {
+					pngBytes, err := RenderBoardPNG(s.Board, opt)
+					if err == nil {
+						s.lastBoardPNG = pngBytes
+						s.lastBoardHash = hash
+					}
 				}
+				if len(s.lastBoardPNG) > 0 {
+					graphicsSeq = EncodeKittyPNGPlacement(
+						KittyBoardImageID,
+						KittyBoardPlacementID,
+						boardPlacementRect.Y+1,
+						boardPlacementRect.X+1,
+						boardPlacementRect.W,
+						boardPlacementRect.H,
+						s.lastBoardPNG,
+					)
+					s.lastBoardRect = boardPlacementRect
+					s.kittyPlaced = true
+				}
+				skipCutout = !forceFull && !rectChanged
+			} else {
+				skipCutout = true
 			}
-			if len(s.lastBoardPNG) > 0 {
-				kittySeq = EncodeKittyPNGPlacement(
-					KittyBoardImageID,
-					KittyBoardPlacementID,
-					boardPlacementRect.Y+1,
-					boardPlacementRect.X+1,
-					boardPlacementRect.W,
-					boardPlacementRect.H,
-					s.lastBoardPNG,
-				)
-				s.lastBoardRect = boardPlacementRect
-				s.kittyPlaced = true
+		} else if s.Graphics == GraphicsSixel {
+			if s.kittyPlaced {
+				graphicsSeq = EncodeKittyDeleteImage(KittyBoardImageID)
+				s.kittyPlaced = false
 			}
-			// On full redraw, let background cells paint first; on incremental board updates, skip writing spaces over cutout
-			skipCutout = !forceFull && !rectChanged
-		} else {
-			// Kitty image is already placed and unchanged — do not overwrite its cells
-			skipCutout = true
+			if forceFull || !s.sixelPlaced || rectChanged || hash != s.lastBoardHash || s.lastBoardSixel == "" {
+				if rectChanged && s.sixelPlaced {
+					scr.InvalidateRect(s.lastBoardRect)
+				}
+				// Clear underlying cells inside the same DEC 2026 sync frame so foot frees the old Sixel surface cleanly
+				scr.InvalidateRect(boardPlacementRect)
+
+				if hash != s.lastBoardHash || s.lastBoardSixel == "" {
+					img, err := RenderBoardImage(s.Board, opt)
+					if err == nil {
+						s.lastBoardSixel = EncodeSixelImage(img)
+						s.lastBoardHash = hash
+					}
+				}
+				if s.lastBoardSixel != "" {
+					graphicsSeq += fmt.Sprintf("\x1b[%d;%dH%s", boardPlacementRect.Y+1, boardPlacementRect.X+1, s.lastBoardSixel)
+					s.lastBoardRect = boardPlacementRect
+					s.sixelPlaced = true
+				}
+				skipCutout = false
+			} else {
+				skipCutout = true
+			}
 		}
 	} else {
 		scr.Cutout = Rect{}
 		if s.kittyPlaced {
-			kittySeq = EncodeKittyDeleteImage(KittyBoardImageID)
+			graphicsSeq = EncodeKittyDeleteImage(KittyBoardImageID)
 			s.kittyPlaced = false
+			s.lastBoardHash = 0
+		}
+		if s.sixelPlaced {
+			scr.InvalidateRect(s.lastBoardRect)
+			s.sixelPlaced = false
 			s.lastBoardHash = 0
 		}
 	}
 
-	return scr.Flush(out, forceFull, skipCutout, kittySeq)
+	return scr.Flush(out, forceFull, skipCutout, graphicsSeq)
 }
 
 func (s *Session) renderTopBar(scr *Screen) {
@@ -167,9 +209,12 @@ func (s *Session) renderTopBar(scr *Screen) {
 	x += scr.WriteText(x, 0, w-x, title, Style{FG: ColAccentCyan, BG: ColBgHeader, Bold: true})
 	x += scr.WriteText(x, 0, w-x, " │ ", Style{FG: ColBorder, BG: ColBgHeader})
 
-	if s.UseKitty {
+	switch s.Graphics {
+	case GraphicsKitty:
 		x += scr.WriteText(x, 0, w-x, "KITTY HD", Style{FG: ColBgBase, BG: ColAccentEmerald, Bold: true})
-	} else {
+	case GraphicsSixel:
+		x += scr.WriteText(x, 0, w-x, "SIXEL HD", Style{FG: ColBgBase, BG: ColAccentCyan, Bold: true})
+	default:
 		x += scr.WriteText(x, 0, w-x, "UNICODE RGB", Style{FG: ColBgBase, BG: ColAccentAmber, Bold: true})
 	}
 	x += scr.WriteText(x, 0, w-x, " ", Style{FG: ColTextMuted, BG: ColBgHeader})
@@ -267,10 +312,38 @@ func (s *Session) renderBoardPane(scr *Screen, box Rect, boardCols, boardRows in
 	var placementRect Rect
 	sqPx := 72
 
-	if s.UseKitty {
+	if s.Graphics.IsPixelMode() {
 		availCols := maxInt(8, box.W-6)
 		bCols := minInt(boardCols, availCols)
 		bRows := minInt(boardRows, maxInt(6, box.H-6))
+
+		if s.Graphics == GraphicsSixel {
+			// Sixel renders 1 image pixel = 1 screen pixel, so match exact cell pixel dimensions
+			cellW, cellH := 10, 20
+			if geom.XPixel > 0 && geom.YPixel > 0 && geom.Cols > 0 && geom.Rows > 0 {
+				cellW = maxInt(4, geom.XPixel/geom.Cols)
+				cellH = maxInt(8, geom.YPixel/geom.Rows)
+			}
+			maxBoardPx := minInt(bCols*cellW, bRows*cellH)
+			sqPx = maxBoardPx / 8
+			if sqPx < 24 {
+				sqPx = 24
+			}
+			if sqPx > 160 {
+				sqPx = 160
+			}
+			boardPx := sqPx * 8
+			bCols = minInt(availCols, maxInt(8, (boardPx+cellW-1)/cellW))
+			bRows = minInt(maxInt(6, box.H-6), maxInt(4, (boardPx+cellH-1)/cellH))
+		} else if geom.XPixel > 0 && geom.Cols > 0 {
+			// Kitty stretches PNG to (bCols, bRows); pick crisp multiple-of-8 pixel density
+			estBoardPx := (geom.XPixel * bCols) / geom.Cols
+			cand := estBoardPx / 8
+			if cand >= 48 && cand <= 144 {
+				sqPx = (cand / 8) * 8
+			}
+		}
+
 		bx := boardX + maxInt(0, (availCols-bCols)/2)
 		by := boardAreaY + maxInt(0, (box.H-6-bRows)/2)
 
@@ -279,15 +352,6 @@ func (s *Session) renderBoardPane(scr *Screen, box Rect, boardCols, boardRows in
 		s.hitBoardIsKitty = true
 
 		scr.DrawVerticalEvalBar(evalBarX, by, bRows, scoreCp, mateIn, s.Flipped)
-
-		// Choose crisp high-DPI pixel square size matching terminal pixel density if reported
-		if geom.XPixel > 0 && geom.Cols > 0 {
-			estBoardPx := (geom.XPixel * bCols) / geom.Cols
-			cand := estBoardPx / 8
-			if cand >= 48 && cand <= 144 {
-				sqPx = (cand / 8) * 8
-			}
-		}
 
 		botPlateY := by + bRows
 		if botPlateY < box.Y+box.H-1 {
@@ -1081,6 +1145,20 @@ func (s *Session) HandleEvent(ev InputEvent) {
 		s.InvalidateKittyCache()
 		return
 	}
+	if ev.Kind == KeyTermCapKitty {
+		if !s.ExplicitMode && s.Graphics != GraphicsKitty {
+			s.SetGraphicsMode(GraphicsKitty)
+			s.SetStatus("Detected Kitty Graphics Protocol — switched to KITTY HD board", false)
+		}
+		return
+	}
+	if ev.Kind == KeyTermCapSixel {
+		if !s.ExplicitMode && s.Graphics == GraphicsUnicode {
+			s.SetGraphicsMode(GraphicsSixel)
+			s.SetStatus("Detected DEC Sixel Graphics — switched to SIXEL HD board", false)
+		}
+		return
+	}
 
 	if s.Mode == ModeHelpModal {
 		if ev.Kind == KeyEsc || ev.Kind == KeyEnter || (ev.Kind == KeyRune && (ev.Rune == '?' || ev.Rune == 'q')) {
@@ -1204,12 +1282,16 @@ func (s *Session) handleNormalRune(r rune) {
 	case 'n':
 		s.CycleNotation()
 	case 'g':
-		s.UseKitty = !s.UseKitty
-		s.InvalidateKittyCache()
-		if s.UseKitty {
-			s.SetStatus("Switched to Kitty Graphics Protocol HD board", false)
-		} else {
+		if s.Graphics.IsPixelMode() {
+			s.SetGraphicsMode(GraphicsUnicode)
 			s.SetStatus("Switched to 24-bit TrueColor Unicode board", false)
+		} else {
+			next := s.PreferredPixelMode
+			if !next.IsPixelMode() {
+				next = GraphicsKitty
+			}
+			s.SetGraphicsMode(next)
+			s.SetStatus(fmt.Sprintf("Switched to %s graphical board", next.String()), false)
 		}
 	case 'a':
 		s.ShowArrows = !s.ShowArrows
@@ -1411,12 +1493,16 @@ func (s *Session) ExecuteColonCommand(raw string) {
 			s.CycleNotation()
 		}
 	case "kitty":
-		s.UseKitty = true
-		s.InvalidateKittyCache()
+		s.ExplicitMode = true
+		s.SetGraphicsMode(GraphicsKitty)
 		s.SetStatus("Enabled Kitty Graphics Protocol HD board", false)
+	case "sixel":
+		s.ExplicitMode = true
+		s.SetGraphicsMode(GraphicsSixel)
+		s.SetStatus("Enabled DEC Sixel Graphics HD board", false)
 	case "unicode", "ascii":
-		s.UseKitty = false
-		s.InvalidateKittyCache()
+		s.ExplicitMode = true
+		s.SetGraphicsMode(GraphicsUnicode)
 		s.SetStatus("Enabled 24-bit TrueColor Unicode board", false)
 	case "fairplay", "fp":
 		s.RunFairPlayAsync(rest)

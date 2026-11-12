@@ -159,6 +159,9 @@ const (
 	KeyCtrlU
 	KeyCtrlW
 	KeyMouse
+	KeyTermCapKitty
+	KeyTermCapSixel
+	KeyTermCellPixels
 )
 
 // MouseAction classifies SGR mouse events.
@@ -205,11 +208,15 @@ func ParseInputEvents(buf []byte) ([]InputEvent, int) {
 
 			next := buf[i+1]
 
-			// Kitty APC response (\x1b_G ... \x1b\\): discard cleanly
+			// Kitty APC response (\x1b_G ... \x1b\\): detect probe i=31;OK, discard others cleanly
 			if next == '_' {
 				endIdx := bytes.Index(buf[i+2:], []byte("\x1b\\"))
 				if endIdx == -1 {
 					break
+				}
+				payload := string(buf[i+2 : i+2+endIdx])
+				if strings.HasPrefix(payload, "Gi=31") && strings.Contains(payload, ";OK") {
+					events = append(events, InputEvent{Kind: KeyTermCapKitty})
 				}
 				i += 2 + endIdx + 2
 				continue
@@ -503,6 +510,25 @@ func parseCSISequence(seq []byte) (ev InputEvent, consumed int, ok bool, incompl
 			return InputEvent{Kind: KeyF5}, consumed, true, false
 		case "17":
 			return InputEvent{Kind: KeyF6}, consumed, true, false
+		}
+	case 'c':
+		// Primary Device Attributes (DA1): \x1b[?62;4;22c -> attribute "4" indicates DEC Sixel support
+		if strings.HasPrefix(params, "?") {
+			for _, attr := range strings.Split(params[1:], ";") {
+				if attr == "4" {
+					return InputEvent{Kind: KeyTermCapSixel}, consumed, true, false
+				}
+			}
+		}
+	case 't':
+		// XTWINOPS cell pixel size report: \x1b[6;<height>;<width>t
+		parts := strings.Split(params, ";")
+		if len(parts) == 3 && parts[0] == "6" {
+			ch, err1 := strconv.Atoi(parts[1])
+			cw, err2 := strconv.Atoi(parts[2])
+			if err1 == nil && err2 == nil && ch > 0 && cw > 0 {
+				return InputEvent{Kind: KeyTermCellPixels, MouseCol: cw, MouseRow: ch}, consumed, true, false
+			}
 		}
 	}
 

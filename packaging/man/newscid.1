@@ -1,8 +1,8 @@
-.TH NEWSCID 1 "October 2026" "NewScid 1.3.44" "User Commands"
+.TH NEWSCID 1 "October 2026" "NewScid 1.3.45" "User Commands"
 .SH NAME
 newscid \- Modern Chess Workstation and .si4 Information Database
 .br
-newscid-tui \- Kitty Graphics Protocol & TrueColor terminal chess workstation
+newscid-tui \- Kitty Graphics, DEC Sixel & TrueColor terminal chess workstation
 .br
 newscid-import \- High-speed standalone PGN & online incremental database importer
 .br
@@ -14,7 +14,7 @@ newscid-scout \- Standalone opponent scouting dossier, opening exploiter & cross
 [\fIOPTIONS\fR] [\fIFILE\fR]
 .br
 .B newscid-tui
-[\fB\-\-kitty\fR|\fB\-\-unicode\fR] [\fB\-\-theme\fR \fIID\fR] [\fB\-\-piece\-set\fR \fIID\fR] [\fB\-\-engine\fR \fIBIN\fR] [\fIDATABASE.si4\fR|\fIFILE.pgn\fR]
+[\fB\-\-kitty\fR|\fB\-\-sixel\fR|\fB\-\-unicode\fR] [\fB\-\-theme\fR \fIID\fR] [\fB\-\-piece\-set\fR \fIID\fR] [\fB\-\-engine\fR \fIBIN\fR] [\fIDATABASE.si4\fR|\fIFILE.pgn\fR]
 .br
 .B newscid-import
 \fB\-db\fR \fIDATABASE.si4\fR [\fB\-pgn\fR \fIFILE.pgn\fR] [\fB\-lichess\fR \fIUSER\fR] [\fB\-chesscom\fR \fIUSER\fR] [\fB\-max\fR \fIN\fR] [\fB\-dedup\fR] [\fB\-compact\fR]
@@ -40,8 +40,8 @@ Display command-line options and exit.
 .BR \-v ", " \-\-version
 Output version, git commit, build date, and runtime architecture, then exit.
 .TP
-.BR tui ", " \-\-tui ", " \-\-kitty
-Launch the interactive terminal workstation directly in the current terminal using the Kitty Graphics Protocol (with a 24-bit TrueColor Unicode fallback).
+.BR tui ", " \-\-tui ", " \-\-kitty ", " \-\-sixel
+Launch the interactive terminal workstation in the current terminal using the Kitty Graphics Protocol or DEC Sixel pixel graphics (with a 24-bit TrueColor Unicode fallback).
 .TP
 .BR \-\-db " \fIPATH\fR"
 Open the specified database (\fB.si4\fR or \fB.pgn\fR) upon startup.
@@ -53,7 +53,7 @@ Launch a dedicated multi-screen/Hyprland window rendering a specific detached wo
 Target compositor workspace when launching a detached screen panel window.
 .SH COMPANION WORKSTATION CLI PROGRAMS
 .SS newscid-tui
-Interactive terminal user interface (TUI) built without GTK/WebKit dependencies. Renders high-DPI PNG boards directly inside Kitty, Ghostty, WezTerm, and Konsole via the Kitty Graphics Protocol (\fBa=T,f=100\fR), supports SGR mouse click/drag-to-move and Kitty CSI-u keyboard input, and toggles live to a 24-bit TrueColor Unicode board with \fBg\fR. Includes scorebook navigation, live Multi-PV UCI engine analysis, opening tree explorer, \fB.si4\fR/\fB.pgn\fR game filtering, positional imbalance metrics, and FairPlay / Scout dossiers. Pass \fB\-\-render\-once\fR to print a single position inline to stdout and exit.
+Interactive terminal user interface (TUI) built without GTK/WebKit dependencies. Renders high-DPI boards inside Kitty, Ghostty, WezTerm, and Konsole via the Kitty Graphics Protocol (\fBa=T,f=100\fR), and inside foot, xterm, contour, and mlterm via DEC Sixel pixel graphics, with SGR mouse click/drag-to-move and Kitty CSI-u keyboard input. Press \fBg\fR to toggle live to a 24-bit TrueColor Unicode board. Includes scorebook navigation, live Multi-PV UCI engine analysis, opening tree explorer, \fB.si4\fR/\fB.pgn\fR game filtering, positional imbalance metrics, and FairPlay / Scout dossiers. Pass \fB\-\-render\-once\fR to print a single position inline to stdout and exit.
 .SS newscid-import
 Standalone high-speed PGN and online game importer, signature deduplicator, and physical compactor:
 .TP

@@ -38,8 +38,10 @@ func RunCLI(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	engineFlag := fs.String("engine", "", "Path to UCI engine binary (e.g. stockfish)")
 	autoEngFlag := fs.Bool("auto-engine", false, "Start live UCI engine analysis immediately on launch")
 	noEngFlag := fs.Bool("no-engine", false, "Disable automatic UCI engine startup")
-	kittyFlag := fs.Bool("kitty", false, "Force Kitty Graphics Protocol high-DPI board rendering")
-	unicodeFlag := fs.Bool("unicode", false, "Use 24-bit TrueColor Unicode board instead of Kitty Graphics")
+	kittyFlag := fs.Bool("kitty", false, "Use high-DPI pixel board (Kitty Graphics Protocol, or Sixel on foot)")
+	forceKittyFlag := fs.Bool("force-kitty", false, "Force raw Kitty APC sequences even on non-Kitty terminals")
+	sixelFlag := fs.Bool("sixel", false, "Force DEC Sixel high-DPI pixel board rendering (foot, xterm, contour)")
+	unicodeFlag := fs.Bool("unicode", false, "Use 24-bit TrueColor Unicode board instead of pixel graphics")
 	themeFlag := fs.String("theme", "tournament-green", "Board theme ID (tournament-green, classic-wood, walnut, slate, blue-white, ...)")
 	pieceFlag := fs.String("piece-set", "cburnett", "Piece set ID (cburnett, merida, staunty, alpha, leipzig, cardinal)")
 	flipFlag := fs.Bool("flip", false, "Flip board orientation (Black at bottom)")
@@ -65,27 +67,43 @@ func RunCLI(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 	}
 
-	useKitty := DetectKittySupport()
-	if *kittyFlag {
-		useKitty = true
-	}
-	if *unicodeFlag {
-		useKitty = false
+	gMode := DetectBestGraphicsModeFromEnv(os.Getenv)
+	explicit := false
+	switch {
+	case *forceKittyFlag:
+		gMode = GraphicsKitty
+		explicit = true
+	case *sixelFlag:
+		gMode = GraphicsSixel
+		explicit = true
+	case *unicodeFlag:
+		gMode = GraphicsUnicode
+		explicit = true
+	case *kittyFlag:
+		if IsFootTerminal(os.Getenv) {
+			gMode = GraphicsSixel
+		} else {
+			gMode = GraphicsKitty
+		}
+		explicit = true
 	}
 
 	autoEngine := (*autoEngFlag || *engineFlag != "") && !*noEngFlag
 
 	sess := NewSession(SessionConfig{
-		DBPath:     dbPath,
-		PGNPath:    pgnPath,
-		InitialFEN: *fenFlag,
-		GameNumber: *gameFlag,
-		EnginePath: *engineFlag,
-		AutoEngine: autoEngine,
-		UseKitty:   useKitty,
-		ThemeID:    *themeFlag,
-		PieceSetID: *pieceFlag,
-		Flipped:    *flipFlag,
+		DBPath:          dbPath,
+		PGNPath:         pgnPath,
+		InitialFEN:      *fenFlag,
+		GameNumber:      *gameFlag,
+		EnginePath:      *engineFlag,
+		AutoEngine:      autoEngine,
+		Graphics:        gMode,
+		HasGraphicsMode: true,
+		ExplicitMode:    explicit,
+		UseKitty:        gMode == GraphicsKitty,
+		ThemeID:         *themeFlag,
+		PieceSetID:      *pieceFlag,
+		Flipped:         *flipFlag,
 	})
 	defer sess.Close()
 
@@ -116,7 +134,8 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  --game <N>          Load 1-based game number from database or PGN")
 	fmt.Fprintln(w, "  --ply <N>           Jump to half-move ply N on startup")
 	fmt.Fprintln(w, "  --fen <FEN>         Start from a custom FEN position")
-	fmt.Fprintln(w, "  --kitty             Force Kitty Graphics Protocol HD board rendering")
+	fmt.Fprintln(w, "  --kitty             Enable high-DPI pixel board (Kitty Graphics, or Sixel on foot)")
+	fmt.Fprintln(w, "  --sixel             Force DEC Sixel high-DPI pixel board (foot, xterm, contour)")
 	fmt.Fprintln(w, "  --unicode           Use 24-bit TrueColor Unicode fallback board")
 	fmt.Fprintln(w, "  --theme <id>        Board theme (tournament-green, classic-wood, walnut, blue-white, slate, ...)")
 	fmt.Fprintln(w, "  --piece-set <id>    Piece set (cburnett, merida, staunty, alpha, leipzig, cardinal)")
@@ -194,17 +213,27 @@ func renderInlineOnce(s *Session, stdout io.Writer, cols, rows int) error {
 		CheckKingSq: checkSq,
 	}
 
-	if s.UseKitty {
+	switch s.Graphics {
+	case GraphicsKitty:
 		pngBytes, err := RenderBoardPNG(s.Board, opt)
 		if err != nil {
 			return err
 		}
-		// Inline Kitty transmission without absolute cursor jump so it renders inline in scrollback
 		seq := encodeInlineKittyPNG(cols, rows, pngBytes)
 		if _, err := io.WriteString(stdout, seq+"\n"); err != nil {
 			return err
 		}
-	} else {
+	case GraphicsSixel:
+		opt.SquarePx = 64
+		img, err := RenderBoardImage(s.Board, opt)
+		if err != nil {
+			return err
+		}
+		seq := EncodeSixelImage(img)
+		if _, err := io.WriteString(stdout, seq+"\n"); err != nil {
+			return err
+		}
+	default:
 		scrW := 36
 		scrH := 18
 		scr := NewScreen(scrW, scrH)
@@ -267,24 +296,40 @@ func runInteractiveLoop(sess *Session, stdin io.Reader, stdout, stderr io.Writer
 	}
 
 	defer func() {
-		// Delete Kitty graphics placements, pop Kitty keyboard mode, disable mouse tracking, show cursor, leave alt screen
-		cleanupSeq := EncodeKittyDeleteAll() + "\x1b[<u\x1b[?1002l\x1b[?1006l\x1b[?25h\x1b[?1049l\x1b[0m"
+		// Delete Kitty placements if used, pop Kitty keyboard mode, disable Sixel cursor mode & mouse tracking, leave alt screen
+		cleanupSeq := ""
+		if sess.Graphics == GraphicsKitty || sess.kittyPlaced {
+			cleanupSeq += EncodeKittyDeleteAll()
+		}
+		cleanupSeq += "\x1b[?8452l\x1b[<u\x1b[?1002l\x1b[?1006l\x1b[?25h\x1b[?1049l\x1b[0m"
 		_, _ = io.WriteString(stdout, cleanupSeq)
 		if restoreRaw != nil {
 			restoreRaw()
 		}
 	}()
 
-	// Enter alternate screen, hide cursor, enable SGR button+drag mouse events, push Kitty CSI-u disambiguation
-	initSeq := "\x1b[?1049h\x1b[2J\x1b[H\x1b[?25l\x1b[?1002h\x1b[?1006h\x1b[>1u"
-	if _, err := io.WriteString(stdout, initSeq); err != nil {
-		return 1
-	}
-
 	geom := TermGeometry{Cols: 120, Rows: 36}
 	if ttyFD >= 0 {
 		geom = GetTermGeometry(ttyFD)
 	}
+
+	// Enter alternate screen, hide cursor, enable SGR mouse, Sixel private cursor mode (?8452h), and Kitty CSI-u disambiguation
+	initSeq := "\x1b[?1049h\x1b[2J\x1b[H\x1b[?25l\x1b[?1002h\x1b[?1006h\x1b[?8452h\x1b[>1u"
+	if ttyFD >= 0 {
+		if geom.XPixel == 0 || geom.YPixel == 0 {
+			initSeq += "\x1b[16t"
+		}
+		if !sess.ExplicitMode && sess.Graphics == GraphicsUnicode {
+			if !IsFootTerminal(os.Getenv) {
+				initSeq += "\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\"
+			}
+			initSeq += "\x1b[c"
+		}
+	}
+	if _, err := io.WriteString(stdout, initSeq); err != nil {
+		return 1
+	}
+
 	scr := NewScreen(geom.Cols, geom.Rows)
 
 	resizeCh, stopResize := SubscribeResize()
@@ -326,13 +371,28 @@ func runInteractiveLoop(sess *Session, stdin io.Reader, stdout, stderr io.Writer
 	for !sess.ShouldQuit {
 		select {
 		case ev := <-inputCh:
-			sess.HandleEvent(ev)
+			fullRedraw := false
+			applyEv := func(e InputEvent) {
+				if e.Kind == KeyTermCellPixels && e.MouseCol > 0 && e.MouseRow > 0 {
+					nx := geom.Cols * e.MouseCol
+					ny := geom.Rows * e.MouseRow
+					if nx != geom.XPixel || ny != geom.YPixel {
+						geom.XPixel = nx
+						geom.YPixel = ny
+						sess.InvalidateKittyCache()
+						fullRedraw = true
+					}
+					return
+				}
+				sess.HandleEvent(e)
+			}
+			applyEv(ev)
 			// Drain any immediately queued input events before rendering
 		drainInput:
 			for !sess.ShouldQuit {
 				select {
 				case nextEv := <-inputCh:
-					sess.HandleEvent(nextEv)
+					applyEv(nextEv)
 				default:
 					break drainInput
 				}
@@ -340,7 +400,7 @@ func runInteractiveLoop(sess *Session, stdin io.Reader, stdout, stderr io.Writer
 			if sess.ShouldQuit {
 				break
 			}
-			_ = sess.Render(scr, geom, stdout, false)
+			_ = sess.Render(scr, geom, stdout, fullRedraw)
 
 		case <-resizeCh:
 			if ttyFD >= 0 {

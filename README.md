@@ -31,9 +31,9 @@ All seven panels (Board, Scorebook, Engine, Opening Tree, Game Browser, Eval Gra
 
 ---
 
-## Terminal Workstation (Kitty Graphics TUI) & Companion CLI Tools
+## Terminal Workstation (Kitty & Sixel TUI) & Companion CLI Tools
 
-NewScid includes a full terminal interface (`newscid-tui`, or `newscid tui` / `newscid --kitty`) with zero GTK/WebKit dependencies. On terminals supporting the Kitty Graphics Protocol (Kitty, Ghostty, WezTerm, Konsole), it renders embedded vector-rasterized piece sets (`cburnett`, `merida`, `staunty`, `alpha`, `leipzig`, `cardinal`), Scid board themes, legal-move overlays, and engine/book arrows directly inside the terminal grid with SGR mouse click/drag-to-move and DEC Mode 2026 synchronized output. Press `g` at any time (or pass `--unicode`) to switch to a 24-bit TrueColor Unicode board over standard terminals or SSH.
+NewScid includes a full terminal interface (`newscid-tui`, or `newscid tui` / `newscid --kitty` / `newscid --sixel`) with zero GTK/WebKit dependencies. It renders embedded vector-rasterized piece sets (`cburnett`, `merida`, `staunty`, `alpha`, `leipzig`, `cardinal`), Scid board themes, legal-move overlays, and engine/book arrows directly inside the terminal grid via the Kitty Graphics Protocol (Kitty, Ghostty, WezTerm, Konsole) or DEC Sixel pixel graphics (`foot`, `xterm`, `contour`, `mlterm`), paired with SGR mouse click/drag-to-move and DEC Mode 2026 synchronized output. Press `g` at any time (or pass `--unicode`) to switch to a 24-bit TrueColor Unicode board over standard terminals or SSH.
 
 ```bash
 # Launch the interactive Kitty Protocol TUI workstation on a Scid v4 database or PGN file

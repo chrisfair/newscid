@@ -280,3 +280,69 @@ func TestRunCLIRenderOnceKittyAndUnicode(t *testing.T) {
 	assert.Contains(t, out.String(), "♚")
 	assert.Contains(t, out.String(), "FEN:")
 }
+
+func TestFootSixelBoardRenderingAndAutoUpgrade(t *testing.T) {
+	assert.Equal(t, GraphicsSixel, DetectBestGraphicsModeFromEnv(func(k string) string {
+		if k == "TERM" {
+			return "foot"
+		}
+		return ""
+	}))
+	assert.Equal(t, GraphicsSixel, DetectBestGraphicsModeFromEnv(func(k string) string {
+		if k == "TERM" {
+			return "foot-extra"
+		}
+		return ""
+	}))
+	assert.Equal(t, GraphicsKitty, DetectBestGraphicsModeFromEnv(func(k string) string {
+		if k == "TERM" {
+			return "xterm-ghostty"
+		}
+		return ""
+	}))
+
+	// Verify terminal capability probe parsing (Kitty i=31 OK, DA1 Sixel ;4, XTWINOPS cell size)
+	probeEvs, consumed := ParseInputEvents([]byte("\x1b_Gi=31;OK\x1b\\\x1b[?62;4;22;28c\x1b[6;29;14t"))
+	assert.Equal(t, len("\x1b_Gi=31;OK\x1b\\\x1b[?62;4;22;28c\x1b[6;29;14t"), consumed)
+	require.Len(t, probeEvs, 3)
+	assert.Equal(t, KeyTermCapKitty, probeEvs[0].Kind)
+	assert.Equal(t, KeyTermCapSixel, probeEvs[1].Kind)
+	assert.Equal(t, KeyTermCellPixels, probeEvs[2].Kind)
+	assert.Equal(t, 14, probeEvs[2].MouseCol)
+	assert.Equal(t, 29, probeEvs[2].MouseRow)
+
+	// Verify Sixel session rendering & caching at foot HiDPI geometry (14x29 cell pixels)
+	sess := NewSession(SessionConfig{
+		Graphics:        GraphicsSixel,
+		HasGraphicsMode: true,
+		ThemeID:         "tournament-green",
+		PieceSetID:      "cburnett",
+	})
+	defer sess.Close()
+
+	scr := NewScreen(140, 40)
+	geom := TermGeometry{Cols: 140, Rows: 40, XPixel: 1960, YPixel: 1160}
+	var out bytes.Buffer
+
+	require.NoError(t, sess.Render(scr, geom, &out, true))
+	frame1 := out.String()
+	assert.Contains(t, frame1, "SIXEL HD")
+	assert.Contains(t, frame1, "\x1bP0;1;0q\"1;1;")
+	assert.NotContains(t, frame1, "\x1b_Ga=T")
+
+	// Second render with unchanged board must NOT re-emit Sixel payload
+	out.Reset()
+	require.NoError(t, sess.Render(scr, geom, &out, false))
+	assert.NotContains(t, out.String(), "\x1bP0;1;0q\"1;1;")
+
+	// Running --kitty inside TERM=foot must automatically render Sixel instead of an invisible Kitty APC box
+	t.Setenv("TERM", "foot")
+	t.Setenv("KITTY_WINDOW_ID", "")
+	t.Setenv("GHOSTTY_RESOURCES_DIR", "")
+	t.Setenv("WEZTERM_EXECUTABLE", "")
+
+	var cliOut, cliErr bytes.Buffer
+	rc := RunCLI([]string{"--render-once", "--kitty"}, strings.NewReader(""), &cliOut, &cliErr)
+	assert.Equal(t, 0, rc)
+	assert.Contains(t, cliOut.String(), "\x1bP0;1;0q\"1;1;512;512")
+}

@@ -135,6 +135,19 @@ func (s *Screen) Invalidate() {
 	}
 }
 
+func (s *Screen) InvalidateRect(r Rect) {
+	x0 := maxInt(0, r.X)
+	y0 := maxInt(0, r.Y)
+	x1 := minInt(s.Width, r.X+r.W)
+	y1 := minInt(s.Height, r.Y+r.H)
+	for y := y0; y < y1; y++ {
+		off := y * s.Width
+		for x := x0; x < x1; x++ {
+			s.Prev[off+x] = Cell{}
+		}
+	}
+}
+
 func runeCellWidth(r rune) int {
 	if r < 32 {
 		return 0

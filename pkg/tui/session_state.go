@@ -67,16 +67,19 @@ type PlyFrame struct {
 
 // SessionConfig configures startup options for a NewScid TUI workstation session.
 type SessionConfig struct {
-	DBPath      string
-	PGNPath     string
-	InitialFEN  string
-	GameNumber  int
-	EnginePath  string
-	AutoEngine  bool
-	UseKitty    bool
-	ThemeID     string
-	PieceSetID  string
-	Flipped     bool
+	DBPath          string
+	PGNPath         string
+	InitialFEN      string
+	GameNumber      int
+	EnginePath      string
+	AutoEngine      bool
+	UseKitty        bool
+	Graphics        GraphicsMode
+	HasGraphicsMode bool
+	ExplicitMode    bool
+	ThemeID         string
+	PieceSetID      string
+	Flipped         bool
 }
 
 // Session manages all chess state, database queries, async UCI engine, and opening tree workers.
@@ -84,19 +87,22 @@ type Session struct {
 	mu sync.Mutex
 
 	// Visual & protocol preferences
-	UseKitty      bool
-	KittyDetected bool
-	ThemeID       string
-	PieceSetID    string
-	Notation      chess.NotationStyle
-	Flipped       bool
-	ShowArrows    bool
-	ActiveTab     TabID
-	Mode          InputMode
-	InputBuffer   string
-	StatusMsg     string
-	StatusIsErr   bool
-	ShouldQuit    bool
+	Graphics           GraphicsMode
+	PreferredPixelMode GraphicsMode
+	ExplicitMode       bool
+	UseKitty           bool
+	KittyDetected      bool
+	ThemeID            string
+	PieceSetID         string
+	Notation           chess.NotationStyle
+	Flipped            bool
+	ShowArrows         bool
+	ActiveTab          TabID
+	Mode               InputMode
+	InputBuffer        string
+	StatusMsg          string
+	StatusIsErr        bool
+	ShouldQuit         bool
 
 	// Chess game & board state
 	Game       *chess.Game
@@ -153,11 +159,14 @@ type Session struct {
 	// Async wakeup channel for UI redraws when background engine/tree/forensics complete
 	RedrawCh chan struct{}
 
-	// Cached Kitty PNG payload
-	lastBoardHash uint64
-	lastBoardPNG  []byte
-	lastBoardRect Rect
-	kittyPlaced   bool
+	// Cached Kitty PNG / Sixel payload
+	lastBoardHash  uint64
+	lastBoardPNG   []byte
+	lastBoardSixel string
+	lastBoardRect  Rect
+	kittyPlaced    bool
+	sixelPlaced    bool
+	eraseSixelRect Rect
 
 	// Hit-test rectangles updated during layout render
 	hitBoardRect     Rect
@@ -191,23 +200,45 @@ func NewSession(cfg SessionConfig) *Session {
 		_ = ecoCls.LoadFromFile(fileformat.SystemScidECOPath)
 	}
 
+	gMode := cfg.Graphics
+	if !cfg.HasGraphicsMode {
+		if cfg.UseKitty {
+			gMode = GraphicsKitty
+		} else {
+			gMode = GraphicsUnicode
+		}
+	}
+
+	prefPixel := gMode
+	if !prefPixel.IsPixelMode() {
+		detected := DetectBestGraphicsModeFromEnv(os.Getenv)
+		if detected.IsPixelMode() {
+			prefPixel = detected
+		} else {
+			prefPixel = GraphicsKitty
+		}
+	}
+
 	s := &Session{
-		UseKitty:       cfg.UseKitty,
-		KittyDetected:  DetectKittySupport(),
-		ThemeID:        themeID,
-		PieceSetID:     pieceID,
-		Notation:       chess.NotationSAN,
-		Flipped:        cfg.Flipped,
-		ShowArrows:     true,
-		ActiveTab:      TabScore,
-		Mode:           ModeNormal,
-		SelectedSq:     chess.NoSquare,
-		DragFromSq:     chess.NoSquare,
-		ECOClassifier:  ecoCls,
-		GamePageSize:   200,
-		MultiPV:        2,
-		EnginePath:     cfg.EnginePath,
-		RedrawCh:       make(chan struct{}, 4),
+		Graphics:           gMode,
+		PreferredPixelMode: prefPixel,
+		ExplicitMode:       cfg.ExplicitMode,
+		UseKitty:           gMode == GraphicsKitty,
+		KittyDetected:      DetectKittySupport(),
+		ThemeID:            themeID,
+		PieceSetID:         pieceID,
+		Notation:           chess.NotationSAN,
+		Flipped:            cfg.Flipped,
+		ShowArrows:         true,
+		ActiveTab:          TabScore,
+		Mode:               ModeNormal,
+		SelectedSq:         chess.NoSquare,
+		DragFromSq:         chess.NoSquare,
+		ECOClassifier:      ecoCls,
+		GamePageSize:       200,
+		MultiPV:            2,
+		EnginePath:         cfg.EnginePath,
+		RedrawCh:           make(chan struct{}, 4),
 	}
 
 	s.ResetNewGame("")
@@ -240,13 +271,29 @@ func NewSession(cfg SessionConfig) *Session {
 	s.onPositionChanged()
 	if s.StatusMsg == "" {
 		modeTag := "Unicode 24-bit RGB"
-		if s.UseKitty {
+		switch s.Graphics {
+		case GraphicsKitty:
 			modeTag = "Kitty Graphics HD"
+		case GraphicsSixel:
+			modeTag = "Sixel Graphics HD"
 		}
 		s.SetStatus(fmt.Sprintf("Ready (%s) — click/drag squares, press m to enter move, ? for help", modeTag), false)
 	}
 
 	return s
+}
+
+// SetGraphicsMode switches the active terminal graphics backend cleanly.
+func (s *Session) SetGraphicsMode(m GraphicsMode) {
+	if s.Graphics == GraphicsSixel && m != GraphicsSixel && s.sixelPlaced {
+		s.eraseSixelRect = s.lastBoardRect
+	}
+	s.Graphics = m
+	s.UseKitty = m == GraphicsKitty
+	if m.IsPixelMode() {
+		s.PreferredPixelMode = m
+	}
+	s.lastBoardHash = 0
 }
 
 // Close shuts down any running UCI engine and open Scid database cleanly.

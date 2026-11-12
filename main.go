@@ -56,8 +56,9 @@ func main() {
 			fmt.Println("\nOptions:")
 			fmt.Println("  -v, --version         Print application version details")
 			fmt.Println("  -h, --help            Display this help message")
-			fmt.Println("  tui, --tui            Launch the Kitty Graphics / TrueColor terminal workstation (TUI)")
-			fmt.Println("  --kitty               Launch the terminal workstation with Kitty Graphics Protocol HD board")
+			fmt.Println("  tui, --tui            Launch the Kitty / Sixel / TrueColor terminal workstation (TUI)")
+			fmt.Println("  --kitty               Launch the terminal workstation with HD pixel board (Kitty, or Sixel on foot)")
+			fmt.Println("  --sixel               Launch the terminal workstation with DEC Sixel HD pixel board (foot, xterm)")
 			fmt.Println("  --window-panel <id>   Launch a detached multi-screen panel window (for Hyprland / multi-monitor)")
 			fmt.Println("  --workspace <1..10>   Place the window onto a specific Hyprland workspace")
 			fmt.Println("  --portal-url <url>    Launch a dedicated live portal window into Lichess.org or Chess.com")
@@ -70,9 +71,12 @@ func main() {
 		if arg == "--kitty" || arg == "-kitty" {
 			os.Exit(tui.RunCLI(append([]string{"--kitty"}, os.Args[2:]...), os.Stdin, os.Stdout, os.Stderr))
 		}
+		if arg == "--sixel" || arg == "-sixel" {
+			os.Exit(tui.RunCLI(append([]string{"--sixel"}, os.Args[2:]...), os.Stdin, os.Stdout, os.Stderr))
+		}
 	}
 
-	// Support --tui or --kitty anywhere in flags (e.g. `newscid games.si4 --tui`)
+	// Support --tui, --kitty, or --sixel anywhere in flags (e.g. `newscid games.si4 --tui`)
 	for i := 1; i < len(os.Args); i++ {
 		if os.Args[i] == "--tui" || os.Args[i] == "-tui" {
 			rest := append([]string{}, os.Args[1:i]...)
@@ -81,6 +85,12 @@ func main() {
 		}
 		if os.Args[i] == "--kitty" || os.Args[i] == "-kitty" {
 			rest := []string{"--kitty"}
+			rest = append(rest, os.Args[1:i]...)
+			rest = append(rest, os.Args[i+1:]...)
+			os.Exit(tui.RunCLI(rest, os.Stdin, os.Stdout, os.Stderr))
+		}
+		if os.Args[i] == "--sixel" || os.Args[i] == "-sixel" {
+			rest := []string{"--sixel"}
 			rest = append(rest, os.Args[1:i]...)
 			rest = append(rest, os.Args[i+1:]...)
 			os.Exit(tui.RunCLI(rest, os.Stdin, os.Stdout, os.Stderr))
