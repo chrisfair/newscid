@@ -127,6 +127,8 @@ type PlayerFairPlayDossier struct {
 	AllGames                 []GameFairPlayRecord      `json:"allGames"`
 	KeyFindings              []string                  `json:"keyFindings"`
 	ReportMarkdown           string                    `json:"reportMarkdown"`
+	Radar                    *RadarRiskAssessment      `json:"radar,omitempty"`
+	CommunityIntel           *CommunitySuspectIntel    `json:"communityIntel,omitempty"`
 }
 
 // TimeControlID is a compact integer constant representing time control buckets in hot paths.
@@ -410,8 +412,9 @@ func BuildPlayerFairPlayDossier(playerName string, games []*chess.Game, gameIDs 
 		dossier.FlaggedGames = sortedGames[:limit]
 	}
 
-	// Synthesize Key Findings & Official Markdown Report
+	// Synthesize Key Findings, FairPlay Radar 6-Signal Assessment & Official Markdown Report
 	dossier.KeyFindings = buildKeyFindings(dossier)
+	dossier.Radar = BuildRadarAssessment(dossier, RadarProfileHints{})
 	dossier.ReportMarkdown = generateFairPlayMarkdown(dossier)
 
 	return dossier

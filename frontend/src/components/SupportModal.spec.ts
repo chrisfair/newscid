@@ -8,6 +8,8 @@ vi.mock('../../wailsjs/go/main/App', () => ({
   RecordUserSupport: vi.fn(),
   DismissSupportNag: vi.fn(),
   OpenSupportLink: vi.fn(),
+  SyncRemoteSupportStatus: vi.fn(),
+  PurchaseMicrosoftStoreUnlock: vi.fn(),
 }))
 
 describe('SupportModal.vue', () => {
@@ -16,6 +18,8 @@ describe('SupportModal.vue', () => {
     vi.mocked(AppBindings.GetSupportStatus).mockResolvedValue({
       supported: false,
       isAuthor: false,
+      isPackagedApp: false,
+      isStorePurchase: false,
       authorId: '',
       deviceSignature: '',
       supporterTier: '',
@@ -45,6 +49,20 @@ describe('SupportModal.vue', () => {
       minAmountUsd: 5,
       shouldShowNag: false,
     } as any)
+    vi.mocked(AppBindings.SyncRemoteSupportStatus).mockResolvedValue({
+      supported: true,
+      isAuthor: false,
+      supporterHandle: 'HeroPlayer',
+      supporterTier: '$35 Support',
+      dismissCount: 0,
+      stripeUrl: 'https://donate.stripe.com/newscid-support',
+      minAmountUsd: 5,
+      shouldShowNag: false,
+    } as any)
+    vi.mocked(AppBindings.PurchaseMicrosoftStoreUnlock).mockResolvedValue({
+      purchased: true,
+      message: 'Microsoft Store $9.99 Permanent Unlock activated!',
+    } as any)
   })
 
   it('renders support tiers ($5 minimum) and opens Stripe link on click', async () => {
@@ -64,7 +82,23 @@ describe('SupportModal.vue', () => {
 
     // Click Stripe button
     await stripeBtn.trigger('click')
+    await flushPromises()
     expect(AppBindings.OpenSupportLink).toHaveBeenCalledWith(10)
+    expect(wrapper.emitted('updated')).toBeTruthy()
+  })
+
+  it('falls back to window.open when OpenSupportLink rejects', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+    vi.mocked(AppBindings.OpenSupportLink).mockRejectedValueOnce(new Error('wails unavailable'))
+
+    const wrapper = mount(SupportModal)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="stripe-support-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(openSpy).toHaveBeenCalledWith('https://donate.stripe.com/newscid-support', '_blank', 'noopener,noreferrer')
+    openSpy.mockRestore()
   })
 
   it('enforces $5 minimum on custom support amount', async () => {
@@ -89,6 +123,115 @@ describe('SupportModal.vue', () => {
     await flushPromises()
 
     expect(AppBindings.RecordUserSupport).toHaveBeenCalledWith('$5 Support', 'rcpt_stripe_999')
+    expect(wrapper.find('[data-testid="supporter-active-banner"]').exists()).toBe(true)
+    expect(wrapper.emitted('updated')).toBeTruthy()
+  })
+
+  it('renders Microsoft Store $9.99 permanent unlock flow on Free Store edition and activates license', async () => {
+    vi.mocked(AppBindings.GetSupportStatus)
+      .mockResolvedValueOnce({
+        supported: false,
+        isAuthor: false,
+        isWindows: true,
+        isPackagedApp: true,
+        isStorePurchase: false,
+        canPurchaseInApp: true,
+        storePriceUsd: 9.99,
+        dismissCount: 0,
+        stripeUrl: 'https://donate.stripe.com/newscid-support',
+        minAmountUsd: 5,
+        shouldShowNag: true,
+      } as any)
+      .mockResolvedValueOnce({
+        supported: true,
+        isLifetime: true,
+        isAuthor: false,
+        isWindows: true,
+        isPackagedApp: true,
+        isStorePurchase: true,
+        dismissCount: 0,
+        stripeUrl: 'https://donate.stripe.com/newscid-support',
+        minAmountUsd: 5,
+        shouldShowNag: false,
+      } as any)
+
+    const wrapper = mount(SupportModal)
+    await flushPromises()
+
+    // Packaged Store app shows MS Store button instead of Stripe button
+    expect(wrapper.find('[data-testid="stripe-support-btn"]').exists()).toBe(false)
+    const storeBtn = wrapper.get('[data-testid="msstore-purchase-btn"]')
+    expect(storeBtn.text()).toContain('$9.99 (Microsoft Store)')
+
+    await storeBtn.trigger('click')
+    await flushPromises()
+
+    expect(AppBindings.PurchaseMicrosoftStoreUnlock).toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="store-verified-banner"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="confirm-support-msg"]').text()).toContain('Permanent Unlock activated')
+    expect(wrapper.emitted('updated')?.[0]).toEqual([true])
+  })
+
+  it('handles cancelled and errored Microsoft Store purchase attempts gracefully', async () => {
+    vi.mocked(AppBindings.GetSupportStatus).mockResolvedValue({
+      supported: false,
+      isAuthor: false,
+      isPackagedApp: true,
+      isStorePurchase: false,
+      dismissCount: 0,
+      stripeUrl: 'https://donate.stripe.com/newscid-support',
+      minAmountUsd: 5,
+      shouldShowNag: true,
+    } as any)
+    vi.mocked(AppBindings.PurchaseMicrosoftStoreUnlock)
+      .mockResolvedValueOnce({ purchased: false, message: 'Purchase cancelled by user.' } as any)
+      .mockRejectedValueOnce(new Error('Store IPC error'))
+
+    const wrapper = mount(SupportModal)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="msstore-purchase-btn"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="confirm-support-msg"]').text()).toContain('Purchase cancelled by user.')
+
+    await wrapper.get('[data-testid="msstore-purchase-btn"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="confirm-support-msg"]').text()).toContain('Microsoft Store checkout could not be opened.')
+  })
+
+  it('restores supporter status via SyncRemoteSupportStatus button and handles not-found/error states', async () => {
+    const wrapper = mount(SupportModal)
+    await flushPromises()
+
+    const syncBtn = wrapper.get('[data-testid="sync-shared-support-btn"]')
+    expect(syncBtn.attributes('disabled')).toBeDefined()
+
+    // Case 1: Not found
+    vi.mocked(AppBindings.SyncRemoteSupportStatus).mockResolvedValueOnce({
+      supported: false,
+      isAuthor: false,
+      dismissCount: 0,
+      stripeUrl: 'https://donate.stripe.com/newscid-support',
+      minAmountUsd: 5,
+      shouldShowNag: true,
+    } as any)
+    await wrapper.get('[data-testid="support-reference-input"]').setValue('UnknownHandle')
+    await syncBtn.trigger('click')
+    await flushPromises()
+    expect(AppBindings.SyncRemoteSupportStatus).toHaveBeenCalledWith('UnknownHandle')
+    expect(wrapper.get('[data-testid="confirm-support-msg"]').text()).toContain('No prior contribution record found')
+
+    // Case 2: Network error
+    vi.mocked(AppBindings.SyncRemoteSupportStatus).mockRejectedValueOnce(new Error('offline'))
+    await syncBtn.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="confirm-support-msg"]').text()).toContain('Could not reach the shared supporter database')
+
+    // Case 3: Restored successfully
+    await wrapper.get('[data-testid="support-reference-input"]').setValue('HeroPlayer')
+    await syncBtn.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="confirm-support-msg"]').text()).toContain('Supporter status restored for HeroPlayer')
     expect(wrapper.find('[data-testid="supporter-active-banner"]').exists()).toBe(true)
     expect(wrapper.emitted('updated')).toBeTruthy()
   })

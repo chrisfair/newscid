@@ -2,6 +2,7 @@ package repertoire_test
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -256,4 +257,112 @@ func TestScanGamesForBookDeviations(t *testing.T) {
 	assert.Equal(t, "d5", report.OpponentSidelines[0].OpponentMoveSAN)
 	assert.NotEmpty(t, report.OpponentSidelines[0].RecommendedReplySAN)
 	assert.NotEmpty(t, report.OpponentSidelines[0].FullLineWithReply)
+}
+
+func TestRepertoire_EdgeCasesAndErrors(t *testing.T) {
+	dir := t.TempDir()
+	// Write a non-json file, a directory, and a corrupt json file to exercise loadAll
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "subdir"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("ignore"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "corrupt.json"), []byte("{bad"), 0o644))
+
+	mgr := repertoire.NewManager(dir)
+
+	// Not-found errors across methods
+	_, err := mgr.AddLineSAN("missing-rep", "1. e4 e5", "")
+	assert.Error(t, err)
+	_, err = mgr.DeleteMove("missing-rep", chess.StartingFEN, "e2e4")
+	assert.Error(t, err)
+	_, err = mgr.UpdateMoveComment("missing-rep", chess.StartingFEN, "e2e4", "note")
+	assert.Error(t, err)
+	_, err = mgr.ResetMastery("missing-rep")
+	assert.Error(t, err)
+	_, err = mgr.GetMasteryReport("missing-rep")
+	assert.Error(t, err)
+	_, err = mgr.CompileToPolyglotBook("missing-rep", filepath.Join(dir, "x.bin"))
+	assert.Error(t, err)
+	_, err = mgr.ScanGamesForBookDeviations("missing-rep", nil, nil)
+	assert.Error(t, err)
+
+	// Create empty repertoire and test empty CompileToPolyglotBook + AddLineSAN edge cases
+	rep := &repertoire.Repertoire{
+		ID:        "edge-book-w",
+		Name:      "Edge Book",
+		Color:     "w",
+		Positions: make(map[string][]repertoire.RepertoireMove),
+	}
+	require.NoError(t, mgr.SaveRepertoire(rep))
+
+	_, err = mgr.CompileToPolyglotBook(rep.ID, filepath.Join(dir, "empty.bin"))
+	assert.Error(t, err)
+
+	_, err = mgr.AddLineSAN(rep.ID, "   ", "")
+	assert.Error(t, err)
+	_, err = mgr.AddLineSAN(rep.ID, "[Event \"X\"]\n1-0 *", "")
+	assert.Error(t, err)
+	_, err = mgr.AddLineSAN(rep.ID, "1. e4 InvalidMoveXYZ", "")
+	assert.Error(t, err)
+
+	// PGN with headers, comments, variations, NAGs, UCI fallback, and existing move comment update
+	pgnInput := `[Event "Test"]
+[White "A"]
+1.e4 {good} (1.d4 d5) $1 e5 2.g1f3 Nc6 1-0`
+	_, err = mgr.AddLineSAN(rep.ID, pgnInput, "First note")
+	require.NoError(t, err)
+	// Re-adding updates comment on existing move
+	_, err = mgr.AddLineSAN(rep.ID, "1. e4 e5 2. Nf3 Nc6", "Updated note")
+	require.NoError(t, err)
+
+	// Add 7 first moves from start pos to exercise weight clamping (idx >= 6) + Correct bonus in CompileToPolyglotBook
+	for _, mv := range []string{"d4", "c4", "Nf3", "b3", "g3", "f4", "Nc3"} {
+		_, err = mgr.AddLineSAN(rep.ID, "1. "+mv, "")
+		require.NoError(t, err)
+	}
+	mgr.RecordPractice(rep.ID, chess.StartingFEN, "e2e4", true)
+	nBin, err := mgr.CompileToPolyglotBook(rep.ID, filepath.Join(dir, "edge.bin"))
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, nBin, 8)
+
+	// UpdateMoveComment not-found move error
+	_, err = mgr.UpdateMoveComment(rep.ID, chess.StartingFEN, "a2a3", "missing")
+	assert.Error(t, err)
+
+	// Delete one move leaving others intact (non-empty filtered branch)
+	_, err = mgr.DeleteMove(rep.ID, chess.StartingFEN, "Nc3")
+	require.NoError(t, err)
+
+	// Black repertoire deviation scan with nil game, empty game, non-matching player, draw, win, loss
+	blackRep := &repertoire.Repertoire{
+		ID:        "black-sicilian-edge",
+		Name:      "Black Sicilian",
+		Color:     "b",
+		Positions: make(map[string][]repertoire.RepertoireMove),
+	}
+	require.NoError(t, mgr.SaveRepertoire(blackRep))
+	_, err = mgr.AddLineSAN(blackRep.ID, "1. e4 c5 2. Nf3 d6 3. d4 cxd4", "Mainline")
+	require.NoError(t, err)
+
+	gEmpty := chess.NewGame()
+	gEmpty.SetTag("Black", "HeroBlack")
+	gOther := mustParsePGN(t, "[White \"Opp\"]\n[Black \"SomeoneElse\"]\n[Result \"1-0\"]\n\n1. e4 c5 1-0")
+	gBlackWin := mustParsePGN(t, "[White \"Opp\"]\n[Black \"HeroBlack\"]\n[Result \"0-1\"]\n\n1. e4 e5 2. Nf3 Nc6 0-1")
+	gBlackDraw := mustParsePGN(t, "[White \"Opp\"]\n[Black \"HeroBlack\"]\n[Result \"1/2-1/2\"]\n\n1. e4 c5 2. Nc3 Nc6 1/2-1/2")
+	gBlackLoss := mustParsePGN(t, "[White \"Opp\"]\n[Black \"HeroBlack\"]\n[Result \"1-0\"]\n\n1. e4 c5 2. Nf3 Nc6 3. d4 cxd4 1-0")
+
+	devRep, err := mgr.ScanGamesForBookDeviations(
+		blackRep.ID,
+		[]*chess.Game{nil, gEmpty, gOther, gBlackWin, gBlackDraw, gBlackLoss},
+		[]string{"HeroBlack", "heroblack", "  "},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, 3, devRep.MatchingColorGames)
+	assert.NotEmpty(t, devRep.UserDeviations)
+	assert.NotEmpty(t, devRep.OpponentSidelines)
+}
+
+func mustParsePGN(t *testing.T, pgn string) *chess.Game {
+	t.Helper()
+	g, err := chess.ParsePGN(pgn)
+	require.NoError(t, err)
+	return g
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
 )
 
@@ -1098,6 +1099,186 @@ func TestLichessIncrementalAndSyncEdgeCases(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, emptyGames)
 	assert.Equal(t, 0, emptySkipped)
+}
+
+func TestChessComAndLichess_FetchRecentNewGamesAndFetchGameByID(t *testing.T) {
+	pgn1 := `[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2026.05.01"]
+[White "hero"]
+[Black "opp1"]
+[Result "1-0"]
+[Link "https://www.chess.com/game/live/123456789"]
+
+1. e4 e5 2. Nf3 Nc6 1-0`
+
+	pgn2 := `[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2026.05.02"]
+[White "opp2"]
+[Black "hero"]
+[Result "0-1"]
+[Link "https://www.chess.com/game/live/987654321"]
+
+1. d4 d5 2. c4 e6 0-1`
+
+	pgn3 := `[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2026.05.03"]
+[White "hero"]
+[Black "opp3"]
+[Result "1/2-1/2"]
+[Link "https://www.chess.com/game/live/555555555"]
+
+1. c4 e5 2. Nc3 Nf6 1/2-1/2`
+
+	combinedPGN := pgn1 + "\n\n" + pgn2 + "\n\n" + pgn3 + "\n"
+
+	ccSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "emptyuser/games/archives"):
+			_, _ = w.Write([]byte(`{"archives":[]}`))
+		case strings.Contains(r.URL.Path, "erruser/games/archives"):
+			w.WriteHeader(http.StatusInternalServerError)
+		case strings.Contains(r.URL.Path, "blankpgn/games/archives"):
+			_, _ = w.Write([]byte(`{"archives":["http://` + r.Host + `/pub/player/blankpgn/games/2026/05"]}`))
+		case strings.Contains(r.URL.Path, "blankpgn/games/2026/05/pgn"):
+			_, _ = w.Write([]byte("   \n  "))
+		case strings.Contains(r.URL.Path, "hero/games/archives"):
+			_, _ = w.Write([]byte(`{"archives":["http://` + r.Host + `/pub/player/hero/games/2026/04","http://` + r.Host + `/pub/player/hero/games/2026/05"]}`))
+		case strings.Contains(r.URL.Path, "hero/games/2026/04/pgn"):
+			_, _ = w.Write([]byte(pgn1))
+		case strings.Contains(r.URL.Path, "hero/games/2026/05/pgn"):
+			_, _ = w.Write([]byte(combinedPGN))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer ccSrv.Close()
+
+	cc := NewChessComClient()
+	cc.BaseURL = ccSrv.URL
+
+	// FetchRecentNewGames error & empty cases
+	_, _, err := cc.FetchRecentNewGames("   ", 0, nil)
+	assert.Error(t, err)
+	_, _, err = cc.FetchRecentNewGames("erruser", 5, nil)
+	assert.Error(t, err)
+	gEmpty, sEmpty, err := cc.FetchRecentNewGames("emptyuser", 5, nil)
+	require.NoError(t, err)
+	assert.Empty(t, gEmpty)
+	assert.Equal(t, 0, sEmpty)
+	gBlank, sBlank, err := cc.FetchRecentNewGames("blankpgn", 0, nil)
+	require.NoError(t, err)
+	assert.Empty(t, gBlank)
+	assert.Equal(t, 0, sBlank)
+
+	// FetchRecentNewGames with limit < total games and dedup via GameSignatureSet
+	sigs := scid.NewGameSignatureSet()
+	gParsed3, err := chess.ParsePGN(pgn3)
+	require.NoError(t, err)
+	sigs.AddGame(gParsed3)
+
+	recent, skipped, err := cc.FetchRecentNewGames("hero", 2, sigs)
+	require.NoError(t, err)
+	assert.Len(t, recent, 1)
+	assert.Equal(t, 1, skipped)
+
+	// Second call skips all
+	recent2, skipped2, err := cc.FetchRecentNewGames("hero", 2, sigs)
+	require.NoError(t, err)
+	assert.Empty(t, recent2)
+	assert.Equal(t, 2, skipped2)
+
+	// FetchGameByID error cases & hit/miss
+	_, err = cc.FetchGameByID("", "hero")
+	assert.Error(t, err)
+	_, err = cc.FetchGameByID("123456789", "")
+	assert.Error(t, err)
+	_, err = cc.FetchGameByID("123456789", "erruser")
+	assert.Error(t, err)
+	_, err = cc.FetchGameByID("123456789", "emptyuser")
+	assert.Error(t, err)
+	_, err = cc.FetchGameByID("999999999", "hero")
+	assert.Error(t, err)
+
+	foundCC, err := cc.FetchGameByID("987654321", "hero")
+	require.NoError(t, err)
+	assert.Equal(t, "opp2", foundCC.Tags["White"])
+
+	// Lichess FetchRecentNewGames and FetchGameByID
+	lichessCount := 2
+	liSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		switch {
+		case strings.HasPrefix(p, "/api/user/"):
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"count":{"all":%d,"rated":%d}}`, lichessCount, lichessCount)))
+		case strings.Contains(p, "/api/games/user/rate429"):
+			w.WriteHeader(http.StatusTooManyRequests)
+		case strings.Contains(p, "/api/games/user/err500"):
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("boom"))
+		case strings.HasPrefix(p, "/api/games/user/"):
+			w.Header().Set("Content-Type", "application/x-chess-pgn")
+			_, _ = w.Write([]byte(pgn2 + "\n\n" + pgn1 + "\n"))
+		case strings.Contains(p, "/game/export/notfound"):
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte("missing"))
+		case strings.HasPrefix(p, "/game/export/"):
+			w.Header().Set("Content-Type", "application/x-chess-pgn")
+			_, _ = w.Write([]byte(pgn1))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer liSrv.Close()
+
+	lc := NewLichessClient()
+	lc.BaseURL = liSrv.URL
+
+	// Error cases for FetchRecentNewGames
+	_, _, err = lc.FetchRecentNewGames("   ", "", 0, nil)
+	assert.Error(t, err)
+	_, _, err = lc.FetchRecentNewGames("rate429", "tok", 0, nil)
+	assert.ErrorContains(t, err, "429")
+	_, _, err = lc.FetchRecentNewGames("err500", "tok", 5, nil)
+	assert.ErrorContains(t, err, "500")
+
+	// First poll fetches 2 games and caches total count
+	liSigs := scid.NewGameSignatureSet()
+	gParsed1, err := chess.ParsePGN(pgn1)
+	require.NoError(t, err)
+	liSigs.AddGame(gParsed1)
+
+	liNew, liSkip, err := lc.FetchRecentNewGames("hero", "tok", 0, liSigs)
+	require.NoError(t, err)
+	assert.Len(t, liNew, 1)
+	assert.Equal(t, 1, liSkip)
+
+	// Second poll with unchanged count short-circuits immediately
+	liNew2, liSkip2, err := lc.FetchRecentNewGames("hero", "tok", 5, liSigs)
+	require.NoError(t, err)
+	assert.Empty(t, liNew2)
+	assert.Equal(t, 0, liSkip2)
+
+	// FetchGameByID: invalid short ID, 12-char ID with path/query trimming, 404, success
+	_, err = lc.FetchGameByID("short", "")
+	assert.Error(t, err)
+	_, err = lc.FetchGameByID("notfound1234", "")
+	assert.ErrorContains(t, err, "404")
+
+	liGame, err := lc.FetchGameByID("/abcd1234wxyz/white?foo=1", "tok")
+	require.NoError(t, err)
+	assert.Equal(t, "hero", liGame.Tags["White"])
+
+	// Invalid URL request construction error
+	badLC := NewLichessClient()
+	badLC.BaseURL = "://bad"
+	_, _, err = badLC.FetchRecentNewGames("hero", "", 5, nil)
+	assert.Error(t, err)
+	_, err = badLC.FetchGameByID("abcd1234", "")
+	assert.Error(t, err)
 }
 
 

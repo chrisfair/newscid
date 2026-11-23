@@ -382,6 +382,14 @@ export function RecordRepertoirePractice(arg1:string,arg2:string,arg3:string,arg
 
 export function RecordUserSupport(arg1:string,arg2:string):Promise<support.SupportStatus>;
 
+export function SyncRemoteSupportStatus(arg1:string):Promise<support.SupportStatus>;
+
+export function PurchaseMicrosoftStoreUnlock():Promise<any>;
+
+export function FetchFairPlayCommunityIntel(arg1:string,arg2:string,arg3:number,arg4:boolean):Promise<any>;
+
+export function SubmitFairPlayCommunityFlag(arg1:string,arg2:string,arg3:number,arg4:boolean,arg5:string):Promise<any>;
+
 export function RemoveNotablePlayer(arg1:string):Promise<Array<scid.DiscoveredNotablePlayer>>;
 
 export function RemovePersonaIdentifier(arg1:string,arg2:string):Promise<persona.Persona>;

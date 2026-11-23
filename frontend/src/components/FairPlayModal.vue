@@ -25,6 +25,8 @@ import {
   AnalyzeHardMoveBenchmark,
   DownloadAndAnalyzeHardMoveBenchmark,
   GetDatabasePlayers,
+  FetchFairPlayCommunityIntel,
+  SubmitFairPlayCommunityFlag,
 } from '../../wailsjs/go/main/App'
 import pkg from '../../package.json'
 
@@ -127,6 +129,42 @@ interface CrossControlDivergence {
   explanation: string
 }
 
+interface RadarSignal {
+  id: string
+  name: string
+  score: number
+  maxScore: number
+  flagged: boolean
+  detail: string
+}
+
+interface RadarRiskAssessment {
+  platform: string
+  crsScore: number
+  cheatLikelihoodPct: number
+  riskTier: string
+  highAccuracyGameCount: number
+  maxHighAccuracyStreak: number
+  avgEstimatedAccuracy: number
+  expectedBandThreshold: number
+  titleDampener: number
+  accountAgeMultiplier: number
+  signals: RadarSignal[]
+  recommendation: string
+}
+
+interface CommunitySuspectIntel {
+  platform: string
+  username: string
+  communityFlagsCount: number
+  scansLast24h: number
+  avgReportedRiskPct: number
+  confirmedBanned: boolean
+  banReason?: string
+  crowdVerdict: string
+  isOfflineEstimate?: boolean
+}
+
 interface PlayerFairPlayDossier {
   playerName: string
   totalGamesAnalyzed: number
@@ -142,6 +180,8 @@ interface PlayerFairPlayDossier {
   allGames: GameFairPlayRecord[]
   keyFindings: string[]
   reportMarkdown: string
+  radar?: RadarRiskAssessment
+  communityIntel?: CommunitySuspectIntel
 }
 
 const sourceMode = ref<'database' | 'online'>(props.dbOpen ? 'database' : 'online')
@@ -156,6 +196,36 @@ const errorMsg = ref<string>('')
 const copiedReport = ref<boolean>(false)
 const dossier = ref<PlayerFairPlayDossier | null>(null)
 const hardMoveReport = ref<any | null>(null)
+const communityIntel = ref<CommunitySuspectIntel | null>(null)
+const flaggingSuspect = ref<boolean>(false)
+
+async function refreshCommunityIntel() {
+  if (!dossier.value) return
+  const plat = dossier.value.radar?.platform || (onlinePlatform.value === 'chesscom' ? 'chesscom' : 'lichess')
+  const risk = dossier.value.radar?.cheatLikelihoodPct ?? Math.round(dossier.value.overallIssueScore || 0)
+  try {
+    communityIntel.value = await FetchFairPlayCommunityIntel(plat, dossier.value.playerName, risk, false)
+  } catch {
+    communityIntel.value = null
+  }
+}
+
+async function handleFlagCommunitySuspect() {
+  if (!dossier.value || flaggingSuspect.value) return
+  flaggingSuspect.value = true
+  try {
+    const plat = dossier.value.radar?.platform || (onlinePlatform.value === 'chesscom' ? 'chesscom' : 'lichess')
+    const risk = dossier.value.radar?.cheatLikelihoodPct ?? Math.round(dossier.value.overallIssueScore || 0)
+    const updated = await SubmitFairPlayCommunityFlag(plat, dossier.value.playerName, risk, false, '')
+    if (updated) {
+      communityIntel.value = updated
+    }
+  } catch (err) {
+    console.error('Community flag failed:', err)
+  } finally {
+    flaggingSuspect.value = false
+  }
+}
 const activeViewTab = ref<'matrix' | 'hardmove' | 'daily' | 'games' | 'report'>('matrix')
 const selectedControlFilter = ref<string>('ALL')
 const anonymousMode = ref<boolean>(false)
@@ -502,6 +572,78 @@ async function handleCopyReport() {
                   :class="scoreBarClass(dossier.overallIssueScore)"
                   :style="{ width: `${Math.min(100, Math.max(4, dossier.overallIssueScore))}%` }"
                 />
+              </div>
+            </div>
+          </div>
+
+          <!-- FairPlay Radar 6-Signal Parity Assessment -->
+          <div
+            v-if="dossier.radar"
+            data-testid="fairplay-radar-card"
+            class="p-3.5 rounded-xl bg-zinc-950/90 border border-zinc-800 space-y-2.5"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <ShieldAlert class="w-4 h-4 text-amber-400" />
+                <span class="font-bold text-zinc-100">FairPlay Radar — 6-Signal Composite Risk Assessment</span>
+                <span class="px-2 py-0.5 rounded bg-zinc-800 text-[10px] font-mono uppercase text-zinc-300">
+                  {{ dossier.radar.platform }}
+                </span>
+              </div>
+              <div class="flex items-center gap-2 text-xs">
+                <span class="font-mono text-zinc-300">CRS {{ dossier.radar.crsScore }}/100</span>
+                <span
+                  class="px-2 py-0.5 rounded-full text-[11px] font-bold border uppercase"
+                  :class="scoreBadgeClass(dossier.radar.cheatLikelihoodPct)"
+                >
+                  {{ dossier.radar.cheatLikelihoodPct }}% · {{ dossier.radar.riskTier }}
+                </span>
+                <button
+                  type="button"
+                  data-testid="community-intel-btn"
+                  class="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-[10px] font-semibold cursor-pointer"
+                  @click="refreshCommunityIntel"
+                >
+                  Community Intel
+                </button>
+                <button
+                  type="button"
+                  data-testid="community-flag-btn"
+                  :disabled="flaggingSuspect"
+                  class="px-2 py-0.5 rounded bg-rose-950/70 hover:bg-rose-800 text-rose-200 border border-rose-700/50 text-[10px] font-semibold cursor-pointer"
+                  @click="handleFlagCommunitySuspect"
+                >
+                  {{ flaggingSuspect ? 'Flagging...' : 'Flag Suspect' }}
+                </button>
+              </div>
+            </div>
+            <div
+              v-if="communityIntel"
+              data-testid="community-intel-strip"
+              class="px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-[11px]"
+            >
+              <span class="text-zinc-300">
+                Crowd Verdict: <strong class="text-amber-300">{{ communityIntel.crowdVerdict }}</strong>
+                &bull; Flags: <strong>{{ communityIntel.communityFlagsCount }}</strong>
+                &bull; 24h Scans: <strong>{{ communityIntel.scansLast24h }}</strong>
+              </span>
+              <span v-if="communityIntel.isOfflineEstimate" class="text-[10px] text-zinc-500">(offline estimate)</span>
+            </div>
+            <p class="text-[11px] text-zinc-400">{{ dossier.radar.recommendation }}</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div
+                v-for="sig in dossier.radar.signals"
+                :key="sig.id"
+                class="p-2 rounded-lg bg-zinc-900/80 border text-[11px]"
+                :class="sig.flagged ? 'border-rose-500/40' : 'border-zinc-800'"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-semibold text-zinc-200">{{ sig.name }}</span>
+                  <span class="font-mono" :class="sig.flagged ? 'text-rose-400 font-bold' : 'text-zinc-400'">
+                    {{ sig.score }}/{{ sig.maxScore }}
+                  </span>
+                </div>
+                <p class="text-[10px] text-zinc-400 mt-0.5 leading-snug">{{ sig.detail }}</p>
               </div>
             </div>
           </div>

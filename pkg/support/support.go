@@ -1,9 +1,11 @@
 package support
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -98,6 +100,7 @@ type SupportConfig struct {
 	IsLifetime               bool   `json:"isLifetime,omitempty"`
 	IsAuthor                 bool   `json:"isAuthor"`
 	AuthorID                 string `json:"authorId,omitempty"`
+	SupporterHandle          string `json:"supporterHandle,omitempty"`
 	SupporterTier            string `json:"supporterTier,omitempty"`
 	Reference                string `json:"reference,omitempty"`
 	SupportedAt              int64  `json:"supportedAt,omitempty"`
@@ -106,6 +109,7 @@ type SupportConfig struct {
 	LastDismissedAt          int64  `json:"lastDismissedAt,omitempty"`
 	StripeURL                string `json:"stripeUrl,omitempty"`
 	BughouseOnlineDonorToken string `json:"bughouseOnlineDonorToken,omitempty"`
+	RemoteSynced             bool   `json:"remoteSynced,omitempty"`
 }
 
 // SupportStatus is returned to the frontend UI to determine whether to show the support form.
@@ -113,6 +117,14 @@ type SupportStatus struct {
 	Supported                bool           `json:"supported"`
 	IsLifetime               bool           `json:"isLifetime"`
 	IsAuthor                 bool           `json:"isAuthor"`
+	IsWindows                bool           `json:"isWindows"`
+	IsPackagedApp            bool           `json:"isPackagedApp"`
+	IsStorePurchase          bool           `json:"isStorePurchase"`
+	CanPurchaseInApp         bool           `json:"canPurchaseInApp"`
+	StorePriceUSD            float64        `json:"storePriceUsd"`
+	StoreVerificationNote    string         `json:"storeVerificationNote,omitempty"`
+	RemoteSynced             bool           `json:"remoteSynced"`
+	SupporterHandle          string         `json:"supporterHandle,omitempty"`
 	AuthorID                 string         `json:"authorId,omitempty"`
 	DeviceSignature          string         `json:"deviceSignature,omitempty"`
 	SupporterTier            string         `json:"supporterTier,omitempty"`
@@ -139,11 +151,14 @@ type FeatureEntitlement struct {
 	Message            string `json:"message"`
 }
 
-// Manager manages support/donation status, Stripe link configuration, and author ID exemption.
+// Manager manages support/donation status, Stripe link configuration, Microsoft Store license verification,
+// shared supporter database sync, and author ID exemption.
 type Manager struct {
-	mu         sync.RWMutex
-	configPath string
-	config     SupportConfig
+	mu           sync.RWMutex
+	configPath   string
+	config       SupportConfig
+	storeChecker StoreLicenseChecker
+	remoteClient *RemoteSupporterClient
 }
 
 // NewManager initializes a support manager backed by the given JSON file path.
@@ -162,6 +177,8 @@ func NewManager(configPath string) (*Manager, error) {
 		config: SupportConfig{
 			StripeURL: resolveDefaultStripeURL(),
 		},
+		storeChecker: DefaultStoreLicenseChecker(),
+		remoteClient: NewRemoteSupporterClient(""),
 	}
 
 	_ = m.load()
@@ -170,6 +187,24 @@ func NewManager(configPath string) (*Manager, error) {
 	}
 
 	return m, nil
+}
+
+// SetStoreLicenseChecker overrides the Microsoft Store license checker (primarily for unit tests).
+func (m *Manager) SetStoreLicenseChecker(checker StoreLicenseChecker) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if checker == nil {
+		m.storeChecker = DefaultStoreLicenseChecker()
+		return
+	}
+	m.storeChecker = checker
+}
+
+// SetRemoteClient overrides the remote supporter database client (primarily for unit tests).
+func (m *Manager) SetRemoteClient(client *RemoteSupporterClient) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.remoteClient = client
 }
 
 func resolveDefaultStripeURL() string {
@@ -316,8 +351,108 @@ func (m *Manager) RecordSupport(tier string, reference string) (SupportStatus, e
 	m.config.Reference = cleanRef
 	m.config.SupportedAt = now.UnixMilli()
 
+	// Sync contribution status to the shared FairPlay Radar / NewScid SQLite database when a handle/reference is provided.
+	syncHandle := cleanRef
+	if syncHandle == "" {
+		syncHandle = strings.TrimSpace(m.config.SupporterHandle)
+	}
+	if !isAuthor && syncHandle != "" && syncHandle != "stripe_checkout" && m.remoteClient != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		rec, rerr := m.remoteClient.RegisterContribution(ctx, syncHandle, cleanTier, "newscid_support")
+		cancel()
+		if rerr == nil && rec != nil && rec.Supported {
+			m.config.SupporterHandle = rec.SupporterID
+			m.config.RemoteSynced = true
+		}
+	}
+
 	err := m.save()
 	return m.buildStatusLocked(sig), err
+}
+
+// SyncRemoteSupporter queries the shared FairPlay Radar / NewScid supporter database for a handle/email/receipt
+// and caches verified supporter status locally so the nag screen stays disabled across devices.
+func (m *Manager) SyncRemoteSupporter(handle string) (SupportStatus, error) {
+	clean := strings.TrimSpace(handle)
+	if clean == "" {
+		return m.GetStatus(nil, nil), fmt.Errorf("supporter handle or email is required")
+	}
+
+	m.mu.RLock()
+	client := m.remoteClient
+	m.mu.RUnlock()
+	if client == nil {
+		return m.GetStatus(nil, nil), fmt.Errorf("remote supporter client is not configured")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	rec, err := client.FetchSupporterStatus(ctx, clean)
+	if err != nil {
+		return m.GetStatus(nil, nil), err
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if rec.Supported {
+		m.config.Supported = true
+		m.config.SupporterHandle = rec.SupporterID
+		if m.config.SupporterHandle == "" {
+			m.config.SupporterHandle = clean
+		}
+		if strings.TrimSpace(rec.TierLabel) != "" {
+			m.config.SupporterTier = rec.TierLabel
+		} else if m.config.SupporterTier == "" {
+			m.config.SupporterTier = "Shared Supporter"
+		}
+		if rec.SupportedAtMs > 0 {
+			m.config.SupportedAt = rec.SupportedAtMs
+		} else if m.config.SupportedAt == 0 {
+			m.config.SupportedAt = time.Now().UnixMilli()
+		}
+		m.config.RemoteSynced = true
+		_ = m.save()
+	}
+	return m.buildStatusLocked(""), nil
+}
+
+// PurchaseMicrosoftStoreUnlock invokes the native Windows Store $9.99 permanent durable add-on checkout.
+// When Succeeded or AlreadyPurchased, permanent lifetime supporter access is persisted locally (and synced
+// to the shared database if a handle is configured).
+func (m *Manager) PurchaseMicrosoftStoreUnlock(ctx context.Context) (StorePurchaseResult, SupportStatus) {
+	m.mu.RLock()
+	checker := m.storeChecker
+	m.mu.RUnlock()
+
+	if checker == nil {
+		checker = DefaultStoreLicenseChecker()
+	}
+	res := checker.PurchasePermanentUnlock(ctx)
+	if res.Purchased {
+		m.mu.Lock()
+		m.config.Supported = true
+		m.config.IsLifetime = true
+		m.config.SupportedUntil = 0
+		m.config.SupporterTier = "Microsoft Store ($9.99 Permanent)"
+		if m.config.SupportedAt == 0 {
+			m.config.SupportedAt = time.Now().UnixMilli()
+		}
+		if h := strings.TrimSpace(m.config.SupporterHandle); h != "" && m.remoteClient != nil {
+			rctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			rec, rerr := m.remoteClient.RegisterContribution(rctx, h, m.config.SupporterTier, "msstore_999_permanent")
+			cancel()
+			if rerr == nil && rec != nil && rec.Supported {
+				m.config.RemoteSynced = true
+			}
+		}
+		_ = m.save()
+		st := m.buildStatusLocked("")
+		m.mu.Unlock()
+		return res, st
+	}
+
+	return res, m.GetStatus(nil, nil)
 }
 
 // DismissNag records that the user dismissed the support prompt without donating (24-hour cooldown).
@@ -411,9 +546,21 @@ func (m *Manager) buildStatusLocked(sig string) SupportStatus {
 		stripeURL = resolveDefaultStripeURL()
 	}
 
+	storeInfo := StoreLicenseInfo{}
+	if m.storeChecker != nil {
+		storeInfo = m.storeChecker.Check()
+	}
+	isStorePurchase := storeInfo.IsWindows && storeInfo.IsStorePurchased
+
 	nowMs := time.Now().UnixMilli()
 	activeSupport := false
-	if m.config.IsAuthor || m.config.IsLifetime || strings.TrimSpace(m.config.BughouseOnlineDonorToken) != "" {
+	supporterTier := m.config.SupporterTier
+	if isStorePurchase {
+		activeSupport = true
+		if supporterTier == "" {
+			supporterTier = "Microsoft Store ($9.99 Permanent)"
+		}
+	} else if m.config.IsAuthor || m.config.IsLifetime || strings.TrimSpace(m.config.BughouseOnlineDonorToken) != "" {
 		activeSupport = true
 	} else if m.config.Supported {
 		if m.config.SupportedUntil > 0 {
@@ -433,11 +580,19 @@ func (m *Manager) buildStatusLocked(sig string) SupportStatus {
 
 	return SupportStatus{
 		Supported:                activeSupport,
-		IsLifetime:               m.config.IsLifetime || m.config.IsAuthor,
+		IsLifetime:               m.config.IsLifetime || m.config.IsAuthor || isStorePurchase,
 		IsAuthor:                 m.config.IsAuthor,
+		IsWindows:                storeInfo.IsWindows,
+		IsPackagedApp:            storeInfo.IsPackaged,
+		IsStorePurchase:          isStorePurchase,
+		CanPurchaseInApp:         storeInfo.CanPurchaseInApp && !isStorePurchase,
+		StorePriceUSD:            StorePermanentPriceUSD,
+		StoreVerificationNote:    storeInfo.VerificationNote,
+		RemoteSynced:             m.config.RemoteSynced,
+		SupporterHandle:          m.config.SupporterHandle,
 		AuthorID:                 m.config.AuthorID,
 		DeviceSignature:          sig,
-		SupporterTier:            m.config.SupporterTier,
+		SupporterTier:            supporterTier,
 		SupportedAt:              m.config.SupportedAt,
 		SupportedUntil:           m.config.SupportedUntil,
 		DismissCount:             m.config.DismissCount,

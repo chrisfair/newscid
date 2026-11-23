@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import ExportGameModal from './ExportGameModal.vue'
 import * as AppBindings from '../../wailsjs/go/main/App'
 
@@ -25,7 +25,6 @@ describe('ExportGameModal.vue', () => {
     expect(wrapper.text()).toContain('Export Game (HTML & LaTeX)')
     expect(wrapper.text()).toContain('Modern HTML')
 
-    // Wait for DOM update after async call
     await vi.waitFor(() => {
       expect(AppBindings.ExportCurrentGameHTML).toHaveBeenCalled()
     })
@@ -36,7 +35,7 @@ describe('ExportGameModal.vue', () => {
     expect(wrapper.find('iframe').attributes('srcdoc')).toContain('Carlsen vs Nakamura')
   })
 
-  it('switches to LaTeX format and fetches LaTeX export', async () => {
+  it('switches to LaTeX format and Social/Study Card (SVG) format', async () => {
     vi.mocked(AppBindings.ExportCurrentGameHTML).mockResolvedValue('<html>HTML</html>')
     vi.mocked(AppBindings.ExportCurrentGameLaTeX).mockResolvedValue('\\documentclass{article}\n\\begin{document}LaTeX Game\\end{document}')
 
@@ -58,10 +57,28 @@ describe('ExportGameModal.vue', () => {
     await vi.waitFor(() => {
       expect(wrapper.text()).toContain('\\documentclass{article}')
     })
+
+    // Switch to Social / Study Card (SVG)
+    const cardBtn = wrapper.findAll('button').find(b => b.text().includes('Social / Study Card'))
+    expect(cardBtn).toBeDefined()
+    await cardBtn?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.html()).toContain('NewScid Game Study Card')
+    expect(wrapper.find('svg').exists()).toBe(true)
   })
 
-  it('switches to Source Code tab and shows code in textarea', async () => {
+  it('switches to Source Code tab, copies to clipboard, and downloads exported file', async () => {
     vi.mocked(AppBindings.ExportCurrentGameHTML).mockResolvedValue('<!DOCTYPE html><code>test</code>')
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    })
+    const createObjectURL = vi.fn(() => 'blob:mock-url')
+    const revokeObjectURL = vi.fn()
+    globalThis.URL.createObjectURL = createObjectURL
+    globalThis.URL.revokeObjectURL = revokeObjectURL
 
     const wrapper = mount(ExportGameModal, {
       props: {
@@ -75,12 +92,24 @@ describe('ExportGameModal.vue', () => {
 
     // Click Source Code tab
     const codeTab = wrapper.findAll('button').find(b => b.text() === 'Source Code')
-    expect(codeTab).toBeDefined()
     await codeTab?.trigger('click')
 
     const textarea = wrapper.find('textarea')
     expect(textarea.exists()).toBe(true)
     expect((textarea.element as HTMLTextAreaElement).value).toBe('<!DOCTYPE html><code>test</code>')
+
+    // Copy to clipboard
+    const copyBtn = wrapper.findAll('button').find(b => b.text().includes('Copy Code'))
+    await copyBtn?.trigger('click')
+    await flushPromises()
+    expect(writeText).toHaveBeenCalledWith('<!DOCTYPE html><code>test</code>')
+    expect(wrapper.text()).toContain('Copied!')
+
+    // Download file
+    const saveBtn = wrapper.findAll('button').find(b => b.text().includes('Save File'))
+    await saveBtn?.trigger('click')
+    expect(createObjectURL).toHaveBeenCalled()
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url')
   })
 
   it('displays error message if export call rejects', async () => {

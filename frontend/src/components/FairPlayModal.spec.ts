@@ -9,6 +9,8 @@ vi.mock('../../wailsjs/go/main/App', () => ({
   AnalyzeHardMoveBenchmark: vi.fn(),
   DownloadAndAnalyzeHardMoveBenchmark: vi.fn(),
   GetDatabasePlayers: vi.fn(),
+  FetchFairPlayCommunityIntel: vi.fn(),
+  SubmitFairPlayCommunityFlag: vi.fn(),
 }))
 
 const mockHardMoveReport = {
@@ -128,6 +130,27 @@ const mockDossier = {
   highestRiskTimeControl: 'Rapid',
   highestControlIssueScore: 88.5,
   overallClassification: 'High Consistent Time-Control Anomaly',
+  radar: {
+    platform: 'lichess',
+    crsScore: 86,
+    cheatLikelihoodPct: 91,
+    riskTier: 'CRITICAL',
+    highAccuracyGameCount: 14,
+    maxHighAccuracyStreak: 6,
+    avgEstimatedAccuracy: 94.2,
+    expectedBandThreshold: 84.0,
+    titleDampener: 1.0,
+    accountAgeMultiplier: 1.15,
+    recommendation: 'Strong multi-signal correlation across accuracy, timing cadence, and rating divergence.',
+    signals: [
+      { id: 'accuracy', name: 'High-Accuracy Density', score: 22, maxScore: 25, flagged: true, detail: '14 games above 93% accuracy' },
+      { id: 'streak', name: 'Consecutive Accuracy Streak', score: 15, maxScore: 15, flagged: true, detail: '6 straight games >92%' },
+      { id: 'cadence', name: 'Robotic Move-Time CV', score: 18, maxScore: 20, flagged: true, detail: 'CV 0.24 across rapid games' },
+      { id: 'divergence', name: 'Cross-Control Divergence', score: 16, maxScore: 15, flagged: true, detail: '+1270 IPR delta Rapid vs Bullet' },
+      { id: 'clutch', name: 'Clutch Toggle Pattern', score: 10, maxScore: 15, flagged: false, detail: 'Moderate critical-move jump' },
+      { id: 'winrate', name: 'Rating-Adjusted Win Rate', score: 5, maxScore: 10, flagged: false, detail: '90.9% win rate in Rapid' },
+    ],
+  },
   timeControlProfiles: [
     {
       category: 'Bullet',
@@ -245,6 +268,26 @@ describe('FairPlayModal.vue', () => {
     vi.mocked(AppBindings.DownloadAndAnalyzePlayerFairPlay).mockResolvedValue(mockDossier as any)
     vi.mocked(AppBindings.AnalyzeHardMoveBenchmark).mockResolvedValue(mockHardMoveReport as any)
     vi.mocked(AppBindings.DownloadAndAnalyzeHardMoveBenchmark).mockResolvedValue(mockHardMoveReport as any)
+    vi.mocked(AppBindings.FetchFairPlayCommunityIntel).mockResolvedValue({
+      platform: 'lichess',
+      username: 'SuspectPlayer',
+      communityFlagsCount: 4,
+      scansLast24h: 17,
+      avgReportedRiskPct: 88,
+      confirmedBanned: false,
+      crowdVerdict: 'High Community Suspicion',
+      isOfflineEstimate: false,
+    } as any)
+    vi.mocked(AppBindings.SubmitFairPlayCommunityFlag).mockResolvedValue({
+      platform: 'lichess',
+      username: 'SuspectPlayer',
+      communityFlagsCount: 5,
+      scansLast24h: 18,
+      avgReportedRiskPct: 89,
+      confirmedBanned: false,
+      crowdVerdict: 'Flagged by Community',
+      isOfflineEstimate: false,
+    } as any)
   })
 
   it('analyzes a database player and renders Per-Time-Control Consistent Issue Scores and Cross-Control Divergence', async () => {
@@ -263,7 +306,70 @@ describe('FairPlayModal.vue', () => {
     expect(wrapper.get('[data-testid="cross-control-banner"]').text()).toContain('+1270 Elo')
   })
 
-  it('switches to Hard-Move & Self-Benchmark tab, renders excess estimate, simulation, and supports Anonymous Mode', async () => {
+  it('renders 6-signal FairPlay Radar card and supports Community Intel & Flag Suspect actions', async () => {
+    const wrapper = mount(FairPlayModal, {
+      props: { dbOpen: true, initialPlayer: 'SuspectPlayer' },
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-testid="run-fairplay-btn"]').trigger('click')
+    await flushPromises()
+
+    const radarCard = wrapper.get('[data-testid="fairplay-radar-card"]')
+    expect(radarCard.text()).toContain('FairPlay Radar — 6-Signal Composite Risk Assessment')
+    expect(radarCard.text()).toContain('CRS 86/100')
+    expect(radarCard.text()).toContain('91% · CRITICAL')
+    expect(radarCard.text()).toContain('High-Accuracy Density')
+    expect(radarCard.text()).toContain('Robotic Move-Time CV')
+
+    // Query Community Intel
+    await wrapper.get('[data-testid="community-intel-btn"]').trigger('click')
+    await flushPromises()
+    expect(AppBindings.FetchFairPlayCommunityIntel).toHaveBeenCalledWith('lichess', 'SuspectPlayer', 91, false)
+    const intelStrip = wrapper.get('[data-testid="community-intel-strip"]')
+    expect(intelStrip.text()).toContain('High Community Suspicion')
+    expect(intelStrip.text()).toContain('Flags: 4')
+
+    // Flag Suspect
+    await wrapper.get('[data-testid="community-flag-btn"]').trigger('click')
+    await flushPromises()
+    expect(AppBindings.SubmitFairPlayCommunityFlag).toHaveBeenCalledWith('lichess', 'SuspectPlayer', 91, false, '')
+    expect(wrapper.get('[data-testid="community-intel-strip"]').text()).toContain('Flagged by Community')
+    expect(wrapper.get('[data-testid="community-intel-strip"]').text()).toContain('Flags: 5')
+  })
+
+  it('switches to online mode, validates empty username, and copies markdown report', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    })
+
+    const wrapper = mount(FairPlayModal, {
+      props: { dbOpen: false },
+    })
+    await flushPromises()
+
+    // Empty username shows validation error
+    await wrapper.get('[data-testid="run-fairplay-btn"]').trigger('click')
+    expect(wrapper.get('[data-testid="fairplay-error"]').text()).toContain('Please enter a player name')
+
+    // Online fetch & inspect
+    await wrapper.get('[data-testid="fairplay-player-input"]').setValue('SuspectPlayer')
+    await wrapper.get('[data-testid="run-fairplay-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(AppBindings.DownloadAndAnalyzePlayerFairPlay).toHaveBeenCalledWith('lichess', 'SuspectPlayer', 250)
+    expect(wrapper.emitted('imported')?.[0]).toEqual([42])
+
+    // Copy markdown report
+    await wrapper.get('[data-testid="copy-fairplay-report-btn"]').trigger('click')
+    await flushPromises()
+    expect(writeText).toHaveBeenCalledWith('# Longitudinal Fair-Play Report')
+    expect(wrapper.get('[data-testid="copy-fairplay-report-btn"]').text()).toContain('Copied Markdown Report!')
+  })
+
+  it('switches to Hard-Move & Self-Benchmark tab, renders excess estimate, simulation, online ban check, and Anonymous Mode', async () => {
     const wrapper = mount(FairPlayModal, {
       props: { dbOpen: true, initialPlayer: 'SuspectPlayer' },
     })
@@ -283,6 +389,12 @@ describe('FairPlayModal.vue', () => {
     await anonBtn!.trigger('click')
     expect(view.text()).toContain('Opponent #001')
     expect(view.text()).not.toContain('CheaterAccount99')
+
+    const banCheckBtn = view.findAll('button').find(b => b.text().includes('Verify Banned Opponents Online'))
+    expect(banCheckBtn).toBeDefined()
+    await banCheckBtn!.trigger('click')
+    await flushPromises()
+    expect(AppBindings.AnalyzeHardMoveBenchmark).toHaveBeenLastCalledWith('SuspectPlayer', 'ALL', 250, true)
   })
 
   it('switches to Everyday Consistency Timeline and Flagged Games tabs and emits select-game', async () => {

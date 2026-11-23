@@ -1013,6 +1013,22 @@ func (s *Session) renderForensicsTab(scr *Screen, r Rect) {
 				p.AvgACPL, p.Top1AgreementPct, p.AvgMoveTimeCV, p.ClutchToggleGameCount,
 				p.ConsistentIssueScore, p.ConsistencyClassification))
 		}
+		if fp.Radar != nil {
+			lines = append(lines,
+				"",
+				fmt.Sprintf("FairPlay Radar 6-Signal Assessment (%s):  CRS %.1f/100  ·  Likelihood %d%%  ·  Tier: %s",
+					strings.ToUpper(fp.Radar.Platform), fp.Radar.CRSScore, fp.Radar.CheatLikelihoodPct, strings.ToUpper(fp.Radar.RiskTier)),
+				fmt.Sprintf("  Avg Est. Accuracy %.1f%% (threshold %.0f%%)  ·  High-Acc Games: %d (max streak %d)",
+					fp.Radar.AvgEstimatedAccuracy, fp.Radar.ExpectedBandThreshold, fp.Radar.HighAccuracyGameCount, fp.Radar.MaxHighAccuracyStreak),
+			)
+			for _, sig := range fp.Radar.Signals {
+				flagMark := "OK"
+				if sig.Flagged {
+					flagMark = "FLAG"
+				}
+				lines = append(lines, fmt.Sprintf("  [%4s] %-34s %4.1f / %-3.0f — %s", flagMark, sig.Name, sig.Score, sig.MaxScore, sig.Detail))
+			}
+		}
 		if len(fp.KeyFindings) > 0 {
 			lines = append(lines, "", "Key Forensic Findings:")
 			for _, kf := range fp.KeyFindings {
@@ -1088,8 +1104,21 @@ func (s *Session) renderBottomBars(scr *Screen) {
 		scr.WritePadded(0, promptY, w, " "+s.StatusMsg, Style{FG: fg, BG: ColBgStatus})
 	}
 
-	// Row H-1: Keybinding Legend
-	legend := " ←/→ Ply  [ ] Var  Click/Drag Move  m Move  e Engine  Space Best  1-6 Tabs  t Theme  p Pieces  f Flip  g Kitty/RGB  / Filter  : Cmd  q Quit"
+	// Row H-1: Context-Sensitive Keybinding Legend for the Active Tab
+	var tabHint string
+	switch s.ActiveTab {
+	case TabTree:
+		tabHint = "a-i Play Book Move  Space Best  "
+	case TabGames:
+		tabHint = "↑/↓ Select  Enter Load  / Filter  N/P Game  "
+	case TabBases:
+		tabHint = "↑/↓ Select  Enter Open DB  :open <path>  "
+	case TabForensics:
+		tabHint = "F FairPlay  S Scout  ↑/↓ Scroll  "
+	default:
+		tabHint = "←/→ Ply  [ ] Var  m Move  e Engine  Space Best  "
+	}
+	legend := " " + tabHint + "1-6 Tabs  f Flip  t Theme  : Cmd  ? Help  q Quit"
 	scr.WritePadded(0, legendY, w, legend, Style{FG: ColTextMuted, BG: ColBgHeader})
 }
 

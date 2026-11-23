@@ -3428,6 +3428,23 @@ func (a *App) SetSupportStripeURL(url string) error {
 	return a.supportMgr.SetStripeURL(url)
 }
 
+// SyncRemoteSupportStatus verifies and restores supporter status from the shared FairPlay Radar / NewScid database.
+func (a *App) SyncRemoteSupportStatus(handle string) (support.SupportStatus, error) {
+	if a.supportMgr == nil {
+		a.supportMgr, _ = support.NewManager("")
+	}
+	return a.supportMgr.SyncRemoteSupporter(handle)
+}
+
+// PurchaseMicrosoftStoreUnlock triggers the native Microsoft Store $9.99 permanent unlock in-app purchase.
+func (a *App) PurchaseMicrosoftStoreUnlock() support.StorePurchaseResult {
+	if a.supportMgr == nil {
+		a.supportMgr, _ = support.NewManager("")
+	}
+	res, _ := a.supportMgr.PurchaseMicrosoftStoreUnlock(a.ctx)
+	return res
+}
+
 // GetMegaDatabaseCatalog returns the curated catalog of big online chess databases
 // (Lumbra's GigaBase, Lichess Open, Lichess Broadcasts, and Lichess Elite).
 func (a *App) GetMegaDatabaseCatalog() []online.MegaDatabaseSource {
@@ -3531,6 +3548,18 @@ func (a *App) AnalyzePlayerFairPlay(playerName string, maxGames int) (*fairplay.
 	db := a.db
 	a.mu.Unlock()
 	return fairplay.AnalyzePlayerFairPlay(db, playerName, maxGames)
+}
+
+// FetchFairPlayCommunityIntel queries the shared FairPlay Radar community telemetry ledger.
+func (a *App) FetchFairPlayCommunityIntel(platform, username string, fallbackRiskPct int, confirmedBanned bool) fairplay.CommunitySuspectIntel {
+	client := fairplay.NewCommunityTelemetryClient("")
+	return client.FetchIntel(a.ctx, platform, username, fallbackRiskPct, confirmedBanned)
+}
+
+// SubmitFairPlayCommunityFlag reports a suspect flag to the shared FairPlay Radar telemetry ledger.
+func (a *App) SubmitFairPlayCommunityFlag(platform, username string, riskPct int, confirmedBanned bool, banReason string) (*fairplay.CommunitySuspectIntel, error) {
+	client := fairplay.NewCommunityTelemetryClient("")
+	return client.SubmitFlag(a.ctx, platform, username, riskPct, confirmedBanned, banReason)
 }
 
 // DownloadAndAnalyzePlayerFairPlay fetches a player's recent games across all time controls from

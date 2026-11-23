@@ -6,6 +6,8 @@ import {
   RecordUserSupport,
   DismissSupportNag,
   OpenSupportLink,
+  SyncRemoteSupportStatus,
+  PurchaseMicrosoftStoreUnlock,
 } from '../../wailsjs/go/main/App'
 
 const emit = defineEmits<{
@@ -15,7 +17,16 @@ const emit = defineEmits<{
 
 interface SupportState {
   supported: boolean
+  isLifetime?: boolean
   isAuthor: boolean
+  isWindows?: boolean
+  isPackagedApp?: boolean
+  isStorePurchase?: boolean
+  canPurchaseInApp?: boolean
+  storePriceUsd?: number
+  storeVerificationNote?: string
+  remoteSynced?: boolean
+  supporterHandle?: string
   authorId?: string
   deviceSignature?: string
   supporterTier?: string
@@ -47,6 +58,8 @@ const useCustomAmount = ref<boolean>(false)
 const referenceInput = ref<string>('')
 const stripeOpened = ref<boolean>(false)
 const confirmMessage = ref<string>('')
+const storeBusy = ref<boolean>(false)
+const syncBusy = ref<boolean>(false)
 
 const presetAmounts = [
   { amount: 1, label: '$1', desc: 'Pawn • 3 Days' },
@@ -124,6 +137,52 @@ async function handleConfirmSupport() {
   }
 }
 
+async function handleMicrosoftStorePurchase() {
+  if (storeBusy.value) return
+  storeBusy.value = true
+  try {
+    const res = await PurchaseMicrosoftStoreUnlock()
+    const refreshed = await GetSupportStatus()
+    if (refreshed) {
+      status.value = refreshed
+    }
+    if (res?.purchased) {
+      confirmMessage.value = res.message || 'Microsoft Store $9.99 Permanent Unlock activated!'
+      emit('updated', true)
+    } else {
+      confirmMessage.value = res?.message || 'Microsoft Store purchase was not completed.'
+    }
+  } catch (err) {
+    console.error('Microsoft Store purchase failed:', err)
+    confirmMessage.value = 'Microsoft Store checkout could not be opened.'
+  } finally {
+    storeBusy.value = false
+  }
+}
+
+async function handleSyncSharedDB() {
+  const handle = referenceInput.value.trim()
+  if (!handle || syncBusy.value) return
+  syncBusy.value = true
+  try {
+    const updated = (await SyncRemoteSupportStatus(handle)) as unknown as SupportState
+    if (updated) {
+      status.value = updated
+      if (updated.supported) {
+        confirmMessage.value = `Supporter status restored for ${updated.supporterHandle || handle}.`
+        emit('updated', true)
+      } else {
+        confirmMessage.value = `No prior contribution record found for "${handle}".`
+      }
+    }
+  } catch (err) {
+    console.error('Failed to sync shared supporter DB:', err)
+    confirmMessage.value = 'Could not reach the shared supporter database right now.'
+  } finally {
+    syncBusy.value = false
+  }
+}
+
 async function handleDismiss() {
   try {
     if (!status.value.supported && !status.value.isAuthor) {
@@ -166,7 +225,7 @@ async function handleDismiss() {
 
       <!-- Body -->
       <div class="p-5 space-y-4 text-xs text-zinc-300">
-        <!-- Author or Active Supporter Banner -->
+        <!-- Author, Store Purchase, or Active Supporter Banner -->
         <div
           v-if="status.isAuthor"
           data-testid="author-verified-banner"
@@ -178,6 +237,20 @@ async function handleDismiss() {
             <p class="text-[11px] text-emerald-200/80">
               Authenticated via linked Chess.com &amp; Lichess.org IDs
               <span class="font-mono text-emerald-300">({{ status.authorId }})</span>.
+            </p>
+          </div>
+        </div>
+
+        <div
+          v-else-if="status.isStorePurchase"
+          data-testid="store-verified-banner"
+          class="p-3.5 rounded-xl bg-emerald-950/70 border border-emerald-500/40 flex items-start gap-3 text-emerald-200"
+        >
+          <ShieldCheck class="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+          <div class="space-y-1">
+            <div class="font-bold text-emerald-300">Microsoft Store Permanent License Verified</div>
+            <p class="text-[11px] text-emerald-200/80">
+              100% permanent access unlocked via Microsoft Store ($9.99). Startup reminders are permanently disabled.
             </p>
           </div>
         </div>
@@ -255,8 +328,25 @@ async function handleDismiss() {
           </div>
         </div>
 
-        <!-- Primary Stripe Checkout Link Button -->
-        <div class="pt-1">
+        <!-- Microsoft Store $9.99 Permanent Unlock (Windows Store Edition) -->
+        <div v-if="status.isPackagedApp && !status.isStorePurchase" class="pt-1 space-y-2">
+          <button
+            type="button"
+            data-testid="msstore-purchase-btn"
+            :disabled="storeBusy"
+            class="w-full py-2.5 px-4 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-60 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition-colors cursor-pointer"
+            @click="handleMicrosoftStorePurchase"
+          >
+            <ShieldCheck class="w-4 h-4" />
+            <span>{{ storeBusy ? 'Opening Microsoft Store...' : 'Unlock Permanent Edition — $9.99 (Microsoft Store)' }}</span>
+          </button>
+          <p class="text-[10px] text-zinc-400 text-center">
+            One-time Microsoft Store purchase permanently removes reminders on all your Windows devices.
+          </p>
+        </div>
+
+        <!-- Primary Stripe Checkout Link Button (Compiled / Linux / macOS builds) -->
+        <div v-else-if="!status.isStorePurchase" class="pt-1">
           <button
             type="button"
             data-testid="stripe-support-btn"
@@ -285,9 +375,19 @@ async function handleDismiss() {
               v-model="referenceInput"
               data-testid="support-reference-input"
               type="text"
-              placeholder="Optional: Stripe receipt email or note (no account needed)"
+              placeholder="Optional: Stripe receipt email or supporter handle"
               class="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-hidden focus:border-emerald-500"
             />
+            <button
+              type="button"
+              data-testid="sync-shared-support-btn"
+              :disabled="!referenceInput.trim() || syncBusy"
+              class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-sky-700 disabled:opacity-50 text-zinc-200 hover:text-white border border-zinc-700 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
+              title="Restore status from shared FairPlay Radar / NewScid supporter database"
+              @click="handleSyncSharedDB"
+            >
+              {{ syncBusy ? 'Checking...' : 'Restore' }}
+            </button>
             <button
               type="button"
               data-testid="confirm-support-btn"

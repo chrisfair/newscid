@@ -706,6 +706,22 @@ export function RecordUserSupport(arg1, arg2) {
   return window['go']['main']['App']['RecordUserSupport'](arg1, arg2);
 }
 
+export function SyncRemoteSupportStatus(arg1) {
+  return window['go']['main']['App']['SyncRemoteSupportStatus'](arg1);
+}
+
+export function PurchaseMicrosoftStoreUnlock() {
+  return window['go']['main']['App']['PurchaseMicrosoftStoreUnlock']();
+}
+
+export function FetchFairPlayCommunityIntel(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['FetchFairPlayCommunityIntel'](arg1, arg2, arg3, arg4);
+}
+
+export function SubmitFairPlayCommunityFlag(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['SubmitFairPlayCommunityFlag'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function RemoveNotablePlayer(arg1) {
   return window['go']['main']['App']['RemoveNotablePlayer'](arg1);
 }

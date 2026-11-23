@@ -22,4 +22,9 @@ describe('pieces.ts', () => {
     const pawn = getPieceSVG('cburnett', 'b', 'p')
     expect(pawn).toBeTruthy()
   })
+
+  it('returns empty string when piece type does not exist in any fallback set', () => {
+    const unknown = getPieceSVG('nonexistent_set_123', 'w', 'Z')
+    expect(unknown).toBe('')
+  })
 })
