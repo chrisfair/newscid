@@ -1,0 +1,78 @@
+name: Build Windows Store MSIX
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "4-part MSIX version (leave blank to derive from VERSION)"
+        required: false
+        default: ""
+      publisher:
+        description: "Partner Center Publisher CN (falls back to MSSTORE_PUBLISHER secret)"
+        required: false
+        default: ""
+      addon_store_id:
+        description: "Partner Center $9.99 add-on Store ID (falls back to MSSTORE_ADDON_ID secret)"
+        required: false
+        default: ""
+
+jobs:
+  msix:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Resolve MSIX parameters
+        id: params
+        shell: pwsh
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_PUBLISHER: ${{ inputs.publisher }}
+          INPUT_ADDON_ID: ${{ inputs.addon_store_id }}
+          SECRET_PUBLISHER: ${{ secrets.MSSTORE_PUBLISHER }}
+          SECRET_ADDON_ID: ${{ secrets.MSSTORE_ADDON_ID }}
+        run: |
+          $ver = $env:INPUT_VERSION.Trim()
+          if (-not $ver) {
+            $raw = (Get-Content VERSION -Raw).Trim()
+            $parts = $raw.Split('.')
+            while ($parts.Count -lt 4) { $parts += '0' }
+            $ver = ($parts[0..3] -join '.')
+          }
+          $pub = if ($env:INPUT_PUBLISHER.Trim()) { $env:INPUT_PUBLISHER.Trim() } elseif ($env:SECRET_PUBLISHER.Trim()) { $env:SECRET_PUBLISHER.Trim() } else { "CN=REPLACE-WITH-PARTNER-CENTER-PUBLISHER-ID" }
+          $addon = if ($env:INPUT_ADDON_ID.Trim()) { $env:INPUT_ADDON_ID.Trim() } else { $env:SECRET_ADDON_ID.Trim() }
+          "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "publisher=$pub" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "addon_id=$addon" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Add Windows SDK MakeAppx to PATH
+        shell: pwsh
+        run: |
+          $sdkBin = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\makeappx.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $sdkBin) { throw "makeappx.exe not found on runner" }
+          $sdkBin.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Build official Microsoft Store MSIX
+        shell: pwsh
+        run: |
+          .\packaging\msix\build-msix.ps1 `
+            -Version "${{ steps.params.outputs.version }}" `
+            -Publisher "${{ steps.params.outputs.publisher }}" `
+            -AddOnStoreId "${{ steps.params.outputs.addon_id }}"
+
+      - name: Upload MSIX Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NewScid-${{ steps.params.outputs.version }}-x64-msix
+          path: build/dist/NewScid-*.msix

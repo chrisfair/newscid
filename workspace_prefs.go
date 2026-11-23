@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -515,7 +514,7 @@ func (a *App) LaunchPanelOnWorkspace(panelID string, workspace string, title str
 	existingPID := detachedPanelPIDs[panelID]
 	prefsMu.Unlock()
 
-	if existingPID > 0 && syscall.Kill(existingPID, 0) == nil {
+	if existingPID > 0 && isProcessAlive(existingPID) {
 		if workspace != "" {
 			dispatchHyprlandWorkspace(existingPID, workspace, false)
 		}
