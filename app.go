@@ -18,6 +18,7 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"newscid/pkg/academy"
 	"newscid/pkg/blundervault"
 	"newscid/pkg/chess"
 	"newscid/pkg/chess960"
@@ -133,6 +134,7 @@ type App struct {
 	supportMgr       *support.Manager
 	cyclicalMgr      *training.CyclicalManager
 	coachMgr         *training.AdaptiveCoachManager
+	academyMgr       *academy.Manager
 }
 
 // NewApp creates a new App application struct
@@ -155,6 +157,8 @@ func NewApp() *App {
 	cycMgr, _ := training.NewCyclicalManager(cyclicalPath)
 	coachPath := filepath.Join(configDir, fileformat.AppDirName, fileformat.FileAdaptiveCoachJSON)
 	coachMgr, _ := training.NewAdaptiveCoachManager(coachPath)
+	academyPath := filepath.Join(configDir, fileformat.AppDirName, "career.json")
+	acadMgr := academy.NewManager(academyPath)
 
 	return &App{
 		db:              scid.NewDatabase(),
@@ -173,6 +177,7 @@ func NewApp() *App {
 		supportMgr:      supMgr,
 		cyclicalMgr:     cycMgr,
 		coachMgr:        coachMgr,
+		academyMgr:      acadMgr,
 	}
 }
 
