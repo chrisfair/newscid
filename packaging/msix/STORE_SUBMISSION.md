@@ -37,7 +37,7 @@ On a Windows 10/11 build machine with Windows SDK (`makeappx.exe`), Go 1.24+, an
 ```powershell
 .\packaging\msix\build-msix.ps1 `
   -AddOnStoreId "9NXXXXXXXXXX" `
-  -Version "1.3.46.0" `
+  -Version "2.0.0.0" `
   -Publisher "CN=YOUR-PARTNER-CENTER-ID"
 ```
 Optional: pass `-BundledStockfishPath C:\path\to\stockfish.exe` (or `--stockfish` on Linux) to bundle GPLv3 Stockfish directly inside the MSIX.

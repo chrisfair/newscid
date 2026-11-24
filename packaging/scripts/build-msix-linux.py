@@ -27,7 +27,7 @@ def read_default_version() -> str:
         while len(parts) < 4:
             parts.append("0")
         return ".".join(parts[:4])
-    return "1.3.46.0"
+    return "2.0.0.0"
 
 
 def build_frontend() -> None:

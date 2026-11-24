@@ -12,7 +12,7 @@
 #>
 param(
   [string]$AddOnStoreId = "",
-  [string]$Version = "1.3.46.0",
+  [string]$Version = "2.0.0.0",
   [string]$Publisher = "CN=REPLACE-WITH-PARTNER-CENTER-PUBLISHER-ID",
   [string]$BundledStockfishPath = ""
 )
