@@ -20,6 +20,18 @@ import PuzzleMinerModal from './components/PuzzleMinerModal.vue'
 import HeaderSearchModal from './components/HeaderSearchModal.vue'
 import AboutModal from './components/AboutModal.vue'
 import HelpModal from './components/HelpModal.vue'
+import AcademyModal from './components/AcademyModal.vue'
+import {
+  getAcademyPersonalityMove,
+  recordAcademyGameResult,
+  computeSquareControlHeatmap,
+  computeSpyThreatOverlay,
+  diagnoseGameForAcademyCoach,
+  type AcademyPersonality,
+  type SpyThreatInfo,
+  type CoachReport,
+  type GameResultUpdate
+} from './utils/academyApi'
 import DatabaseMaintenanceModal from './components/DatabaseMaintenanceModal.vue'
 import OnlineSyncModal from './components/OnlineSyncModal.vue'
 import PlayerSimulationModal from './components/PlayerSimulationModal.vue'
@@ -373,6 +385,112 @@ const showProphylaxisModal = ref(false)
 const showSupportModal = ref(false)
 const showMegaDatabaseModal = ref(false)
 const showFairPlayModal = ref(false)
+const showAcademyModal = ref(false)
+const academyInitialTab = ref<'career' | 'build-db' | 'editor'>('career')
+const academyInitialLessonId = ref<string | undefined>(undefined)
+
+// Active Academy Career Match + Post-Game Coach Report
+const activeCareerOpponent = ref<{ personality: AcademyPersonality; playerColor: 'white' | 'black' } | null>(null)
+const careerBotThinking = ref(false)
+const careerStatusText = ref('')
+const careerCoachReport = ref<CoachReport | null>(null)
+const careerResultUpdate = ref<GameResultUpdate | null>(null)
+
+// PyChess Spy Mode & Square Control Heatmap
+const spyModeEnabled = ref(false)
+const spyThreat = ref<SpyThreatInfo | null>(null)
+const heatmapEnabled = ref(false)
+const squareControlHeatmap = ref<Record<string, { netControl: number; isHanging: boolean; whiteAttackers: number; blackAttackers: number }>>({})
+
+function openAcademyHub(tab: 'career' | 'build-db' | 'editor' = 'career', lessonId?: string) {
+  academyInitialTab.value = tab
+  academyInitialLessonId.value = lessonId
+  showAcademyModal.value = true
+}
+
+async function refreshBoardOverlays(fen: string) {
+  if (spyModeEnabled.value) {
+    try {
+      spyThreat.value = await computeSpyThreatOverlay(fen)
+    } catch {
+      spyThreat.value = null
+    }
+  } else {
+    spyThreat.value = null
+  }
+  if (heatmapEnabled.value) {
+    try {
+      const cells = await computeSquareControlHeatmap(fen)
+      const map: Record<string, { netControl: number; isHanging: boolean; whiteAttackers: number; blackAttackers: number }> = {}
+      for (const c of cells) {
+        map[c.square] = {
+          netControl: c.netControl,
+          isHanging: c.isHanging,
+          whiteAttackers: c.whiteAttackers,
+          blackAttackers: c.blackAttackers
+        }
+      }
+      squareControlHeatmap.value = map
+    } catch {
+      squareControlHeatmap.value = {}
+    }
+  } else {
+    squareControlHeatmap.value = {}
+  }
+}
+
+async function startAcademyCareerGame(personality: AcademyPersonality, color: 'white' | 'black') {
+  handleNewGame()
+  activeCareerOpponent.value = { personality, playerColor: color }
+  careerCoachReport.value = null
+  careerResultUpdate.value = null
+  flipped.value = color === 'black'
+  gameTags.value = {
+    ...gameTags.value,
+    Event: `NewScid Academy · Tier ${personality.tier}`,
+    White: color === 'white' ? 'Challenger' : `${personality.name} (${personality.elo})`,
+    Black: color === 'black' ? 'Challenger' : `${personality.name} (${personality.elo})`,
+    Result: '*'
+  }
+  careerStatusText.value = `Playing ${personality.name} (${personality.elo} Elo · ${personality.styleTag})`
+  if (color === 'black') {
+    await triggerCareerOpponentMove()
+  }
+}
+
+async function triggerCareerOpponentMove() {
+  if (!activeCareerOpponent.value || careerBotThinking.value) return
+  careerBotThinking.value = true
+  try {
+    const res = await getAcademyPersonalityMove(activeCareerOpponent.value.personality.id, currentFEN.value)
+    if (res?.uci) {
+      careerStatusText.value = res.commentary || `${activeCareerOpponent.value.personality.name} played ${res.san}`
+      await handleMove(res.uci)
+    }
+  } catch (e: any) {
+    careerStatusText.value = e?.message || 'Opponent could not move'
+  } finally {
+    careerBotThinking.value = false
+  }
+}
+
+async function finishCareerGame(outcome: 'win' | 'draw' | 'loss') {
+  if (!activeCareerOpponent.value) return
+  const opp = activeCareerOpponent.value
+  try {
+    careerResultUpdate.value = await recordAcademyGameResult(opp.personality.id, outcome)
+  } catch {
+    // ignore
+  }
+  try {
+    const pgnMoves = flatMoves.value.map((m, idx) => (idx % 2 === 0 ? `${Math.floor(idx / 2) + 1}. ${m.san}` : m.san)).join(' ')
+    const pgn = `[Event "Academy"]\n[White "${gameTags.value.White || 'White'}"]\n[Black "${gameTags.value.Black || 'Black'}"]\n[Result "${outcome === 'win' ? '1-0' : outcome === 'draw' ? '1/2-1/2' : '0-1'}"]\n\n${pgnMoves}`
+    careerCoachReport.value = await diagnoseGameForAcademyCoach(pgn, opp.playerColor)
+  } catch {
+    // ignore
+  }
+  activeCareerOpponent.value = null
+}
 const showCyclicalDrillModal = ref(false)
 const showAdaptiveCoachModal = ref(false)
 const showWorkstationManagerModal = ref(false)
@@ -993,12 +1111,29 @@ const evalScore = computed(() => {
 const evalMate = computed(() => (evalInfo.value?.mateIn ? evalInfo.value.mateIn : null))
 
 const engineArrows = computed(() => {
-  if (!isAnalyzing.value || !evalInfo.value?.bestMove || evalInfo.value.bestMove.length < 4) {
-    return []
+  const arrows: { from: string; to: string; color: string; style?: 'solid' | 'dashed' }[] = []
+  if (isAnalyzing.value && evalInfo.value?.bestMove && evalInfo.value.bestMove.length >= 4) {
+    arrows.push({
+      from: evalInfo.value.bestMove.slice(0, 2),
+      to: evalInfo.value.bestMove.slice(2, 4),
+      color: '#38bdf8'
+    })
   }
-  const from = evalInfo.value.bestMove.slice(0, 2)
-  const to = evalInfo.value.bestMove.slice(2, 4)
-  return [{ from, to, color: '#38bdf8' }]
+  if (spyModeEnabled.value && spyThreat.value?.hasThreat && spyThreat.value.from && spyThreat.value.to) {
+    arrows.push({
+      from: spyThreat.value.from,
+      to: spyThreat.value.to,
+      color: '#ef4444',
+      style: 'dashed'
+    })
+  }
+  return arrows
+})
+
+watch([currentFEN, spyModeEnabled, heatmapEnabled], ([fen]) => {
+  if (fen) {
+    refreshBoardOverlays(fen)
+  }
 })
 
 function handleLoadChess960(pos: { id: number; fen: string; pieces: string; isClassic: boolean }) {
@@ -1690,6 +1825,24 @@ async function handleMove(moveInput: string) {
     const swing = isWhite ? (evalBefore - evalAfter) : (evalAfter - evalBefore)
     if (swing >= 200) {
       triggerBlunderRadar(`Blunder Radar: Move dropped evaluation by ${(swing / 100).toFixed(1)} pawns!`)
+    }
+
+    // If Academy Career match is active, trigger personality reply or finish game
+    if (activeCareerOpponent.value && !careerBotThinking.value) {
+      const opp = activeCareerOpponent.value
+      const nextTurnColor = nextState.turn === 'b' ? 'black' : 'white'
+      if (nextState.isCheckmate) {
+        const userWon = nextTurnColor !== opp.playerColor
+        gameTags.value.Result = isWhite ? '1-0' : '0-1'
+        careerStatusText.value = userWon ? `Checkmate! You defeated ${opp.personality.name}!` : `Checkmate! ${opp.personality.name} wins.`
+        await finishCareerGame(userWon ? 'win' : 'loss')
+      } else if (nextState.isStalemate) {
+        gameTags.value.Result = '1/2-1/2'
+        careerStatusText.value = 'Game drawn by stalemate.'
+        await finishCareerGame('draw')
+      } else if (nextTurnColor !== opp.playerColor) {
+        await triggerCareerOpponentMove()
+      }
     }
 
     // If simulated match is active and game is not finished, trigger bot response!
@@ -3469,10 +3622,113 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
               :eval-score="evalScore"
               :eval-mate="evalMate"
               :threat-squares="threatSquares"
+              :square-control-heatmap="heatmapEnabled ? squareControlHeatmap : undefined"
               :arrows="engineArrows"
               :board-size="computedBoardSize"
               @move="handleMove"
             />
+            <!-- Board Vision (Spy Mode / Square Control Heatmap) & Career Status Strip -->
+            <div class="w-full mt-1.5 flex flex-wrap items-center justify-between gap-1.5 px-2 py-1.5 rounded-lg bg-zinc-900/90 border border-zinc-800 text-[11px]">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  @click="spyModeEnabled = !spyModeEnabled"
+                  :class="[
+                    'px-2 py-0.5 rounded border font-semibold transition-colors cursor-pointer',
+                    spyModeEnabled
+                      ? 'bg-rose-950/70 border-rose-500/60 text-rose-200'
+                      : 'bg-zinc-950 border-zinc-700 text-zinc-400 hover:text-zinc-200'
+                  ]"
+                  title="Spy Mode (PyChess-style): Shows a dashed red arrow of your opponent's sharpest immediate threat"
+                >
+                  👁 Spy Threats: {{ spyModeEnabled ? 'ON' : 'OFF' }}
+                </button>
+                <button
+                  type="button"
+                  @click="heatmapEnabled = !heatmapEnabled"
+                  :class="[
+                    'px-2 py-0.5 rounded border font-semibold transition-colors cursor-pointer',
+                    heatmapEnabled
+                      ? 'bg-emerald-950/70 border-emerald-500/60 text-emerald-200'
+                      : 'bg-zinc-950 border-zinc-700 text-zinc-400 hover:text-zinc-200'
+                  ]"
+                  title="Square Control Heatmap: Green = White control, Blue = Black control, Red ring = undefended hanging piece"
+                >
+                  ▦ Square Control: {{ heatmapEnabled ? 'ON' : 'OFF' }}
+                </button>
+              </div>
+              <span v-if="spyModeEnabled && spyThreat?.reason" class="text-rose-300 truncate max-w-[280px]" :title="spyThreat.reason">
+                {{ spyThreat.reason }}
+              </span>
+            </div>
+
+            <!-- Active Academy Career Match Banner -->
+            <div
+              v-if="activeCareerOpponent"
+              class="w-full mt-1.5 px-3 py-2 rounded-lg bg-amber-950/40 border border-amber-500/50 flex flex-wrap items-center justify-between gap-2 text-xs"
+            >
+              <div class="flex items-center gap-2 min-w-0">
+                <span
+                  class="w-6 h-6 rounded flex items-center justify-center text-sm font-bold text-white shrink-0"
+                  :style="{ backgroundColor: activeCareerOpponent.personality.avatarColor }"
+                >
+                  {{ activeCareerOpponent.personality.avatarSymbol }}
+                </span>
+                <div class="truncate">
+                  <span class="font-bold text-amber-200">{{ activeCareerOpponent.personality.name }} ({{ activeCareerOpponent.personality.elo }})</span>
+                  <span class="text-zinc-300 ml-2">{{ careerBotThinking ? 'Thinking...' : careerStatusText }}</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  @click="finishCareerGame('draw')"
+                  class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-semibold"
+                >
+                  Claim Draw
+                </button>
+                <button
+                  type="button"
+                  @click="finishCareerGame('loss')"
+                  class="px-2 py-1 rounded bg-rose-900/70 hover:bg-rose-800 text-rose-100 text-[11px] font-semibold"
+                >
+                  Resign &amp; Coach Review
+                </button>
+              </div>
+            </div>
+
+            <!-- Post-Game Coach Report Card -->
+            <div
+              v-if="careerCoachReport"
+              class="w-full mt-1.5 p-3 rounded-lg bg-emerald-950/35 border border-emerald-600/50 text-xs space-y-1.5"
+            >
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-bold text-emerald-300">
+                  Coach Report
+                  <span v-if="careerResultUpdate" class="ml-1.5 font-mono text-amber-300">
+                    (Elo {{ careerResultUpdate.newRating }} {{ careerResultUpdate.ratingDelta >= 0 ? '+' : '' }}{{ careerResultUpdate.ratingDelta }})
+                  </span>
+                </span>
+                <button type="button" @click="careerCoachReport = null" class="text-zinc-400 hover:text-zinc-200 text-[11px]">Dismiss</button>
+              </div>
+              <div v-if="careerResultUpdate?.examMessage" class="text-amber-300 font-semibold">{{ careerResultUpdate.examMessage }}</div>
+              <div class="text-zinc-200 font-medium">{{ careerCoachReport.headline }}</div>
+              <ul v-if="careerCoachReport.keyMistakes?.length" class="list-disc pl-4 text-zinc-300 space-y-0.5">
+                <li v-for="(m, idx) in careerCoachReport.keyMistakes" :key="idx">{{ m }}</li>
+              </ul>
+              <div v-if="careerCoachReport.recommendedLessons?.length" class="pt-1 flex flex-wrap items-center gap-1.5">
+                <span class="text-zinc-400">Recommended Lesson:</span>
+                <button
+                  v-for="lid in careerCoachReport.recommendedLessons"
+                  :key="lid"
+                  type="button"
+                  @click="openAcademyHub('career', lid)"
+                  class="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold"
+                >
+                  Open Lesson →
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -3597,6 +3853,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           @open-mega-downloader="showMegaDatabaseModal = true"
           @ensure-personal-db="handleEnsurePersonalUserDatabase"
           @open-online-sync="showOnlineSyncModal = true"
+          @open-build-opponent="openAcademyHub('build-db')"
         />
 
         <LivePortalPanel
@@ -3606,6 +3863,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           :lichess-username="appPreferences.lichessUsername"
           :chess-com-username="appPreferences.chessComUsername"
           @open-online-sync="showOnlineSyncModal = true"
+          @open-build-opponent="openAcademyHub('build-db')"
           @open-fair-play="showFairPlayModal = true"
           @detach-portal-screen="handleDetachPanelScreen('portal')"
           @float-portal="togglePanelFloater('portal')"
@@ -3631,6 +3889,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           @open-clipbase="handleOpenClipbase"
           @open-mega-downloader="showMegaDatabaseModal = true"
           @open-online-sync="showOnlineSyncModal = true"
+          @open-build-opponent="openAcademyHub('build-db')"
           @open-maintenance="showMaintenanceModal = true"
           @update-from-local="handleUpdateDatabaseFromLocal"
           @cancel-update-local="handleCancelUpdateDatabaseFromLocal"
@@ -3700,6 +3959,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         @open-clipbase="handleOpenClipbase"
         @open-portal-panel="openPortalView"
         @launch-portal-window="handleLaunchPortalWindow"
+        @open-academy="openAcademyHub"
+        @open-help="showHelpModal = true"
         @detach-panel-screen="handleDetachPanelScreen"
         @show-shortcuts="showShortcutsModal = true"
         @show-about="showAboutModal = true"
@@ -3793,6 +4054,8 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         @open-workstation-manager="openWorkstationManagerModal"
         @open-portal-panel="openPortalView"
         @launch-portal-window="handleLaunchPortalWindow"
+        @open-academy="openAcademyHub"
+        @open-help="showHelpModal = true"
         @open-preferences="openPreferencesModal"
       />
 
@@ -3983,10 +4246,113 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
               :eval-score="evalScore"
               :eval-mate="evalMate"
               :threat-squares="threatSquares"
+              :square-control-heatmap="heatmapEnabled ? squareControlHeatmap : undefined"
               :arrows="engineArrows"
               :board-size="computedBoardSize"
               @move="handleMove"
             />
+            <!-- Board Vision (Spy Mode / Square Control Heatmap) & Career Status Strip -->
+            <div class="w-full mt-1.5 flex flex-wrap items-center justify-between gap-1.5 px-2 py-1.5 rounded-lg bg-zinc-900/90 border border-zinc-800 text-[11px]">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  @click="spyModeEnabled = !spyModeEnabled"
+                  :class="[
+                    'px-2 py-0.5 rounded border font-semibold transition-colors cursor-pointer',
+                    spyModeEnabled
+                      ? 'bg-rose-950/70 border-rose-500/60 text-rose-200'
+                      : 'bg-zinc-950 border-zinc-700 text-zinc-400 hover:text-zinc-200'
+                  ]"
+                  title="Spy Mode (PyChess-style): Shows a dashed red arrow of your opponent's sharpest immediate threat"
+                >
+                  👁 Spy Threats: {{ spyModeEnabled ? 'ON' : 'OFF' }}
+                </button>
+                <button
+                  type="button"
+                  @click="heatmapEnabled = !heatmapEnabled"
+                  :class="[
+                    'px-2 py-0.5 rounded border font-semibold transition-colors cursor-pointer',
+                    heatmapEnabled
+                      ? 'bg-emerald-950/70 border-emerald-500/60 text-emerald-200'
+                      : 'bg-zinc-950 border-zinc-700 text-zinc-400 hover:text-zinc-200'
+                  ]"
+                  title="Square Control Heatmap: Green = White control, Blue = Black control, Red ring = undefended hanging piece"
+                >
+                  ▦ Square Control: {{ heatmapEnabled ? 'ON' : 'OFF' }}
+                </button>
+              </div>
+              <span v-if="spyModeEnabled && spyThreat?.reason" class="text-rose-300 truncate max-w-[280px]" :title="spyThreat.reason">
+                {{ spyThreat.reason }}
+              </span>
+            </div>
+
+            <!-- Active Academy Career Match Banner -->
+            <div
+              v-if="activeCareerOpponent"
+              class="w-full mt-1.5 px-3 py-2 rounded-lg bg-amber-950/40 border border-amber-500/50 flex flex-wrap items-center justify-between gap-2 text-xs"
+            >
+              <div class="flex items-center gap-2 min-w-0">
+                <span
+                  class="w-6 h-6 rounded flex items-center justify-center text-sm font-bold text-white shrink-0"
+                  :style="{ backgroundColor: activeCareerOpponent.personality.avatarColor }"
+                >
+                  {{ activeCareerOpponent.personality.avatarSymbol }}
+                </span>
+                <div class="truncate">
+                  <span class="font-bold text-amber-200">{{ activeCareerOpponent.personality.name }} ({{ activeCareerOpponent.personality.elo }})</span>
+                  <span class="text-zinc-300 ml-2">{{ careerBotThinking ? 'Thinking...' : careerStatusText }}</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  @click="finishCareerGame('draw')"
+                  class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-semibold"
+                >
+                  Claim Draw
+                </button>
+                <button
+                  type="button"
+                  @click="finishCareerGame('loss')"
+                  class="px-2 py-1 rounded bg-rose-900/70 hover:bg-rose-800 text-rose-100 text-[11px] font-semibold"
+                >
+                  Resign &amp; Coach Review
+                </button>
+              </div>
+            </div>
+
+            <!-- Post-Game Coach Report Card -->
+            <div
+              v-if="careerCoachReport"
+              class="w-full mt-1.5 p-3 rounded-lg bg-emerald-950/35 border border-emerald-600/50 text-xs space-y-1.5"
+            >
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-bold text-emerald-300">
+                  Coach Report
+                  <span v-if="careerResultUpdate" class="ml-1.5 font-mono text-amber-300">
+                    (Elo {{ careerResultUpdate.newRating }} {{ careerResultUpdate.ratingDelta >= 0 ? '+' : '' }}{{ careerResultUpdate.ratingDelta }})
+                  </span>
+                </span>
+                <button type="button" @click="careerCoachReport = null" class="text-zinc-400 hover:text-zinc-200 text-[11px]">Dismiss</button>
+              </div>
+              <div v-if="careerResultUpdate?.examMessage" class="text-amber-300 font-semibold">{{ careerResultUpdate.examMessage }}</div>
+              <div class="text-zinc-200 font-medium">{{ careerCoachReport.headline }}</div>
+              <ul v-if="careerCoachReport.keyMistakes?.length" class="list-disc pl-4 text-zinc-300 space-y-0.5">
+                <li v-for="(m, idx) in careerCoachReport.keyMistakes" :key="idx">{{ m }}</li>
+              </ul>
+              <div v-if="careerCoachReport.recommendedLessons?.length" class="pt-1 flex flex-wrap items-center gap-1.5">
+                <span class="text-zinc-400">Recommended Lesson:</span>
+                <button
+                  v-for="lid in careerCoachReport.recommendedLessons"
+                  :key="lid"
+                  type="button"
+                  @click="openAcademyHub('career', lid)"
+                  class="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold"
+                >
+                  Open Lesson →
+                </button>
+              </div>
+            </div>
           </div>
           <div
             v-else
@@ -4401,6 +4767,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
                 @open-mega-downloader="showMegaDatabaseModal = true"
                 @ensure-user-d-b="handleEnsurePersonalUserDatabase"
                 @open-online-sync="showOnlineSyncModal = true"
+          @open-build-opponent="openAcademyHub('build-db')"
               />
             </div>
 
@@ -4441,6 +4808,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
                 @open-clipbase="handleOpenClipbase"
                 @open-mega-downloader="showMegaDatabaseModal = true"
                 @open-online-sync="showOnlineSyncModal = true"
+          @open-build-opponent="openAcademyHub('build-db')"
                 @open-maintenance="showMaintenanceModal = true"
                 @update-from-local="handleUpdateDatabaseFromLocal"
                 @cancel-update-local="handleCancelUpdateDatabaseFromLocal"
@@ -4460,6 +4828,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
                 :lichess-username="appPreferences.lichessUsername"
                 :chess-com-username="appPreferences.chessComUsername"
                 @open-online-sync="showOnlineSyncModal = true"
+          @open-build-opponent="openAcademyHub('build-db')"
                 @open-fair-play="showFairPlayModal = true"
                 @detach-portal-screen="handleDetachPanelScreen('portal')"
                 @float-portal="togglePanelFloater('portal')"
@@ -4574,6 +4943,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
           @open-standard-import="showImportModal = true"
           @open-mega-downloader="showMegaDatabaseModal = true"
           @open-online-sync="showOnlineSyncModal = true"
+          @open-build-opponent="openAcademyHub('build-db')"
           @ensure-personal-db="handleEnsurePersonalUserDatabase"
         />
       </div>
@@ -4681,6 +5051,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
             @open-clipbase="handleOpenClipbase"
             @open-mega-downloader="showMegaDatabaseModal = true"
             @open-online-sync="showOnlineSyncModal = true"
+          @open-build-opponent="openAcademyHub('build-db')"
             @open-maintenance="showMaintenanceModal = true"
             @update-from-local="handleUpdateDatabaseFromLocal"
             @cancel-update-local="handleCancelUpdateDatabaseFromLocal"
@@ -4698,6 +5069,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
             :lichess-username="appPreferences.lichessUsername"
             :chess-com-username="appPreferences.chessComUsername"
             @open-online-sync="showOnlineSyncModal = true"
+          @open-build-opponent="openAcademyHub('build-db')"
             @open-fair-play="showFairPlayModal = true"
             @detach-portal-screen="handleDetachPanelScreen('portal')"
             @float-portal="togglePanelFloater('portal')"
@@ -4910,6 +5282,20 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       :initial-tab="helpInitialTab"
       @close="showHelpModal = false"
       @open-shortcuts="showHelpModal = false; showShortcutsModal = true"
+    />
+
+    <!-- NewScid v2.0 Academy, Career Ladder, Chess University & DB Personality Builder -->
+    <AcademyModal
+      :show="showAcademyModal"
+      :initial-tab="academyInitialTab"
+      :initial-lesson-id="academyInitialLessonId"
+      :db-name="dbInfo?.name"
+      :db-num-games="dbInfo?.numGames"
+      :piece-set="currentPieceSet"
+      :board-theme="currentTheme"
+      @close="showAcademyModal = false"
+      @start-career-game="startAcademyCareerGame"
+      @open-database="showAcademyModal = false; handleOpenDB()"
     />
 
     <!-- Header / General Search Modal (Ctrl+H) -->

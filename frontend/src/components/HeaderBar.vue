@@ -89,6 +89,8 @@ const emit = defineEmits<{
   (e: 'changeUITheme', id: string): void
   (e: 'toggleDarkLight'): void
   (e: 'toggleFlip'): void
+  (e: 'openAcademy', tab?: 'career' | 'build-db' | 'editor'): void
+  (e: 'openHelp'): void
 }>()
 
 const isCurrentLight = computed(() => props.currentUITheme === 'light' || props.currentUITheme === 'retro')
@@ -176,6 +178,24 @@ defineExpose({
         >
           <PlusCircle class="w-3.5 h-3.5 text-zinc-400" />
           <span>Create DB</span>
+        </button>
+
+        <button
+          class="header-btn flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-950/60 hover:bg-amber-900/70 text-amber-200 text-xs font-semibold border border-amber-500/40 transition-colors"
+          title="Open Chess Academy, 6-Tier Career Ladder & Interactive University Lessons"
+          @click="emit('openAcademy', 'career')"
+        >
+          <Star class="w-3.5 h-3.5 text-amber-400" />
+          <span>Academy &amp; Career</span>
+        </button>
+
+        <button
+          class="header-btn flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-950/60 hover:bg-cyan-900/70 text-cyan-200 text-xs font-semibold border border-cyan-500/40 transition-colors"
+          title="Build a playable opponent personality from any player in your open database"
+          @click="emit('openAcademy', 'build-db')"
+        >
+          <BookOpen class="w-3.5 h-3.5 text-cyan-400" />
+          <span>Build Opponent</span>
         </button>
 
         <!-- Installed & Discovered Databases Dropdown -->

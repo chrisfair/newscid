@@ -32,6 +32,7 @@ const props = withDefaults(defineProps<{
   inCheck?: boolean
   arrows?: BoardArrow[]
   threatSquares?: string[]
+  squareControlHeatmap?: Record<string, { netControl: number; isHanging: boolean; whiteAttackers: number; blackAttackers: number }>
   blindfold?: boolean
   showEvalBar?: boolean
   evalScore?: number | null // centipawns
@@ -460,6 +461,22 @@ watch(() => props.fen, (newFEN) => {
           >
             {{ String.fromCharCode('a'.charCodeAt(0) + sq.file) }}
           </span>
+
+          <!-- Square Control / Attack-Defense Heatmap Overlay -->
+          <div
+            v-if="squareControlHeatmap && squareControlHeatmap[sq.square]"
+            class="absolute inset-0 pointer-events-none z-5"
+            :style="{
+              backgroundColor: squareControlHeatmap[sq.square].isHanging
+                ? 'rgba(239, 68, 68, 0.42)'
+                : squareControlHeatmap[sq.square].netControl > 0
+                  ? `rgba(16, 185, 129, ${Math.min(0.42, 0.14 * squareControlHeatmap[sq.square].netControl)})`
+                  : squareControlHeatmap[sq.square].netControl < 0
+                    ? `rgba(56, 189, 248, ${Math.min(0.42, 0.14 * Math.abs(squareControlHeatmap[sq.square].netControl))})`
+                    : 'transparent',
+              boxShadow: squareControlHeatmap[sq.square].isHanging ? 'inset 0 0 0 2.5px #ef4444' : undefined
+            }"
+          />
 
           <!-- Piece Image (Normal mode) -->
           <img

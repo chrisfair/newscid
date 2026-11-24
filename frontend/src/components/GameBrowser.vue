@@ -84,6 +84,7 @@ const emit = defineEmits<{
   (e: 'openMegaDownloader'): void
   (e: 'ensurePersonalDb'): void
   (e: 'openOnlineSync'): void
+  (e: 'openBuildOpponent'): void
 }>()
 
 const startingFENPrefix = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR'
@@ -437,6 +438,18 @@ const totalPages = () => Math.max(1, Math.ceil(props.totalGames / props.pageSize
 
       <!-- Quick Action Buttons -->
       <div class="flex items-center gap-1.5 flex-wrap">
+        <!-- 1-Click Build Opponent Personality from Open DB -->
+        <button
+          v-if="dbName"
+          type="button"
+          class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-950/60 hover:bg-cyan-900/70 text-cyan-200 border border-cyan-500/40 text-xs font-semibold transition-colors cursor-pointer"
+          title="Pick any player from this database and turn their real opening repertoire &amp; style into a playable opponent"
+          @click="emit('openBuildOpponent')"
+        >
+          <UserPlus class="w-3.5 h-3.5 text-cyan-400" />
+          <span>Build Opponent</span>
+        </button>
+
         <!-- 1-Click Extract to Sub-Database Button -->
         <button
           type="button"
@@ -472,6 +485,14 @@ const totalPages = () => Math.max(1, Math.ceil(props.totalGames / props.pageSize
           <span>Save</span>
         </button>
       </div>
+    </div>
+
+    <!-- Plain-English Quick Search Guide -->
+    <div v-if="dbName" class="px-3 py-1.5 bg-zinc-900/80 border-b border-zinc-800/70 text-[11px] text-zinc-400 flex flex-wrap items-center justify-between gap-2">
+      <span>
+        <strong class="text-zinc-200">Quick Search:</strong> Type a player name or pick <span class="text-amber-300">★ Famous Players</span>, choose an opening, or click <span class="text-emerald-300">Board Position</span> to find games reaching the current board.
+      </span>
+      <span class="text-cyan-300/90">Want to play a database player? Click <strong>Build Opponent</strong> above.</span>
     </div>
 
     <!-- Intuitive Search Bar: Grouped into 3 Labeled Clusters (1. Player & Legend, 2. Opening & Moves, 3. Position & Result) -->
