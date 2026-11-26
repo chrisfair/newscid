@@ -140,4 +140,46 @@ func TestBuildTreeFromDatabaseAndCoreFEN(t *testing.T) {
 	assert.Equal(t, []int{0, 1}, foundIndices)
 }
 
+func TestParallelTreeAndSearch(t *testing.T) {
+	pgnE4 := `[White "A"][Black "B"][Result "1-0"] 1. e4 e5 2. Nf3 Nc6 1-0`
+	pgnD4 := `[White "C"][Black "D"][Result "0-1"] 1. d4 d5 2. c4 e6 0-1`
+	pgnDraw := `[White "E"][Black "F"][Result "1/2-1/2"] 1. e4 c5 2. Nf3 d6 1/2-1/2`
+
+	var games []*chess.Game
+	for i := 0; i < 48; i++ {
+		var pgn string
+		switch i % 3 {
+		case 0:
+			pgn = pgnE4
+		case 1:
+			pgn = pgnD4
+		default:
+			pgn = pgnDraw
+		}
+		g, err := chess.ParsePGN(pgn)
+		require.NoError(t, err)
+		games = append(games, g)
+	}
+
+	res := tree.BuildTreeFromGames(chess.StartingFEN, games)
+	assert.Equal(t, 48, res.TotalGames)
+	require.Len(t, res.Moves, 2)
+	assert.Equal(t, "e4", res.Moves[0].Move)
+	assert.Equal(t, 32, res.Moves[0].Count)
+	assert.Equal(t, 16, res.Moves[0].WhiteWins)
+	assert.Equal(t, 16, res.Moves[0].Draws)
+	assert.Equal(t, "d4", res.Moves[1].Move)
+	assert.Equal(t, 16, res.Moves[1].Count)
+	assert.Equal(t, 16, res.Moves[1].BlackWins)
+
+	b := chess.NewBoard()
+	m, _ := b.ParseSAN("d4")
+	b.MakeMove(m)
+	indices := tree.SearchPositionInGames(b.FEN(), games)
+	require.Len(t, indices, 16)
+	for k, idx := range indices {
+		assert.Equal(t, k*3+1, idx)
+	}
+}
+
 

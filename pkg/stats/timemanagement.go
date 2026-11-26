@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
@@ -849,11 +851,15 @@ func AnalyzePlayerTimeManagement(db *scid.Database, playerName string, maxGames 
 	var scrambleGames int
 	var scrambleBlundersAll int
 
-	gamesSampled := 0
+	type sampledGame struct {
+		game        *chess.Game
+		targetColor chess.Color
+	}
+	var sampled []sampledGame
 
 	numGames := db.NumGames()
 	for i := 0; i < numGames; i++ {
-		if gamesSampled >= maxGames {
+		if len(sampled) >= maxGames {
 			break
 		}
 
@@ -884,18 +890,50 @@ func AnalyzePlayerTimeManagement(db *scid.Database, playerName string, maxGames 
 			continue
 		}
 
-		dossier.GamesAnalyzed++
-		gamesSampled++
-
-		report, err := AnalyzeGameTimeManagement(game)
-		if err != nil {
-			continue
-		}
-
 		targetColor := chess.White
 		if isBlack {
 			targetColor = chess.Black
 		}
+		sampled = append(sampled, sampledGame{game: game, targetColor: targetColor})
+	}
+
+	dossier.GamesAnalyzed = len(sampled)
+	reports := make([]*GameTimeManagementReport, len(sampled))
+	workers := min(runtime.GOMAXPROCS(0), len(sampled))
+	if len(sampled) < 4 || workers <= 1 {
+		for i, sg := range sampled {
+			if r, err := AnalyzeGameTimeManagement(sg.game); err == nil {
+				reports[i] = r
+			}
+		}
+	} else {
+		var wg sync.WaitGroup
+		chunk := (len(sampled) + workers - 1) / workers
+		for w := 0; w < workers; w++ {
+			start := w * chunk
+			if start >= len(sampled) {
+				break
+			}
+			end := min(start+chunk, len(sampled))
+			wg.Add(1)
+			go func(lo, hi int) {
+				defer wg.Done()
+				for i := lo; i < hi; i++ {
+					if r, err := AnalyzeGameTimeManagement(sampled[i].game); err == nil {
+						reports[i] = r
+					}
+				}
+			}(start, end)
+		}
+		wg.Wait()
+	}
+
+	for i, sg := range sampled {
+		report := reports[i]
+		if report == nil {
+			continue
+		}
+		targetColor := sg.targetColor
 
 		hasClock := (targetColor == chess.White && report.WhiteHasClock) || (targetColor == chess.Black && report.BlackHasClock)
 		if !hasClock {

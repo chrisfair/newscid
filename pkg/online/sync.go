@@ -200,7 +200,7 @@ func (sm *SyncManager) ImportPlayerGames(opts ImportPlayerOptions, activeDB *sci
 	}
 
 	mode := opts.TargetMode
-	if mode == "" {
+	if mode == TargetModeUnset {
 		if activeDB != nil && activeDB.IsOpen {
 			mode = TargetActiveBase
 		} else {

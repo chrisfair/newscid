@@ -466,10 +466,10 @@ func (m *Manager) BuildPersonalityFromDB(db *scid.Database, playerName string) (
 	if len(pb.TopWhiteECOs) > 0 || len(pb.TopBlackECOs) > 0 {
 		parts := []string{}
 		if len(pb.TopWhiteECOs) > 0 {
-			parts = append(parts, "White: "+strings.Join(pb.TopWhiteECOs[:minInt(3, len(pb.TopWhiteECOs))], ", "))
+			parts = append(parts, "White: "+strings.Join(pb.TopWhiteECOs[:min(3, len(pb.TopWhiteECOs))], ", "))
 		}
 		if len(pb.TopBlackECOs) > 0 {
-			parts = append(parts, "Black: "+strings.Join(pb.TopBlackECOs[:minInt(3, len(pb.TopBlackECOs))], ", "))
+			parts = append(parts, "Black: "+strings.Join(pb.TopBlackECOs[:min(3, len(pb.TopBlackECOs))], ", "))
 		}
 		ecoSummary = strings.Join(parts, " | ")
 	}
@@ -545,11 +545,4 @@ func clampInt(v, lo, hi int) int {
 		return hi
 	}
 	return v
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

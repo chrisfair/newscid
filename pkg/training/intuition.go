@@ -1,6 +1,7 @@
 package training
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
@@ -12,13 +13,63 @@ import (
 )
 
 // IntuitionCategory classifies the strategic/tactical balance of a position.
-type IntuitionCategory string
+type IntuitionCategory uint8
 
 const (
-	IntuitionWhiteWinning IntuitionCategory = "white_winning" // Eval >= +150 cp
-	IntuitionEqual        IntuitionCategory = "equal"         // -150 cp < Eval < +150 cp
-	IntuitionBlackWinning IntuitionCategory = "black_winning" // Eval <= -150 cp
+	IntuitionEqual        IntuitionCategory = iota + 1 // -150 cp < Eval < +150 cp
+	IntuitionWhiteWinning                              // Eval >= +150 cp
+	IntuitionBlackWinning                              // Eval <= -150 cp
 )
+
+var intuitionCategoryNames = [...]string{
+	IntuitionEqual:        "equal",
+	IntuitionWhiteWinning: "white_winning",
+	IntuitionBlackWinning: "black_winning",
+}
+
+var intuitionCatDisplayNames = [...]string{
+	IntuitionEqual:        "Equal (=)",
+	IntuitionWhiteWinning: "White is Winning (+)",
+	IntuitionBlackWinning: "Black is Winning (-)",
+}
+
+// String returns the canonical JSON name of the intuition category.
+func (c IntuitionCategory) String() string {
+	if int(c) < len(intuitionCategoryNames) {
+		return intuitionCategoryNames[c]
+	}
+	return "equal"
+}
+
+// ParseIntuitionCategory parses an intuition category string.
+func ParseIntuitionCategory(s string) (IntuitionCategory, bool) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "white_winning":
+		return IntuitionWhiteWinning, true
+	case "black_winning":
+		return IntuitionBlackWinning, true
+	case "equal":
+		return IntuitionEqual, true
+	default:
+		return IntuitionEqual, false
+	}
+}
+
+// MarshalJSON encodes IntuitionCategory as its canonical JSON string.
+func (c IntuitionCategory) MarshalJSON() ([]byte, error) {
+	return json.Marshal(c.String())
+}
+
+// UnmarshalJSON decodes IntuitionCategory from its JSON string name.
+func (c *IntuitionCategory) UnmarshalJSON(data []byte) error {
+	var raw string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	parsed, _ := ParseIntuitionCategory(raw)
+	*c = parsed
+	return nil
+}
 
 // IntuitionChallenge represents a flashcard position for the Intuition Storm trainer.
 type IntuitionChallenge struct {
@@ -207,37 +258,6 @@ func GetIntuitionDrillBatch(count int) []IntuitionChallenge {
 	return all[:count]
 }
 
-type intuitionCatID uint8
-
-const (
-	intCatEqual intuitionCatID = iota
-	intCatWhiteWinning
-	intCatBlackWinning
-)
-
-var intuitionCatValues = [3]IntuitionCategory{
-	intCatEqual:        IntuitionEqual,
-	intCatWhiteWinning: IntuitionWhiteWinning,
-	intCatBlackWinning: IntuitionBlackWinning,
-}
-
-var intuitionCatDisplayNames = [3]string{
-	intCatEqual:        "Equal (=)",
-	intCatWhiteWinning: "White is Winning (+)",
-	intCatBlackWinning: "Black is Winning (-)",
-}
-
-func parseIntuitionCatID(c IntuitionCategory) intuitionCatID {
-	switch c {
-	case IntuitionWhiteWinning:
-		return intCatWhiteWinning
-	case IntuitionBlackWinning:
-		return intCatBlackWinning
-	default:
-		return intCatEqual
-	}
-}
-
 // SubmitIntuitionAnswer evaluates a user's speed assessment and awards points based on accuracy and reaction time.
 func SubmitIntuitionAnswer(challengeID string, userChoice string, elapsedMs int) (*IntuitionResult, error) {
 	ch, found := GetIntuitionChallenge(challengeID)
@@ -245,8 +265,8 @@ func SubmitIntuitionAnswer(challengeID string, userChoice string, elapsedMs int)
 		return nil, fmt.Errorf("challenge %q not found", challengeID)
 	}
 
-	choice := IntuitionCategory(strings.ToLower(strings.TrimSpace(userChoice)))
-	isCorrect := (choice == ch.Category)
+	choice, valid := ParseIntuitionCategory(userChoice)
+	isCorrect := valid && choice == ch.Category
 
 	basePoints := 0
 	speedBonus := 0
@@ -275,7 +295,7 @@ func SubmitIntuitionAnswer(challengeID string, userChoice string, elapsedMs int)
 	if isCorrect {
 		explanation = fmt.Sprintf("Correct. Evaluated in %dms (%s). %s", elapsedMs, scoreFormatted, ch.KeyFeature)
 	} else {
-		actualName := intuitionCatDisplayNames[parseIntuitionCatID(ch.Category)]
+		actualName := intuitionCatDisplayNames[ch.Category]
 		explanation = fmt.Sprintf("Incorrect. The assessment is %s (%s). %s", actualName, scoreFormatted, ch.KeyFeature)
 	}
 
@@ -374,14 +394,14 @@ func GenerateIntuitionDrillsFromDatabase(db *scid.Database, count int) ([]Intuit
 
 		matDelta := matWhite - matBlack
 
-		catID := intCatEqual
+		cat := IntuitionEqual
 		var keyFeature string
 
 		if matDelta >= 250 {
-			catID = intCatWhiteWinning
+			cat = IntuitionWhiteWinning
 			keyFeature = fmt.Sprintf("White has clear material superiority (+%d cp).", matDelta)
 		} else if matDelta <= -250 {
-			catID = intCatBlackWinning
+			cat = IntuitionBlackWinning
 			keyFeature = fmt.Sprintf("Black has clear material superiority (%d cp).", matDelta)
 		} else {
 			keyFeature = "Material is approximately level in this dynamic middlegame."
@@ -394,7 +414,7 @@ func GenerateIntuitionDrillsFromDatabase(db *scid.Database, count int) ([]Intuit
 			BlackPlayer:   blackName,
 			Event:         event,
 			EvaluationCp:  matDelta,
-			Category:      intuitionCatValues[catID],
+			Category:      cat,
 			KeyFeature:    keyFeature,
 			MaterialDelta: matDelta,
 			TimeLimitSec:  5,

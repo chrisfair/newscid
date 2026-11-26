@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 )
 
@@ -118,9 +120,16 @@ func ParsePGN(pgn string) (*Game, error) {
 }
 
 // ParsePGNDatabase parses all games from a PGN reader stream.
+// Move text parsing (SAN validation and board replay) fans out across worker
+// goroutines when multiple games are present while preserving exact game order.
 func ParsePGNDatabase(r io.Reader) ([]*Game, error) {
+	type pendingGame struct {
+		game *Game
+		text string
+	}
+
 	scanner := bufio.NewScanner(r)
-	var games []*Game
+	var pending []pendingGame
 	var currentGame *Game
 	var moveText strings.Builder
 	inHeader := true
@@ -137,9 +146,7 @@ func ParsePGNDatabase(r io.Reader) ([]*Game, error) {
 		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
 			// Tag line
 			if !inHeader && currentGame != nil {
-				// Finish previous game
-				parseMoveText(currentGame, moveText.String())
-				games = append(games, currentGame)
+				pending = append(pending, pendingGame{game: currentGame, text: moveText.String()})
 				currentGame = nil
 				moveText.Reset()
 				inHeader = true
@@ -168,10 +175,43 @@ func ParsePGNDatabase(r io.Reader) ([]*Game, error) {
 	}
 
 	if currentGame != nil {
-		parseMoveText(currentGame, moveText.String())
-		games = append(games, currentGame)
+		pending = append(pending, pendingGame{game: currentGame, text: moveText.String()})
 	}
 
+	n := len(pending)
+	if n == 0 {
+		return nil, nil
+	}
+
+	workers := min(runtime.GOMAXPROCS(0), n)
+	if n < 8 || workers <= 1 {
+		for i := range pending {
+			parseMoveText(pending[i].game, pending[i].text)
+		}
+	} else {
+		var wg sync.WaitGroup
+		chunk := (n + workers - 1) / workers
+		for w := 0; w < workers; w++ {
+			start := w * chunk
+			if start >= n {
+				break
+			}
+			end := min(start+chunk, n)
+			wg.Add(1)
+			go func(lo, hi int) {
+				defer wg.Done()
+				for i := lo; i < hi; i++ {
+					parseMoveText(pending[i].game, pending[i].text)
+				}
+			}(start, end)
+		}
+		wg.Wait()
+	}
+
+	games := make([]*Game, n)
+	for i := range pending {
+		games[i] = pending[i].game
+	}
 	return games, nil
 }
 

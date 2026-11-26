@@ -1,6 +1,7 @@
 package training
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -11,15 +12,65 @@ import (
 )
 
 // ProphylaxisCategory classifies the strategic objective of the quiet move.
-type ProphylaxisCategory string
+type ProphylaxisCategory uint8
 
 const (
-	CategoryKingSafety     ProphylaxisCategory = "king_safety"     // e.g. Kh1, Kh8, avoiding pins/checks
-	CategoryPieceRestraint ProphylaxisCategory = "piece_restraint" // e.g. a3/h3 denying enemy outpost/pins
-	CategoryOverprotection ProphylaxisCategory = "overprotection"  // Nimzowitsch overprotection of strongpoint
-	CategoryBlockade       ProphylaxisCategory = "blockade"        // Restricting enemy passed pawn or file
-	CategoryQuietRegroup   ProphylaxisCategory = "quiet_regroup"   // Calm retreat preparing future breakthrough
+	CategoryKingSafety     ProphylaxisCategory = iota + 1 // e.g. Kh1, Kh8, avoiding pins/checks
+	CategoryPieceRestraint                                // e.g. a3/h3 denying enemy outpost/pins
+	CategoryOverprotection                                // Nimzowitsch overprotection of strongpoint
+	CategoryBlockade                                      // Restricting enemy passed pawn or file
+	CategoryQuietRegroup                                  // Calm retreat preparing future breakthrough
 )
+
+var prophylaxisCategoryNames = [...]string{
+	CategoryKingSafety:     "king_safety",
+	CategoryPieceRestraint: "piece_restraint",
+	CategoryOverprotection: "overprotection",
+	CategoryBlockade:       "blockade",
+	CategoryQuietRegroup:   "quiet_regroup",
+}
+
+// String returns the canonical JSON name of the prophylaxis category.
+func (c ProphylaxisCategory) String() string {
+	if int(c) < len(prophylaxisCategoryNames) {
+		return prophylaxisCategoryNames[c]
+	}
+	return "king_safety"
+}
+
+// ParseProphylaxisCategory parses a prophylaxis category name.
+func ParseProphylaxisCategory(s string) (ProphylaxisCategory, bool) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "king_safety":
+		return CategoryKingSafety, true
+	case "piece_restraint":
+		return CategoryPieceRestraint, true
+	case "overprotection":
+		return CategoryOverprotection, true
+	case "blockade":
+		return CategoryBlockade, true
+	case "quiet_regroup":
+		return CategoryQuietRegroup, true
+	default:
+		return CategoryKingSafety, false
+	}
+}
+
+// MarshalJSON encodes ProphylaxisCategory as its canonical JSON string.
+func (c ProphylaxisCategory) MarshalJSON() ([]byte, error) {
+	return json.Marshal(c.String())
+}
+
+// UnmarshalJSON decodes ProphylaxisCategory from its JSON string name.
+func (c *ProphylaxisCategory) UnmarshalJSON(data []byte) error {
+	var raw string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	parsed, _ := ParseProphylaxisCategory(raw)
+	*c = parsed
+	return nil
+}
 
 // ProphylaxisDrill represents a quiet move or prophylactic puzzle.
 type ProphylaxisDrill struct {
@@ -189,8 +240,10 @@ func GetProphylaxisDrillBatch(count int, category string) []ProphylaxisDrill {
 	defer prophylaxisMu.RUnlock()
 
 	var matched []ProphylaxisDrill
+	filterCat, hasFilter := ParseProphylaxisCategory(category)
+	allCategories := category == "" || category == "all"
 	for _, d := range prophylaxisBank {
-		if category == "" || category == "all" || string(d.Category) == category {
+		if allCategories || (hasFilter && d.Category == filterCat) {
 			matched = append(matched, d)
 		}
 	}

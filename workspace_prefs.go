@@ -1345,9 +1345,7 @@ func (a *App) SelectAndImportWorkstationAsset(category string) (*workstation.Sto
 	if a.ctx == nil {
 		return nil, fmt.Errorf("file dialog requires desktop GUI runtime")
 	}
-	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Select Asset to Copy into NewScid Workstation Storage",
-	})
+	path, err := a.openFileDialog("Select Asset to Copy into NewScid Workstation Storage")
 	if err != nil || strings.TrimSpace(path) == "" {
 		return nil, err
 	}

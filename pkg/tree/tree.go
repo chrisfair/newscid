@@ -1,8 +1,10 @@
 package tree
 
 import (
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 
 	"newscid/pkg/chess"
 	"newscid/pkg/database/scid"
@@ -34,32 +36,28 @@ func boardsMatchCore(a, b *chess.Board) bool {
 	return a.Turn == b.Turn && a.Castling == b.Castling && a.Squares == b.Squares
 }
 
-// BuildTreeFromGames generates tree statistics for a position given a set of games.
-func BuildTreeFromGames(fen string, games []*chess.Game) *TreeResult {
-	targetBoard, err := chess.ParseFEN(fen)
-	if err != nil {
-		targetBoard = chess.NewBoard()
-		fen = targetBoard.FEN()
+// initGameBoard initializes a board to a game's starting position.
+func initGameBoard(g *chess.Game) *chess.Board {
+	if g.StartFEN != "" && g.StartFEN != chess.StartingFEN {
+		if parsed, err := chess.ParseFEN(g.StartFEN); err == nil {
+			return parsed
+		}
 	}
+	return chess.NewBoard()
+}
 
+func scanTreeChunk(targetBoard *chess.Board, games []*chess.Game) (map[string]*MoveStat, int) {
 	moveStatsMap := make(map[string]*MoveStat)
-	totalGamesMatching := 0
+	totalMatching := 0
 
 	for _, g := range games {
-		// Replay game and check if it reaches targetBoard
-		b := chess.NewBoard()
-		if g.StartFEN != "" && g.StartFEN != chess.StartingFEN {
-			if parsed, err := chess.ParseFEN(g.StartFEN); err == nil {
-				b = parsed
-			}
-		}
-
+		b := initGameBoard(g)
 		matched := false
 		curr := g.RootMove
 		for curr != nil {
 			if boardsMatchCore(b, targetBoard) {
 				matched = true
-				totalGamesMatching++
+				totalMatching++
 
 				san := curr.SAN
 				stat, exists := moveStatsMap[san]
@@ -87,7 +85,65 @@ func BuildTreeFromGames(fen string, games []*chess.Game) *TreeResult {
 		}
 
 		if !matched && boardsMatchCore(b, targetBoard) {
-			totalGamesMatching++
+			totalMatching++
+		}
+	}
+
+	return moveStatsMap, totalMatching
+}
+
+// BuildTreeFromGames generates tree statistics for a position given a set of games.
+// Replays games concurrently across worker goroutines for larger slices.
+func BuildTreeFromGames(fen string, games []*chess.Game) *TreeResult {
+	targetBoard, err := chess.ParseFEN(fen)
+	if err != nil {
+		targetBoard = chess.NewBoard()
+		fen = targetBoard.FEN()
+	}
+
+	var moveStatsMap map[string]*MoveStat
+	totalGamesMatching := 0
+
+	workers := min(runtime.GOMAXPROCS(0), len(games))
+	if len(games) < 32 || workers <= 1 {
+		moveStatsMap, totalGamesMatching = scanTreeChunk(targetBoard, games)
+	} else {
+		type chunkResult struct {
+			stats   map[string]*MoveStat
+			matched int
+		}
+		results := make([]chunkResult, workers)
+		chunk := (len(games) + workers - 1) / workers
+		var wg sync.WaitGroup
+		for w := 0; w < workers; w++ {
+			start := w * chunk
+			if start >= len(games) {
+				break
+			}
+			end := min(start+chunk, len(games))
+			wg.Add(1)
+			go func(idx, lo, hi int) {
+				defer wg.Done()
+				s, m := scanTreeChunk(targetBoard, games[lo:hi])
+				results[idx] = chunkResult{stats: s, matched: m}
+			}(w, start, end)
+		}
+		wg.Wait()
+
+		moveStatsMap = make(map[string]*MoveStat)
+		for _, res := range results {
+			totalGamesMatching += res.matched
+			for san, s := range res.stats {
+				dst, exists := moveStatsMap[san]
+				if !exists {
+					moveStatsMap[san] = s
+					continue
+				}
+				dst.Count += s.Count
+				dst.WhiteWins += s.WhiteWins
+				dst.Draws += s.Draws
+				dst.BlackWins += s.BlackWins
+			}
 		}
 	}
 
@@ -101,7 +157,10 @@ func BuildTreeFromGames(fen string, games []*chess.Game) *TreeResult {
 	}
 
 	sort.Slice(moveStats, func(i, j int) bool {
-		return moveStats[i].Count > moveStats[j].Count
+		if moveStats[i].Count != moveStats[j].Count {
+			return moveStats[i].Count > moveStats[j].Count
+		}
+		return moveStats[i].Move < moveStats[j].Move
 	})
 
 	if moveStats == nil {
@@ -143,35 +202,64 @@ func CoreFEN(fen string) string {
 	return coreFEN(fen)
 }
 
+func gameReachesPosition(g *chess.Game, targetBoard *chess.Board) bool {
+	b := initGameBoard(g)
+	if boardsMatchCore(b, targetBoard) {
+		return true
+	}
+	for curr := g.RootMove; curr != nil; curr = curr.Next {
+		b.MakeMove(curr.Move)
+		if boardsMatchCore(b, targetBoard) {
+			return true
+		}
+	}
+	return false
+}
+
 // SearchPositionInGames returns the 0-based indices of games that reach the target position.
 func SearchPositionInGames(fen string, games []*chess.Game) []int {
 	targetBoard, err := chess.ParseFEN(fen)
 	if err != nil {
 		targetBoard = chess.NewBoard()
 	}
+
+	workers := min(runtime.GOMAXPROCS(0), len(games))
+	if len(games) < 32 || workers <= 1 {
+		var matched []int
+		for i, g := range games {
+			if gameReachesPosition(g, targetBoard) {
+				matched = append(matched, i)
+			}
+		}
+		return matched
+	}
+
+	perWorker := make([][]int, workers)
+	chunk := (len(games) + workers - 1) / workers
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		start := w * chunk
+		if start >= len(games) {
+			break
+		}
+		end := min(start+chunk, len(games))
+		wg.Add(1)
+		go func(idx, lo, hi int) {
+			defer wg.Done()
+			var local []int
+			for i := lo; i < hi; i++ {
+				if gameReachesPosition(games[i], targetBoard) {
+					local = append(local, i)
+				}
+			}
+			perWorker[idx] = local
+		}(w, start, end)
+	}
+	wg.Wait()
+
 	var matched []int
-
-	for i, g := range games {
-		b := chess.NewBoard()
-		if g.StartFEN != "" && g.StartFEN != chess.StartingFEN {
-			if parsed, err := chess.ParseFEN(g.StartFEN); err == nil {
-				b = parsed
-			}
-		}
-
-		isMatch := boardsMatchCore(b, targetBoard)
-		curr := g.RootMove
-		for !isMatch && curr != nil {
-			b.MakeMove(curr.Move)
-			if boardsMatchCore(b, targetBoard) {
-				isMatch = true
-				break
-			}
-			curr = curr.Next
-		}
-		if isMatch {
-			matched = append(matched, i)
-		}
+	for _, local := range perWorker {
+		matched = append(matched, local...)
 	}
 	return matched
 }

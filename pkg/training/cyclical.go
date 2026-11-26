@@ -2659,7 +2659,7 @@ func (cm *CyclicalManager) finalizeCycleLocked(s *CycleSet) {
 	if s.CurrentCycle < 7 {
 		s.CurrentCycle++
 	}
-	s.TargetDays = maxInt(1, s.TargetDays/2)
+	s.TargetDays = max(1, s.TargetDays/2)
 	s.ActiveProgress = &ActiveCycleProgress{
 		CycleNumber:  s.CurrentCycle,
 		CurrentIndex: 0,
@@ -2674,12 +2674,6 @@ func calcPct(correct, total int) float64 {
 	return math.Round((float64(correct)/float64(total))*1000.0) / 10.0
 }
 
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
 
 // StartNextCycle manually advances or resets a CycleSet to start the next repetition pass.
 func (cm *CyclicalManager) StartNextCycle(setID string) (*CycleSet, error) {
@@ -2694,7 +2688,7 @@ func (cm *CyclicalManager) StartNextCycle(setID string) (*CycleSet, error) {
 				if s.CurrentCycle < 7 {
 					s.CurrentCycle++
 				}
-				s.TargetDays = maxInt(1, s.TargetDays/2)
+				s.TargetDays = max(1, s.TargetDays/2)
 				s.ActiveProgress = &ActiveCycleProgress{
 					CycleNumber:  s.CurrentCycle,
 					CurrentIndex: 0,

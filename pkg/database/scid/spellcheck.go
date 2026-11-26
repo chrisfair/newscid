@@ -290,16 +290,6 @@ func LevenshteinDistance(s, t string) int {
 	return d[sLen][tLen]
 }
 
-func min(a, b, c int) int {
-	if a <= b && a <= c {
-		return a
-	}
-	if b <= a && b <= c {
-		return b
-	}
-	return c
-}
-
 // StandardizeDatabase scans all player names in the database, maps them to canonical
 // standardized forms, updates IndexEntry pointers, and returns a detailed summary.
 func (sc *SpellChecker) StandardizeDatabase(db *Database) (*SpellCheckSummary, error) {

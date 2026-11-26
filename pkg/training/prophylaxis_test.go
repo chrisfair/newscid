@@ -18,7 +18,7 @@ func TestGetProphylaxisDrillBatch(t *testing.T) {
 	assert.True(t, len(batch) <= 5)
 
 	// Filter by king safety
-	kingBatch := GetProphylaxisDrillBatch(10, string(CategoryKingSafety))
+	kingBatch := GetProphylaxisDrillBatch(10, CategoryKingSafety.String())
 	assert.NotEmpty(t, kingBatch)
 	for _, d := range kingBatch {
 		assert.Equal(t, CategoryKingSafety, d.Category)

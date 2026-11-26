@@ -1,13 +1,59 @@
 package tournament
 
+import (
+	"encoding/json"
+	"strings"
+)
+
 // TournamentType describes the format of the chess tournament.
-type TournamentType string
+type TournamentType uint8
 
 const (
-	TypeRoundRobin TournamentType = "Round-Robin"
-	TypeSwiss      TournamentType = "Swiss"
-	TypeMatch      TournamentType = "Match"
+	TypeRoundRobin TournamentType = iota
+	TypeSwiss
+	TypeMatch
 )
+
+var tournamentTypeNames = [...]string{
+	TypeRoundRobin: "Round-Robin",
+	TypeSwiss:      "Swiss",
+	TypeMatch:      "Match",
+}
+
+// String returns the human/JSON representation of the tournament format.
+func (t TournamentType) String() string {
+	if int(t) < len(tournamentTypeNames) {
+		return tournamentTypeNames[t]
+	}
+	return "Round-Robin"
+}
+
+// ParseTournamentType parses a tournament format name.
+func ParseTournamentType(s string) TournamentType {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "swiss":
+		return TypeSwiss
+	case "match":
+		return TypeMatch
+	default:
+		return TypeRoundRobin
+	}
+}
+
+// MarshalJSON encodes TournamentType as its canonical JSON string.
+func (t TournamentType) MarshalJSON() ([]byte, error) {
+	return json.Marshal(t.String())
+}
+
+// UnmarshalJSON decodes TournamentType from its JSON string name.
+func (t *TournamentType) UnmarshalJSON(data []byte) error {
+	var raw string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*t = ParseTournamentType(raw)
+	return nil
+}
 
 // EventSummary provides metadata about a distinct tournament event found in a database.
 type EventSummary struct {

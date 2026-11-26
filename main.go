@@ -5,6 +5,7 @@ import (
 	"embed"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"strconv"
@@ -21,7 +22,13 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-func runServer(app *App, host string, port int, dataDir string) {
+var (
+	runTUIFunc    = tui.RunCLI
+	runServerFunc = runServer
+	wailsRunFunc  = wails.Run
+)
+
+func runServer(app *App, host string, port int, dataDir string) error {
 	defer app.shutdown(context.Background())
 	srv := server.New(server.ServerConfig{
 		Host:     host,
@@ -31,91 +38,98 @@ func runServer(app *App, host string, port int, dataDir string) {
 	}, app)
 
 	fmt.Printf("NewScid Web / Mobile Server running on http://%s:%d\n", host, port)
-	if err := srv.Start(); err != nil {
-		fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
-		os.Exit(1)
-	}
+	return srv.Start()
 }
 
-func main() {
-	isAndroid := runtime.GOOS == "android"
+func printCLIHelp(w io.Writer) {
+	fmt.Fprintf(w, "NewScid - Modern Chess Information Database (%s)\n", version.Short())
+	fmt.Fprintln(w, "Usage: newscid [options] [database.si4 | file.pgn]")
+	fmt.Fprintln(w, "       newscid tui [--kitty|--unicode] [--theme <id>] [--piece-set <id>] [database.si4 | file.pgn]")
+	fmt.Fprintln(w, "       newscid --window-panel <board|tree|engine|notation|games|imbalance|info|portal|db-roles> [--workspace <1..10>] [--title <title>]")
+	fmt.Fprintln(w, "       newscid --portal-url <https://lichess.org | https://www.chess.com> [--title <title>]")
+	fmt.Fprintln(w, "       newscid serve [--host 127.0.0.1] [--port 8080] [--data-dir /path]")
+	fmt.Fprintln(w, "\nOptions:")
+	fmt.Fprintln(w, "  -v, --version         Print application version details")
+	fmt.Fprintln(w, "  -h, --help            Display this help message")
+	fmt.Fprintln(w, "  tui, --tui            Launch the Kitty / Sixel / TrueColor terminal workstation (TUI)")
+	fmt.Fprintln(w, "  --kitty               Launch the terminal workstation with HD pixel board (Kitty, or Sixel on foot)")
+	fmt.Fprintln(w, "  --sixel               Launch the terminal workstation with DEC Sixel HD pixel board (foot, xterm)")
+	fmt.Fprintln(w, "  --window-panel <id>   Launch a detached multi-screen panel window (for Hyprland / multi-monitor)")
+	fmt.Fprintln(w, "  --workspace <1..10>   Place the window onto a specific Hyprland workspace")
+	fmt.Fprintln(w, "  --portal-url <url>    Launch a dedicated live portal window into Lichess.org or Chess.com")
+	fmt.Fprintln(w, "  serve, --server       Run in standalone web / mobile server mode (for Android / browser)")
+}
 
-	if len(os.Args) > 1 {
-		arg := os.Args[1]
-		if arg == "-v" || arg == "--version" || arg == "version" {
-			fmt.Println(version.String())
-			os.Exit(0)
+// extractTUIArgs detects `tui`, `--tui`, `--kitty`, or `--sixel` anywhere in args
+// and returns the normalized argument slice to pass to tui.RunCLI.
+func extractTUIArgs(args []string) ([]string, bool) {
+	if len(args) > 1 && args[1] == "tui" {
+		return args[2:], true
+	}
+	for i := 1; i < len(args); i++ {
+		var prefix string
+		switch args[i] {
+		case "--tui", "-tui":
+		case "--kitty", "-kitty":
+			prefix = "--kitty"
+		case "--sixel", "-sixel":
+			prefix = "--sixel"
+		default:
+			continue
 		}
-		if arg == "-h" || arg == "--help" || arg == "help" {
-			fmt.Printf("NewScid - Modern Chess Information Database (%s)\n", version.Short())
-			fmt.Println("Usage: newscid [options] [database.si4 | file.pgn]")
-			fmt.Println("       newscid tui [--kitty|--unicode] [--theme <id>] [--piece-set <id>] [database.si4 | file.pgn]")
-			fmt.Println("       newscid --window-panel <board|tree|engine|notation|games|imbalance|info|portal|db-roles> [--workspace <1..10>] [--title <title>]")
-			fmt.Println("       newscid --portal-url <https://lichess.org | https://www.chess.com> [--title <title>]")
-			fmt.Println("       newscid serve [--host 127.0.0.1] [--port 8080] [--data-dir /path]")
-			fmt.Println("\nOptions:")
-			fmt.Println("  -v, --version         Print application version details")
-			fmt.Println("  -h, --help            Display this help message")
-			fmt.Println("  tui, --tui            Launch the Kitty / Sixel / TrueColor terminal workstation (TUI)")
-			fmt.Println("  --kitty               Launch the terminal workstation with HD pixel board (Kitty, or Sixel on foot)")
-			fmt.Println("  --sixel               Launch the terminal workstation with DEC Sixel HD pixel board (foot, xterm)")
-			fmt.Println("  --window-panel <id>   Launch a detached multi-screen panel window (for Hyprland / multi-monitor)")
-			fmt.Println("  --workspace <1..10>   Place the window onto a specific Hyprland workspace")
-			fmt.Println("  --portal-url <url>    Launch a dedicated live portal window into Lichess.org or Chess.com")
-			fmt.Println("  serve, --server       Run in standalone web / mobile server mode (for Android / browser)")
-			os.Exit(0)
+		var rest []string
+		if prefix != "" {
+			rest = append(rest, prefix)
 		}
-		if arg == "tui" || arg == "--tui" || arg == "-tui" {
-			os.Exit(tui.RunCLI(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
-		}
-		if arg == "--kitty" || arg == "-kitty" {
-			os.Exit(tui.RunCLI(append([]string{"--kitty"}, os.Args[2:]...), os.Stdin, os.Stdout, os.Stderr))
-		}
-		if arg == "--sixel" || arg == "-sixel" {
-			os.Exit(tui.RunCLI(append([]string{"--sixel"}, os.Args[2:]...), os.Stdin, os.Stdout, os.Stderr))
+		rest = append(rest, args[1:i]...)
+		rest = append(rest, args[i+1:]...)
+		return rest, true
+	}
+	return nil, false
+}
+
+func runMain(args []string, goos string, stdin io.Reader, stdout, stderr io.Writer) int {
+	isAndroid := goos == "android"
+
+	if len(args) > 1 {
+		switch args[1] {
+		case "-v", "--version", "version":
+			fmt.Fprintln(stdout, version.String())
+			return 0
+		case "-h", "--help", "help":
+			printCLIHelp(stdout)
+			return 0
 		}
 	}
 
-	// Support --tui, --kitty, or --sixel anywhere in flags (e.g. `newscid games.si4 --tui`)
-	for i := 1; i < len(os.Args); i++ {
-		if os.Args[i] == "--tui" || os.Args[i] == "-tui" {
-			rest := append([]string{}, os.Args[1:i]...)
-			rest = append(rest, os.Args[i+1:]...)
-			os.Exit(tui.RunCLI(rest, os.Stdin, os.Stdout, os.Stderr))
-		}
-		if os.Args[i] == "--kitty" || os.Args[i] == "-kitty" {
-			rest := []string{"--kitty"}
-			rest = append(rest, os.Args[1:i]...)
-			rest = append(rest, os.Args[i+1:]...)
-			os.Exit(tui.RunCLI(rest, os.Stdin, os.Stdout, os.Stderr))
-		}
-		if os.Args[i] == "--sixel" || os.Args[i] == "-sixel" {
-			rest := []string{"--sixel"}
-			rest = append(rest, os.Args[1:i]...)
-			rest = append(rest, os.Args[i+1:]...)
-			os.Exit(tui.RunCLI(rest, os.Stdin, os.Stdout, os.Stderr))
-		}
+	if tuiArgs, ok := extractTUIArgs(args); ok {
+		return runTUIFunc(tuiArgs, stdin, stdout, stderr)
 	}
 
 	app := NewApp()
 
-	if len(os.Args) > 1 {
-		arg := os.Args[1]
-		if arg == "serve" || arg == "--server" || arg == "-server" {
-			fs := flag.NewFlagSet("serve", flag.ExitOnError)
+	if len(args) > 1 {
+		switch args[1] {
+		case "serve", "--server", "-server":
+			fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+			fs.SetOutput(stderr)
 			host := fs.String("host", "127.0.0.1", "Host address to bind to (e.g. 127.0.0.1 or 0.0.0.0)")
 			port := fs.Int("port", 8080, "Port to listen on")
 			dataDir := fs.String("data-dir", "", "Data directory for databases and uploads")
-			_ = fs.Parse(os.Args[2:])
-
-			runServer(app, *host, *port, *dataDir)
-			return
+			if err := fs.Parse(args[2:]); err != nil {
+				return 2
+			}
+			if err := runServerFunc(app, *host, *port, *dataDir); err != nil {
+				fmt.Fprintf(stderr, "Server error: %v\n", err)
+				return 1
+			}
+			return 0
 		}
 	}
 
-	// Headless Linux SSH / console fallback: when neither X11 nor Wayland is active, launch TUI directly
-	if runtime.GOOS == "linux" && !isAndroid && os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
-		os.Exit(tui.RunCLI(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
+	// Headless Linux SSH / console fallback: when neither X11 nor Wayland is active, launch TUI directly.
+	if goos == "linux" && !isAndroid && os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
+		return runTUIFunc(args[1:], stdin, stdout, stderr)
 	}
 
 	windowTitle := "NewScid - Modern Chess Information Database"
@@ -124,13 +138,13 @@ func main() {
 	minWidth := 460
 	minHeight := 360
 
-	for i := 1; i < len(os.Args); i++ {
-		switch os.Args[i] {
+	for i := 1; i < len(args); i++ {
+		switch args[i] {
 		case "--window-panel":
-			if i+1 < len(os.Args) {
+			if i+1 < len(args) {
 				windowStartupCfg.Mode = "panel"
-				windowStartupCfg.PanelID = os.Args[i+1]
-				windowTitle = fmt.Sprintf("NewScid — %s [Screen Panel]", os.Args[i+1])
+				windowStartupCfg.PanelID = args[i+1]
+				windowTitle = fmt.Sprintf("NewScid — %s [Screen Panel]", args[i+1])
 				if windowStartupCfg.PanelID == "board" {
 					windowWidth = 680
 					windowHeight = 720
@@ -141,33 +155,33 @@ func main() {
 				i++
 			}
 		case "--workspace":
-			if i+1 < len(os.Args) {
-				windowStartupCfg.Workspace = os.Args[i+1]
+			if i+1 < len(args) {
+				windowStartupCfg.Workspace = args[i+1]
 				i++
 			}
 		case "--portal-url":
-			if i+1 < len(os.Args) {
+			if i+1 < len(args) {
 				windowStartupCfg.Mode = "portal"
-				windowStartupCfg.PortalURL = os.Args[i+1]
+				windowStartupCfg.PortalURL = args[i+1]
 				windowTitle = "NewScid Live Portal"
 				windowWidth = 1120
 				windowHeight = 800
 				i++
 			}
 		case "--title":
-			if i+1 < len(os.Args) {
-				windowStartupCfg.PortalTitle = os.Args[i+1]
-				windowTitle = os.Args[i+1]
+			if i+1 < len(args) {
+				windowStartupCfg.PortalTitle = args[i+1]
+				windowTitle = args[i+1]
 				i++
 			}
 		case "--fen":
-			if i+1 < len(os.Args) {
-				windowStartupCfg.InitialFEN = os.Args[i+1]
+			if i+1 < len(args) {
+				windowStartupCfg.InitialFEN = args[i+1]
 				i++
 			}
 		case "--db":
-			if i+1 < len(os.Args) {
-				windowStartupCfg.InitialDB = os.Args[i+1]
+			if i+1 < len(args) {
+				windowStartupCfg.InitialDB = args[i+1]
 				i++
 			}
 		}
@@ -179,7 +193,7 @@ func main() {
 		}(windowStartupCfg.Workspace)
 	}
 
-	// On Android, always run the server mode for WebView or Termux
+	// On Android, always run the server mode for WebView or Termux.
 	if isAndroid {
 		port := 8080
 		if portEnv := os.Getenv("NEWSCID_PORT"); portEnv != "" {
@@ -192,12 +206,14 @@ func main() {
 			host = hostEnv
 		}
 		dataDir := os.Getenv("NEWSCID_DATA_DIR")
-		runServer(app, host, port, dataDir)
-		return
+		if err := runServerFunc(app, host, port, dataDir); err != nil {
+			fmt.Fprintf(stderr, "Server error: %v\n", err)
+			return 1
+		}
+		return 0
 	}
 
-	// Create application with options
-	err := wails.Run(&options.App{
+	err := wailsRunFunc(&options.App{
 		Title:     windowTitle,
 		Width:     windowWidth,
 		Height:    windowHeight,
@@ -215,6 +231,14 @@ func main() {
 	})
 
 	if err != nil {
-		println("Error:", err.Error())
+		fmt.Fprintf(stderr, "Error: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+func main() {
+	if code := runMain(os.Args, runtime.GOOS, os.Stdin, os.Stdout, os.Stderr); code != 0 {
+		os.Exit(code)
 	}
 }

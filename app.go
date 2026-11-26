@@ -615,35 +615,45 @@ func (a *App) ImportPGNFileBatch(filePath string) (*scid.ImportStats, error) {
 	return a.db.ImportPGNFile(filePath)
 }
 
-func (a *App) OpenPGNFileDialog() (string, error) {
-	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Select PGN File to Import",
-		Filters: []runtime.FileFilter{
-			{DisplayName: "PGN Files (" + fileformat.GlobPGN + ")", Pattern: fileformat.GlobPGN},
-			{DisplayName: "All Files (*.*)", Pattern: "*.*"},
-		},
+var (
+	openFileDialogFunc = runtime.OpenFileDialog
+	saveFileDialogFunc = runtime.SaveFileDialog
+)
+
+func (a *App) openFileDialog(title string, filters ...runtime.FileFilter) (string, error) {
+	return openFileDialogFunc(a.ctx, runtime.OpenDialogOptions{
+		Title:   title,
+		Filters: filters,
 	})
+}
+
+func (a *App) saveFileDialog(title, defaultName string, filters ...runtime.FileFilter) (string, error) {
+	return saveFileDialogFunc(a.ctx, runtime.SaveDialogOptions{
+		Title:           title,
+		DefaultFilename: defaultName,
+		Filters:         filters,
+	})
+}
+
+func (a *App) OpenPGNFileDialog() (string, error) {
+	return a.openFileDialog("Select PGN File to Import",
+		runtime.FileFilter{DisplayName: "PGN Files (" + fileformat.GlobPGN + ")", Pattern: fileformat.GlobPGN},
+		runtime.FileFilter{DisplayName: "All Files (*.*)", Pattern: "*.*"},
+	)
 }
 
 func (a *App) OpenFileDialog() (string, error) {
-	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Open Chess Database",
-		Filters: []runtime.FileFilter{
-			{DisplayName: "SCID Databases (" + fileformat.GlobScidIndex + ")", Pattern: fileformat.GlobScidIndex},
-			{DisplayName: "PGN Databases (" + fileformat.GlobPGN + ")", Pattern: fileformat.GlobPGN},
-			{DisplayName: "All Files (*.*)", Pattern: "*.*"},
-		},
-	})
+	return a.openFileDialog("Open Chess Database",
+		runtime.FileFilter{DisplayName: "SCID Databases (" + fileformat.GlobScidIndex + ")", Pattern: fileformat.GlobScidIndex},
+		runtime.FileFilter{DisplayName: "PGN Databases (" + fileformat.GlobPGN + ")", Pattern: fileformat.GlobPGN},
+		runtime.FileFilter{DisplayName: "All Files (*.*)", Pattern: "*.*"},
+	)
 }
 
 func (a *App) SaveFileDialog(defaultName string) (string, error) {
-	return runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
-		Title:           "Create Chess Database",
-		DefaultFilename: defaultName,
-		Filters: []runtime.FileFilter{
-			{DisplayName: "SCID Database (" + fileformat.GlobScidIndex + ")", Pattern: fileformat.GlobScidIndex},
-		},
-	})
+	return a.saveFileDialog("Create Chess Database", defaultName,
+		runtime.FileFilter{DisplayName: "SCID Database (" + fileformat.GlobScidIndex + ")", Pattern: fileformat.GlobScidIndex},
+	)
 }
 // Chess Board & Move Operations
 func (a *App) ParseFEN(fen string) (*BoardState, error) {
@@ -1830,51 +1840,48 @@ func (a *App) IsEngineMatchRunning() bool {
 // Notation Styles & Formatting
 // SetNotationStyle sets the active notation style (san, fan, lan, descriptive, uci, iccf).
 func (a *App) SetNotationStyle(style string) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if !chess.ValidNotationStyle(style) {
+	parsed := chess.ParseNotationStyle(style)
+	if parsed == chess.NotationInvalid {
 		return fmt.Errorf("invalid notation style: %s", style)
 	}
-	a.notationStyle = chess.NotationStyle(strings.ToLower(style))
+	a.mu.Lock()
+	a.notationStyle = parsed
+	a.mu.Unlock()
 	return nil
 }
 
 // GetNotationStyle returns the active notation format.
 func (a *App) GetNotationStyle() string {
 	a.mu.RLock()
-	defer a.mu.RUnlock()
-	if a.notationStyle == "" {
-		return string(chess.NotationSAN)
+	st := a.notationStyle
+	a.mu.RUnlock()
+	if st == chess.NotationInvalid {
+		return chess.NotationSAN.String()
 	}
-	return string(a.notationStyle)
+	return st.String()
+}
+
+func (a *App) resolveNotationStyle(style string) chess.NotationStyle {
+	if st := chess.ParseNotationStyle(style); st != chess.NotationInvalid {
+		return st
+	}
+	a.mu.RLock()
+	st := a.notationStyle
+	a.mu.RUnlock()
+	if st == chess.NotationInvalid {
+		return chess.NotationSAN
+	}
+	return st
 }
 
 // FormatMove formats a UCI move from a given FEN position into the target notation style.
 func (a *App) FormatMove(fen string, moveUCI string, style string) (string, error) {
-	st := chess.NotationStyle(strings.ToLower(style))
-	if !chess.ValidNotationStyle(style) {
-		a.mu.RLock()
-		st = a.notationStyle
-		a.mu.RUnlock()
-		if st == "" {
-			st = chess.NotationSAN
-		}
-	}
-	return chess.FormatMoveWithFEN(fen, moveUCI, st)
+	return chess.FormatMoveWithFEN(fen, moveUCI, a.resolveNotationStyle(style))
 }
 
 // FormatMoveSequence formats a sequence of UCI moves into readable moves with full-move numbers.
 func (a *App) FormatMoveSequence(fen string, movesUCI []string, style string) (string, error) {
-	st := chess.NotationStyle(strings.ToLower(style))
-	if !chess.ValidNotationStyle(style) {
-		a.mu.RLock()
-		st = a.notationStyle
-		a.mu.RUnlock()
-		if st == "" {
-			st = chess.NotationSAN
-		}
-	}
-	return chess.FormatPVWithStyle(fen, movesUCI, st), nil
+	return chess.FormatPVWithStyle(fen, movesUCI, a.resolveNotationStyle(style)), nil
 }
 // Game Annotations & Variations
 // AddGameComment attaches a comment to the move node at the given 1-based ply in activeGame.
@@ -3194,24 +3201,16 @@ func (a *App) ExportAntiPersonaPGN(report *persona.AntiPersonaReport, filePath s
 
 // SaveBookFileDialog prompts user to choose a destination for opening book (.bin).
 func (a *App) SaveBookFileDialog(defaultFilename string) (string, error) {
-	return runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
-		Title:           "Save Polyglot Opening Book",
-		DefaultFilename: defaultFilename,
-		Filters: []runtime.FileFilter{
-			{DisplayName: "Polyglot Opening Book (" + fileformat.GlobPolyglotBook + ")", Pattern: fileformat.GlobPolyglotBook},
-		},
-	})
+	return a.saveFileDialog("Save Polyglot Opening Book", defaultFilename,
+		runtime.FileFilter{DisplayName: "Polyglot Opening Book (" + fileformat.GlobPolyglotBook + ")", Pattern: fileformat.GlobPolyglotBook},
+	)
 }
 
 // SavePGNFileDialog prompts user to choose a destination for PGN repertoire.
 func (a *App) SavePGNFileDialog(defaultFilename string) (string, error) {
-	return runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
-		Title:           "Save Repertoire PGN",
-		DefaultFilename: defaultFilename,
-		Filters: []runtime.FileFilter{
-			{DisplayName: "PGN Chess Repertoire (" + fileformat.GlobPGN + ")", Pattern: fileformat.GlobPGN},
-		},
-	})
+	return a.saveFileDialog("Save Repertoire PGN", defaultFilename,
+		runtime.FileFilter{DisplayName: "PGN Chess Repertoire (" + fileformat.GlobPGN + ")", Pattern: fileformat.GlobPGN},
+	)
 }
 // Piece Safety Scanner & Drill Module
 // AnalyzeBoardSafety calculates square safety, attackers, defenders, and hanging pieces for the given FEN.

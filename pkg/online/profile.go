@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,13 +13,58 @@ import (
 )
 
 // DatabaseTargetMode specifies where downloaded player games should be merged.
-type DatabaseTargetMode string
+type DatabaseTargetMode uint8
 
 const (
-	TargetActiveBase    DatabaseTargetMode = "active"    // Merge into currently active database
-	TargetDedicatedBase DatabaseTargetMode = "dedicated" // Maintain dedicated standalone database
-	TargetBlendedBase   DatabaseTargetMode = "blended"   // Dedicated database + also blend into master database
+	TargetModeUnset     DatabaseTargetMode = iota
+	TargetActiveBase                       // Merge into currently active database
+	TargetDedicatedBase                    // Maintain dedicated standalone database
+	TargetBlendedBase                      // Dedicated database + also blend into master database
 )
+
+var databaseTargetModeNames = [...]string{
+	TargetModeUnset:     "",
+	TargetActiveBase:    "active",
+	TargetDedicatedBase: "dedicated",
+	TargetBlendedBase:   "blended",
+}
+
+// String returns the canonical JSON identifier of the target mode.
+func (m DatabaseTargetMode) String() string {
+	if int(m) < len(databaseTargetModeNames) {
+		return databaseTargetModeNames[m]
+	}
+	return ""
+}
+
+// ParseDatabaseTargetMode parses a target mode string (case-insensitive).
+func ParseDatabaseTargetMode(s string) DatabaseTargetMode {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "active":
+		return TargetActiveBase
+	case "dedicated":
+		return TargetDedicatedBase
+	case "blended":
+		return TargetBlendedBase
+	default:
+		return TargetModeUnset
+	}
+}
+
+// MarshalJSON encodes DatabaseTargetMode as its canonical JSON string.
+func (m DatabaseTargetMode) MarshalJSON() ([]byte, error) {
+	return json.Marshal(m.String())
+}
+
+// UnmarshalJSON decodes DatabaseTargetMode from its JSON string name.
+func (m *DatabaseTargetMode) UnmarshalJSON(data []byte) error {
+	var raw string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*m = ParseDatabaseTargetMode(raw)
+	return nil
+}
 
 // Profile represents a user synchronization configuration mapping online platform accounts
 // to local target database(s).
@@ -149,7 +195,7 @@ func (pm *ProfileManager) SaveProfile(p *Profile) error {
 		p.ID = fmt.Sprintf("profile_%d", now)
 		p.CreatedAt = now
 	}
-	if p.TargetMode == "" {
+	if p.TargetMode == TargetModeUnset {
 		p.TargetMode = TargetActiveBase
 	}
 	p.UpdatedAt = now

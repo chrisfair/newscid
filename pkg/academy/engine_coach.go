@@ -152,7 +152,7 @@ func SelectPersonalityMove(fen string, p Personality, candidates []CandidateMove
 	if len(pool) > 1 && p.Sliders.BlunderRate > 0 {
 		roll := rng.Intn(100)
 		if roll < p.Sliders.BlunderRate/2 {
-			maxPick := minInt(len(pool), 2+p.Sliders.BlunderRate/25)
+			maxPick := min(len(pool), 2+p.Sliders.BlunderRate/25)
 			pickIdx = rng.Intn(maxPick)
 		}
 	}
@@ -544,40 +544,35 @@ func countAttacks(b *chess.Board, by chess.Color) [64]int {
 	return counts
 }
 
+var pieceCharTable = [7]string{
+	chess.Pawn:   "P",
+	chess.Knight: "N",
+	chess.Bishop: "B",
+	chess.Rook:   "R",
+	chess.Queen:  "Q",
+	chess.King:   "K",
+}
+
+var pieceNameTable = [7]string{
+	chess.None:   "Piece",
+	chess.Pawn:   "Pawn",
+	chess.Knight: "Knight",
+	chess.Bishop: "Bishop",
+	chess.Rook:   "Rook",
+	chess.Queen:  "Queen",
+	chess.King:   "King",
+}
+
 func pieceChar(pt chess.PieceType) string {
-	switch pt {
-	case chess.Pawn:
-		return "P"
-	case chess.Knight:
-		return "N"
-	case chess.Bishop:
-		return "B"
-	case chess.Rook:
-		return "R"
-	case chess.Queen:
-		return "Q"
-	case chess.King:
-		return "K"
-	default:
-		return ""
+	if int(pt) < len(pieceCharTable) {
+		return pieceCharTable[pt]
 	}
+	return ""
 }
 
 func pieceCharName(pt chess.PieceType) string {
-	switch pt {
-	case chess.Pawn:
-		return "Pawn"
-	case chess.Knight:
-		return "Knight"
-	case chess.Bishop:
-		return "Bishop"
-	case chess.Rook:
-		return "Rook"
-	case chess.Queen:
-		return "Queen"
-	case chess.King:
-		return "King"
-	default:
-		return "Piece"
+	if int(pt) < len(pieceNameTable) {
+		return pieceNameTable[pt]
 	}
+	return "Piece"
 }

@@ -283,7 +283,7 @@ func (m *AdaptiveCoachManager) RecordDrillAttempt(drillID string, solvedFirstTry
 	wasAlreadyAttempted := drill.Attempted
 	drill.Attempted = true
 	drill.AttemptsCount++
-	drill.TimeTakenSec += maxInt(1, timeTakenSec)
+	drill.TimeTakenSec += max(1, timeTakenSec)
 	if !wasAlreadyAttempted {
 		drill.SolvedFirstTry = solvedFirstTry
 	}
@@ -389,7 +389,7 @@ func (m *AdaptiveCoachManager) ensureThemeStatLocked(themeKey string) ThemeWeakn
 func (m *AdaptiveCoachManager) recordGameMistakeThemeLocked(themeKey string, evalDeltaCp int) {
 	st := m.ensureThemeStatLocked(themeKey)
 	st.GameMissCount++
-	st.TotalEvalLostCp += maxInt(100, evalDeltaCp)
+	st.TotalEvalLostCp += max(100, evalDeltaCp)
 	st.MasteryScore = computeThemeMasteryScore(st)
 	st.PriorityWeight = computeThemePriorityWeight(st)
 	m.store.ThemeStats[themeKey] = st

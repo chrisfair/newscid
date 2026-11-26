@@ -342,7 +342,7 @@ func TestSortAllFieldsAndEdgeCases(t *testing.T) {
 		SortByResult,
 		SortByMoves,
 		SortByDate,
-		SortField("unknownField"),
+		SortField(99),
 	}
 
 	for _, f := range fields {

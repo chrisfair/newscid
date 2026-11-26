@@ -1300,7 +1300,7 @@ func (s *Session) CycleNotation() {
 		}
 	}
 	s.Notation = order[idx]
-	s.SetStatus(fmt.Sprintf("Move notation: %s", strings.ToUpper(string(s.Notation))), false)
+	s.SetStatus(fmt.Sprintf("Move notation: %s", strings.ToUpper(s.Notation.String())), false)
 }
 
 // RunFairPlayAsync computes a longitudinal FairPlay Inspector dossier in the background.

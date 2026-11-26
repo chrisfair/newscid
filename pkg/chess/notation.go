@@ -1,75 +1,95 @@
 package chess
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 )
 
 // NotationStyle represents the chess move notation format.
-type NotationStyle string
+type NotationStyle uint8
 
 const (
-	NotationSAN         NotationStyle = "san"         // Standard Algebraic: Nf3, e4, Bxf7+
-	NotationFAN         NotationStyle = "fan"         // Figurine Algebraic: ♘f3, e4, ♗xf7+
-	NotationLAN         NotationStyle = "lan"         // Long Algebraic: Ng1-f3, e2-e4, Bf1xf7+
-	NotationDescriptive NotationStyle = "descriptive" // English Descriptive / Classical: N-KB3, P-K4, BxP+
-	NotationUCI         NotationStyle = "uci"         // Coordinate / Engine: g1f3, e2e4, f1f7
-	NotationICCF        NotationStyle = "iccf"        // Numeric Correspondence: 7163, 5254, 6167
+	NotationInvalid     NotationStyle = iota
+	NotationSAN                       // Standard Algebraic: Nf3, e4, Bxf7+
+	NotationFAN                       // Figurine Algebraic: ♘f3, e4, ♗xf7+
+	NotationLAN                       // Long Algebraic: Ng1-f3, e2-e4, Bf1xf7+
+	NotationDescriptive               // English Descriptive / Classical: N-KB3, P-K4, BxP+
+	NotationUCI                       // Coordinate / Engine: g1f3, e2e4, f1f7
+	NotationICCF                      // Numeric Correspondence: 7163, 5254, 6167
 )
 
-type notationStyleID uint8
+var notationStyleNames = [...]string{
+	NotationInvalid:     "",
+	NotationSAN:         "san",
+	NotationFAN:         "fan",
+	NotationLAN:         "lan",
+	NotationDescriptive: "descriptive",
+	NotationUCI:         "uci",
+	NotationICCF:        "iccf",
+}
 
-const (
-	styleInvalid notationStyleID = iota
-	styleSAN
-	styleFAN
-	styleLAN
-	styleDescriptive
-	styleUCI
-	styleICCF
-)
-
-func parseNotationStyleID(s NotationStyle) notationStyleID {
-	switch NotationStyle(strings.ToLower(string(s))) {
-	case NotationSAN:
-		return styleSAN
-	case NotationFAN:
-		return styleFAN
-	case NotationLAN:
-		return styleLAN
-	case NotationDescriptive:
-		return styleDescriptive
-	case NotationUCI:
-		return styleUCI
-	case NotationICCF:
-		return styleICCF
-	default:
-		return styleInvalid
+// String returns the canonical lowercase identifier for the notation style.
+func (s NotationStyle) String() string {
+	if int(s) < len(notationStyleNames) {
+		return notationStyleNames[s]
 	}
+	return ""
+}
+
+// ParseNotationStyle parses a notation style name (case-insensitive).
+func ParseNotationStyle(s string) NotationStyle {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "san":
+		return NotationSAN
+	case "fan":
+		return NotationFAN
+	case "lan":
+		return NotationLAN
+	case "descriptive":
+		return NotationDescriptive
+	case "uci":
+		return NotationUCI
+	case "iccf":
+		return NotationICCF
+	default:
+		return NotationInvalid
+	}
+}
+
+// MarshalJSON encodes NotationStyle as its canonical JSON string.
+func (s NotationStyle) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.String())
+}
+
+// UnmarshalJSON decodes NotationStyle from its JSON string name.
+func (s *NotationStyle) UnmarshalJSON(data []byte) error {
+	var raw string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*s = ParseNotationStyle(raw)
+	return nil
 }
 
 // ValidNotationStyle returns whether the given string is a valid notation style.
 func ValidNotationStyle(s string) bool {
-	return parseNotationStyleID(NotationStyle(s)) != styleInvalid
+	return ParseNotationStyle(s) != NotationInvalid
 }
 
 // MoveToNotation formats a legal move according to the specified notation style.
 func (b *Board) MoveToNotation(m Move, style NotationStyle) string {
-	return b.moveToNotationByID(m, parseNotationStyleID(style))
-}
-
-func (b *Board) moveToNotationByID(m Move, id notationStyleID) string {
-	switch id {
-	case styleFAN:
+	switch style {
+	case NotationFAN:
 		return b.MoveToFAN(m)
-	case styleLAN:
+	case NotationLAN:
 		return b.MoveToLAN(m)
-	case styleDescriptive:
+	case NotationDescriptive:
 		return b.MoveToDescriptive(m)
-	case styleUCI:
+	case NotationUCI:
 		return m.String()
-	case styleICCF:
+	case NotationICCF:
 		return b.MoveToICCF(m)
 	default:
 		return b.MoveToSAN(m)
@@ -307,7 +327,6 @@ func FormatPVWithStyle(startFEN string, pvMoves []string, style NotationStyle) s
 		return strings.Join(pvMoves, " ")
 	}
 
-	styleID := parseNotationStyleID(style)
 	var sb strings.Builder
 	moveNum := b.FullMove
 	isWhite := b.Turn == White
@@ -333,8 +352,7 @@ func FormatPVWithStyle(startFEN string, pvMoves []string, style NotationStyle) s
 			fmt.Fprintf(&sb, "%d... ", moveNum)
 		}
 
-		notated := b.moveToNotationByID(m, styleID)
-		sb.WriteString(notated)
+		sb.WriteString(b.MoveToNotation(m, style))
 
 		b.MakeMove(m)
 		if !isWhite {

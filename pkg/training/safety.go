@@ -1,6 +1,7 @@
 package training
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -31,30 +32,58 @@ var colorTitle = [2]string{
 	chess.Black: "Black",
 }
 
-type safetyStatusID uint8
-
-const (
-	statusIDDefended safetyStatusID = iota
-	statusIDLoose
-	statusIDUnderdefended
-	statusIDHanging
-)
-
 // PieceSafetyStatus classifies the vulnerability of a piece.
-type PieceSafetyStatus string
+type PieceSafetyStatus uint8
 
 const (
-	StatusHanging       PieceSafetyStatus = "hanging"       // Attacked with 0 defenders or net positive capture (SEE > 0)
-	StatusUnderdefended PieceSafetyStatus = "underdefended" // Attacked with more attackers than defenders
-	StatusLoose         PieceSafetyStatus = "loose"         // 0 defenders, not currently attacked (LPDO risk)
-	StatusDefended      PieceSafetyStatus = "defended"      // Adequately protected
+	StatusDefended      PieceSafetyStatus = iota // Adequately protected
+	StatusLoose                                  // 0 defenders, not currently attacked (LPDO risk)
+	StatusUnderdefended                          // Attacked with more attackers than defenders
+	StatusHanging                                // Attacked with 0 defenders or net positive capture (SEE > 0)
 )
 
-var safetyStatusLabels = [4]PieceSafetyStatus{
-	statusIDDefended:      StatusDefended,
-	statusIDLoose:         StatusLoose,
-	statusIDUnderdefended: StatusUnderdefended,
-	statusIDHanging:       StatusHanging,
+var safetyStatusNames = [...]string{
+	StatusDefended:      "defended",
+	StatusLoose:         "loose",
+	StatusUnderdefended: "underdefended",
+	StatusHanging:       "hanging",
+}
+
+// String returns the canonical JSON name of the piece safety status.
+func (s PieceSafetyStatus) String() string {
+	if int(s) < len(safetyStatusNames) {
+		return safetyStatusNames[s]
+	}
+	return "defended"
+}
+
+// ParsePieceSafetyStatus parses a piece safety status string.
+func ParsePieceSafetyStatus(s string) PieceSafetyStatus {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "hanging":
+		return StatusHanging
+	case "underdefended":
+		return StatusUnderdefended
+	case "loose":
+		return StatusLoose
+	default:
+		return StatusDefended
+	}
+}
+
+// MarshalJSON encodes PieceSafetyStatus as its canonical JSON string.
+func (s PieceSafetyStatus) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.String())
+}
+
+// UnmarshalJSON decodes PieceSafetyStatus from its JSON string name.
+func (s *PieceSafetyStatus) UnmarshalJSON(data []byte) error {
+	var raw string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*s = ParsePieceSafetyStatus(raw)
+	return nil
 }
 
 // PieceSafety represents the safety audit of a single piece on the board.
@@ -86,14 +115,58 @@ type BoardSafetyReport struct {
 }
 
 // SafetyDrillMode defines the style of exercise.
-type SafetyDrillMode string
+type SafetyDrillMode uint8
 
 const (
-	ModeFindAllHanging   SafetyDrillMode = "find_all_hanging"   // Click all hanging pieces on board
-	ModeDefendYourPieces SafetyDrillMode = "defend_your_pieces" // Spot your own hanging pieces
-	ModePunishBlunder    SafetyDrillMode = "punish_blunder"    // Spot and click opponent's free pieces
-	ModeCaptureHanging   SafetyDrillMode = "capture_hanging"   // Make the legal move capturing the hanging piece
+	ModeFindAllHanging   SafetyDrillMode = iota // Click all hanging pieces on board
+	ModeDefendYourPieces                        // Spot your own hanging pieces
+	ModePunishBlunder                           // Spot and click opponent's free pieces
+	ModeCaptureHanging                          // Make the legal move capturing the hanging piece
 )
+
+var safetyDrillModeNames = [...]string{
+	ModeFindAllHanging:   "find_all_hanging",
+	ModeDefendYourPieces: "defend_your_pieces",
+	ModePunishBlunder:    "punish_blunder",
+	ModeCaptureHanging:   "capture_hanging",
+}
+
+// String returns the canonical JSON name of the drill mode.
+func (m SafetyDrillMode) String() string {
+	if int(m) < len(safetyDrillModeNames) {
+		return safetyDrillModeNames[m]
+	}
+	return "find_all_hanging"
+}
+
+// ParseSafetyDrillMode parses a safety drill mode string.
+func ParseSafetyDrillMode(s string) SafetyDrillMode {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "defend_your_pieces":
+		return ModeDefendYourPieces
+	case "punish_blunder":
+		return ModePunishBlunder
+	case "capture_hanging":
+		return ModeCaptureHanging
+	default:
+		return ModeFindAllHanging
+	}
+}
+
+// MarshalJSON encodes SafetyDrillMode as its canonical JSON string.
+func (m SafetyDrillMode) MarshalJSON() ([]byte, error) {
+	return json.Marshal(m.String())
+}
+
+// UnmarshalJSON decodes SafetyDrillMode from its JSON string name.
+func (m *SafetyDrillMode) UnmarshalJSON(data []byte) error {
+	var raw string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*m = ParseSafetyDrillMode(raw)
+	return nil
+}
 
 // SafetyDrill represents an interactive challenge presented to the user.
 type SafetyDrill struct {
@@ -347,14 +420,14 @@ func AnalyzeBoardSafety(fen string) (*BoardSafetyReport, error) {
 			defenderSqs = append(defenderSqs, dsq.String())
 		}
 
-		statusID := statusIDDefended
+		status := StatusDefended
 		netLoss := 0
 		explanation := fmt.Sprintf("%s %s on %s is safely defended (%d attackers, %d defenders).",
 			cTitle, pieceStr, sqStr, len(attackers), len(defenders))
 
 		if len(attackers) == 0 {
 			if len(defenders) == 0 && pieceType != chess.Pawn {
-				statusID = statusIDLoose
+				status = StatusLoose
 				explanation = fmt.Sprintf("%s %s on %s is loose (0 defenders) — Loose Piece Drops Off (LPDO).",
 					cTitle, pieceStr, sqStr)
 			}
@@ -373,13 +446,13 @@ func AnalyzeBoardSafety(fen string) (*BoardSafetyReport, error) {
 
 			// Condition 1: 0 defenders (completely free piece)
 			if len(defenders) == 0 {
-				statusID = statusIDHanging
+				status = StatusHanging
 				netLoss = val
 				explanation = fmt.Sprintf("%s %s on %s is completely hanging with 0 defenders! Attacked by %s.",
 					cTitle, pieceStr, sqStr, bestAttackerSq.String())
 			} else if minAttackerVal < val {
 				// Condition 2: Attacked by a piece of strictly lower value (e.g. Queen by Knight/Bishop, Rook by Minor)
-				statusID = statusIDHanging
+				status = StatusHanging
 				netLoss = val - minAttackerVal
 				explanation = fmt.Sprintf("%s %s on %s is attacked by lower-value %s on %s; capture wins material despite %d defender(s).",
 					cTitle, pieceStr, sqStr,
@@ -388,12 +461,12 @@ func AnalyzeBoardSafety(fen string) (*BoardSafetyReport, error) {
 				// Condition 3: Deficit in defenders vs attackers
 				see := CalculateSEE(b, bestAttackerSq, sq)
 				if see > 0 {
-					statusID = statusIDHanging
+					status = StatusHanging
 					netLoss = see
 					explanation = fmt.Sprintf("%s %s on %s has more attackers (%d) than defenders (%d); tactical liquidation wins material.",
 						cTitle, pieceStr, sqStr, len(attackers), len(defenders))
 				} else {
-					statusID = statusIDUnderdefended
+					status = StatusUnderdefended
 					explanation = fmt.Sprintf("%s %s on %s is underdefended (%d attackers vs %d defenders).",
 						cTitle, pieceStr, sqStr, len(attackers), len(defenders))
 				}
@@ -407,15 +480,15 @@ func AnalyzeBoardSafety(fen string) (*BoardSafetyReport, error) {
 			PieceValue:  val,
 			Attackers:   attackerSqs,
 			Defenders:   defenderSqs,
-			Status:      safetyStatusLabels[statusID],
+			Status:      status,
 			NetLoss:     netLoss,
 			Explanation: explanation,
 		}
 
 		report.Pieces = append(report.Pieces, ps)
 
-		switch statusID {
-		case statusIDHanging:
+		switch status {
+		case StatusHanging:
 			report.HangingPieces = append(report.HangingPieces, ps)
 			report.HangingSquares = append(report.HangingSquares, sqStr)
 			if color == chess.White {
@@ -428,9 +501,9 @@ func AnalyzeBoardSafety(fen string) (*BoardSafetyReport, error) {
 				psCopy := ps
 				report.CriticalThreat = &psCopy
 			}
-		case statusIDUnderdefended:
+		case StatusUnderdefended:
 			report.Underdefended = append(report.Underdefended, ps)
-		case statusIDLoose:
+		case StatusLoose:
 			report.LoosePieces = append(report.LoosePieces, ps)
 		}
 	}

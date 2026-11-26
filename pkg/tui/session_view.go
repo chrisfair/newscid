@@ -531,7 +531,7 @@ func (s *Session) renderScoreAndEngineTab(scr *Screen, r Rect) {
 	// Header metadata line (Event / Site / Date)
 	ev := s.Game.Tag("Event")
 	dt := s.Game.Tag("Date")
-	hdr := fmt.Sprintf("%s  ·  %s  ·  Notation: %s [n]", ev, dt, strings.ToUpper(string(s.Notation)))
+	hdr := fmt.Sprintf("%s  ·  %s  ·  Notation: %s [n]", ev, dt, strings.ToUpper(s.Notation.String()))
 	scr.WritePadded(r.X, r.Y, r.W, hdr, Style{FG: ColTextMuted, BG: ColBgPanel})
 
 	// Build wrapped scorebook tokens with ply indices so active move auto-scrolls into view
@@ -1515,9 +1515,9 @@ func (s *Session) ExecuteColonCommand(raw string) {
 			s.SetStatus("Piece set: "+s.PieceSetID, false)
 		}
 	case "notation":
-		if chess.ValidNotationStyle(rest) {
-			s.Notation = chess.NotationStyle(strings.ToLower(rest))
-			s.SetStatus("Notation: "+strings.ToUpper(rest), false)
+		if parsed := chess.ParseNotationStyle(rest); parsed != chess.NotationInvalid {
+			s.Notation = parsed
+			s.SetStatus("Notation: "+strings.ToUpper(parsed.String()), false)
 		} else {
 			s.CycleNotation()
 		}

@@ -302,7 +302,7 @@ func TestCovAppVariationsAnnotationsAndHeaders(t *testing.T) {
 	require.NoError(t, app.DeleteVariation(1, 0))
 
 	// FormatMove & FormatMoveSequence fallback styles
-	app.notationStyle = ""
+	app.notationStyle = chess.NotationInvalid
 	s, err := app.FormatMove(chess.StartingFEN, "e2e4", "invalid_style")
 	require.NoError(t, err)
 	assert.Equal(t, "e4", s)

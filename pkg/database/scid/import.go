@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"newscid/pkg/chess"
@@ -97,9 +99,39 @@ func (db *Database) ImportGames(games []*chess.Game) (*ImportStats, error) {
 	firstID := len(db.Entries) + 1
 	var lastID int
 
-	for _, g := range games {
-		// Encode game
-		rawBytes, err := EncodeGameData(g)
+	// Pre-encode game move bytes concurrently for larger batches while keeping file writes sequential.
+	type encodedGame struct {
+		raw []byte
+		err error
+	}
+	encoded := make([]encodedGame, len(games))
+	workers := min(runtime.GOMAXPROCS(0), len(games))
+	if len(games) < 16 || workers <= 1 {
+		for i, g := range games {
+			encoded[i].raw, encoded[i].err = EncodeGameData(g)
+		}
+	} else {
+		var wg sync.WaitGroup
+		chunk := (len(games) + workers - 1) / workers
+		for w := 0; w < workers; w++ {
+			start := w * chunk
+			if start >= len(games) {
+				break
+			}
+			end := min(start+chunk, len(games))
+			wg.Add(1)
+			go func(lo, hi int) {
+				defer wg.Done()
+				for i := lo; i < hi; i++ {
+					encoded[i].raw, encoded[i].err = EncodeGameData(games[i])
+				}
+			}(start, end)
+		}
+		wg.Wait()
+	}
+
+	for i, g := range games {
+		rawBytes, err := encoded[i].raw, encoded[i].err
 		if err != nil {
 			stats.Errors++
 			continue
