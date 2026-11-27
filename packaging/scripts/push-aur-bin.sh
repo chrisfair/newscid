@@ -17,7 +17,7 @@ if [ -z "${SUM}" ] || [ "${#SUM}" -ne 64 ]; then
 fi
 
 sed -i -E "s/^pkgver=.*/pkgver=${VERSION}/" packaging/pacman-bin/PKGBUILD
-sed -i -E "s/^sha256sums_x86_64=\('[a-f0-9]+'\)/sha256sums_x86_64=('${SUM}')/" packaging/pacman-bin/PKGBUILD
+sed -i -E "s/'[a-f0-9]{64}'/'${SUM}'/" packaging/pacman-bin/PKGBUILD
 
 if command -v makepkg >/dev/null 2>&1; then
     (cd packaging/pacman-bin && makepkg --printsrcinfo > .SRCINFO)
@@ -33,9 +33,14 @@ fi
 
 cp packaging/pacman-bin/PKGBUILD "${CLONE_DIR}/PKGBUILD"
 cp packaging/pacman-bin/.SRCINFO "${CLONE_DIR}/.SRCINFO"
+if [ -d packaging/pacman-bin/keys ]; then
+    rm -rf "${CLONE_DIR}/keys"
+    cp -a packaging/pacman-bin/keys "${CLONE_DIR}/keys"
+fi
 
 if [ -n "$(git -C "${CLONE_DIR}" status --porcelain)" ]; then
     git -C "${CLONE_DIR}" add PKGBUILD .SRCINFO
+    [ -d "${CLONE_DIR}/keys" ] && git -C "${CLONE_DIR}" add keys
     git -C "${CLONE_DIR}" commit -m "Update newscid-bin to v${VERSION}"
     git -C "${CLONE_DIR}" push -u origin HEAD:master
     echo "✔ Successfully updated AUR newscid-bin to v${VERSION}"
