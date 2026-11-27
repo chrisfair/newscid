@@ -1,6 +1,6 @@
 # Maintainer: Christopher Patrick Fair <christopherpatrickfair@gmail.com>
 pkgname=newscid-bin
-pkgver=2.1.1
+pkgver=2.1.2
 pkgrel=2
 pkgdesc="Chess Information Database (Scid v4 compatible) — prebuilt binary"
 arch=('x86_64')
