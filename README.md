@@ -65,8 +65,25 @@ newscid-scout -db ~/.local/share/newscid/databases/master.si4 -crosstable "Tata 
 
 ### Arch Linux (AUR)
 
+Prebuilt, PGP-signed binary (no Go/Node build toolchain required):
+
+```bash
+yay -S newscid-bin
+```
+
+Or build from source:
+
 ```bash
 yay -S newscid
+```
+
+### Verifying Release Binaries (PGP)
+
+Linux release tarballs are signed with PGP key `7225 8688 D0C7 4A46 0621  B38B 0EBA F092 96D9 2C11`:
+
+```bash
+gpg --keyserver hkps://keyserver.ubuntu.com --recv-keys 72258688D0C74A460621B38B0EBAF09296D92C11
+gpg --verify newscid-2.1.1-linux-x86_64.tar.gz.asc newscid-2.1.1-linux-x86_64.tar.gz
 ```
 
 ### Building from Source
