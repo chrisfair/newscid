@@ -92,6 +92,7 @@ const props = defineProps<{
   isAnalyzing: boolean
   soundEnabled?: boolean
   blindfold?: boolean
+  blindfoldLevel?: 'off' | 'pawns' | 'opponent' | 'full'
   threatMode?: boolean
   showEvalBar?: boolean
   zenMode?: boolean
@@ -186,6 +187,9 @@ const emit = defineEmits<{
   (e: 'adaptiveCoach'): void
   (e: 'openWorkstationManager', tab?: 'builder' | 'storage' | 'reset'): void
   (e: 'openGettingStartedWizard'): void
+  (e: 'materialSearch'): void
+  (e: 'endgameTrainer'): void
+  (e: 'lichessStudy'): void
 }>()
 
 const activeMenu = ref<string | null>(null)
@@ -673,6 +677,25 @@ onUnmounted(() => {
           @click="selectItem(() => emit('searchPosition'))"
         >
           <span class="flex items-center gap-2.5 whitespace-nowrap"><Search class="w-4 h-4 shrink-0 text-emerald-400" /> Search Current Board Position</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('materialSearch'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Sliders class="w-4 h-4 shrink-0 text-cyan-400" /> Material &amp; Pawn-Structure Search...</span>
+        </button>
+        <div class="h-px bg-zinc-800 my-1 mx-2" />
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('endgameTrainer'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><Trophy class="w-4 h-4 shrink-0 text-amber-400" /> Endgame Sparring Trainer (Syzygy)...</span>
+        </button>
+        <button
+          class="w-full text-left px-3.5 py-2 hover:bg-zinc-800 text-zinc-200 flex items-center justify-between gap-6 cursor-pointer transition-colors whitespace-nowrap"
+          @click="selectItem(() => emit('lichessStudy'))"
+        >
+          <span class="flex items-center gap-2.5 whitespace-nowrap"><BookOpen class="w-4 h-4 shrink-0 text-emerald-400" /> Import Lichess Study...</span>
         </button>
       </div>
     </div>
@@ -1170,7 +1193,7 @@ onUnmounted(() => {
         >
           <span class="flex items-center gap-2.5 whitespace-nowrap">
             <EyeOff class="w-4 h-4 shrink-0" :class="blindfold ? 'text-purple-400' : 'text-zinc-500'" />
-            <span>Blindfold Mode {{ blindfold ? '(Active)' : '(Off)' }}</span>
+            <span>Blindfold Mode ({{ blindfoldLevel && blindfoldLevel !== 'off' ? blindfoldLevel : (blindfold ? 'full' : 'Off') }})</span>
           </span>
           <Check v-if="blindfold" class="w-3.5 h-3.5 text-purple-400 shrink-0" />
         </button>

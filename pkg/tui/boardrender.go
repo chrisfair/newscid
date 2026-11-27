@@ -312,7 +312,7 @@ func RenderBoardImage(b *chess.Board, opt BoardRenderOptions) (*image.RGBA, erro
 		if coordScale > 3 {
 			coordScale = 3
 		}
-		pad := maxInt(3, sqPx/18)
+		pad := max(3, sqPx/18)
 
 		for row := 0; row < 8; row++ {
 			sq := DisplayCoordsToSquare(0, row, opt.Flipped)
@@ -415,10 +415,10 @@ func blendByte(base, over uint8, alpha float64) uint8 {
 
 func fillRectRGBA(dst *image.RGBA, x0, y0, w, h int, c color.NRGBA) {
 	bounds := dst.Bounds()
-	x1 := minInt(bounds.Max.X, x0+w)
-	y1 := minInt(bounds.Max.Y, y0+h)
-	x0 = maxInt(bounds.Min.X, x0)
-	y0 = maxInt(bounds.Min.Y, y0)
+	x1 := min(bounds.Max.X, x0+w)
+	y1 := min(bounds.Max.Y, y0+h)
+	x0 = max(bounds.Min.X, x0)
+	y0 = max(bounds.Min.Y, y0)
 	for y := y0; y < y1; y++ {
 		rowOff := dst.PixOffset(x0, y)
 		for x := x0; x < x1; x++ {
@@ -730,16 +730,3 @@ func clampUint8(v float64) uint8 {
 	return uint8(v + 0.5)
 }
 
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}

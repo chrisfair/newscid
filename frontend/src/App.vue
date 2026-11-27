@@ -64,6 +64,9 @@ import AdaptiveCoachModal from './components/AdaptiveCoachModal.vue'
 import WorkstationManagerModal from './components/WorkstationManagerModal.vue'
 import StandardImportModal from './components/StandardImportModal.vue'
 import GettingStartedWizardModal from './components/GettingStartedWizardModal.vue'
+import MaterialSearchModal from './components/MaterialSearchModal.vue'
+import EndgameTrainerModal from './components/EndgameTrainerModal.vue'
+import LichessStudyModal from './components/LichessStudyModal.vue'
 import FloatingPanel from './components/FloatingPanel.vue'
 import LivePortalPanel from './components/LivePortalPanel.vue'
 import DatabaseHubPanel, { type DatabaseRolesStatusView } from './components/DatabaseHubPanel.vue'
@@ -1074,9 +1077,40 @@ function toggleSound() {
   localStorage.setItem('newscid:soundEnabled', String(soundEnabled.value))
 }
 
+const blindfoldLevel = ref<'off' | 'pawns' | 'opponent' | 'full'>('off')
 const blindfoldMode = ref(false)
+const showMaterialSearchModal = ref(false)
+const showEndgameTrainerModal = ref(false)
+const showLichessStudyModal = ref(false)
+
 function toggleBlindfold() {
-  blindfoldMode.value = !blindfoldMode.value
+  const order: ('off' | 'pawns' | 'opponent' | 'full')[] = ['off', 'pawns', 'opponent', 'full']
+  const next = order[(order.indexOf(blindfoldLevel.value) + 1) % order.length]
+  blindfoldLevel.value = next
+  blindfoldMode.value = next !== 'off'
+}
+
+async function handleLoadMaterialHit(gameId: number, ply: number) {
+  await handleLoadGame(gameId)
+  if (ply > 0) {
+    jumpToPly(ply)
+  }
+}
+
+async function handleLoadStudyPGN(pgn: string) {
+  try {
+    const app = (window as any)?.go?.main?.App
+    if (app?.ImportPGNText) {
+      await app.ImportPGNText(pgn)
+      await refreshGames()
+    }
+  } catch {
+    // ignore
+  }
+}
+
+async function handleLoadEndgameFEN(fen: string) {
+  await handleSetupBoardApply(fen)
 }
 
 const threatMode = ref(false)
@@ -3618,6 +3652,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
               :in-check="inCheck"
               :sound-enabled="soundEnabled"
               :blindfold="blindfoldMode"
+              :blindfold-level="blindfoldLevel"
               :show-eval-bar="showEvalBar"
               :eval-score="evalScore"
               :eval-mate="evalMate"
@@ -3982,6 +4017,10 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
         @standardize-names="handleStandardizeNames"
         :sound-enabled="soundEnabled"
         :blindfold="blindfoldMode"
+        :blindfold-level="blindfoldLevel"
+        @material-search="showMaterialSearchModal = true"
+        @endgame-trainer="showEndgameTrainerModal = true"
+        @lichess-study="showLichessStudyModal = true"
         :threat-mode="threatMode"
         :show-eval-bar="showEvalBar"
         :zen-mode="zenMode"
@@ -4242,6 +4281,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
               :in-check="inCheck"
               :sound-enabled="soundEnabled"
               :blindfold="blindfoldMode"
+              :blindfold-level="blindfoldLevel"
               :show-eval-bar="showEvalBar"
               :eval-score="evalScore"
               :eval-mate="evalMate"
@@ -4972,6 +5012,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
             :in-check="inCheck"
             :sound-enabled="soundEnabled"
             :blindfold="blindfoldMode"
+            :blindfold-level="blindfoldLevel"
             :show-eval-bar="showEvalBar"
             :eval-score="evalScore"
             :eval-mate="evalMate"
@@ -5296,6 +5337,32 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       @close="showAcademyModal = false"
       @start-career-game="startAcademyCareerGame"
       @open-database="showAcademyModal = false; handleOpenDB()"
+    />
+
+    <!-- NewScid v2.1 Material & Pawn-Structure Search Modal -->
+    <MaterialSearchModal
+      :show="showMaterialSearchModal"
+      :db-name="dbInfo?.name"
+      @close="showMaterialSearchModal = false"
+      @load-game-at-ply="handleLoadMaterialHit"
+    />
+
+    <!-- NewScid v2.1 Endgame Sparring & Theoretical Trainer Modal -->
+    <EndgameTrainerModal
+      :show="showEndgameTrainerModal"
+      :piece-set="currentPieceSet"
+      :board-theme="currentTheme"
+      @close="showEndgameTrainerModal = false"
+      @load-position="handleLoadEndgameFEN"
+    />
+
+    <!-- NewScid v2.1 Lichess Study Importer Modal -->
+    <LichessStudyModal
+      :show="showLichessStudyModal"
+      :db-name="dbInfo?.name"
+      @close="showLichessStudyModal = false"
+      @load-game-id="handleLoadGame"
+      @load-p-g-n="handleLoadStudyPGN"
     />
 
     <!-- Header / General Search Modal (Ctrl+H) -->

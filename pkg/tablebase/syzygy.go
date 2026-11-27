@@ -52,6 +52,13 @@ func NewClient() *Client {
 	}
 }
 
+// SetBaseURL overrides the Syzygy endpoint URL (useful for local mirrors or tests).
+func (c *Client) SetBaseURL(u string) {
+	c.mu.Lock()
+	c.baseURL = strings.TrimRight(u, "/")
+	c.mu.Unlock()
+}
+
 type tbCategory uint8
 
 const (

@@ -136,10 +136,10 @@ func (s *Screen) Invalidate() {
 }
 
 func (s *Screen) InvalidateRect(r Rect) {
-	x0 := maxInt(0, r.X)
-	y0 := maxInt(0, r.Y)
-	x1 := minInt(s.Width, r.X+r.W)
-	y1 := minInt(s.Height, r.Y+r.H)
+	x0 := max(0, r.X)
+	y0 := max(0, r.Y)
+	x1 := min(s.Width, r.X+r.W)
+	y1 := min(s.Height, r.Y+r.H)
 	for y := y0; y < y1; y++ {
 		off := y * s.Width
 		for x := x0; x < x1; x++ {
@@ -414,8 +414,8 @@ func (s *Screen) DrawUnicodeBoard(r Rect, b *chess.Board, opt BoardRenderOptions
 
 	gridW := cellW * 8
 	gridH := cellH * 8
-	gx := r.X + 2 + maxInt(0, (r.W-2-gridW)/2)
-	gy := r.Y + maxInt(0, (r.H-1-gridH)/2)
+	gx := r.X + 2 + max(0, (r.W-2-gridW)/2)
+	gy := r.Y + max(0, (r.H-1-gridH)/2)
 
 	legalSet := make(map[chess.Square]bool, len(opt.LegalTargets))
 	for _, sq := range opt.LegalTargets {

@@ -34,6 +34,7 @@ const props = withDefaults(defineProps<{
   threatSquares?: string[]
   squareControlHeatmap?: Record<string, { netControl: number; isHanging: boolean; whiteAttackers: number; blackAttackers: number }>
   blindfold?: boolean
+  blindfoldLevel?: 'off' | 'pawns' | 'opponent' | 'full'
   showEvalBar?: boolean
   evalScore?: number | null // centipawns
   evalMate?: number | null  // moves to mate
@@ -53,6 +54,7 @@ const props = withDefaults(defineProps<{
   arrows: () => [],
   threatSquares: () => [],
   blindfold: false,
+  blindfoldLevel: 'off',
   showEvalBar: false,
   evalScore: null,
   evalMate: null,
@@ -66,6 +68,34 @@ const emit = defineEmits<{
 
 const selectedSquare = ref<string | null>(null)
 const promoPending = ref<{ from: string; to: string; color: 'w' | 'b' } | null>(null)
+const isPeeking = ref(false)
+let peekTimer: ReturnType<typeof setTimeout> | null = null
+
+const effectiveBlindfoldLevel = computed<'off' | 'pawns' | 'opponent' | 'full'>(() => {
+  if (props.blindfoldLevel && props.blindfoldLevel !== 'off') return props.blindfoldLevel
+  return props.blindfold ? 'full' : 'off'
+})
+
+function isPieceHidden(piece: string | null): boolean {
+  if (!piece || isPeeking.value) return false
+  const lvl = effectiveBlindfoldLevel.value
+  if (lvl === 'off') return false
+  if (lvl === 'full') return true
+  if (lvl === 'pawns') return piece[1] === 'P'
+  if (lvl === 'opponent') {
+    const userColor = props.flipped ? 'b' : 'w'
+    return piece[0] !== userColor
+  }
+  return false
+}
+
+function triggerBlindfoldPeek() {
+  isPeeking.value = true
+  if (peekTimer) clearTimeout(peekTimer)
+  peekTimer = setTimeout(() => {
+    isPeeking.value = false
+  }, 2000)
+}
 
 // Custom right-click user arrows and highlights (PyChess / Lichess style)
 const customArrows = ref<BoardArrow[]>([])
@@ -478,9 +508,9 @@ watch(() => props.fen, (newFEN) => {
             }"
           />
 
-          <!-- Piece Image (Normal mode) -->
+          <!-- Piece Image (Normal or Progressive Blindfold) -->
           <img
-            v-if="sq.piece && !blindfold"
+            v-if="sq.piece && !isPieceHidden(sq.piece)"
             :src="getPieceSVG(pieceSet, sq.piece[0] as 'w' | 'b', sq.piece[1])"
             :alt="sq.piece"
             class="piece-img w-[88%] h-[88%] object-contain select-none z-10 filter drop-shadow-sm active:scale-105 transition-transform"
@@ -490,7 +520,7 @@ watch(() => props.fen, (newFEN) => {
 
           <!-- Blindfold Mode Marker -->
           <div
-            v-else-if="sq.piece && blindfold"
+            v-else-if="sq.piece && isPieceHidden(sq.piece)"
             class="blindfold-dot w-2.5 h-2.5 rounded-full opacity-20 pointer-events-none z-10"
             :class="sq.piece[0] === 'w' ? 'bg-white' : 'bg-black'"
           />
@@ -548,6 +578,16 @@ watch(() => props.fen, (newFEN) => {
             opacity="0.85"
           />
         </svg>
+
+        <!-- Progressive Blindfold Peek Overlay -->
+        <button
+          v-if="effectiveBlindfoldLevel !== 'off'"
+          type="button"
+          class="absolute top-1.5 right-1.5 z-30 px-2 py-0.5 rounded bg-zinc-900/85 hover:bg-zinc-800 border border-purple-500/50 text-[10px] font-semibold text-purple-200 shadow cursor-pointer"
+          @click.stop="triggerBlindfoldPeek"
+        >
+          {{ isPeeking ? 'Peeking...' : `Peek (${effectiveBlindfoldLevel})` }}
+        </button>
 
         <!-- Promotion Modal Overlay -->
         <div

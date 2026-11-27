@@ -28,7 +28,7 @@ func (s *Session) Render(scr *Screen, geom TermGeometry, out io.Writer, forceFul
 
 	// 2. Compute left (Board) vs right (Inspector) split
 	contentY := 1
-	contentH := maxInt(6, h-3) // leave bottom 2 rows for command/status + shortcut legend
+	contentH := max(6, h-3) // leave bottom 2 rows for command/status + shortcut legend
 
 	// Determine optimal Kitty/Unicode board dimensions inside left pane
 	cellAspect := 2.0 // typical monospace cell height:width ratio
@@ -51,25 +51,25 @@ func (s *Session) Render(scr *Screen, geom TermGeometry, out io.Writer, forceFul
 		maxBoardRows = 24
 	}
 	// Keep left pane <= ~48% of terminal width so inspector has plenty of room
-	maxLeftW := maxInt(30, (w*48)/100)
+	maxLeftW := max(30, (w*48)/100)
 	maxBoardColsByW := maxLeftW - 6 // borders (2) + eval bar (3) + padding (1)
 	boardRows := maxBoardRows
 	boardCols := int(math.Round(float64(boardRows) * cellAspect))
 	if boardCols > maxBoardColsByW {
-		boardCols = maxInt(16, maxBoardColsByW)
-		boardRows = maxInt(8, int(math.Round(float64(boardCols)/cellAspect)))
+		boardCols = max(16, maxBoardColsByW)
+		boardRows = max(8, int(math.Round(float64(boardCols)/cellAspect)))
 	}
 	// Make boardCols a clean even integer >= 16 when space permits
 	if boardCols >= 16 && boardCols%2 == 1 {
 		boardCols--
 	}
 
-	leftW := minInt(w-24, boardCols+7)
+	leftW := min(w-24, boardCols+7)
 	if leftW < 26 {
-		leftW = minInt(w/2, 26)
+		leftW = min(w/2, 26)
 	}
 	rightX := leftW
-	rightW := maxInt(20, w-rightX)
+	rightW := max(20, w-rightX)
 
 	leftBox := Rect{X: 0, Y: contentY, W: leftW, H: contentH}
 	rightBox := Rect{X: rightX, Y: contentY, W: rightW, H: contentH}
@@ -279,7 +279,7 @@ func (s *Session) renderBoardPane(scr *Screen, box Rect, boardCols, boardRows in
 	scr.DrawBox(box, "Chessboard", turnStr, true, ColBgPanel)
 
 	innerX := box.X + 2
-	innerW := maxInt(10, box.W-4)
+	innerW := max(10, box.W-4)
 	topPlateY := box.Y + 1
 
 	topColor := chess.Black
@@ -313,18 +313,18 @@ func (s *Session) renderBoardPane(scr *Screen, box Rect, boardCols, boardRows in
 	sqPx := 72
 
 	if s.Graphics.IsPixelMode() {
-		availCols := maxInt(8, box.W-6)
-		bCols := minInt(boardCols, availCols)
-		bRows := minInt(boardRows, maxInt(6, box.H-6))
+		availCols := max(8, box.W-6)
+		bCols := min(boardCols, availCols)
+		bRows := min(boardRows, max(6, box.H-6))
 
 		if s.Graphics == GraphicsSixel {
 			// Sixel renders 1 image pixel = 1 screen pixel, so match exact cell pixel dimensions
 			cellW, cellH := 10, 20
 			if geom.XPixel > 0 && geom.YPixel > 0 && geom.Cols > 0 && geom.Rows > 0 {
-				cellW = maxInt(4, geom.XPixel/geom.Cols)
-				cellH = maxInt(8, geom.YPixel/geom.Rows)
+				cellW = max(4, geom.XPixel/geom.Cols)
+				cellH = max(8, geom.YPixel/geom.Rows)
 			}
-			maxBoardPx := minInt(bCols*cellW, bRows*cellH)
+			maxBoardPx := min(bCols*cellW, bRows*cellH)
 			sqPx = maxBoardPx / 8
 			if sqPx < 24 {
 				sqPx = 24
@@ -333,8 +333,8 @@ func (s *Session) renderBoardPane(scr *Screen, box Rect, boardCols, boardRows in
 				sqPx = 160
 			}
 			boardPx := sqPx * 8
-			bCols = minInt(availCols, maxInt(8, (boardPx+cellW-1)/cellW))
-			bRows = minInt(maxInt(6, box.H-6), maxInt(4, (boardPx+cellH-1)/cellH))
+			bCols = min(availCols, max(8, (boardPx+cellW-1)/cellW))
+			bRows = min(max(6, box.H-6), max(4, (boardPx+cellH-1)/cellH))
 		} else if geom.XPixel > 0 && geom.Cols > 0 {
 			// Kitty stretches PNG to (bCols, bRows); pick crisp multiple-of-8 pixel density
 			estBoardPx := (geom.XPixel * bCols) / geom.Cols
@@ -344,8 +344,8 @@ func (s *Session) renderBoardPane(scr *Screen, box Rect, boardCols, boardRows in
 			}
 		}
 
-		bx := boardX + maxInt(0, (availCols-bCols)/2)
-		by := boardAreaY + maxInt(0, (box.H-6-bRows)/2)
+		bx := boardX + max(0, (availCols-bCols)/2)
+		by := boardAreaY + max(0, (box.H-6-bRows)/2)
 
 		placementRect = Rect{X: bx, Y: by, W: bCols, H: bRows}
 		s.hitBoardRect = placementRect
@@ -362,7 +362,7 @@ func (s *Session) renderBoardPane(scr *Screen, box Rect, boardCols, boardRows in
 			s.renderBoardFooterStrip(scr, innerX, ecoY, innerW)
 		}
 	} else {
-		unicodeArea := Rect{X: boardX, Y: boardAreaY, W: maxInt(16, box.W-6), H: maxInt(8, box.H-5)}
+		unicodeArea := Rect{X: boardX, Y: boardAreaY, W: max(16, box.W-6), H: max(8, box.H-5)}
 		lastFrom, lastTo := s.LastMoveSquares()
 		targets, capMask := s.LegalTargetsFrom(s.SelectedSq)
 		uGrid := scr.DrawUnicodeBoard(unicodeArea, s.Board, BoardRenderOptions{
@@ -380,7 +380,7 @@ func (s *Session) renderBoardPane(scr *Screen, box Rect, boardCols, boardRows in
 
 		scr.DrawVerticalEvalBar(evalBarX, uGrid.Y, uGrid.H, scoreCp, mateIn, s.Flipped)
 
-		botPlateY := minInt(box.Y+box.H-2, uGrid.Y+uGrid.H+1)
+		botPlateY := min(box.Y+box.H-2, uGrid.Y+uGrid.H+1)
 		if botPlateY > boardAreaY && botPlateY < box.Y+box.H-1 {
 			s.renderPlayerPlate(scr, innerX, botPlateY, innerW, botColor)
 		}
@@ -456,7 +456,7 @@ func (s *Session) renderBoardFooterStrip(scr *Screen, x, y, width int) {
 	}
 	plyStr := fmt.Sprintf("Ply %d/%d", s.CurPly, len(s.Path))
 	scr.WritePadded(x, y, width, "", Style{FG: ColTextMuted, BG: ColBgPanel})
-	scr.WriteText(x, y, maxInt(0, width-len(plyStr)-2), ecoStr, Style{FG: ColAccentAmber, BG: ColBgPanel})
+	scr.WriteText(x, y, max(0, width-len(plyStr)-2), ecoStr, Style{FG: ColAccentAmber, BG: ColBgPanel})
 	pw := DisplayWidth(plyStr)
 	if width > pw+2 {
 		scr.WriteText(x+width-pw, y, pw, plyStr, Style{FG: ColTextMuted, BG: ColBgPanel})
@@ -471,7 +471,7 @@ func (s *Session) renderRightPane(scr *Screen, box Rect) {
 	tabY := box.Y + 1
 	tx := box.X + 2
 	maxX := box.X + box.W - 2
-	scr.WritePadded(tx, tabY, maxInt(0, maxX-tx), "", Style{FG: ColTextMuted, BG: ColBgPanel})
+	scr.WritePadded(tx, tabY, max(0, maxX-tx), "", Style{FG: ColTextMuted, BG: ColBgPanel})
 
 	for i := TabID(0); i < tabCount; i++ {
 		lbl := " " + tabTitles[i] + " "
@@ -500,8 +500,8 @@ func (s *Session) renderRightPane(scr *Screen, box Rect) {
 	body := Rect{
 		X: box.X + 2,
 		Y: box.Y + 3,
-		W: maxInt(10, box.W-4),
-		H: maxInt(2, box.H-4),
+		W: max(10, box.W-4),
+		H: max(2, box.H-4),
 	}
 
 	switch s.ActiveTab {
@@ -522,11 +522,11 @@ func (s *Session) renderRightPane(scr *Screen, box Rect) {
 
 func (s *Session) renderScoreAndEngineTab(scr *Screen, r Rect) {
 	// Split vertically: top ~58% Scorebook, bottom ~42% Live UCI Engine
-	engH := maxInt(6, (r.H*40)/100)
+	engH := max(6, (r.H*40)/100)
 	if r.H < 12 {
-		engH = maxInt(4, r.H/2)
+		engH = max(4, r.H/2)
 	}
-	scoreH := maxInt(3, r.H-engH-1)
+	scoreH := max(3, r.H-engH-1)
 
 	// Header metadata line (Event / Site / Date)
 	ev := s.Game.Tag("Event")
@@ -628,12 +628,12 @@ func (s *Session) renderScoreAndEngineTab(scr *Screen, r Rect) {
 			lines = append(lines, curLine)
 		}
 
-		availRows := maxInt(1, scoreH-1)
+		availRows := max(1, scoreH-1)
 		startLine := 0
 		if activeLine >= availRows {
 			startLine = activeLine - availRows + 2
 			if startLine > len(lines)-availRows {
-				startLine = maxInt(0, len(lines)-availRows)
+				startLine = max(0, len(lines)-availRows)
 			}
 		}
 
@@ -716,7 +716,7 @@ func (s *Session) renderScoreAndEngineTab(scr *Screen, r Rect) {
 		if pvText == "" {
 			pvText = strings.Join(ln.PV, " ")
 		}
-		scr.WriteText(r.X+pw, ry, maxInt(0, r.W-pw), pvText, Style{FG: ColTextPrimary, BG: ColBgPanel})
+		scr.WriteText(r.X+pw, ry, max(0, r.W-pw), pvText, Style{FG: ColTextPrimary, BG: ColBgPanel})
 	}
 }
 
@@ -749,7 +749,7 @@ func (s *Session) renderOpeningTreeTab(scr *Screen, r Rect) {
 		return
 	}
 
-	avail := maxInt(1, r.H-2)
+	avail := max(1, r.H-2)
 	if cursor >= len(res.Moves) {
 		cursor = len(res.Moves) - 1
 	}
@@ -779,7 +779,7 @@ func (s *Session) renderOpeningTreeTab(scr *Screen, r Rect) {
 		line := fmt.Sprintf("%-4s %-8s %6d   %5.1f%%  ", keyHint, mv.Move, mv.Count, mv.ScorePct)
 		scr.WritePadded(r.X, ry, r.W, line, Style{FG: ColTextPrimary, BG: rowBG, Bold: idx == cursor})
 		barX := r.X + 32
-		barW := minInt(24, maxInt(0, r.W-34))
+		barW := min(24, max(0, r.W-34))
 		if barW >= 6 {
 			scr.DrawWDLBar(barX, ry, barW, mv.WhiteWins, mv.Draws, mv.BlackWins, rowBG)
 		}
@@ -806,7 +806,7 @@ func (s *Session) renderGamesTab(scr *Screen, r Rect) {
 		return
 	}
 
-	avail := maxInt(1, r.H-2)
+	avail := max(1, r.H-2)
 	if s.GameListCursor >= len(s.GameSummaries) {
 		s.GameListCursor = len(s.GameSummaries) - 1
 	}
@@ -860,7 +860,7 @@ func (s *Session) renderBasesTab(scr *Screen, r Rect) {
 		return
 	}
 
-	avail := maxInt(1, r.H-2)
+	avail := max(1, r.H-2)
 	if s.BasesCursor >= len(s.DiscoveredBases) {
 		s.BasesCursor = len(s.DiscoveredBases) - 1
 	}
@@ -1071,9 +1071,9 @@ func (s *Session) renderForensicsTab(scr *Screen, r Rect) {
 		}
 	}
 
-	avail := maxInt(1, r.H-2)
-	if scroll > maxInt(0, len(lines)-avail) {
-		scroll = maxInt(0, len(lines)-avail)
+	avail := max(1, r.H-2)
+	if scroll > max(0, len(lines)-avail) {
+		scroll = max(0, len(lines)-avail)
 	}
 	for i := 0; i < avail && scroll+i < len(lines); i++ {
 		scr.WriteText(r.X, r.Y+2+i, r.W, lines[scroll+i], Style{FG: ColTextPrimary, BG: ColBgPanel})
@@ -1123,8 +1123,8 @@ func (s *Session) renderBottomBars(scr *Screen) {
 }
 
 func (s *Session) renderHelpModal(scr *Screen) {
-	mw := minInt(scr.Width-6, 78)
-	mh := minInt(scr.Height-4, 24)
+	mw := min(scr.Width-6, 78)
+	mh := min(scr.Height-4, 24)
 	if mw < 30 || mh < 10 {
 		return
 	}
@@ -1701,7 +1701,7 @@ func (s *Session) scrollActiveTab(delta int) {
 			s.BasesCursor = clampIdx(s.BasesCursor+delta, len(s.DiscoveredBases))
 		}
 	case TabForensics:
-		s.ForensicsScroll = maxInt(0, s.ForensicsScroll+delta)
+		s.ForensicsScroll = max(0, s.ForensicsScroll+delta)
 	}
 }
 
