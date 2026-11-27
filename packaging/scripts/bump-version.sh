@@ -100,6 +100,10 @@ if [ -f packaging/pacman/PKGBUILD ]; then
     sed -i -E "s/^pkgver=.*/pkgver=${NEW_VERSION}/" packaging/pacman/PKGBUILD
 fi
 
+if [ -f packaging/pacman-bin/PKGBUILD ]; then
+    sed -i -E "s/^pkgver=.*/pkgver=${NEW_VERSION}/" packaging/pacman-bin/PKGBUILD
+fi
+
 if [ -f packaging/pacman/.SRCINFO ]; then
     sed -i -E "s/pkgver = .*/pkgver = ${NEW_VERSION}/" packaging/pacman/.SRCINFO
     sed -i -E "s/newscid-[0-9.]+(-[0-9]+)?\.tar\.gz/newscid-${NEW_VERSION}\1.tar.gz/g" packaging/pacman/.SRCINFO
