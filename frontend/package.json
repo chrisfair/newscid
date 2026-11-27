@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,20 +12,24 @@
   },
   "dependencies": {
     "@lucide/vue": "^1.52.0",
-    "vue": "^3.2.37"
+    "vue": "^3.5.46"
   },
   "devDependencies": {
     "@babel/types": "^7.18.10",
-    "@vitejs/plugin-vue": "^3.0.3",
-    "@vitest/coverage-v8": "^0.34.6",
-    "@vue/test-utils": "^2.5.1",
+    "@vitejs/plugin-vue": "^6.0.11",
+    "@vitest/coverage-v8": "^5.1.2",
+    "@vue/test-utils": "^2.4.11",
     "autoprefixer": "^10.6.1",
-    "happy-dom": "^12.10.3",
+    "happy-dom": "^21.0.4",
     "postcss": "^8.5.29",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.2.2",
-    "vite": "^3.0.7",
-    "vitest": "^0.34.6",
-    "vue-tsc": "^1.8.27"
+    "typescript": "^6.0.3",
+    "vite": "^8.4.0",
+    "vitest": "^5.1.2",
+    "vue-tsc": "^3.3.14"
+  },
+  "overrides": {
+    "glob": ">=14.0.2",
+    "minimatch": ">=11.0.1"
   }
 }

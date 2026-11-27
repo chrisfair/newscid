@@ -460,9 +460,9 @@ onMounted(async () => {
                     solved: item.attempted && item.solvedFirstTry,
                     missed: item.attempted && !item.solvedFirstTry,
                   }"
-                  @click="loadDrillAtIndex(idx)"
+                  @click="loadDrillAtIndex(Number(idx))"
                 >
-                  <span class="queue-idx">#{{ idx + 1 }}</span>
+                  <span class="queue-idx">#{{ Number(idx) + 1 }}</span>
                   <span class="queue-theme">{{ item.themeName }}</span>
                   <span class="queue-source">
                     {{ item.sourceType === 'online_game_mistake' ? `${item.white} vs ${item.black}` : 'Reinforcement' }}

@@ -77,7 +77,7 @@ describe('sound utility', () => {
 
   it('does not play sounds when disabled', () => {
     const { ctxMock } = createMockAudioContext()
-    ;(window as any).AudioContext = vi.fn(() => ctxMock)
+    ;(window as any).AudioContext = vi.fn(function () { return ctxMock })
 
     setSoundEnabled(false)
     playMoveSound()
@@ -92,7 +92,7 @@ describe('sound utility', () => {
 
   it('synthesizes move, capture, check, castle, and victory sounds with Web Audio API', () => {
     const { ctxMock, oscMock, gainMock } = createMockAudioContext()
-    ;(window as any).AudioContext = vi.fn(() => ctxMock)
+    ;(window as any).AudioContext = vi.fn(function () { return ctxMock })
 
     playMoveSound()
     expect(ctxMock.resume).toHaveBeenCalled()

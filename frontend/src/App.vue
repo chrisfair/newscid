@@ -5674,7 +5674,7 @@ const commandPaletteItems = computed<CommandItem[]>(() => [
       @open-home-d-b="() => { showGettingStartedWizardModal = false; handleOpenDefaultDatabase() }"
       @open-opening-trainer="() => { showGettingStartedWizardModal = false; showOpeningTrainerModal = true }"
       @open-portal="(platform) => { showGettingStartedWizardModal = false; openPortalView() }"
-      @open-simulate-player="(p) => { showGettingStartedWizardModal = false; selectedSimulationPersona = p; showPlayerSimulationModal = true }"
+      @open-simulate-player="() => { showGettingStartedWizardModal = false; showPlayerSimulationModal = true }"
       @open-personas="() => { showGettingStartedWizardModal = false; showPersonaModal = true }"
       @open-mega-catalog="() => { showGettingStartedWizardModal = false; showMegaDatabaseModal = true }"
     />

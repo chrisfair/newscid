@@ -1072,7 +1072,7 @@ async function handleCopyReport() {
                         :key="`${perf.gameId}-${perf.side}`"
                         class="hover:bg-zinc-900/60"
                       >
-                        <td class="py-2 px-2.5 text-zinc-400">#{{ idx + 1 }}</td>
+                        <td class="py-2 px-2.5 text-zinc-400">#{{ Number(idx) + 1 }}</td>
                         <td class="py-2 px-2.5 font-sans">
                           <span
                             class="px-2 py-0.5 rounded text-[10px] font-bold"
