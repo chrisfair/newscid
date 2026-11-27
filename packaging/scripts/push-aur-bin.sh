@@ -8,7 +8,8 @@ VERSION=$(tr -d ' \n\r' < VERSION)
 echo "==> Pushing NewScid-bin v${VERSION} to AUR (${AUR_REPO})..."
 
 # Fetch live SHA256 directly from GitHub Release asset
-ASSET_URL="https://github.com/chrisfair/newscid/releases/download/v${VERSION}/newscid-${VERSION}-linux-x86_64.tar.gz"
+PKGREL=$(grep -E '^pkgrel=' packaging/pacman-bin/PKGBUILD | cut -d= -f2)
+ASSET_URL="https://github.com/chrisfair/newscid/releases/download/v${VERSION}/newscid-${VERSION}-${PKGREL}-linux-x86_64.tar.gz"
 echo "==> Verifying live release asset checksum from ${ASSET_URL}..."
 SUM=$(curl -sfL "${ASSET_URL}" | sha256sum | awk '{print $1}')
 if [ -z "${SUM}" ] || [ "${#SUM}" -ne 64 ]; then

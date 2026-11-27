@@ -1,13 +1,10 @@
 name: Release Linux Binaries (x86_64 & aarch64)
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v2.1.1)'
+        description: 'Release tag (e.g. v2.1.2)'
         required: true
 
 permissions:
@@ -69,4 +66,4 @@ jobs:
           if ! gh release view "${TAG}" >/dev/null 2>&1; then
             gh release create "${TAG}" --title "NewScid ${TAG}" --generate-notes
           fi
-          gh release upload "${TAG}" "${ASSET}" --clobber
+          gh release upload "${TAG}" "${ASSET}"
